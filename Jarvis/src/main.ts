@@ -54,7 +54,7 @@ import {
   type ArcadeId,
 } from './arcadeGames'
 
-const APP_VERSION = '1.5.1'
+const APP_VERSION = '1.5.2'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -472,7 +472,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.1'
+          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.2'
       }</p>
     </div>
   `

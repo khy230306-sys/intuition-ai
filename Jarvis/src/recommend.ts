@@ -66,6 +66,53 @@ async function cachedQuote(symbol: string): Promise<QuoteSnapshot | null> {
   }
 }
 
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let i = 0
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++
+      out[idx] = await fn(items[idx])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return out
+}
+
+function structuralFallback(
+  universe: RecCandidate[],
+  risk: 'conservative' | 'balanced' | 'aggressive',
+  owned: Set<string>,
+): string {
+  const rank = (c: RecCandidate): number => {
+    let s = 50
+    if (c.kind === 'etf') s += risk === 'aggressive' ? 4 : 16
+    if (risk === 'conservative') {
+      if (['금융', '지수ETF', '배당ETF'].includes(c.sector)) s += 12
+      if (['방산', '바이오', '배터리'].includes(c.sector) || c.symbol === 'TSLA' || c.symbol === 'NVDA') s -= 14
+    } else if (risk === 'aggressive') {
+      if (['반도체', '빅테크', '방산', '배터리'].includes(c.sector)) s += 10
+    } else if (['반도체', '빅테크', '금융', '지수ETF'].includes(c.sector)) s += 6
+    if (owned.has(c.symbol)) s -= 10
+    return s
+  }
+  const sorted = [...universe].sort((a, b) => rank(b) - rank(a)).slice(0, 5)
+  const riskLabel = risk === 'conservative' ? '보수' : risk === 'aggressive' ? '공격' : '균형'
+  const lines = [
+    '【구조 스크리닝】 실시간 시세 연결 실패 → 섹터·성향 기준 후보',
+    `성향: ${riskLabel} · 유니버스 ${universe.length}종`,
+    '',
+    '— 참고 후보 (가격 없이 구조만) —',
+  ]
+  sorted.forEach((c, i) => {
+    lines.push(`${i + 1}. ${c.name} (${c.symbol}) · ${c.sector}${c.kind === 'etf' ? ' · ETF' : ''}`)
+  })
+  lines.push('')
+  lines.push('팁: 잠시 후 다시 "종목 추천"을 입력하거나 개별 "삼성전자 시세"를 확인해 보세요.')
+  lines.push('면책: 투자 권유가 아니며, 시세 미연결 상태의 참고용입니다.')
+  return lines.join('\n')
+}
+
 function rangePosition(q: QuoteSnapshot): number | null {
   if (q.fiftyTwoHigh == null || q.fiftyTwoLow == null) return null
   const span = q.fiftyTwoHigh - q.fiftyTwoLow
@@ -191,14 +238,15 @@ export async function buildColdRecommendations(text: string): Promise<string> {
     return true
   })
 
-  const quotes = await Promise.all(universe.map(async (c) => ({ c, q: await cachedQuote(c.symbol) })))
+  // Limit concurrency — Yahoo rate-limits / browsers choke on 20+ parallel calls
+  const quotes = await mapPool(universe, 3, async (c) => ({ c, q: await cachedQuote(c.symbol) }))
   const scored = quotes
     .filter((x): x is { c: RecCandidate; q: QuoteSnapshot } => Boolean(x.q))
     .map(({ c, q }) => scorePick(c, q, risk, owned, watched))
     .sort((a, b) => b.score - a.score)
 
   if (!scored.length) {
-    return '시세를 가져오지 못했습니다. 네트워크를 확인한 뒤 다시 "종목 추천"을 입력해 주세요.'
+    return structuralFallback(universe, risk, owned)
   }
 
   const top = scored.slice(0, 5)
@@ -208,9 +256,16 @@ export async function buildColdRecommendations(text: string): Promise<string> {
   const riskLabel =
     risk === 'conservative' ? '보수' : risk === 'aggressive' ? '공격' : '균형'
 
+  const stale = scored.filter((s) => Date.now() - s.quote.fetchedAt > 6 * 60 * 60 * 1000).length
+  const sourceNote =
+    stale > scored.length / 2
+      ? '시세 출처: 배포 스냅샷/캐시 (실시간 지연 가능)'
+      : `시세 수집 ${scored.length}/${universe.length}종`
+
   const lines: string[] = [
     '【냉정 스크리닝】 감정 배제 · 시세 기반',
     `범위: ${marketLabel} · 성향: ${riskLabel} · 유니버스 ${universe.length}종`,
+    sourceNote,
     '',
     '— 상위 후보 (매수 강요가 아님) —',
   ]

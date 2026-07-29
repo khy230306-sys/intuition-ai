@@ -67,6 +67,39 @@ async function main() {
   await page.goto('http://127.0.0.1:4182/', { waitUntil: 'networkidle0' })
   await page.click('[data-view="games"]')
   await page.waitForSelector('#arcade-canvas')
+  await page.waitForSelector('[data-arcade-rank="1"]')
+  await page.waitForSelector('[data-action="share-arcade-score"]')
+  await page.waitForSelector('[data-action="open-arcade-import"]')
+
+  // Seed a best so share modal can open
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'jarvis.arcade.best.v1',
+      JSON.stringify({ snake: 12, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+    )
+    localStorage.setItem(
+      'jarvis.arcade.bestLevel.v1',
+      JSON.stringify({ snake: 2, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+    )
+  })
+  await page.click('[data-arcade="snake"]')
+  await page.click('[data-action="share-arcade-score"]')
+  await page.waitForSelector('.share-modal')
+  await page.waitForSelector('[data-action="copy-arcade-score"]')
+  await page.click('[data-action="close-share"]')
+
+  await page.click('[data-action="open-arcade-import"]')
+  await page.waitForSelector('#arcade-import-form')
+  const friendCode =
+    'JARVIS-ARCADE|v1|snake|99|6|친구테스트|friend-e2e|1700000000000'
+  await page.$eval('#arcade-import-form textarea', (el, code) => {
+    ;(el as HTMLTextAreaElement).value = code as string
+  }, friendCode)
+  await page.click('#arcade-import-form button[type="submit"]')
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.arcade-rank-row')]
+    return rows.some((r) => (r.textContent || '').includes('친구테스트'))
+  })
 
   const ids = ['snake', 'breakout', 'shooter', 'flappy', 'dodge', 'pong']
   for (const id of ids) {

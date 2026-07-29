@@ -815,6 +815,121 @@ body {
   position: relative;
 }
 
+.arcade-rank {
+  margin: 0 0 12px;
+  padding: 12px 12px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 210, 190, 0.22);
+  background:
+    linear-gradient(160deg, rgba(0, 210, 190, 0.08), transparent 60%),
+    rgba(8, 14, 22, 0.85);
+}
+
+.arcade-rank-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.arcade-rank-head strong {
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+
+.arcade-name-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arcade-name-form input {
+  width: 88px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.arcade-rank-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.arcade-rank-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.82rem;
+}
+
+.arcade-rank-row.me {
+  background: rgba(0, 210, 190, 0.12);
+  color: var(--cyan-bright);
+}
+
+.arcade-rank-pos {
+  font-family: var(--font-display);
+  color: var(--cyan);
+  font-size: 0.78rem;
+}
+
+.arcade-rank-score {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.arcade-rank-row.me .arcade-rank-score {
+  color: var(--cyan-bright);
+}
+
+.arcade-rank-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 6px 2px 8px;
+}
+
+.arcade-rank-actions {
+  margin-bottom: 4px;
+}
+
+.arcade-rank-hint {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+}
+
+.arcade-import {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.arcade-import textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  padding: 10px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
 .arcade-stage {
   width: 100%;
   border-radius: 16px;

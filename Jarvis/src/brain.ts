@@ -101,7 +101,7 @@ function helpText(name: string): string {
     '• 장시간 / 장 열렸어',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
-    '• 게임 / 스네이크 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁',
+    '• 게임 / 스네이크 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁 / 게임 순위',
     '• 내 위치 / 지금 어디야',
     '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
@@ -708,9 +708,24 @@ export async function think(
   if (/^퐁$|핑퐁|pong/i.test(text) && text.length < 24) {
     return { text: '퐁 아케이드를 엽니다.', speak: true, view: 'games', arcadeId: 'pong' }
   }
+  if (/게임\s*순위|아케이드\s*순위|점수\s*순위|친구\s*순위|랭킹/.test(text)) {
+    return {
+      text: '게임 순위판을 엽니다. 닉네임을 정하고 친구 기록 코드를 받아 순위를 만드세요.',
+      speak: true,
+      view: 'games',
+    }
+  }
+  if (/게임\s*기록\s*공유|점수\s*공유|아케이드\s*(?:기록\s*)?공유/.test(text)) {
+    return {
+      text: '내 아케이드 기록 공유 화면을 엽니다.',
+      speak: true,
+      view: 'games',
+      action: async () => ({ ok: true, message: await openShareUi('arcade') }),
+    }
+  }
   if (/^(게임|미니게임|오프라인\s*게임|아케이드)/i.test(text) || /게임\s*(할래|하자|열어)/.test(text)) {
     return {
-      text: '아케이드 게임 탭으로 이동합니다.\n· 스네이크 · 벽돌깨기 · 스페이스\n· 플래피 · 닷지 · 퐁\n데이터 없이 플레이할 수 있습니다.',
+      text: '아케이드 게임 탭으로 이동합니다.\n· 스네이크 · 벽돌깨기 · 스페이스\n· 플래피 · 닷지 · 퐁\n기록 공유로 친구 순위도 만들 수 있습니다.',
       speak: true,
       view: 'games',
     }

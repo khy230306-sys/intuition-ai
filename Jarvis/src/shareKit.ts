@@ -157,24 +157,28 @@ export function downloadBackupBlob(json = exportBackup(), name?: string): void {
   URL.revokeObjectURL(url)
 }
 
-type ShareModalFn = (kind: 'app' | 'backup') => Promise<void>
+export type ShareModalKind = 'app' | 'backup' | 'arcade'
+type ShareModalFn = (kind: ShareModalKind) => Promise<void>
 let shareModalFn: ShareModalFn | null = null
 
 export function registerShareModal(fn: ShareModalFn): void {
   shareModalFn = fn
 }
 
-export async function openShareUi(kind: 'app' | 'backup'): Promise<string> {
+export async function openShareUi(kind: ShareModalKind): Promise<string> {
   if (!shareModalFn) {
     if (kind === 'app') {
       const r = await shareAppLink()
       return r.message
     }
+    if (kind === 'arcade') {
+      return '게임 탭에서 내 기록 공유를 사용해 주세요.'
+    }
     const r = await shareBackupFile()
     return r.message
   }
   await shareModalFn(kind)
-  return kind === 'app'
-    ? '앱 공유 QR을 열었습니다. 스캔하거나 공유하기를 누르세요.'
-    : '백업 QR/공유 화면을 열었습니다. 큰 백업은 공유보내기를 사용하세요.'
+  if (kind === 'app') return '앱 공유 QR을 열었습니다. 스캔하거나 공유하기를 누르세요.'
+  if (kind === 'arcade') return '아케이드 기록 QR을 열었습니다. 친구에게 공유하거나 코드를 복사하세요.'
+  return '백업 QR/공유 화면을 열었습니다. 큰 백업은 공유보내기를 사용하세요.'
 }

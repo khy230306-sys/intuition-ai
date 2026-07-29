@@ -54,6 +54,14 @@ import {
   type ArcadeId,
 } from './arcadeGames'
 import {
+  buildMyScoreCard,
+  getArcadePlayerName,
+  importScoreCard,
+  rankingForGame,
+  setArcadePlayerName,
+  syncSelfBestsToBoard,
+} from './arcadeRank'
+import {
   ensureNotificationPermission,
   setAlarmUiHandler,
   startAlarmScheduler,
@@ -91,7 +99,7 @@ import {
   setFamilySyncListener,
 } from './familySyncLazy'
 
-const APP_VERSION = '1.6.2'
+const APP_VERSION = '1.6.3'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -131,9 +139,11 @@ const state = {
   arcadeScore: 0,
   arcadeLevel: 1,
   weather: null as WeatherSnap | null,
-  shareModal: null as null | 'app' | 'backup',
+  shareModal: null as null | 'app' | 'backup' | 'arcade',
   shareQrSvg: '',
   shareHint: '',
+  shareArcadePayload: '',
+  arcadeImportOpen: false,
   familyTab: 'chat' as 'chat' | 'notices' | 'events',
   familySyncStatus: '대기',
 }
@@ -178,9 +188,10 @@ function showFlash(msg: string): void {
   window.setTimeout(() => el.classList.remove('show'), 1800)
 }
 
-async function openShareModal(kind: 'app' | 'backup'): Promise<void> {
+async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> {
   state.shareModal = kind
   state.shareQrSvg = ''
+  state.shareArcadePayload = ''
   state.shareHint = kind === 'app' ? appShareUrl() : 'QR 생성 중…'
   render()
   try {
@@ -188,6 +199,17 @@ async function openShareModal(kind: 'app' | 'backup'): Promise<void> {
       const url = appShareUrl()
       state.shareQrSvg = await qrSvg(url)
       state.shareHint = url
+    } else if (kind === 'arcade') {
+      syncSelfBestsToBoard(state.arcadeId)
+      const built = buildMyScoreCard(state.arcadeId)
+      if (!built) {
+        state.shareHint = '이 게임의 기록이 없습니다. 먼저 플레이해 주세요.'
+        state.shareQrSvg = ''
+      } else {
+        state.shareArcadePayload = built.payload
+        state.shareQrSvg = await qrSvg(built.payload)
+        state.shareHint = `${ARCADE_META[state.arcadeId].title} · ${built.card.name} · Lv.${built.card.level} · ${built.card.score}`
+      }
     } else {
       const built = buildBackupQrPayload()
       state.shareQrSvg = await qrSvg(built.payload)
@@ -424,6 +446,49 @@ function renderNav(): string {
   `
 }
 
+function renderArcadeRank(): string {
+  syncSelfBestsToBoard(state.arcadeId)
+  const ranks = rankingForGame(state.arcadeId, 8)
+  const myName = getArcadePlayerName()
+  const rows =
+    ranks.length === 0
+      ? `<li class="arcade-rank-empty">아직 기록이 없습니다. 플레이 후 공유하세요.</li>`
+      : ranks
+          .map((e, i) => {
+            const me = e.source === 'self' ? ' me' : ''
+            return `<li class="arcade-rank-row${me}"><span class="arcade-rank-pos">${i + 1}</span><span class="arcade-rank-name">${escapeHtml(e.name)}</span><span class="arcade-rank-score">Lv.${e.level} · ${e.score}</span></li>`
+          })
+          .join('')
+  const importBlock = state.arcadeImportOpen
+    ? `
+      <form id="arcade-import-form" class="arcade-import">
+        <textarea name="code" rows="3" placeholder="친구가 보낸 JARVIS-ARCADE 코드를 붙여넣기" required></textarea>
+        <div class="row-btns">
+          <button type="submit" class="primary-btn">순위 반영</button>
+          <button type="button" class="ghost-btn" data-action="close-arcade-import">취소</button>
+        </div>
+      </form>`
+    : ''
+  return `
+    <div class="arcade-rank" data-arcade-rank="1">
+      <div class="arcade-rank-head">
+        <strong>친구 순위 · ${escapeHtml(ARCADE_META[state.arcadeId].title)}</strong>
+        <form id="arcade-name-form" class="arcade-name-form">
+          <input id="arcade-name" name="name" maxlength="16" value="${escapeAttr(myName)}" placeholder="닉네임" aria-label="닉네임" />
+          <button type="submit" class="ghost-btn tiny">저장</button>
+        </form>
+      </div>
+      <ol class="arcade-rank-list">${rows}</ol>
+      <div class="row-btns arcade-rank-actions">
+        <button type="button" class="primary-btn" data-action="share-arcade-score">내 기록 공유</button>
+        <button type="button" class="ghost-btn" data-action="open-arcade-import">친구 기록 받기</button>
+      </div>
+      ${importBlock}
+      <p class="hint arcade-rank-hint">QR·공유·코드 붙여넣기로 친구 기록을 모아 순위를 만듭니다. 서버 없이 이 기기에만 저장됩니다.</p>
+    </div>
+  `
+}
+
 function renderGames(): string {
   const best = loadArcadeBest()
   const meta = ARCADE_META[state.arcadeId]
@@ -456,13 +521,14 @@ function renderGames(): string {
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 점수 기기 저장</p>
+      <p class="hint">오프라인 아케이드 · 점수·순위 기기 저장</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>
         <button type="button" class="arcade-restart-btn" data-arcade-restart="1">다시 시작</button>
       </div>
       <p class="hint">${escapeHtml(meta.blurb)}</p>
+      ${renderArcadeRank()}
       <div class="arcade-stage">
         <canvas id="arcade-canvas" width="360" height="440"></canvas>
       </div>
@@ -566,7 +632,23 @@ function renderHomeWidget(): string {
 
 function renderShareModal(): string {
   if (!state.shareModal) return ''
-  const title = state.shareModal === 'app' ? '앱 공유 QR' : '백업 QR / 공유'
+  const title =
+    state.shareModal === 'app' ? '앱 공유 QR' : state.shareModal === 'arcade' ? '게임 기록 공유' : '백업 QR / 공유'
+  const actions =
+    state.shareModal === 'app'
+      ? `
+            <button type="button" class="primary-btn" data-action="share-app-native">공유하기</button>
+            <button type="button" class="ghost-btn" data-action="copy-app-link">링크 복사</button>
+          `
+      : state.shareModal === 'arcade'
+        ? `
+            <button type="button" class="primary-btn" data-action="share-arcade-native">공유하기</button>
+            <button type="button" class="ghost-btn" data-action="copy-arcade-score">코드 복사</button>
+          `
+        : `
+            <button type="button" class="primary-btn" data-action="share-backup-native">백업 공유</button>
+            <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
+          `
   return `
     <div class="share-modal" role="dialog" aria-modal="true" aria-label="${title}" data-action="close-share-backdrop">
       <div class="share-sheet" data-share-sheet="1">
@@ -577,17 +659,7 @@ function renderShareModal(): string {
         <div class="share-qr">${state.shareQrSvg || '<p class="hint">QR 생성 중…</p>'}</div>
         <p class="hint share-hint">${escapeHtml(state.shareHint || appShareUrl())}</p>
         <div class="row-btns">
-          ${
-            state.shareModal === 'app'
-              ? `
-            <button type="button" class="primary-btn" data-action="share-app-native">공유하기</button>
-            <button type="button" class="ghost-btn" data-action="copy-app-link">링크 복사</button>
-          `
-              : `
-            <button type="button" class="primary-btn" data-action="share-backup-native">백업 공유</button>
-            <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
-          `
-          }
+          ${actions}
         </div>
       </div>
     </div>
@@ -1619,9 +1691,66 @@ function bind(): void {
     )
   })
 
+  document.querySelector('[data-action="share-arcade-score"]')?.addEventListener('click', () => {
+    void openShareModal('arcade')
+  })
+
+  document.querySelector('[data-action="open-arcade-import"]')?.addEventListener('click', () => {
+    state.arcadeImportOpen = true
+    render()
+  })
+
+  document.querySelector('[data-action="close-arcade-import"]')?.addEventListener('click', () => {
+    state.arcadeImportOpen = false
+    render()
+  })
+
+  document.getElementById('arcade-name-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const name = setArcadePlayerName(String(fd.get('name') || ''))
+    syncSelfBestsToBoard()
+    showFlash(`닉네임 «${name}» 저장`)
+    render()
+  })
+
+  document.getElementById('arcade-import-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const result = importScoreCard(String(fd.get('code') || ''))
+    showFlash(result.message)
+    if (result.ok) {
+      state.arcadeImportOpen = false
+      if (result.entry.game !== state.arcadeId) state.arcadeId = result.entry.game
+      render()
+    }
+  })
+
+  document.querySelector('[data-action="share-arcade-native"]')?.addEventListener('click', () => {
+    const built = buildMyScoreCard(state.arcadeId)
+    if (!built) {
+      showFlash('공유할 기록이 없습니다.')
+      return
+    }
+    void shareText(built.message).then((r) => showFlash(r.message))
+  })
+
+  document.querySelector('[data-action="copy-arcade-score"]')?.addEventListener('click', () => {
+    const payload = state.shareArcadePayload || buildMyScoreCard(state.arcadeId)?.payload
+    if (!payload) {
+      showFlash('복사할 기록이 없습니다.')
+      return
+    }
+    void navigator.clipboard.writeText(payload).then(
+      () => showFlash('기록 코드를 복사했습니다.'),
+      () => showFlash('복사에 실패했습니다.'),
+    )
+  })
+
   document.querySelector('[data-action="close-share"]')?.addEventListener('click', () => {
     state.shareModal = null
     state.shareQrSvg = ''
+    state.shareArcadePayload = ''
     render()
   })
 
@@ -1629,6 +1758,7 @@ function bind(): void {
     if ((ev.target as HTMLElement).dataset.action === 'close-share-backdrop') {
       state.shareModal = null
       state.shareQrSvg = ''
+      state.shareArcadePayload = ''
       render()
     }
   })

@@ -40,9 +40,9 @@ import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking }
 
 const SUGGESTIONS = [
   '주식 종목 추천',
-  '삼성전자 시세',
+  '프랑스 정보',
+  '도쿄 시차',
   '브리핑',
-  '통계',
   '도움말',
 ]
 

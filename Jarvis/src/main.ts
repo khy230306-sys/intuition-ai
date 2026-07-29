@@ -48,6 +48,7 @@ import {
 import {
   ARCADE_META,
   loadArcadeBest,
+  loadArcadeBestLevel,
   mountArcade,
   type ArcadeHandle,
   type ArcadeId,
@@ -90,7 +91,7 @@ import {
   setFamilySyncListener,
 } from './familySyncLazy'
 
-const APP_VERSION = '1.6.1'
+const APP_VERSION = '1.6.2'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -128,6 +129,7 @@ const state = {
   lastFix: null as GeoFix | null,
   arcadeId: 'snake' as ArcadeId,
   arcadeScore: 0,
+  arcadeLevel: 1,
   weather: null as WeatherSnap | null,
   shareModal: null as null | 'app' | 'backup',
   shareQrSvg: '',
@@ -432,6 +434,7 @@ function renderGames(): string {
     )
     .join('')
   const hi = best[state.arcadeId]
+  const bestLv = loadArcadeBestLevel()[state.arcadeId]
   const controls =
     state.arcadeId === 'snake'
       ? `
@@ -456,7 +459,7 @@ function renderGames(): string {
       <p class="hint">오프라인 아케이드 · 점수 기기 저장</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
-        <div class="arcade-hud">SCORE ${state.arcadeScore} · BEST ${hi ?? '—'}</div>
+        <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>
         <button type="button" class="arcade-restart-btn" data-arcade-restart="1">다시 시작</button>
       </div>
       <p class="hint">${escapeHtml(meta.blurb)}</p>
@@ -473,12 +476,15 @@ function mountActiveArcade(): void {
   const canvas = document.getElementById('arcade-canvas') as HTMLCanvasElement | null
   if (!canvas || state.view !== 'games') return
   state.arcadeScore = 0
-  arcade = mountArcade(state.arcadeId, canvas, (n) => {
+  state.arcadeLevel = 1
+  arcade = mountArcade(state.arcadeId, canvas, (n, lv) => {
     state.arcadeScore = n
+    state.arcadeLevel = lv
     const hud = document.querySelector('.arcade-hud')
     if (hud) {
       const best = loadArcadeBest()[state.arcadeId]
-      hud.textContent = `SCORE ${n} · BEST ${best ?? '—'}`
+      const bestLv = loadArcadeBestLevel()[state.arcadeId]
+      hud.textContent = `Lv.${lv} · SCORE ${n} · BEST ${best ?? '—'} · BEST Lv.${bestLv ?? '—'}`
     }
   })
 
@@ -499,9 +505,11 @@ function mountActiveArcade(): void {
     if (arcade?.isOver()) {
       arcade.restart()
       state.arcadeScore = 0
+      state.arcadeLevel = 1
       const hud = document.querySelector('.arcade-hud')
       const best = loadArcadeBest()[state.arcadeId]
-      if (hud) hud.textContent = `SCORE 0 · BEST ${best ?? '—'}`
+      const bestLv = loadArcadeBestLevel()[state.arcadeId]
+      if (hud) hud.textContent = `Lv.1 · SCORE 0 · BEST ${best ?? '—'} · BEST Lv.${bestLv ?? '—'}`
       return
     }
     arcade?.pointer(p.x, p.y, 'down')
@@ -1369,6 +1377,7 @@ function bind(): void {
       stopArcade()
       state.arcadeId = btn.dataset.arcade as ArcadeId
       state.arcadeScore = 0
+      state.arcadeLevel = 1
       render()
     })
   })
@@ -1390,9 +1399,11 @@ function bind(): void {
     }
     arcade.restart()
     state.arcadeScore = 0
+    state.arcadeLevel = 1
     const hud = document.querySelector('.arcade-hud')
     const best = loadArcadeBest()[state.arcadeId]
-    if (hud) hud.textContent = `SCORE 0 · BEST ${best ?? '—'}`
+    const bestLv = loadArcadeBestLevel()[state.arcadeId]
+    if (hud) hud.textContent = `Lv.1 · SCORE 0 · BEST ${best ?? '—'} · BEST Lv.${bestLv ?? '—'}`
   })
 
   document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {

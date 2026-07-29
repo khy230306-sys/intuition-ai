@@ -2,9 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   breakoutPaddleBounce,
   flappyPipeCleared,
+  levelFromUnits,
   loadArcadeBest,
+  loadArcadeBestLevel,
   pongPaddleBounce,
   snakeWouldHitSelf,
+  unitsPerLevel,
 } from './arcadeGames'
 
 const store = new Map<string, string>()
@@ -37,5 +40,24 @@ describe('arcade helpers', () => {
     expect(loadArcadeBest().flappy).toBeNull()
     expect(loadArcadeBest().dodge).toBeNull()
     expect(loadArcadeBest().pong).toBeNull()
+  })
+
+  it('levels up one step at a time from progress units', () => {
+    expect(unitsPerLevel('snake')).toBe(3)
+    expect(unitsPerLevel('dodge')).toBe(8)
+    expect(levelFromUnits('snake', 0)).toBe(1)
+    expect(levelFromUnits('snake', 2)).toBe(1)
+    expect(levelFromUnits('snake', 3)).toBe(2)
+    expect(levelFromUnits('snake', 6)).toBe(3)
+    expect(levelFromUnits('flappy', 5)).toBe(2)
+    expect(levelFromUnits('shooter', 10)).toBe(3)
+    expect(levelFromUnits('pong', 4)).toBe(1)
+    expect(levelFromUnits('breakout', 0)).toBe(1)
+    expect(levelFromUnits('breakout', 2)).toBe(3)
+  })
+
+  it('loads empty best levels by default', () => {
+    expect(loadArcadeBestLevel().snake).toBeNull()
+    expect(loadArcadeBestLevel().breakout).toBeNull()
   })
 })

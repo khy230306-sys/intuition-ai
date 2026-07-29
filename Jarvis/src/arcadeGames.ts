@@ -1,17 +1,18 @@
-/** Offline arcade games — canvas, no network. */
+/** Offline arcade games — canvas, no network. Level-up progression. */
 
 export type ArcadeId = 'snake' | 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  snake: { title: '스네이크', blurb: '먹이를 먹고 몸을 늘리세요 · 벽·몸에 닿으면 끝' },
-  breakout: { title: '벽돌깨기', blurb: '패들로 공을 튕겨 벽돌을 깨세요' },
-  shooter: { title: '스페이스', blurb: '좌우로 움직이며 적을 격추하세요' },
-  flappy: { title: '플래피', blurb: '탭해서 날아오르고 기둥을 피하세요' },
-  dodge: { title: '닷지', blurb: '좌우로 피해 떨어지는 장애물을 피하세요' },
-  pong: { title: '퐁', blurb: '패들로 공을 계속 받아치세요' },
+  snake: { title: '스네이크', blurb: '먹이 3개마다 레벨업 · 속도 증가' },
+  breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
+  shooter: { title: '스페이스', blurb: '5기 격추마다 레벨업 · 적 강화' },
+  flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
+  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
+  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
+const LEVEL_KEY = 'jarvis.arcade.bestLevel.v1'
 
 export type ArcadeBest = {
   snake: number | null
@@ -21,6 +22,8 @@ export type ArcadeBest = {
   dodge: number | null
   pong: number | null
 }
+
+export type ArcadeBestLevel = ArcadeBest
 
 const EMPTY_BEST: ArcadeBest = {
   snake: null,
@@ -41,8 +44,22 @@ export function loadArcadeBest(): ArcadeBest {
   }
 }
 
+export function loadArcadeBestLevel(): ArcadeBestLevel {
+  try {
+    const raw = localStorage.getItem(LEVEL_KEY)
+    if (!raw) return { ...EMPTY_BEST }
+    return { ...EMPTY_BEST, ...JSON.parse(raw) }
+  } catch {
+    return { ...EMPTY_BEST }
+  }
+}
+
 function saveBest(best: ArcadeBest): void {
   localStorage.setItem(BEST_KEY, JSON.stringify(best))
+}
+
+function saveBestLevel(levels: ArcadeBestLevel): void {
+  localStorage.setItem(LEVEL_KEY, JSON.stringify(levels))
 }
 
 function bumpBest(game: ArcadeId, score: number): void {
@@ -54,12 +71,47 @@ function bumpBest(game: ArcadeId, score: number): void {
   }
 }
 
+function bumpBestLevel(game: ArcadeId, level: number): void {
+  const best = loadArcadeBestLevel()
+  const cur = best[game]
+  if (cur == null || level > cur) {
+    best[game] = level
+    saveBestLevel(best)
+  }
+}
+
+/** How many progress units needed to advance one level. */
+export function unitsPerLevel(id: ArcadeId): number {
+  switch (id) {
+    case 'snake':
+      return 3
+    case 'breakout':
+      return 1
+    case 'shooter':
+      return 5
+    case 'flappy':
+      return 5
+    case 'dodge':
+      return 8
+    case 'pong':
+      return 5
+  }
+}
+
+/** Level from progress units (1-based). */
+export function levelFromUnits(id: ArcadeId, units: number): number {
+  return Math.max(1, Math.floor(Math.max(0, units) / unitsPerLevel(id)) + 1)
+}
+
+export type ScoreCb = (score: number, level: number) => void
+
 export type ArcadeHandle = {
   stop: () => void
   setDir?: (dx: number, dy: number) => void
   pointer: (x: number, y: number, type: 'down' | 'move' | 'up') => void
   restart: () => void
   getScore: () => number
+  getLevel: () => number
   isOver: () => boolean
 }
 
@@ -90,27 +142,40 @@ function drawHud(
   w: number,
   h: number,
   score: number,
+  level: number,
   over: boolean,
   title: string,
-  cleared = false,
+  opts?: { cleared?: boolean; levelUpUntil?: number },
 ): void {
   ctx.fillStyle = 'rgba(8,14,22,0.55)'
   ctx.fillRect(0, 0, w, 28)
   ctx.fillStyle = '#5affe8'
-  ctx.font = '600 13px IBM Plex Sans KR, sans-serif'
+  ctx.font = '600 12px IBM Plex Sans KR, sans-serif'
   ctx.textAlign = 'left'
-  ctx.fillText(`${title}  SCORE ${score}`, 10, 18)
-  if (over || cleared) {
+  ctx.fillText(`${title}  Lv.${level}  SCORE ${score}`, 10, 18)
+  const now = performance.now()
+  if (opts?.levelUpUntil && now < opts.levelUpUntil && !over && !opts.cleared) {
+    ctx.fillStyle = 'rgba(0, 210, 190, 0.18)'
+    ctx.fillRect(0, h * 0.38, w, 44)
+    ctx.fillStyle = '#5affe8'
+    ctx.font = '700 20px Orbitron, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(`LEVEL ${level}`, w / 2, h * 0.38 + 30)
+  }
+  if (over || opts?.cleared) {
     ctx.fillStyle = 'rgba(0,0,0,0.62)'
     ctx.fillRect(0, 0, w, h)
     ctx.fillStyle = '#fff'
     ctx.font = '700 22px Orbitron, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText(cleared ? 'CLEAR!' : 'GAME OVER', w / 2, h * 0.36)
+    ctx.fillText(opts?.cleared ? 'CLEAR!' : 'GAME OVER', w / 2, h * 0.32)
+    ctx.fillStyle = '#5affe8'
+    ctx.font = '600 14px IBM Plex Sans KR, sans-serif'
+    ctx.fillText(`도달 레벨 ${level} · 점수 ${score}`, w / 2, h * 0.32 + 28)
     const bw = 168
     const bh = 48
     const bx = w / 2 - bw / 2
-    const by = h * 0.36 + 28
+    const by = h * 0.32 + 48
     ctx.fillStyle = '#00d2be'
     ctx.fillRect(bx, by, bw, bh)
     ctx.fillStyle = '#041018'
@@ -122,8 +187,24 @@ function drawHud(
   }
 }
 
+function noteLevel(
+  game: ArcadeId,
+  prevLevel: number,
+  nextLevel: number,
+  score: number,
+  onScore?: ScoreCb,
+): { level: number; levelUpUntil: number } {
+  if (nextLevel > prevLevel) {
+    bumpBestLevel(game, nextLevel)
+    onScore?.(score, nextLevel)
+    return { level: nextLevel, levelUpUntil: performance.now() + 1200 }
+  }
+  onScore?.(score, nextLevel)
+  return { level: nextLevel, levelUpUntil: 0 }
+}
+
 /** —— SNAKE —— */
-export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountSnake(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   const cols = 16
   const rows = 22
   let dir = { x: 1, y: 0 }
@@ -135,10 +216,16 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
   ]
   let food = { x: 10, y: 10 }
   let score = 0
+  let foods = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
   let acc = 0
-  const step = 1 / 9
   const loop: Loop = { running: true, raf: 0, last: 0 }
+
+  function stepInterval(): number {
+    return 1 / Math.min(18, 8 + level)
+  }
 
   function placeFood(): void {
     for (let i = 0; i < 200; i++) {
@@ -160,9 +247,12 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
       { x: 2, y: 10 },
     ]
     score = 0
+    foods = 0
+    level = 1
+    levelUpUntil = 0
     over = false
     placeFood()
-    onScore?.(score)
+    onScore?.(score, level)
   }
 
   function tick(): void {
@@ -172,13 +262,18 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     if (head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows || snake.some((s) => s.x === head.x && s.y === head.y)) {
       over = true
       bumpBest('snake', score)
-      onScore?.(score)
+      bumpBestLevel('snake', level)
+      onScore?.(score, level)
       return
     }
     snake.unshift(head)
     if (head.x === food.x && head.y === food.y) {
       score += 10
-      onScore?.(score)
+      foods += 1
+      const next = levelFromUnits('snake', foods)
+      const noted = noteLevel('snake', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
       placeFood()
     } else {
       snake.pop()
@@ -193,7 +288,6 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     const cellH = (h - 28) / rows
     ctx.fillStyle = '#070b12'
     ctx.fillRect(0, 0, w, h)
-    // grid vibe
     ctx.strokeStyle = 'rgba(0,210,190,0.06)'
     for (let x = 0; x <= cols; x++) {
       ctx.beginPath()
@@ -207,7 +301,7 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
       ctx.fillStyle = i === 0 ? '#5affe8' : '#00d2be'
       ctx.fillRect(s.x * cellW + 1, 28 + s.y * cellH + 1, cellW - 2, cellH - 2)
     })
-    drawHud(ctx, w, h, score, over, 'SNAKE')
+    drawHud(ctx, w, h, score, level, over, 'SNAKE', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -217,6 +311,7 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     loop.last = t
     if (!over) {
       acc += dt
+      const step = stepInterval()
       while (acc >= step) {
         acc -= step
         tick()
@@ -251,15 +346,17 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
       acc = 0
     },
     getScore: () => score,
+    getLevel: () => level,
     isOver: () => over,
   }
 }
 
 /** —— BREAKOUT —— */
-export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let score = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
-  let won = false
   let paddleX = 0
   let ball = { x: 0, y: 0, vx: 140, vy: -220 }
   let bricks: Array<{ x: number; y: number; w: number; h: number; alive: boolean; color: string }> = []
@@ -276,7 +373,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
   function buildBricks(): void {
     bricks = []
     const cols = 8
-    const rows = 5
+    const rows = Math.min(9, 4 + level)
     const gap = 4
     const bw = (w - gap * (cols + 1)) / cols
     const bh = 14
@@ -294,37 +391,63 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
     }
   }
 
+  function ballSpeed(): number {
+    return 200 + level * 28
+  }
+
+  function resetBall(): void {
+    const spd = ballSpeed()
+    ball = {
+      x: w / 2,
+      y: h - 60,
+      vx: spd * 0.55 * (Math.random() > 0.5 ? 1 : -1),
+      vy: -spd,
+    }
+  }
+
   function reset(): void {
     const sized = sizeCanvas(canvas)
     w = sized.w
     h = sized.h
     score = 0
+    level = 1
+    levelUpUntil = 0
     over = false
-    won = false
     paddleX = w / 2 - paddleW / 2
-    ball = { x: w / 2, y: h - 60, vx: 140 * (Math.random() > 0.5 ? 1 : -1), vy: -220 }
     buildBricks()
-    onScore?.(score)
+    resetBall()
+    onScore?.(score, level)
+  }
+
+  function nextStage(): void {
+    score += 100
+    const next = level + 1
+    const noted = noteLevel('breakout', level, next, score, onScore)
+    level = noted.level
+    levelUpUntil = noted.levelUpUntil || performance.now() + 1200
+    bumpBest('breakout', score)
+    buildBricks()
+    resetBall()
   }
 
   function step(dt: number): void {
-    if (over || won) return
+    if (over) return
     ball.x += ball.vx * dt
     ball.y += ball.vy * dt
     if (ball.x < ballR || ball.x > w - ballR) ball.vx *= -1
     if (ball.y < 28 + ballR) ball.vy = Math.abs(ball.vy)
-    // paddle
     const py = h - 28
     if (ball.y + ballR >= py && ball.y + ballR <= py + paddleH + 8 && ball.x >= paddleX && ball.x <= paddleX + paddleW && ball.vy > 0) {
       ball.vy = -Math.abs(ball.vy)
       const hit = (ball.x - (paddleX + paddleW / 2)) / (paddleW / 2)
-      ball.vx = hit * 220
+      ball.vx = hit * (180 + level * 20)
       ball.y = py - ballR
     }
     if (ball.y > h) {
       over = true
       bumpBest('breakout', score)
-      onScore?.(score)
+      bumpBestLevel('breakout', level)
+      onScore?.(score, level)
       return
     }
     for (const b of bricks) {
@@ -333,16 +456,11 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
         b.alive = false
         ball.vy *= -1
         score += 10
-        onScore?.(score)
+        onScore?.(score, level)
         break
       }
     }
-    if (bricks.every((b) => !b.alive)) {
-      won = true
-      score += 100
-      bumpBest('breakout', score)
-      onScore?.(score)
-    }
+    if (bricks.length && bricks.every((b) => !b.alive)) nextStage()
   }
 
   function draw(): void {
@@ -364,10 +482,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
     ctx.arc(ball.x, ball.y, ballR, 0, Math.PI * 2)
     ctx.fillStyle = '#fff'
     ctx.fill()
-    if (won) {
-      // handled in drawHud as cleared
-    }
-    drawHud(ctx, w, h, score, over, 'BREAKOUT', won)
+    drawHud(ctx, w, h, score, level, over, 'BREAKOUT', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -389,7 +504,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
       cancelAnimationFrame(loop.raf)
     },
     pointer: (x, _y, type) => {
-      if ((over || won) && type === 'down') {
+      if (over && type === 'down') {
         reset()
         return
       }
@@ -401,15 +516,19 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
     },
     restart: () => reset(),
     getScore: () => score,
-    isOver: () => over || won,
+    getLevel: () => level,
+    isOver: () => over,
   }
 }
 
 /** —— SPACE SHOOTER —— */
-export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let w = 320
   let h = 420
   let score = 0
+  let kills = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
   let shipX = 160
   let bullets: Array<{ x: number; y: number }> = []
@@ -423,38 +542,41 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
     w = sized.w
     h = sized.h
     score = 0
+    kills = 0
+    level = 1
+    levelUpUntil = 0
     over = false
     shipX = w / 2
     bullets = []
     enemies = []
     spawnAcc = 0
     fireAcc = 0
-    onScore?.(score)
+    onScore?.(score, level)
   }
 
   function step(dt: number): void {
     if (over) return
     fireAcc += dt
-    if (fireAcc > 0.28) {
+    if (fireAcc > Math.max(0.16, 0.3 - level * 0.015)) {
       fireAcc = 0
       bullets.push({ x: shipX, y: h - 50 })
     }
     spawnAcc += dt
-    if (spawnAcc > Math.max(0.35, 1.1 - score / 400)) {
+    if (spawnAcc > Math.max(0.28, 1.15 - level * 0.08)) {
       spawnAcc = 0
       enemies.push({
         x: 20 + Math.random() * (w - 40),
         y: 36,
-        vx: (Math.random() - 0.5) * 80,
-        hp: 1 + (score > 120 ? 1 : 0),
+        vx: (Math.random() - 0.5) * (70 + level * 10),
+        hp: 1 + (level >= 3 ? 1 : 0) + (level >= 6 ? 1 : 0),
       })
     }
     bullets.forEach((b) => {
-      b.y -= 380 * dt
+      b.y -= (360 + level * 20) * dt
     })
     bullets = bullets.filter((b) => b.y > 20)
     enemies.forEach((e) => {
-      e.y += (55 + score * 0.15) * dt
+      e.y += (50 + level * 12) * dt
       e.x += e.vx * dt
       if (e.x < 12 || e.x > w - 12) e.vx *= -1
     })
@@ -466,19 +588,23 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
           if (e.hp <= 0) {
             e.y = 9999
             score += 15
-            onScore?.(score)
+            kills += 1
+            const next = levelFromUnits('shooter', kills)
+            const noted = noteLevel('shooter', level, next, score, onScore)
+            level = noted.level
+            if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
           }
         }
       }
     }
     bullets = bullets.filter((b) => b.y > 20)
     enemies = enemies.filter((e) => e.y < h + 20)
-    // collision with ship
     for (const e of enemies) {
       if (Math.hypot(e.x - shipX, e.y - (h - 36)) < 22 || e.y > h - 10) {
         over = true
         bumpBest('shooter', score)
-        onScore?.(score)
+        bumpBestLevel('shooter', level)
+        onScore?.(score, level)
         break
       }
     }
@@ -492,12 +618,10 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
     if (!ctx) return
     ctx.fillStyle = '#05080e'
     ctx.fillRect(0, 0, w, h)
-    // stars
     ctx.fillStyle = 'rgba(255,255,255,0.25)'
     for (let i = 0; i < 30; i++) {
       ctx.fillRect((i * 47) % w, (i * 89 + score) % h, 2, 2)
     }
-    // ship
     ctx.fillStyle = '#5affe8'
     ctx.beginPath()
     ctx.moveTo(shipX, h - 48)
@@ -513,7 +637,7 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
       ctx.fillStyle = e.hp > 1 ? '#f472b6' : '#ff6b6b'
       ctx.fillRect(e.x - 12, e.y - 10, 24, 20)
     }
-    drawHud(ctx, w, h, score, over, 'SPACE')
+    drawHud(ctx, w, h, score, level, over, 'SPACE', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -544,25 +668,31 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
     },
     restart: () => reset(),
     getScore: () => score,
+    getLevel: () => level,
     isOver: () => over,
   }
 }
 
 /** —— FLAPPY —— */
-export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountFlappy(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let w = 320
   let h = 400
   let birdY = 180
   let birdV = 0
   let pipes: Array<{ x: number; gapY: number; scored: boolean }> = []
   let score = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
   let spawn = 0
   const loop: Loop = { running: true, raf: 0, last: 0 }
   const birdR = 12
-  const gap = 110
   const gravity = 980
   const flap = -320
+
+  function gapSize(): number {
+    return Math.max(78, 120 - level * 5)
+  }
 
   function reset(): void {
     const s = sizeCanvas(canvas)
@@ -572,17 +702,21 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => 
     birdV = 0
     pipes = []
     score = 0
+    level = 1
+    levelUpUntil = 0
     over = false
     spawn = 0
-    onScore?.(0)
+    onScore?.(0, level)
   }
 
   function step(dt: number): void {
     if (over) return
+    const gap = gapSize()
     birdV += gravity * dt
     birdY += birdV * dt
     spawn += dt
-    if (spawn > 1.35) {
+    const interval = Math.max(0.85, 1.4 - level * 0.06)
+    if (spawn > interval) {
       spawn = 0
       pipes.push({
         x: w + 20,
@@ -590,24 +724,30 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => 
         scored: false,
       })
     }
-    for (const p of pipes) p.x -= 140 * dt
+    const speed = 130 + level * 12
+    for (const p of pipes) p.x -= speed * dt
     pipes = pipes.filter((p) => p.x > -40)
     for (const p of pipes) {
       if (!p.scored && p.x + 28 < w * 0.28) {
         p.scored = true
         score += 1
+        const next = levelFromUnits('flappy', score)
+        const noted = noteLevel('flappy', level, next, score, onScore)
+        level = noted.level
+        if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
         bumpBest('flappy', score)
-        onScore?.(score)
       }
       const inX = Math.abs(p.x + 14 - w * 0.28) < 14 + birdR * 0.7
       if (inX && (birdY - birdR < p.gapY || birdY + birdR > p.gapY + gap)) {
         over = true
         bumpBest('flappy', score)
+        bumpBestLevel('flappy', level)
       }
     }
     if (birdY - birdR < 0 || birdY + birdR > h) {
       over = true
       bumpBest('flappy', score)
+      bumpBestLevel('flappy', level)
     }
   }
 
@@ -617,6 +757,7 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => 
     const s = sizeCanvas(canvas)
     w = s.w
     h = s.h
+    const gap = gapSize()
     ctx.fillStyle = '#0a1624'
     ctx.fillRect(0, 0, w, h)
     ctx.fillStyle = '#00d2be'
@@ -628,7 +769,7 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => 
     ctx.beginPath()
     ctx.arc(w * 0.28, birdY, birdR, 0, Math.PI * 2)
     ctx.fill()
-    drawHud(ctx, w, h, score, over, 'FLAPPY')
+    drawHud(ctx, w, h, score, level, over, 'FLAPPY', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -659,17 +800,20 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: (n: number) => 
     },
     restart: () => reset(),
     getScore: () => score,
+    getLevel: () => level,
     isOver: () => over,
   }
 }
 
 /** —— DODGE —— */
-export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountDodge(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let w = 320
   let h = 400
   let playerX = 160
   let hazards: Array<{ x: number; y: number; s: number; vy: number }> = []
   let score = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
   let spawn = 0
   let elapsed = 0
@@ -684,17 +828,19 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     playerX = w / 2
     hazards = []
     score = 0
+    level = 1
+    levelUpUntil = 0
     over = false
     spawn = 0
     elapsed = 0
-    onScore?.(0)
+    onScore?.(0, level)
   }
 
   function step(dt: number): void {
     if (over) return
     elapsed += dt
     spawn += dt
-    const rate = Math.max(0.28, 0.9 - elapsed * 0.02)
+    const rate = Math.max(0.22, 0.95 - level * 0.07)
     if (spawn > rate) {
       spawn = 0
       const s = 18 + Math.random() * 22
@@ -702,7 +848,7 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
         x: s / 2 + Math.random() * (w - s),
         y: -s,
         s,
-        vy: 160 + Math.random() * 120 + elapsed * 8,
+        vy: 150 + level * 25 + Math.random() * 80,
       })
     }
     for (const hz of hazards) hz.y += hz.vy * dt
@@ -711,8 +857,11 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     const passed = before - hazards.length
     if (passed > 0) {
       score += passed
+      const next = levelFromUnits('dodge', score)
+      const noted = noteLevel('dodge', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
       bumpBest('dodge', score)
-      onScore?.(score)
     }
     const px = playerX - pw / 2
     const py = h - 42
@@ -725,6 +874,7 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
       ) {
         over = true
         bumpBest('dodge', score)
+        bumpBestLevel('dodge', level)
         break
       }
     }
@@ -744,7 +894,7 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     }
     ctx.fillStyle = '#5affe8'
     ctx.fillRect(playerX - pw / 2, h - 42, pw, ph)
-    drawHud(ctx, w, h, score, over, 'DODGE')
+    drawHud(ctx, w, h, score, level, over, 'DODGE', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -775,38 +925,48 @@ export function mountDodge(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     },
     restart: () => reset(),
     getScore: () => score,
+    getLevel: () => level,
     isOver: () => over,
   }
 }
 
 /** —— PONG (solo wall) —— */
-export function mountPong(canvas: HTMLCanvasElement, onScore?: (n: number) => void): ArcadeHandle {
+export function mountPong(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let w = 320
   let h = 400
   let paddleX = 120
   let ball = { x: 160, y: 200, vx: 160, vy: -220 }
   let score = 0
+  let level = 1
+  let levelUpUntil = 0
   let over = false
   const loop: Loop = { running: true, raf: 0, last: 0 }
-  const paddleW = 78
   const paddleH = 12
   const ballR = 8
+
+  function paddleW(): number {
+    return Math.max(48, 86 - level * 4)
+  }
 
   function reset(): void {
     const s = sizeCanvas(canvas)
     w = s.w
     h = s.h
-    paddleX = w / 2 - paddleW / 2
-    ball = { x: w / 2, y: h * 0.45, vx: 150 * (Math.random() < 0.5 ? -1 : 1), vy: -230 }
+    paddleX = w / 2 - paddleW() / 2
+    ball = { x: w / 2, y: h * 0.45, vx: 150 * (Math.random() < 0.5 ? -1 : 1), vy: -220 }
     score = 0
+    level = 1
+    levelUpUntil = 0
     over = false
-    onScore?.(0)
+    onScore?.(0, level)
   }
 
   function step(dt: number): void {
     if (over) return
-    ball.x += ball.vx * dt
-    ball.y += ball.vy * dt
+    const pw = paddleW()
+    const speedMul = 1 + (level - 1) * 0.08
+    ball.x += ball.vx * dt * speedMul
+    ball.y += ball.vy * dt * speedMul
     if (ball.x - ballR < 0) {
       ball.x = ballR
       ball.vx = Math.abs(ball.vx)
@@ -825,18 +985,22 @@ export function mountPong(canvas: HTMLCanvasElement, onScore?: (n: number) => vo
       ball.y + ballR >= py &&
       ball.y - ballR <= py + paddleH &&
       ball.x >= paddleX &&
-      ball.x <= paddleX + paddleW
+      ball.x <= paddleX + pw
     ) {
       ball.y = py - ballR
       ball.vy = -Math.abs(ball.vy) * 1.03
-      ball.vx = pongPaddleBounce(ball.x, paddleX, paddleW)
+      ball.vx = pongPaddleBounce(ball.x, paddleX, pw)
       score += 1
+      const next = levelFromUnits('pong', score)
+      const noted = noteLevel('pong', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
       bumpBest('pong', score)
-      onScore?.(score)
     }
     if (ball.y - ballR > h) {
       over = true
       bumpBest('pong', score)
+      bumpBestLevel('pong', level)
     }
   }
 
@@ -846,15 +1010,16 @@ export function mountPong(canvas: HTMLCanvasElement, onScore?: (n: number) => vo
     const s = sizeCanvas(canvas)
     w = s.w
     h = s.h
+    const pw = paddleW()
     ctx.fillStyle = '#071018'
     ctx.fillRect(0, 0, w, h)
     ctx.fillStyle = '#5ac8ff'
-    ctx.fillRect(paddleX, h - 36, paddleW, paddleH)
+    ctx.fillRect(paddleX, h - 36, pw, paddleH)
     ctx.fillStyle = '#fff'
     ctx.beginPath()
     ctx.arc(ball.x, ball.y, ballR, 0, Math.PI * 2)
     ctx.fill()
-    drawHud(ctx, w, h, score, over, 'PONG')
+    drawHud(ctx, w, h, score, level, over, 'PONG', { levelUpUntil })
   }
 
   function frame(t: number): void {
@@ -881,10 +1046,12 @@ export function mountPong(canvas: HTMLCanvasElement, onScore?: (n: number) => vo
         return
       }
       if (over) return
-      paddleX = Math.max(0, Math.min(w - paddleW, x - paddleW / 2))
+      const pw = paddleW()
+      paddleX = Math.max(0, Math.min(w - pw, x - pw / 2))
     },
     restart: () => reset(),
     getScore: () => score,
+    getLevel: () => level,
     isOver: () => over,
   }
 }
@@ -892,7 +1059,7 @@ export function mountPong(canvas: HTMLCanvasElement, onScore?: (n: number) => vo
 export function mountArcade(
   id: ArcadeId,
   canvas: HTMLCanvasElement,
-  onScore?: (n: number) => void,
+  onScore?: ScoreCb,
 ): ArcadeHandle {
   if (id === 'snake') return mountSnake(canvas, onScore)
   if (id === 'breakout') return mountBreakout(canvas, onScore)

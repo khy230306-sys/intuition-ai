@@ -128,12 +128,13 @@ export interface ActionResult {
   opened?: string
 }
 
-export type View = 'chat' | 'invest' | 'life' | 'actions' | 'settings'
+export type View = 'chat' | 'invest' | 'life' | 'games' | 'actions' | 'settings'
 
 export interface BrainReply {
   text: string
   speak?: boolean
   speakLang?: string
   listenLang?: string
+  view?: View
   action?: () => Promise<ActionResult | void> | ActionResult | void
 }

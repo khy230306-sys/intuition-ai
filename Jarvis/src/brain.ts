@@ -84,6 +84,7 @@ function helpText(name: string): string {
     '• 브리핑 / 오늘 뭐하지',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
+    '• 게임 / 업다운 / 기억력 / 순발력 (오프라인)',
     '• 내 위치 / 지금 어디야',
     '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
@@ -660,6 +661,24 @@ export async function think(
   if (/^(스톱|스탑|stop|그만|종료)$/i.test(text.trim())) {
     const locked = await handleTranslate(text)
     if (locked) return locked
+  }
+
+  // Offline games shortcut
+  if (/^(게임|미니게임|오프라인\s*게임)/i.test(text) || /게임\s*(할래|하자|열어)/.test(text)) {
+    return {
+      text: '오프라인 게임 탭으로 이동합니다.\n· 업다운 · 기억력 · 순발력\n데이터 없이 플레이할 수 있습니다.',
+      speak: true,
+      view: 'games',
+    }
+  }
+  if (/업다운|숫자\s*맞히/.test(text) && text.length < 20) {
+    return { text: '업다운 게임을 엽니다. 1~100 숫자를 맞춰 보세요.', speak: true, view: 'games' }
+  }
+  if (/기억력\s*게임|사이먼|메모리\s*게임/.test(text)) {
+    return { text: '기억력 게임을 엽니다. 빛나는 순서를 따라 누르세요.', speak: true, view: 'games' }
+  }
+  if (/순발력|반응\s*속도/.test(text) && text.length < 24) {
+    return { text: '순발력 게임을 엽니다. 초록이 되면 바로 탭!', speak: true, view: 'games' }
   }
 
   // Translate lock must win over stocks/stats/life until user says 스톱

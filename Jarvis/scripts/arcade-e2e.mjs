@@ -93,7 +93,7 @@ async function main() {
   const friendCode =
     'JARVIS-ARCADE|v1|snake|99|6|친구테스트|friend-e2e|1700000000000'
   await page.$eval('#arcade-import-form textarea', (el, code) => {
-    ;(el as HTMLTextAreaElement).value = code as string
+    el.value = code
   }, friendCode)
   await page.click('#arcade-import-form button[type="submit"]')
   await page.waitForFunction(() => {

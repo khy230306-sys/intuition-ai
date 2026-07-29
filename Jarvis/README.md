@@ -5,7 +5,7 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://hovering-byte-00wcsta.shipstatic.com
+**앱 URL:** https://diagonal-wisp-kwq1fj2.shipstatic.com
 
 > 게이트/번역 바에 **v1.6.3**이 보여야 최신입니다.  
 > 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)

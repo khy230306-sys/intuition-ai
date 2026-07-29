@@ -727,7 +727,6 @@ function renderChat(): string {
         }" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
         <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
       </form>
-      ${renderShareModal()}
     </section>
   `
 }
@@ -1116,7 +1115,6 @@ function renderActions(): string {
           )
           .join('')}
       </div>
-      ${renderShareModal()}
     </section>
   `
 }
@@ -1161,7 +1159,6 @@ function renderSettings(): string {
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
       <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다.</p>
-      ${renderShareModal()}
     </section>
   `
 }
@@ -1188,7 +1185,7 @@ function render(): void {
               : state.view === 'actions'
                 ? renderActions()
                 : renderSettings()
-  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}`
+  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
   bind()
   if (state.view === 'games') {
     // remount after DOM ready

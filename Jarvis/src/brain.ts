@@ -25,6 +25,7 @@ import {
   positionSize,
   riskProfileAdvice,
 } from './finance'
+import { buildColdRecommendations, wantsStockRecommend } from './recommend'
 import {
   convertUnit,
   decide,
@@ -73,12 +74,12 @@ function helpText(name: string): string {
     `${name}, JARVIS 만능 비서입니다.`,
     '',
     '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 계산 · 변환',
-    '【투자】 시세 · 관심종목 · 포트폴리오 · 매매노트 · 포지션 · 적립식 · 체크리스트',
+    '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식',
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
     '• 브리핑 / 오늘 뭐하지',
-    '• 장바구니 우유 계란 / 지출 커피 4500',
+    '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 삼성전자 시세 / 애플 주가',
     '• 데이터 수익률 1.2 -0.5 3.1 → 통계',
     '• 추가 0.8 / 확률 0 이상 / 시세기록 삼성전자',
@@ -89,7 +90,7 @@ function helpText(name: string): string {
     '• 적립식 매달 50만 10년 연7%',
     '• 삼성전자 투자체크',
     '',
-    '설정에서 OpenAI API 키를 넣으면 더 깊은 대화·분석이 가능합니다.',
+    '종목 추천은 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
     '면책: 투자 조언이 아니며 손실 책임은 본인에게 있습니다.',
   ].join('\n')
 }
@@ -146,6 +147,11 @@ async function callCloudLLM(
 }
 
 async function handleInvest(text: string): Promise<BrainReply | null> {
+  if (wantsStockRecommend(text)) {
+    const report = await buildColdRecommendations(text)
+    return { text: report, speak: true }
+  }
+
   if (/장\s*시간|시장\s*개장|장중|마켓\s*아워|market\s*hours/i.test(text)) {
     return { text: marketSessionNow(), speak: true }
   }

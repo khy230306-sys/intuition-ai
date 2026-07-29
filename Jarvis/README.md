@@ -5,7 +5,7 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://liquid-mind-g4sdr0j.shipstatic.com
+**앱 URL:** https://hypnotic-lens-0s2xp8v.shipstatic.com
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**

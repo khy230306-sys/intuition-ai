@@ -39,9 +39,9 @@ import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
 
 const SUGGESTIONS = [
-  '브리핑',
+  '주식 종목 추천',
   '삼성전자 시세',
-  '데이터 1.2 -0.5 3.1 0.8',
+  '브리핑',
   '통계',
   '도움말',
 ]
@@ -292,10 +292,10 @@ function renderInvest(): string {
       <h2 class="section-title">INVEST</h2>
       <p class="hint">실시간 시세(Yahoo) · 포트폴리오 · 관심종목 · 매매노트. 투자 조언이 아닌 참고 도구입니다.</p>
       <div class="chips left">
+        <button type="button" data-suggest="주식 종목 추천">냉정 추천</button>
         <button type="button" data-suggest="포트폴리오">포트폴리오 새로고침</button>
         <button type="button" data-suggest="관심종목 목록">관심 시세</button>
         <button type="button" data-suggest="장시간">장 시간</button>
-        <button type="button" data-suggest="적립식 매달 50만 10년 연7%">적립식 계산</button>
       </div>
 
       <h2 class="section-title">HOLDINGS</h2>

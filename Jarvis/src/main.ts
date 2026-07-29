@@ -40,8 +40,8 @@ import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking }
 import { currentListenLang, loadInterpretMode } from './translateBrain'
 
 const SUGGESTIONS = [
-  '영어 통역 모드',
-  '일본어로 번역해 안녕하세요',
+  '지금부터 스톱할 때까지 베트남어로 번역해줘',
+  '내 말을 영어로 번역해줘',
   '주식 종목 추천',
   '프랑스 정보',
   '도움말',

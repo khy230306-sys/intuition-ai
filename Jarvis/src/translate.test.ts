@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { detectLangCode, findLang, translateText } from './translate'
+import { translateOffline } from './offlineDict'
+import { detectLangCode, findLang } from './translate'
 import {
   clearInterpretMode,
   currentListenLang,
@@ -23,41 +24,31 @@ vi.stubGlobal('localStorage', {
 describe('translate helpers', () => {
   it('finds languages by Korean name and alias', () => {
     expect(findLang('영어')?.code).toBe('en')
-    expect(findLang('japanese')?.code).toBe('ja')
-    expect(findLang('스페인어')?.code).toBe('es')
+    expect(findLang('vietnamese')?.code).toBe('vi')
+    expect(findLang('베트남어')?.code).toBe('vi')
   })
 
   it('detects script languages', () => {
     expect(detectLangCode('안녕하세요')).toBe('ko')
     expect(detectLangCode('こんにちは')).toBe('ja')
-    expect(detectLangCode('Hello there')).toBe('en')
-    expect(detectLangCode('Привет')).toBe('ru')
+  })
+
+  it('translates Vietnamese offline meal phrase', () => {
+    const r = translateOffline('나는 이미 식사를 했어요', 'ko', 'vi')
+    expect(r.ok).toBe(true)
+    expect(r.text.toLowerCase()).toMatch(/đã ăn|toi/)
   })
 })
 
-describe('translate API + interpret brain', () => {
+describe('lock-until-stop translate mode', () => {
   beforeEach(() => {
     store.clear()
     clearInterpretMode()
+    vi.stubGlobal('navigator', { onLine: false })
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => {
-        const u = String(url)
-        const q = decodeURIComponent(u.match(/q=([^&]+)/)?.[1] || '')
-        const pair = decodeURIComponent(u.match(/langpair=([^&]+)/)?.[1] || '')
-        const [from, to] = pair.split('|')
-        let translated = q
-        if (from === 'ko' && to === 'en' && /안녕/.test(q)) translated = 'Hello'
-        else if (from === 'en' && to === 'ko' && /hello/i.test(q)) translated = '안녕하세요'
-        else if (to === 'ja') translated = 'こんにちは'
-        else translated = `[${to}]${q}`
-        return {
-          ok: true,
-          json: async () => ({
-            responseData: { translatedText: translated },
-            responseStatus: 200,
-          }),
-        }
+      vi.fn(async () => {
+        throw new Error('offline')
       }),
     )
   })
@@ -66,41 +57,37 @@ describe('translate API + interpret brain', () => {
     store.clear()
   })
 
-  it('translates via MyMemory shape', async () => {
-    const r = await translateText('안녕하세요', 'ko', 'en')
-    expect(r.ok).toBe(true)
-    expect(r.text).toBe('Hello')
-  })
-
-  it('starts English interpret mode (ko mic → en)', async () => {
-    const reply = await handleTranslate('영어 통역 모드')
-    expect(reply?.text).toMatch(/실시간 통역 ON/)
-    expect(reply?.listenLang).toBe('ko-KR')
-    const mode = loadInterpretMode()
-    expect(mode.active).toBe(true)
-    expect(mode.langB).toBe('en')
-    expect(mode.listening).toBe('ko')
+  it('starts lock from natural “지금부터 스톱할 때까지 베트남어로…”', async () => {
+    const reply = await handleTranslate('지금부터 스톱할 때까지 베트남어로 번역해줘')
+    expect(reply?.text).toMatch(/번역 잠금 ON/)
+    expect(reply?.text).toMatch(/베트남어/)
+    expect(loadInterpretMode().active).toBe(true)
+    expect(loadInterpretMode().langB).toBe('vi')
     expect(currentListenLang()).toBe('ko-KR')
   })
 
-  it('live-translates Korean to English and sets speakLang', async () => {
-    await handleTranslate('영어 통역 모드')
-    const reply = await handleTranslate('안녕하세요')
-    expect(reply?.text).toMatch(/Hello/)
-    expect(reply?.speakLang).toBe('en-US')
+  it('parses “내 말을 베트남어로 번역해 줘 + 문장” and translates', async () => {
+    const reply = await handleTranslate('내 말을 베트남어로 번역해 줘 나는 이미 식사를 했어요')
+    expect(reply?.text).toMatch(/đã ăn|Tôi|베트남/i)
+    expect(loadInterpretMode().active).toBe(true)
+    expect(loadInterpretMode().langB).toBe('vi')
   })
 
-  it('one-shot translates to Japanese', async () => {
-    const reply = await handleTranslate('일본어로 번역해 안녕하세요')
-    expect(reply?.text).toMatch(/こんにちは|일본어/)
-    expect(reply?.speakLang).toBe('ja-JP')
-  })
-
-  it('stops interpret mode', async () => {
-    await handleTranslate('영어 통역 모드')
-    const reply = await handleTranslate('통역 종료')
-    expect(reply?.listenLang).toBe('ko-KR')
+  it('while locked, only translates until 스톱', async () => {
+    await handleTranslate('베트남어로만 번역')
+    const mid = await handleTranslate('안녕하세요')
+    expect(mid?.text).toMatch(/Xin chào/)
+    expect(mid?.speakLang).toBe('vi-VN')
+    const stop = await handleTranslate('스톱')
+    expect(stop?.text).toMatch(/종료/)
     expect(loadInterpretMode().active).toBe(false)
-    expect(currentListenLang()).toBeNull()
+  })
+
+  it('ignores non-translate intents wording while locked (still translates)', async () => {
+    await handleTranslate('영어 통역 모드')
+    // Even stock-like text gets translated, not invested
+    const reply = await handleTranslate('삼성전자 시세')
+    expect(reply?.text).toMatch(/영어|EN|【/)
+    expect(loadInterpretMode().active).toBe(true)
   })
 })

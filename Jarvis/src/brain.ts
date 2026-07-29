@@ -67,7 +67,7 @@ import {
 import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
-import { handleTranslate } from './translateBrain'
+import { handleTranslate, loadInterpretMode } from './translateBrain'
 import type { BrainReply, JarvisSettings } from './types'
 
 function helpText(name: string): string {
@@ -653,6 +653,12 @@ export async function think(
   const name = settings.displayName
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
+
+  // Translate lock must win over stocks/stats/life until user says 스톱
+  if (loadInterpretMode().active) {
+    const locked = await handleTranslate(text)
+    if (locked) return locked
+  }
 
   const stats = await handleStats(text)
   if (stats) return stats

@@ -532,8 +532,18 @@ body {
   font-weight: 500;
 }
 
-.up {
-  color: var(--ok);
+.stats-report {
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(0, 210, 190, 0.18);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-x: auto;
 }
 
 .down {

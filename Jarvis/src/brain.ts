@@ -65,6 +65,7 @@ import {
   upsertMemory,
 } from './storage'
 import { extractTickerFromText, resolveTicker } from './tickers'
+import { handleStats } from './statsBrain'
 import type { BrainReply, JarvisSettings } from './types'
 
 function helpText(name: string): string {
@@ -73,11 +74,14 @@ function helpText(name: string): string {
     '',
     '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 계산 · 변환',
     '【투자】 시세 · 관심종목 · 포트폴리오 · 매매노트 · 포지션 · 적립식 · 체크리스트',
+    '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
     '• 브리핑 / 오늘 뭐하지',
     '• 장바구니 우유 계란 / 지출 커피 4500',
     '• 삼성전자 시세 / 애플 주가',
+    '• 데이터 수익률 1.2 -0.5 3.1 → 통계',
+    '• 추가 0.8 / 확률 0 이상 / 시세기록 삼성전자',
     '• 관심종목 엔비디아 추가',
     '• 보유 삼성전자 10주 평단 70000',
     '• 포트폴리오 / 장시간',
@@ -640,6 +644,9 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  const stats = await handleStats(text)
+  if (stats) return stats
+
   const invest = await handleInvest(text)
   if (invest) return invest
 
@@ -738,7 +745,7 @@ export async function think(
   return {
     text: [
       '명령을 이해하지 못했습니다.',
-      '예: 브리핑 · 삼성전자 시세 · 관심종목 엔비디아 추가 · 지출 커피 4500원 · 도움말',
+      '예: 브리핑 · 삼성전자 시세 · 데이터 1.2 -0.5 3 · 통계 · 도움말',
       settings.apiKey.trim() ? '' : '설정에 API 키를 넣으면 자유 대화·심화 분석이 가능합니다.',
     ]
       .filter(Boolean)

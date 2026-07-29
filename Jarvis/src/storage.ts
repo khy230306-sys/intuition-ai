@@ -1,5 +1,6 @@
 import type {
   ChatMessage,
+  DataSeries,
   ExpenseItem,
   HabitItem,
   Holding,
@@ -25,6 +26,8 @@ const KEYS = {
   watchlist: 'jarvis_watchlist_v1',
   holdings: 'jarvis_holdings_v1',
   trades: 'jarvis_trades_v1',
+  series: 'jarvis_series_v1',
+  activeSeries: 'jarvis_active_series_v1',
   settings: 'jarvis_settings_v1',
   installDismiss: 'jarvis_install_dismissed',
 } as const
@@ -475,6 +478,73 @@ export function deleteTrade(id: string): void {
   saveTrades(loadTrades().filter((t) => t.id !== id))
 }
 
+export function loadSeriesList(): DataSeries[] {
+  return readJson(KEYS.series, [])
+}
+
+export function saveSeriesList(items: DataSeries[]): void {
+  writeJson(KEYS.series, items)
+}
+
+export function getActiveSeriesName(): string {
+  return localStorage.getItem(KEYS.activeSeries) || '기본'
+}
+
+export function setActiveSeriesName(name: string): void {
+  localStorage.setItem(KEYS.activeSeries, name.trim() || '기본')
+}
+
+export function getSeries(name?: string): DataSeries {
+  const n = (name || getActiveSeriesName()).trim() || '기본'
+  const list = loadSeriesList()
+  const found = list.find((s) => s.name.toLowerCase() === n.toLowerCase())
+  if (found) return found
+  const created: DataSeries = {
+    id: crypto.randomUUID(),
+    name: n,
+    values: [],
+    updatedAt: Date.now(),
+  }
+  list.unshift(created)
+  saveSeriesList(list)
+  setActiveSeriesName(n)
+  return created
+}
+
+export function replaceSeriesValues(name: string, values: number[]): DataSeries {
+  const list = loadSeriesList()
+  const idx = list.findIndex((s) => s.name.toLowerCase() === name.toLowerCase())
+  const item: DataSeries = {
+    id: idx >= 0 ? list[idx].id : crypto.randomUUID(),
+    name,
+    values: values.slice(-5000),
+    updatedAt: Date.now(),
+  }
+  if (idx >= 0) list[idx] = item
+  else list.unshift(item)
+  saveSeriesList(list)
+  setActiveSeriesName(name)
+  return item
+}
+
+export function appendSeriesValues(name: string, values: number[]): DataSeries {
+  const current = getSeries(name)
+  return replaceSeriesValues(current.name, [...current.values, ...values])
+}
+
+export function clearSeries(name?: string): void {
+  const n = name || getActiveSeriesName()
+  replaceSeriesValues(n, [])
+}
+
+export function deleteSeries(name: string): void {
+  saveSeriesList(loadSeriesList().filter((s) => s.name.toLowerCase() !== name.toLowerCase()))
+  if (getActiveSeriesName().toLowerCase() === name.toLowerCase()) {
+    const rest = loadSeriesList()
+    setActiveSeriesName(rest[0]?.name || '기본')
+  }
+}
+
 export function loadSettings(): JarvisSettings {
   return { ...defaultSettings, ...readJson(KEYS.settings, {}) }
 }
@@ -486,7 +556,7 @@ export function saveSettings(settings: JarvisSettings): void {
 export function exportBackup(): string {
   return JSON.stringify(
     {
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       chat: loadChat(),
       memory: loadMemory(),
@@ -499,6 +569,8 @@ export function exportBackup(): string {
       watchlist: loadWatchlist(),
       holdings: loadHoldings(),
       trades: loadTrades(),
+      series: loadSeriesList(),
+      activeSeries: getActiveSeriesName(),
       settings: { ...loadSettings(), apiKey: '' },
     },
     null,
@@ -520,6 +592,8 @@ export function importBackup(json: string): { ok: boolean; message: string } {
       watchlist?: WatchItem[]
       holdings?: Holding[]
       trades?: TradeNote[]
+      series?: DataSeries[]
+      activeSeries?: string
       settings?: Partial<JarvisSettings>
     }
     if (data.chat) saveChat(data.chat)
@@ -533,6 +607,8 @@ export function importBackup(json: string): { ok: boolean; message: string } {
     if (data.watchlist) saveWatchlist(data.watchlist)
     if (data.holdings) saveHoldings(data.holdings)
     if (data.trades) saveTrades(data.trades)
+    if (data.series) saveSeriesList(data.series)
+    if (data.activeSeries) setActiveSeriesName(data.activeSeries)
     if (data.settings) {
       const current = loadSettings()
       saveSettings({
@@ -557,6 +633,7 @@ export function lifeContextBlock(): string {
   const memories = loadMemory().slice(0, 8)
   const holdings = loadHoldings().slice(0, 10)
   const watch = loadWatchlist().slice(0, 10)
+  const active = getSeries()
   return [
     `사용자 호칭: ${settings.displayName}`,
     `도시: ${settings.city || profile.city}`,
@@ -572,6 +649,8 @@ export function lifeContextBlock(): string {
       ? `보유: ${holdings.map((h) => `${h.name} ${h.shares}주@${h.avgPrice}`).join(' | ')}`
       : '보유 종목: 없음',
     watch.length ? `관심: ${watch.map((w) => w.name).join(', ')}` : '관심종목: 없음',
+    `통계 데이터셋 "${active.name}" n=${active.values.length}` +
+      (active.values.length ? ` 최근값=${active.values.slice(-5).join(',')}` : ''),
     memories.length
       ? `기억: ${memories.map((m) => `${m.key}=${m.value}`).join(' | ')}`
       : '기억: 없음',

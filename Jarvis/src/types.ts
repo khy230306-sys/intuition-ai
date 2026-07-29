@@ -91,6 +91,13 @@ export interface TradeNote {
   createdAt: number
 }
 
+export interface DataSeries {
+  id: string
+  name: string
+  values: number[]
+  updatedAt: number
+}
+
 export interface QuoteSnapshot {
   symbol: string
   name: string

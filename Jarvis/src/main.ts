@@ -2,6 +2,7 @@ import './style.css'
 import { quickActions } from './actions'
 import { think } from './brain'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
+import { formatDescriptive } from './stats'
 import {
   INSTALL_DISMISS_KEY,
   clearChat,
@@ -9,10 +10,12 @@ import {
   deleteHabit,
   deleteMemory,
   deleteReminder,
+  deleteSeries,
   deleteShopping,
   deleteTrade,
   expenseTotals,
   exportBackup,
+  getActiveSeriesName,
   importBackup,
   loadChat,
   loadExpenses,
@@ -20,6 +23,7 @@ import {
   loadHoldings,
   loadMemory,
   loadReminders,
+  loadSeriesList,
   loadSettings,
   loadShopping,
   loadTrades,
@@ -37,8 +41,8 @@ import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking }
 const SUGGESTIONS = [
   '브리핑',
   '삼성전자 시세',
-  '포트폴리오',
-  '관심종목 엔비디아 추가',
+  '데이터 1.2 -0.5 3.1 0.8',
+  '통계',
   '도움말',
 ]
 
@@ -364,9 +368,42 @@ function renderLife(): string {
   const reminders = loadReminders().slice(0, 8)
   const memories = loadMemory().slice(0, 6)
   const totals = expenseTotals()
+  const seriesList = loadSeriesList()
+  const activeName = getActiveSeriesName()
+  const active = seriesList.find((s) => s.name.toLowerCase() === activeName.toLowerCase())
+  const activeStats = active && active.values.length ? formatDescriptive(active.name, active.values) : ''
 
   return `
     <section class="panel view-scroll">
+      <h2 class="section-title">STATS</h2>
+      <p class="hint">실시간으로 숫자를 넣으면 평균·분산·확률 등 통계 해답을 줍니다. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
+      <div class="chips left">
+        <button type="button" data-suggest="통계">통계 분석</button>
+        <button type="button" data-suggest="데이터셋 목록">데이터셋</button>
+        <button type="button" data-suggest="통계 도움말">사용법</button>
+        <button type="button" data-suggest="시세기록 삼성전자">시세 기록</button>
+      </div>
+      ${
+        seriesList.length === 0
+          ? '<div class="empty">예: 대화에서 "데이터 수익률 1.2 -0.5 3.1"</div>'
+          : seriesList
+              .slice(0, 8)
+              .map((s) => {
+                const preview = s.values.slice(-4).join(', ')
+                return `
+                <div class="list-item">
+                  <div class="body">
+                    <strong>${s.name === activeName ? '▶ ' : ''}${escapeHtml(s.name)} <span class="tag">n=${s.values.length}</span></strong>
+                    <p>${preview ? escapeHtml(preview) : '비어 있음'}</p>
+                  </div>
+                  <button type="button" data-stats-use="${escapeAttr(s.name)}">분석</button>
+                  <button type="button" data-del-series="${escapeAttr(s.name)}">삭제</button>
+                </div>`
+              })
+              .join('')
+      }
+      ${activeStats ? `<pre class="stats-report">${escapeHtml(activeStats)}</pre>` : ''}
+
       <h2 class="section-title">LIFE</h2>
       <p class="hint">오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}</p>
       <div class="chips left">
@@ -718,6 +755,18 @@ function bind(): void {
     btn.addEventListener('click', () => {
       deleteTrade(btn.dataset.delTrade || '')
       render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-series]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteSeries(btn.dataset.delSeries || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-stats-use]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.view = 'chat'
+      void handleUserText(`통계 ${btn.dataset.statsUse || ''}`)
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-quote]').forEach((btn) => {

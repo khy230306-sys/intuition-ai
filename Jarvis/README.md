@@ -5,7 +5,7 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://holistic-data-aej5k6v.shipstatic.com
+**앱 URL:** https://future-bolt-tk8s8r9.shipstatic.com
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**

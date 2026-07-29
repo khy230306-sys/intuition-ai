@@ -37,7 +37,9 @@ import {
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
-import { currentListenLang, loadInterpretMode } from './translateBrain'
+import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
+
+const APP_VERSION = '1.2.1'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -45,6 +47,14 @@ const SUGGESTIONS = [
   '주식 종목 추천',
   '프랑스 정보',
   '도움말',
+]
+
+const TRANSLATE_LANGS: Array<{ code: string; label: string; cmd: string }> = [
+  { code: 'vi', label: '베트남어', cmd: '지금부터 스톱할 때까지 베트남어로 번역해줘' },
+  { code: 'en', label: '영어', cmd: '지금부터 스톱할 때까지 영어로 번역해줘' },
+  { code: 'ja', label: '일본어', cmd: '지금부터 스톱할 때까지 일본어로 번역해줘' },
+  { code: 'zh-CN', label: '중국어', cmd: '지금부터 스톱할 때까지 중국어로 번역해줘' },
+  { code: 'es', label: '스페인어', cmd: '지금부터 스톱할 때까지 스페인어로 번역해줘' },
 ]
 
 const state = {
@@ -260,13 +270,14 @@ function renderNav(): string {
 }
 
 function renderChat(): string {
+  const mode = loadInterpretMode()
   const body =
     state.messages.length === 0
       ? `
         <div class="hero-empty">
           <div class="big-orb"></div>
           <h2>JARVIS</h2>
-          <p>실생활 + 주식 투자까지.<br />브리핑부터 시세·포트폴리오를 물어보세요.</p>
+          <p>아래 <strong>번역</strong> 버튼을 누르면<br/>스톱할 때까지 한국말만 그 언어로 번역합니다.</p>
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>
@@ -283,15 +294,39 @@ function renderChat(): string {
           )
           .join('')
 
+  const lockBar = `
+    <div class="translate-bar ${mode.active ? 'on' : ''}">
+      <div class="translate-bar-head">
+        <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
+        <span class="ver">v${APP_VERSION}</span>
+      </div>
+      <div class="translate-chips">
+        ${TRANSLATE_LANGS.map(
+          (l) =>
+            `<button type="button" class="${mode.active && mode.langB === l.code ? 'active' : ''}" data-translate-cmd="${escapeAttr(l.cmd)}">${escapeHtml(l.label)}</button>`,
+        ).join('')}
+        <button type="button" class="stop-btn" data-translate-stop="1">스톱</button>
+      </div>
+      <p class="translate-hint">${
+        mode.active
+          ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
+          : '언어 버튼 → 말한 뒤 스톱. (이 화면이 v1.2.1인지 확인)'
+      }</p>
+    </div>
+  `
+
   return `
     <section class="panel chat-panel">
       <div class="messages">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
       )}</div>
+      ${lockBar}
       <form class="composer" id="composer">
         <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
-        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${state.listening ? '음성 인식 중…' : '시세, 브리핑, 명령...'}" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
+        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
+          mode.active ? '한국말로 입력 → 번역' : state.listening ? '음성 인식 중…' : '시세, 브리핑, 번역…'
+        }" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
         <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
       </form>
     </section>
@@ -637,6 +672,25 @@ function bind(): void {
       state.view = 'chat'
       void handleUserText(btn.dataset.suggest || '')
     })
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-translate-cmd]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.view = 'chat'
+      void handleUserText(btn.dataset.translateCmd || '')
+    })
+  })
+
+  document.querySelector('[data-translate-stop]')?.addEventListener('click', () => {
+    state.view = 'chat'
+    if (loadInterpretMode().active) {
+      void handleUserText('스톱')
+    } else {
+      clearInterpretMode()
+      pushMsg('assistant', '번역이 꺼져 있습니다. 위에서 언어 버튼을 먼저 눌러 주세요.')
+      render()
+      scrollChat()
+    }
   })
 
   document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {

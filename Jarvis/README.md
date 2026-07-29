@@ -5,7 +5,9 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://hazy-logic-f4gli47.shipstatic.com
+**앱 URL:** https://hovering-halo-03tr6h1.shipstatic.com
+
+> 화면 아래 번역 바에 **v1.2.1**이 보여야 최신입니다. 예전 shipstatic 주소는 동작하지 않습니다.
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**

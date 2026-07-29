@@ -206,6 +206,69 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.translate-bar {
+  margin: 0 10px 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0, 210, 190, 0.06);
+  border: 1px solid rgba(0, 210, 190, 0.18);
+}
+
+.translate-bar.on {
+  background: rgba(0, 210, 190, 0.14);
+  border-color: rgba(0, 210, 190, 0.45);
+}
+
+.translate-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.translate-bar-head .ver {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.translate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.translate-chips button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.78rem;
+}
+
+.translate-chips button.active {
+  border-color: rgba(0, 210, 190, 0.55);
+  background: rgba(0, 210, 190, 0.18);
+  color: var(--cyan-bright);
+}
+
+.translate-chips .stop-btn {
+  border-color: rgba(255, 120, 100, 0.45);
+  color: #ffb4a8;
+  background: rgba(255, 80, 60, 0.12);
+  font-weight: 600;
+}
+
+.translate-hint {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .voice-caption {
   margin: 0 10px 8px;
   padding: 8px 12px;

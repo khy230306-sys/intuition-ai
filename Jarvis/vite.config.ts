@@ -22,7 +22,7 @@ export default defineConfig({
       manifest: {
         name: 'JARVIS',
         short_name: 'JARVIS',
-        description: 'iPhone 만능 AI 비서 — 대화, 음성, 빠른 실행, 기억',
+        description: 'iPhone 만능 AI 비서 — 번역 잠금, 음성, 투자, 기억',
         theme_color: '#0b121c',
         background_color: '#0b121c',
         display: 'standalone',

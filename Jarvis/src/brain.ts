@@ -654,6 +654,12 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // Bare stop always handled (even if lock was cleared / old session)
+  if (/^(스톱|스탑|stop|그만|종료)$/i.test(text.trim())) {
+    const locked = await handleTranslate(text)
+    if (locked) return locked
+  }
+
   // Translate lock must win over stocks/stats/life until user says 스톱
   if (loadInterpretMode().active) {
     const locked = await handleTranslate(text)

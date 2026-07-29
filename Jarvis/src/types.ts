@@ -133,5 +133,7 @@ export type View = 'chat' | 'invest' | 'life' | 'actions' | 'settings'
 export interface BrainReply {
   text: string
   speak?: boolean
+  speakLang?: string
+  listenLang?: string
   action?: () => Promise<ActionResult | void> | ActionResult | void
 }

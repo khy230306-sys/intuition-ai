@@ -134,6 +134,7 @@ export class VoiceListener {
   private finishing = false
   private sessionId = 0
   private emptyEnds = 0
+  private listenLang = 'ko-KR'
 
   /** Fallback only when we have interim but no final yet. */
   silenceMs = 420
@@ -152,7 +153,7 @@ export class VoiceListener {
     return this.compose(this.interim)
   }
 
-  start(callbacks: VoiceCallbacks): boolean {
+  start(callbacks: VoiceCallbacks, lang = 'ko-KR'): boolean {
     if (!getRecognitionCtor()) {
       callbacks.onError?.('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
       return false
@@ -166,6 +167,7 @@ export class VoiceListener {
     this.heardSpeech = false
     this.emptyEnds = 0
     this.sessionId += 1
+    this.listenLang = lang || 'ko-KR'
     stopSpeaking()
     this.setState('listening')
     this.armSafety()
@@ -296,7 +298,7 @@ export class VoiceListener {
     this.starting = true
     const rec = new Ctor()
     const sid = this.sessionId
-    rec.lang = 'ko-KR'
+    rec.lang = this.listenLang || 'ko-KR'
     // false = faster single-utterance path on iOS Safari
     rec.continuous = false
     rec.interimResults = true

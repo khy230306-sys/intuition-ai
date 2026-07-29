@@ -37,12 +37,13 @@ import {
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
+import { currentListenLang, loadInterpretMode } from './translateBrain'
 
 const SUGGESTIONS = [
+  '영어 통역 모드',
+  '일본어로 번역해 안녕하세요',
   '주식 종목 추천',
   '프랑스 정보',
-  '도쿄 시차',
-  '브리핑',
   '도움말',
 ]
 
@@ -57,6 +58,7 @@ const state = {
   showInstall: false,
   settings: loadSettings(),
   quoteCache: {} as Record<string, QuoteSnapshot | null>,
+  listenLang: 'ko-KR',
 }
 
 const voice = new VoiceListener()
@@ -128,8 +130,14 @@ async function handleUserText(raw: string): Promise<void> {
     state.busy = false
     render()
     scrollChat()
+    if (reply.listenLang) state.listenLang = reply.listenLang
     if (reply.speak !== false && state.settings.speakReplies) {
-      void speakAsync(reply.text.replace(/\n+/g, '. ').slice(0, 180))
+      const lang = reply.speakLang || 'ko-KR'
+      // Prefer speaking the translated line when present
+      const speakText = reply.text.includes('번역:')
+        ? reply.text.split('번역:').pop()?.split('\n')[0]?.trim() || reply.text
+        : reply.text
+      void speakAsync(speakText.replace(/\n+/g, '. ').slice(0, 220), lang)
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
@@ -191,14 +199,22 @@ function escapeAttr(s: string): string {
 }
 
 function renderBrand(): string {
-  const status = state.listening ? '듣는 중' : state.busy ? '분석 중' : state.online ? '대기' : '오프라인'
+  const status = state.listening
+    ? '듣는 중'
+    : state.busy
+      ? '분석 중'
+      : loadInterpretMode().active
+        ? '통역'
+        : state.online
+          ? '대기'
+          : '오프라인'
   return `
     <header class="brand-bar">
       <div class="brand">
         <div class="orb" aria-hidden="true"></div>
         <div>
           <h1>JARVIS</h1>
-          <p>만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}</p>
+          <p>${loadInterpretMode().active ? `실시간 통역 · MIC ${escapeHtml(state.listenLang)}` : `만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}`}</p>
         </div>
       </div>
       <div class="status-pill">${status}</div>
@@ -646,7 +662,11 @@ function bind(): void {
     }
     stopSpeaking()
     state.draft = ''
-    state.voiceHint = '듣고 있습니다… 바로 말씀해 주세요'
+    const listenLang = currentListenLang() || state.listenLang || 'ko-KR'
+    state.listenLang = listenLang
+    state.voiceHint = loadInterpretMode().active
+      ? `통역 듣는 중 (${listenLang})…`
+      : '듣고 있습니다… 바로 말씀해 주세요'
     // Ensure chat shell exists without heavy remount when already on chat
     if (state.view !== 'chat' || !document.getElementById('voice-caption')) {
       state.view = 'chat'
@@ -656,32 +676,34 @@ function bind(): void {
       state.listening = true
       patchVoiceUi()
     }
-    const ok = voice.start({
-      onInterim: (text) => {
-        state.draft = text
-        state.voiceHint = text || '듣고 있습니다…'
-        patchVoiceUi()
+    const ok = voice.start(
+      {
+        onInterim: (text) => {
+          state.draft = text
+          state.voiceHint = text || state.voiceHint
+          patchVoiceUi()
+        },
+        onFinal: (text) => {
+          state.listening = false
+          state.voiceHint = '인식 완료'
+          state.draft = text
+          patchVoiceUi()
+          void handleUserText(text)
+        },
+        onState: (s) => {
+          state.listening = s === 'listening' || s === 'processing'
+          if (s === 'idle' && !state.busy) state.listening = false
+          patchVoiceUi()
+        },
+        onError: (err) => {
+          state.listening = false
+          state.voiceHint = ''
+          showFlash(err)
+          patchVoiceUi()
+        },
       },
-      onFinal: (text) => {
-        state.listening = false
-        state.voiceHint = '인식 완료'
-        state.draft = text
-        patchVoiceUi()
-        void handleUserText(text)
-      },
-      onState: (s) => {
-        state.listening = s === 'listening' || s === 'processing'
-        if (s === 'listening' && !state.voiceHint) state.voiceHint = '듣고 있습니다… 바로 말씀해 주세요'
-        if (s === 'idle' && !state.busy) state.listening = false
-        patchVoiceUi()
-      },
-      onError: (err) => {
-        state.listening = false
-        state.voiceHint = ''
-        showFlash(err)
-        patchVoiceUi()
-      },
-    })
+      listenLang,
+    )
     if (!ok) {
       state.listening = false
       state.voiceHint = ''

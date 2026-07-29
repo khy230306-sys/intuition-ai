@@ -5,7 +5,6 @@ import {
   openMail,
   openMaps,
   openSearch,
-  openTranslate,
   openWeather,
   resolveAppIntent,
   sendSms,
@@ -68,6 +67,7 @@ import {
 import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
+import { handleTranslate } from './translateBrain'
 import type { BrainReply, JarvisSettings } from './types'
 
 function helpText(name: string): string {
@@ -76,13 +76,14 @@ function helpText(name: string): string {
     '',
     '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 계산 · 변환',
     '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식',
-    '【세계】 국가·도시·지리·시차·위키 요약 (한국 외 전 세계)',
+    '【세계】 국가·도시·지리·시차 · 실시간 다국어 통역',
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
     '• 브리핑 / 오늘 뭐하지',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
+    '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
     '• 데이터 수익률 1.2 -0.5 3.1 → 통계',
     '• 추가 0.8 / 확률 0 이상 / 시세기록 삼성전자',
@@ -659,6 +660,9 @@ export async function think(
   const invest = await handleInvest(text)
   if (invest) return invest
 
+  const translated = await handleTranslate(text)
+  if (translated) return translated
+
   const geo = await handleGeo(text)
   if (geo) return geo
 
@@ -697,10 +701,10 @@ export async function think(
 
   const translateMatch = text.match(/^(?:번역|영어로)\s*(.+)$/i) || text.match(/^(.+?)\s*번역해?$/)
   if (translateMatch) {
+    // handled earlier by handleTranslate; keep Google fallback only for leftover
     return {
-      text: '번역을 엽니다.',
+      text: '통역 엔진으로 처리합니다. 예: "영어 통역 모드" 또는 "일본어로 번역해 안녕하세요"',
       speak: true,
-      action: () => openTranslate(translateMatch[1]),
     }
   }
 

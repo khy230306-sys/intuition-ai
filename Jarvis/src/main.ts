@@ -54,7 +54,7 @@ import {
   type ArcadeId,
 } from './arcadeGames'
 
-const APP_VERSION = '1.5.0'
+const APP_VERSION = '1.5.1'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -351,23 +351,25 @@ function renderGames(): string {
         </div>
         <button type="button" data-dir="0,1">▼</button>
       </div>
-      <p class="game-meta">방향 버튼으로 조작</p>`
+      <p class="game-meta">방향 버튼 · 게임오버 시 화면 탭</p>`
       : state.arcadeId === 'breakout'
-        ? `<p class="game-meta">화면을 좌우로 드래그해 패들을 움직이세요</p>`
-        : `<p class="game-meta">화면을 좌우로 드래그 · 자동 발사</p>`
+        ? `<p class="game-meta">드래그로 패들 · 게임오버 시 화면 탭</p>`
+        : `<p class="game-meta">좌우 드래그 · 자동발사 · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
       <p class="hint">오프라인 아케이드 · 점수 기기 저장</p>
       <div class="game-tabs">${tabs}</div>
+      <div class="arcade-toolbar">
+        <div class="arcade-hud">SCORE ${state.arcadeScore} · BEST ${hi ?? '—'}</div>
+        <button type="button" class="arcade-restart-btn" data-arcade-restart="1">다시 시작</button>
+      </div>
       <p class="hint">${escapeHtml(meta.blurb)}</p>
-      <div class="arcade-hud">SCORE ${state.arcadeScore} · BEST ${hi ?? '—'}</div>
       <div class="arcade-stage">
         <canvas id="arcade-canvas" width="360" height="440"></canvas>
       </div>
       ${controls}
-      <button type="button" class="primary-btn" data-arcade-restart="1">다시 시작</button>
     </section>
   `
 }
@@ -400,6 +402,14 @@ function mountActiveArcade(): void {
     const p = toLocal(ev)
     if (!p) return
     ev.preventDefault()
+    if (arcade?.isOver()) {
+      arcade.restart()
+      state.arcadeScore = 0
+      const hud = document.querySelector('.arcade-hud')
+      const best = loadArcadeBest()[state.arcadeId]
+      if (hud) hud.textContent = `SCORE 0 · BEST ${best ?? '—'}`
+      return
+    }
     arcade?.pointer(p.x, p.y, 'down')
   }
   const onMove = (ev: TouchEvent | MouseEvent) => {
@@ -462,7 +472,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.0'
+          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.1'
       }</p>
     </div>
   `
@@ -916,8 +926,14 @@ function bind(): void {
     })
   })
 
-  document.querySelector('[data-arcade-restart]')?.addEventListener('click', () => {
-    arcade?.restart()
+  document.querySelector('[data-arcade-restart]')?.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!arcade) {
+      mountActiveArcade()
+      return
+    }
+    arcade.restart()
     state.arcadeScore = 0
     const hud = document.querySelector('.arcade-hud')
     const best = loadArcadeBest()[state.arcadeId]

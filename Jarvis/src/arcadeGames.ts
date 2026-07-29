@@ -45,6 +45,7 @@ export type ArcadeHandle = {
   pointer: (x: number, y: number, type: 'down' | 'move' | 'up') => void
   restart: () => void
   getScore: () => number
+  isOver: () => boolean
 }
 
 type Loop = {
@@ -69,23 +70,40 @@ function sizeCanvas(canvas: HTMLCanvasElement): { w: number; h: number; dpr: num
   return { w, h, dpr }
 }
 
-function drawHud(ctx: CanvasRenderingContext2D, w: number, score: number, over: boolean, title: string): void {
+function drawHud(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  score: number,
+  over: boolean,
+  title: string,
+  cleared = false,
+): void {
   ctx.fillStyle = 'rgba(8,14,22,0.55)'
   ctx.fillRect(0, 0, w, 28)
   ctx.fillStyle = '#5affe8'
   ctx.font = '600 13px IBM Plex Sans KR, sans-serif'
   ctx.textAlign = 'left'
   ctx.fillText(`${title}  SCORE ${score}`, 10, 18)
-  if (over) {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'
-    ctx.fillRect(0, 0, w, 9999)
+  if (over || cleared) {
+    ctx.fillStyle = 'rgba(0,0,0,0.62)'
+    ctx.fillRect(0, 0, w, h)
     ctx.fillStyle = '#fff'
     ctx.font = '700 22px Orbitron, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('GAME OVER', w / 2, 160)
-    ctx.font = '500 13px IBM Plex Sans KR, sans-serif'
-    ctx.fillStyle = '#5affe8'
-    ctx.fillText('다시 시작을 누르세요', w / 2, 190)
+    ctx.fillText(cleared ? 'CLEAR!' : 'GAME OVER', w / 2, h * 0.36)
+    const bw = 168
+    const bh = 48
+    const bx = w / 2 - bw / 2
+    const by = h * 0.36 + 28
+    ctx.fillStyle = '#00d2be'
+    ctx.fillRect(bx, by, bw, bh)
+    ctx.fillStyle = '#041018'
+    ctx.font = '700 16px IBM Plex Sans KR, sans-serif'
+    ctx.fillText('다시 시작', w / 2, by + 31)
+    ctx.fillStyle = '#9adfd6'
+    ctx.font = '500 12px IBM Plex Sans KR, sans-serif'
+    ctx.fillText('화면 아무 곳이나 탭', w / 2, by + bh + 22)
   }
 }
 
@@ -174,7 +192,7 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
       ctx.fillStyle = i === 0 ? '#5affe8' : '#00d2be'
       ctx.fillRect(s.x * cellW + 1, 28 + s.y * cellH + 1, cellW - 2, cellH - 2)
     })
-    drawHud(ctx, w, score, over, 'SNAKE')
+    drawHud(ctx, w, h, score, over, 'SNAKE')
   }
 
   function frame(t: number): void {
@@ -203,17 +221,22 @@ export function mountSnake(canvas: HTMLCanvasElement, onScore?: (n: number) => v
     },
     setDir: (dx, dy) => {
       if (over) return
-      // no instant reverse
       if (dx === -dir.x && dy === -dir.y) return
       if (dx === 0 && dy === 0) return
       nextDir = { x: dx, y: dy }
     },
-    pointer: () => undefined,
+    pointer: (_x, _y, type) => {
+      if (type === 'down' && over) {
+        reset()
+        acc = 0
+      }
+    },
     restart: () => {
       reset()
       acc = 0
     },
     getScore: () => score,
+    isOver: () => over,
   }
 }
 
@@ -327,14 +350,9 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
     ctx.fillStyle = '#fff'
     ctx.fill()
     if (won) {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'
-      ctx.fillRect(0, 0, w, h)
-      ctx.fillStyle = '#5affe8'
-      ctx.font = '700 22px Orbitron, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('CLEAR!', w / 2, 160)
+      // handled in drawHud as cleared
     }
-    drawHud(ctx, w, score, over, 'BREAKOUT')
+    drawHud(ctx, w, h, score, over, 'BREAKOUT', won)
   }
 
   function frame(t: number): void {
@@ -356,6 +374,10 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
       cancelAnimationFrame(loop.raf)
     },
     pointer: (x, _y, type) => {
+      if ((over || won) && type === 'down') {
+        reset()
+        return
+      }
       if (type === 'down') pointerDown = true
       if (type === 'up') pointerDown = false
       if (type === 'down' || type === 'move' || pointerDown) {
@@ -364,6 +386,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: (n: number) =
     },
     restart: () => reset(),
     getScore: () => score,
+    isOver: () => over || won,
   }
 }
 
@@ -475,7 +498,7 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
       ctx.fillStyle = e.hp > 1 ? '#f472b6' : '#ff6b6b'
       ctx.fillRect(e.x - 12, e.y - 10, 24, 20)
     }
-    drawHud(ctx, w, score, over, 'SPACE')
+    drawHud(ctx, w, h, score, over, 'SPACE')
   }
 
   function frame(t: number): void {
@@ -496,12 +519,17 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: (n: number) =>
       loop.running = false
       cancelAnimationFrame(loop.raf)
     },
-    pointer: (x) => {
+    pointer: (x, _y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
       if (over) return
       shipX = Math.max(16, Math.min(w - 16, x))
     },
     restart: () => reset(),
     getScore: () => score,
+    isOver: () => over,
   }
 }
 

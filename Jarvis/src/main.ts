@@ -90,7 +90,7 @@ import {
   setFamilySyncListener,
 } from './familySyncLazy'
 
-const APP_VERSION = '1.6.0'
+const APP_VERSION = '1.6.1'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -444,9 +444,11 @@ function renderGames(): string {
         <button type="button" data-dir="0,1">▼</button>
       </div>
       <p class="game-meta">방향 버튼 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'breakout'
-        ? `<p class="game-meta">드래그로 패들 · 게임오버 시 화면 탭</p>`
-        : `<p class="game-meta">좌우 드래그 · 자동발사 · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'flappy'
+        ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
+        : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+          ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+          : `<p class="game-meta">좌우 드래그 · 자동발사 · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   breakoutPaddleBounce,
+  flappyPipeCleared,
   loadArcadeBest,
+  pongPaddleBounce,
   snakeWouldHitSelf,
 } from './arcadeGames'
 
@@ -29,6 +31,11 @@ describe('arcade helpers', () => {
   it('maps paddle hit to bounce vx', () => {
     expect(breakoutPaddleBounce(50, 20, 60)).toBeCloseTo(0)
     expect(breakoutPaddleBounce(80, 20, 60)).toBeGreaterThan(0)
-    expect(loadArcadeBest().snake).toBeNull()
+    expect(pongPaddleBounce(80, 20, 60)).toBeGreaterThan(0)
+    expect(flappyPipeCleared(90, 40, 28, false)).toBe(true)
+    expect(flappyPipeCleared(90, 40, 28, true)).toBe(false)
+    expect(loadArcadeBest().flappy).toBeNull()
+    expect(loadArcadeBest().dodge).toBeNull()
+    expect(loadArcadeBest().pong).toBeNull()
   })
 })

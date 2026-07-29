@@ -1,3 +1,5 @@
+import { loadFamilyRoom, saveFamilyRoom } from './familyStore'
+import type { FamilyRoom } from './familyTypes'
 import type {
   ChatMessage,
   DataSeries,
@@ -557,7 +559,7 @@ export function saveSettings(settings: JarvisSettings): void {
 export function exportBackup(): string {
   return JSON.stringify(
     {
-      version: 4,
+      version: 5,
       exportedAt: new Date().toISOString(),
       chat: loadChat(),
       memory: loadMemory(),
@@ -572,6 +574,7 @@ export function exportBackup(): string {
       trades: loadTrades(),
       series: loadSeriesList(),
       activeSeries: getActiveSeriesName(),
+      family: loadFamilyRoom(),
       settings: { ...loadSettings(), apiKey: '' },
     },
     null,
@@ -595,6 +598,7 @@ export function importBackup(json: string): { ok: boolean; message: string } {
       trades?: TradeNote[]
       series?: DataSeries[]
       activeSeries?: string
+      family?: FamilyRoom | null
       settings?: Partial<JarvisSettings>
     }
     if (data.chat) saveChat(data.chat)
@@ -610,6 +614,7 @@ export function importBackup(json: string): { ok: boolean; message: string } {
     if (data.trades) saveTrades(data.trades)
     if (data.series) saveSeriesList(data.series)
     if (data.activeSeries) setActiveSeriesName(data.activeSeries)
+    if (data.family) saveFamilyRoom(data.family)
     if (data.settings) {
       const current = loadSettings()
       saveSettings({

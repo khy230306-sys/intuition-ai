@@ -986,3 +986,102 @@ body {
   word-break: break-all;
   margin: 10px 0 12px;
 }
+
+.nav.nav-7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.nav.nav-7 button {
+  padding: 8px 2px 6px;
+  font-size: 0.62rem;
+}
+
+.nav.nav-7 .nav-ico {
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
+}
+
+.family-panel .family-head {
+  margin-bottom: 8px;
+}
+
+.family-setup h3 {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+}
+
+.family-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.family-tab {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 6px;
+  font-size: 0.82rem;
+}
+
+.family-tab.active {
+  color: var(--cyan-bright);
+  border-color: rgba(0, 210, 190, 0.45);
+  background: rgba(0, 210, 190, 0.12);
+}
+
+.fam-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 42vh;
+  overflow: auto;
+  padding: 4px 2px 10px;
+}
+
+.fam-msg {
+  align-self: flex-start;
+  max-width: 88%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: pre-wrap;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+.fam-msg.mine {
+  align-self: flex-end;
+  background: rgba(0, 210, 190, 0.12);
+  border-color: rgba(0, 210, 190, 0.25);
+}
+
+.fam-msg .meta {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.family-composer {
+  margin-top: 8px;
+}
+
+.fam-notice.pinned {
+  border-color: rgba(0, 210, 190, 0.35);
+}
+
+.settings-form textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}

@@ -1,5 +1,5 @@
 import './style.css'
-import { quickActions } from './actions'
+import { quickActions, shareText } from './actions'
 import { think } from './brain'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
 import { formatDescriptive } from './stats'
@@ -69,8 +69,28 @@ import {
   shareBackupFile,
 } from './shareKit'
 import { fetchWeather, type WeatherSnap } from './weather'
+import {
+  addFamilyEvent,
+  addFamilyNotice,
+  createFamilyRoom,
+  deleteFamilyEvent,
+  deleteFamilyNotice,
+  familyInviteText,
+  joinFamilyRoomLocal,
+  leaveFamilyRoom,
+  loadFamilyRoom,
+  normalizeFamilyCode,
+  postFamilyChat,
+} from './familyStore'
+import {
+  broadcastFamilyPacket,
+  connectFamilySync,
+  disconnectFamilySync,
+  getFamilyPeerCount,
+  setFamilySyncListener,
+} from './familySyncLazy'
 
-const APP_VERSION = '1.5.5'
+const APP_VERSION = '1.6.0'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -112,6 +132,8 @@ const state = {
   shareModal: null as null | 'app' | 'backup',
   shareQrSvg: '',
   shareHint: '',
+  familyTab: 'chat' as 'chat' | 'notices' | 'events',
+  familySyncStatus: '대기',
 }
 
 let arcade: ArcadeHandle | null = null
@@ -379,12 +401,13 @@ function renderNav(): string {
     { id: 'chat', label: '대화', ico: 'CHAT' },
     { id: 'invest', label: '투자', ico: 'INV' },
     { id: 'life', label: '생활', ico: 'LIFE' },
+    { id: 'family', label: '가족', ico: 'FAM' },
     { id: 'games', label: '게임', ico: 'PLAY' },
     { id: 'actions', label: '실행', ico: 'RUN' },
     { id: 'settings', label: '설정', ico: 'SET' },
   ]
   return `
-    <nav class="nav nav-6">
+    <nav class="nav nav-7">
       ${items
         .map(
           (i) => `
@@ -847,6 +870,146 @@ function renderLife(): string {
   `
 }
 
+function todayIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function renderFamily(): string {
+  const room = loadFamilyRoom()
+  if (!room) {
+    return `
+      <section class="panel view-scroll family-panel">
+        <h2 class="section-title">FAMILY</h2>
+        <p class="hint">가족 단체 대화 · 공지 · 일정을 한곳에서. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다.</p>
+        <div class="family-setup">
+          <h3>새 가족 공간</h3>
+          <form id="family-create" class="settings-form">
+            <label>공간 이름
+              <input name="name" value="우리 가족" maxlength="40" required />
+            </label>
+            <label>내 이름
+              <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
+            </label>
+            <button class="primary-btn" type="submit">만들기</button>
+          </form>
+          <h3>코드로 참여</h3>
+          <form id="family-join" class="settings-form">
+            <label>가족 코드
+              <input name="code" placeholder="예: K7M2PQ" maxlength="8" required />
+            </label>
+            <label>내 이름
+              <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
+            </label>
+            <button class="ghost-btn" type="submit">참여</button>
+          </form>
+        </div>
+      </section>
+    `
+  }
+
+  const tabs = (
+    [
+      ['chat', '대화'],
+      ['notices', '공지'],
+      ['events', '일정'],
+    ] as const
+  )
+    .map(
+      ([id, label]) =>
+        `<button type="button" class="family-tab ${state.familyTab === id ? 'active' : ''}" data-family-tab="${id}">${label}</button>`,
+    )
+    .join('')
+
+  let body = ''
+  if (state.familyTab === 'chat') {
+    const msgs = room.messages
+      .slice(-80)
+      .map((m) => {
+        const mine = m.authorId === room.memberId
+        return `<div class="fam-msg ${mine ? 'mine' : ''}"><span class="meta">${escapeHtml(m.authorName)}</span>${escapeHtml(m.text)}</div>`
+      })
+      .join('')
+    body = `
+      <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.</div>'}</div>
+      <form id="family-chat-form" class="composer family-composer">
+        <input name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required />
+        <button class="primary-btn" type="submit">전송</button>
+      </form>
+    `
+  } else if (state.familyTab === 'notices') {
+    const list = [...room.notices]
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
+      .map(
+        (n) => `
+        <div class="list-item fam-notice ${n.pinned ? 'pinned' : ''}">
+          <div class="body">
+            <strong>${n.pinned ? '[고정] ' : ''}${escapeHtml(n.title)}</strong>
+            <p>${escapeHtml(n.body)}</p>
+            <p class="hint">${escapeHtml(n.authorName)}</p>
+          </div>
+          <button type="button" data-del-notice="${escapeAttr(n.id)}">삭제</button>
+        </div>`,
+      )
+      .join('')
+    body = `
+      <form id="family-notice-form" class="settings-form">
+        <label>제목 <input name="title" required maxlength="80" placeholder="주말 가족 회의" /></label>
+        <label>내용 <textarea name="body" rows="3" maxlength="1000" placeholder="일요일 오후 2시 거실"></textarea></label>
+        <div class="toggle-row"><span>상단 고정</span><input type="checkbox" name="pinned" /></div>
+        <button class="primary-btn" type="submit">공지 등록</button>
+      </form>
+      ${list || '<div class="empty">등록된 공지가 없습니다.</div>'}
+    `
+  } else {
+    const list = [...room.events]
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''))
+      .map(
+        (e) => `
+        <div class="list-item">
+          <div class="body">
+            <strong>${escapeHtml(e.date)}${e.time ? ` ${escapeHtml(e.time)}` : ''} · ${escapeHtml(e.title)}</strong>
+            <p>${escapeHtml(e.note || e.authorName)}</p>
+          </div>
+          <button type="button" data-del-event="${escapeAttr(e.id)}">삭제</button>
+        </div>`,
+      )
+      .join('')
+    body = `
+      <form id="family-event-form" class="settings-form">
+        <label>제목 <input name="title" required maxlength="80" placeholder="병원 예약" /></label>
+        <label>날짜 <input name="date" type="date" value="${todayIso()}" required /></label>
+        <label>시간 <input name="time" type="time" /></label>
+        <label>메모 <input name="note" maxlength="500" placeholder="선택" /></label>
+        <button class="primary-btn" type="submit">일정 추가</button>
+      </form>
+      ${list || '<div class="empty">등록된 일정이 없습니다.</div>'}
+    `
+  }
+
+  const members = room.members.map((m) => escapeHtml(m.name)).join(' · ') || room.memberName
+
+  return `
+    <section class="panel view-scroll family-panel">
+      <div class="family-head">
+        <div>
+          <h2 class="section-title">${escapeHtml(room.name)}</h2>
+          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명</p>
+          <p class="hint">멤버: ${members}</p>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="family-invite">초대 공유</button>
+        <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
+        <button type="button" class="ghost-btn" data-action="family-leave">나가기</button>
+      </div>
+      <div class="family-tabs">${tabs}</div>
+      ${body}
+      <p class="hint">같은 Wi‑Fi/데이터가 아니어도 됩니다. 각자 앱을 연 상태에서 코드가 같으면 P2P로 동기화됩니다. 오프라인이면 이 기기에만 저장됩니다.</p>
+    </section>
+  `
+}
+
 function renderActions(): string {
   return `
     <section class="panel view-scroll">
@@ -936,11 +1099,13 @@ function render(): void {
         ? renderInvest()
         : state.view === 'life'
           ? renderLife()
-          : state.view === 'games'
-            ? renderGames()
-            : state.view === 'actions'
-              ? renderActions()
-              : renderSettings()
+          : state.view === 'family'
+            ? renderFamily()
+            : state.view === 'games'
+              ? renderGames()
+              : state.view === 'actions'
+                ? renderActions()
+                : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}`
   bind()
   if (state.view === 'games') {
@@ -948,6 +1113,22 @@ function render(): void {
     requestAnimationFrame(() => mountActiveArcade())
   } else {
     stopArcade()
+  }
+  if (state.view === 'family' && loadFamilyRoom()) {
+    void ensureFamilySyncOnce()
+  }
+}
+
+let familySyncBooted = false
+async function ensureFamilySyncOnce(): Promise<void> {
+  if (familySyncBooted) return
+  familySyncBooted = true
+  const r = await connectFamilySync()
+  state.familySyncStatus = r.message
+  const el = document.querySelector('.family-head .hint')
+  const room = loadFamilyRoom()
+  if (el && room) {
+    el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명`
   }
 }
 
@@ -1018,6 +1199,123 @@ function bind(): void {
       state.listening = false
       render()
       if (state.view === 'invest') void refreshQuotes()
+    })
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-family-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.familyTab = btn.dataset.familyTab as 'chat' | 'notices' | 'events'
+      render()
+    })
+  })
+
+  document.getElementById('family-create')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    createFamilyRoom(String(fd.get('name') || ''), String(fd.get('member') || ''))
+    state.familyTab = 'chat'
+    familySyncBooted = false
+    showFlash('가족 공간을 만들었습니다.')
+    render()
+  })
+
+  document.getElementById('family-join')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const code = normalizeFamilyCode(String(fd.get('code') || ''))
+    if (code.length < 4) {
+      showFlash('코드를 확인해 주세요.')
+      return
+    }
+    joinFamilyRoomLocal(code, '가족 공간', String(fd.get('member') || ''))
+    state.familyTab = 'chat'
+    familySyncBooted = false
+    showFlash(`코드 ${code}로 참여했습니다.`)
+    render()
+  })
+
+  document.getElementById('family-chat-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const msg = postFamilyChat(String(fd.get('text') || ''))
+    if (msg) {
+      void broadcastFamilyPacket({ type: 'chat', message: msg })
+      render()
+      const box = document.querySelector('.fam-chat')
+      if (box) box.scrollTop = box.scrollHeight
+    }
+  })
+
+  document.getElementById('family-notice-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const notice = addFamilyNotice(
+      String(fd.get('title') || ''),
+      String(fd.get('body') || ''),
+      Boolean(fd.get('pinned')),
+    )
+    if (notice) {
+      void broadcastFamilyPacket({ type: 'notice', notice })
+      showFlash('공지를 등록했습니다.')
+      render()
+    }
+  })
+
+  document.getElementById('family-event-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const event = addFamilyEvent(
+      String(fd.get('title') || ''),
+      String(fd.get('date') || ''),
+      String(fd.get('time') || ''),
+      String(fd.get('note') || ''),
+    )
+    if (event) {
+      void broadcastFamilyPacket({ type: 'event', event })
+      showFlash('일정을 추가했습니다.')
+      render()
+    }
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-del-notice]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.delNotice || ''
+      if (deleteFamilyNotice(id)) {
+        void broadcastFamilyPacket({ type: 'notice-del', id })
+        render()
+      }
+    })
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-del-event]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.delEvent || ''
+      if (deleteFamilyEvent(id)) {
+        void broadcastFamilyPacket({ type: 'event-del', id })
+        render()
+      }
+    })
+  })
+
+  document.querySelector('[data-action="family-invite"]')?.addEventListener('click', () => {
+    const room = loadFamilyRoom()
+    if (!room) return
+    void shareText(familyInviteText(room, appShareUrl())).then((r) => showFlash(r.message))
+  })
+
+  document.querySelector('[data-action="family-leave"]')?.addEventListener('click', () => {
+    void disconnectFamilySync()
+    familySyncBooted = false
+    leaveFamilyRoom()
+    showFlash('가족 공간에서 나갔습니다.')
+    render()
+  })
+
+  document.querySelector('[data-action="family-reconnect"]')?.addEventListener('click', () => {
+    familySyncBooted = false
+    void disconnectFamilySync().then(() => ensureFamilySyncOnce()).then(() => {
+      showFlash(state.familySyncStatus)
+      render()
     })
   })
 
@@ -1359,6 +1657,24 @@ function boot(): void {
   state.settings = loadSettings()
   refreshInstallHint()
   registerShareModal(openShareModal)
+  setFamilySyncListener((info) => {
+    state.familySyncStatus = info.status
+    if (state.view !== 'family' || !state.locationReady) return
+    const active = document.activeElement as HTMLElement | null
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      const el = document.querySelector('.family-head .hint')
+      const room = loadFamilyRoom()
+      if (el && room) {
+        el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)} · 동료 ${info.peers}명`
+      }
+      return
+    }
+    // Debounced soft refresh for incoming packets
+    window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
+    ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
+      if (state.view === 'family') render()
+    }, 400)
+  })
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {
     pushMsg('assistant', `⏰ 알림: ${alarm.body}`)

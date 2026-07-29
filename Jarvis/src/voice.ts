@@ -73,7 +73,7 @@ export function speakAsync(text: string, lang = 'ko-KR'): Promise<void> {
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang
-    u.rate = 1.12
+    u.rate = 1.05
     u.pitch = 1
     u.onend = () => resolve()
     u.onerror = () => resolve()
@@ -107,17 +107,16 @@ function errorMessage(code: string): string | null {
       return '이 환경에서는 음성 인식 서비스를 사용할 수 없습니다.'
     case 'bad-grammar':
     case 'language-not-supported':
-      return '한국어 음성 인식을 시작할 수 없습니다.'
+      return '선택한 언어의 음성 인식을 시작할 수 없습니다.'
     default:
       return `음성 인식 오류: ${code}`
   }
 }
 
 /**
- * Speed-first voice session for iPhone Safari.
- * - final result → submit immediately (no long silence wait)
- * - continuous=false (faster single utterance on iOS)
- * - tiny fallback silence only for interim-only paths
+ * Patient voice session for iPhone Safari.
+ * Safari often emits "final" chunks mid-sentence — we accumulate and only
+ * submit after a real pause (silenceMs), not on the first final.
  */
 export class VoiceListener {
   private recognition: SpeechRecognitionLike | null = null
@@ -135,11 +134,13 @@ export class VoiceListener {
   private sessionId = 0
   private emptyEnds = 0
   private listenLang = 'ko-KR'
+  private lastActivityAt = 0
 
-  /** Fallback only when we have interim but no final yet. */
-  silenceMs = 420
-  maxListenMs = 12000
-  restartDelayMs = 80
+  /** Wait this long after last speech/result before submitting. */
+  silenceMs = 2000
+  /** Absolute cap for one MIC session. */
+  maxListenMs = 90000
+  restartDelayMs = 120
 
   get listening(): boolean {
     return this.state === 'listening' || this.wanted
@@ -168,6 +169,7 @@ export class VoiceListener {
     this.emptyEnds = 0
     this.sessionId += 1
     this.listenLang = lang || 'ko-KR'
+    this.lastActivityAt = Date.now()
     stopSpeaking()
     this.setState('listening')
     this.armSafety()
@@ -252,11 +254,21 @@ export class VoiceListener {
     return `${base} ${interim}`.trim()
   }
 
+  private markActivity(): void {
+    this.lastActivityAt = Date.now()
+    this.bumpSilenceWatch()
+  }
+
   private bumpSilenceWatch(): void {
     if (this.silenceTimer != null) clearTimeout(this.silenceTimer)
-    if (!this.heardSpeech || this.finishing) return
+    if (!this.heardSpeech || this.finishing || !this.wanted) return
     this.silenceTimer = setTimeout(() => {
       if (!this.wanted || this.finishing) return
+      // Require a real pause — ignore if activity arrived late
+      if (Date.now() - this.lastActivityAt < this.silenceMs - 50) {
+        this.bumpSilenceWatch()
+        return
+      }
       const text = this.compose(this.interim).trim()
       if (text) this.finishWith(text)
     }, this.silenceMs) as unknown as number
@@ -299,8 +311,8 @@ export class VoiceListener {
     const rec = new Ctor()
     const sid = this.sessionId
     rec.lang = this.listenLang || 'ko-KR'
-    // false = faster single-utterance path on iOS Safari
-    rec.continuous = false
+    // continuous: keep listening across mid-utterance finals on Safari
+    rec.continuous = true
     rec.interimResults = true
     rec.maxAlternatives = 1
 
@@ -312,13 +324,13 @@ export class VoiceListener {
 
     rec.onspeechstart = () => {
       this.heardSpeech = true
+      this.markActivity()
     }
 
     rec.onspeechend = () => {
-      // If we already have finals, finish immediately — do not wait
-      const ready = this.compose('').trim()
-      if (ready) this.finishWith(ready)
-      else this.bumpSilenceWatch()
+      // Do NOT finish here — Safari fires speechend between clauses.
+      // Wait for silenceMs of no new results.
+      this.bumpSilenceWatch()
     }
 
     rec.onresult = (event) => {
@@ -331,22 +343,19 @@ export class VoiceListener {
         if (!piece) continue
         this.heardSpeech = true
         if (result.isFinal) {
-          this.finals.push(piece)
+          // Avoid duplicating the same final chunk
+          const last = this.finals[this.finals.length - 1]
+          if (piece !== last) this.finals.push(piece)
           gotFinal = true
         } else {
           interim = piece
         }
       }
-      this.interim = interim
-      const live = this.compose(interim)
+      this.interim = gotFinal ? '' : interim
+      const live = this.compose(this.interim)
       this.callbacks.onInterim?.(live)
-
-      // SPEED: submit the moment Safari marks a final result
-      if (gotFinal) {
-        this.finishWith(this.compose(''))
-        return
-      }
-      this.bumpSilenceWatch()
+      // Patient mode: never submit on first final — wait for silence
+      this.markActivity()
     }
 
     rec.onerror = (event) => {
@@ -354,12 +363,17 @@ export class VoiceListener {
       if (this.sessionId !== sid || this.finishing) return
       if (event.error === 'aborted') return
       const text = this.compose(this.interim).trim()
-      if (text && (event.error === 'no-speech' || event.error === 'network')) {
-        this.finishWith(text)
+      if (text && event.error === 'no-speech') {
+        // Keep waiting if we already have text — silence timer will finish
+        this.bumpSilenceWatch()
+        return
+      }
+      if (event.error === 'network' && text) {
+        // Keep accumulated text; try restarting recognition
+        this.scheduleRestart(sid)
         return
       }
       if (event.error === 'no-speech' && !this.heardSpeech) {
-        // let onend restart once quickly
         return
       }
       const msg = errorMessage(event.error)
@@ -373,19 +387,20 @@ export class VoiceListener {
       this.starting = false
       this.recognition = null
       if (this.sessionId !== sid || this.finishing) return
+      if (!this.wanted) return
+
       const text = this.compose(this.interim).trim()
-      if (text) {
-        this.finishWith(text)
+      // Safari often ends the session mid-sentence — restart while user may still speak
+      if (this.heardSpeech || text) {
+        this.emptyEnds = 0
+        this.scheduleRestart(sid)
+        // Silence timer remains armed; will finish after pause
         return
       }
-      if (!this.wanted) return
+
       this.emptyEnds += 1
-      // one fast retry if Safari ended before speech; then stop
-      if (this.emptyEnds <= 1) {
-        this.restartTimer = setTimeout(() => {
-          if (!this.wanted || this.sessionId !== sid) return
-          this.bootRecognition()
-        }, this.restartDelayMs) as unknown as number
+      if (this.emptyEnds <= 2) {
+        this.scheduleRestart(sid)
         return
       }
       this.callbacks.onError?.('음성이 감지되지 않았습니다. 다시 MIC를 눌러 주세요.')
@@ -399,12 +414,17 @@ export class VoiceListener {
     } catch {
       this.starting = false
       this.recognition = null
-      this.restartTimer = setTimeout(() => {
-        if (!this.wanted || this.sessionId !== sid) return
-        this.bootRecognition()
-      }, 120) as unknown as number
+      this.scheduleRestart(sid)
       return true
     }
+  }
+
+  private scheduleRestart(sid: number): void {
+    if (this.restartTimer != null) clearTimeout(this.restartTimer)
+    this.restartTimer = setTimeout(() => {
+      if (!this.wanted || this.sessionId !== sid || this.finishing) return
+      this.bootRecognition()
+    }, this.restartDelayMs) as unknown as number
   }
 }
 
@@ -421,7 +441,7 @@ export function probeVoiceSupport(): {
     recognition ? '음성인식: 지원' : '음성인식: 미지원 (Safari 권장)',
     speechSynthesis ? 'TTS: 지원' : 'TTS: 미지원',
     secureContext ? '보안맥락(HTTPS): OK' : '보안맥락: 필요 (HTTPS 또는 localhost)',
-    '모드: 고속(최종 인식 즉시 전송)',
+    '모드: 여유(말 끊김 방지 · 침묵 후 전송)',
   ].join('\n')
   return { recognition, speechSynthesis, secureContext, details }
 }

@@ -1,4 +1,3 @@
-import { openTranslate } from './actions'
 import {
   detectLangCode,
   findLang,
@@ -142,7 +141,7 @@ async function liveTranslate(text: string, mode: InterpretMode): Promise<BrainRe
 
   return {
     text: [
-      `【실시간 통역】 ${langLabel(result.from)} → ${langLabel(result.to)}`,
+      `【실시간 통역${result.offline ? '·오프라인' : ''}】 ${langLabel(result.from)} → ${langLabel(result.to)}`,
       `입력: ${text}`,
       `번역: ${result.text}`,
       '· 「통역 방향 바꾸기」 · 「통역 종료」',
@@ -163,6 +162,7 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
         '【실시간 통역 — 전 세계 언어】',
         '• 영어 통역 모드 / 일본어 통역 모드 / 스페인어 통역 모드',
         '• MIC로 말하면 바로 번역하고 해당 언어로 읽어 줍니다',
+        '• 기본 여행·일상 표현은 데이터(인터넷) 없이 오프라인 통역',
         '• 통역 방향 바꾸기 · 통역 종료',
         '• 영어로 번역해 안녕하세요',
         '• Hello를 한국어로 번역',
@@ -224,6 +224,7 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
         '실시간 통역 ON',
         `${langLabel(langA)} ↔ ${langLabel(langB)}`,
         `MIC: ${langLabel(listening)} → 출력: ${langLabel(otherSide(next, listening))}`,
+        '여행·일상 표현은 데이터 없이 오프라인 통역됩니다.',
         '상대 언어로 말해도 자동으로 반대쪽 언어로 통역합니다.',
         '· 「통역 방향 바꾸기」 · 「통역 종료」 · 「통역 도움말」',
       ].join('\n'),
@@ -243,7 +244,7 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
       const result = await translateText(payload, from, toLang.code)
       if (!result.ok) return { text: result.error || '번역 실패', speak: true }
       return {
-        text: `【통역】 ${langLabel(from)} → ${toLang.name}\n원문: ${payload}\n번역: ${result.text}`,
+        text: `【통역${result.offline ? '·오프라인' : ''}】 ${langLabel(from)} → ${toLang.name}\n원문: ${payload}\n번역: ${result.text}`,
         speak: true,
         speakLang: bcp47(toLang.code),
       }
@@ -269,12 +270,12 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
       const result = await translateText(payload, from === to ? (to === 'ko' ? 'en' : 'ko') : from, to)
       if (!result.ok) {
         return {
-          text: `${result.error}\nGoogle 번역을 엽니다.`,
-          action: () => openTranslate(payload, to.startsWith('zh') ? 'zh-CN' : to),
+          text: result.error || '번역 실패',
+          speak: true,
         }
       }
       return {
-        text: `【통역】 ${langLabel(result.from)} → ${target.name}\n원문: ${payload}\n번역: ${result.text}`,
+        text: `【통역${result.offline ? '·오프라인' : ''}】 ${langLabel(result.from)} → ${target.name}\n원문: ${payload}\n번역: ${result.text}`,
         speak: true,
         speakLang: bcp47(to),
       }
@@ -295,7 +296,7 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
     const result = await translateText(payload, from, target.code)
     if (result.ok) {
       return {
-        text: `【통역】 ${langLabel(result.from)} → ${target.name}\n원문: ${payload}\n번역: ${result.text}`,
+        text: `【통역${result.offline ? '·오프라인' : ''}】 ${langLabel(result.from)} → ${target.name}\n원문: ${payload}\n번역: ${result.text}`,
         speak: true,
         speakLang: bcp47(target.code),
         listenLang: bcp47(mode.listening),

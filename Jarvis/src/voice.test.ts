@@ -65,7 +65,7 @@ class FakeRecognition implements SpeechRecognitionLike {
 
 let lastFake: FakeRecognition | null = null
 
-describe('VoiceListener speed mode', () => {
+describe('VoiceListener patient mode', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     lastFake = null
@@ -91,14 +91,13 @@ describe('VoiceListener speed mode', () => {
 
   it('reports recognition capability when ctor injected', () => {
     expect(canListen()).toBe(true)
-    expect(probeVoiceSupport().details).toContain('고속')
+    expect(probeVoiceSupport().details).toContain('여유')
   })
 
-  it('finalizes immediately on final result (no silence wait)', () => {
+  it('does not finalize immediately on final — waits for silence', () => {
     const listener = new VoiceListener()
-    listener.silenceMs = 5000
+    listener.silenceMs = 2000
     let finalText = ''
-    const t0 = Date.now()
     listener.start({
       onFinal: (t) => {
         finalText = t
@@ -107,25 +106,33 @@ describe('VoiceListener speed mode', () => {
     lastFake!.onspeechstart?.()
     lastFake!.emitInterim('지금')
     lastFake!.emitFinal('지금 몇 시야')
+    expect(finalText).toBe('')
+    vi.advanceTimersByTime(1990)
+    expect(finalText).toBe('')
+    vi.advanceTimersByTime(50)
     expect(finalText).toBe('지금 몇 시야')
-    expect(Date.now() - t0).toBeLessThan(50)
     expect(listener.currentState).toBe('idle')
   })
 
-  it('finishes on speechend when finals already present', () => {
+  it('keeps listening across multiple final chunks until silence', () => {
     const listener = new VoiceListener()
+    listener.silenceMs = 1500
     let finalText = ''
     listener.start({
       onFinal: (t) => {
         finalText = t
       },
     })
-    // manually push via final
-    lastFake!.emitFinal('브리핑')
-    expect(finalText).toBe('브리핑')
+    lastFake!.onspeechstart?.()
+    lastFake!.emitFinal('안녕하세요')
+    vi.advanceTimersByTime(800)
+    lastFake!.emitFinal('만나서 반가워요')
+    expect(finalText).toBe('')
+    vi.advanceTimersByTime(1600)
+    expect(finalText).toBe('안녕하세요 만나서 반가워요')
   })
 
-  it('retries once on empty end then errors', () => {
+  it('restarts on empty end then errors after retries', () => {
     const listener = new VoiceListener()
     listener.restartDelayMs = 50
     let err = ''
@@ -138,6 +145,8 @@ describe('VoiceListener speed mode', () => {
     first!.onend?.()
     vi.advanceTimersByTime(60)
     expect(lastFake).not.toBe(first)
+    lastFake!.onend?.()
+    vi.advanceTimersByTime(60)
     lastFake!.onend?.()
     expect(err).toContain('음성이 감지되지 않았습니다')
   })

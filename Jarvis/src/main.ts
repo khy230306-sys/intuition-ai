@@ -665,8 +665,8 @@ function bind(): void {
     const listenLang = currentListenLang() || state.listenLang || 'ko-KR'
     state.listenLang = listenLang
     state.voiceHint = loadInterpretMode().active
-      ? `통역 듣는 중 (${listenLang})…`
-      : '듣고 있습니다… 바로 말씀해 주세요'
+      ? `통역 듣는 중 (${listenLang}) · 말씀 끝나면 잠시 기다려 주세요`
+      : '듣고 있습니다… 천천히 말씀하세요 (끝나면 잠깐 대기)'
     // Ensure chat shell exists without heavy remount when already on chat
     if (state.view !== 'chat' || !document.getElementById('voice-caption')) {
       state.view = 'chat'

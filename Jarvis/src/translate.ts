@@ -1,3 +1,5 @@
+import { rememberTranslation, translateOffline } from './offlineDict'
+
 export interface LangDef {
   code: string // MyMemory / BCP47 short: en, ko, ja
   bcp47: string // for SpeechRecognition / TTS
@@ -76,20 +78,27 @@ export interface TranslateResult {
   from: string
   to: string
   error?: string
+  offline?: boolean
+  partial?: boolean
 }
 
-export async function translateText(text: string, from: string, to: string): Promise<TranslateResult> {
-  const q = text.trim()
-  if (!q) return { ok: false, text: '', from, to, error: '번역할 문장이 없습니다.' }
-  if (from === to) return { ok: true, text: q, from, to }
+function isOnline(): boolean {
+  try {
+    return typeof navigator === 'undefined' ? true : navigator.onLine !== false
+  } catch {
+    return true
+  }
+}
 
+async function translateOnline(text: string, from: string, to: string): Promise<TranslateResult | null> {
+  if (!isOnline()) return null
   const url =
-    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(q.slice(0, 450))}` +
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 450))}` +
     `&langpair=${encodeURIComponent(from)}|${encodeURIComponent(to)}`
 
   try {
     const res = await fetch(url)
-    if (!res.ok) return { ok: false, text: '', from, to, error: `번역 서버 오류 (${res.status})` }
+    if (!res.ok) return null
     const data = (await res.json()) as {
       responseData?: { translatedText?: string }
       responseStatus?: number | string
@@ -97,22 +106,63 @@ export async function translateText(text: string, from: string, to: string): Pro
     }
     const out = data.responseData?.translatedText?.trim() || ''
     const status = Number(data.responseStatus)
-    if (!out || status !== 200) {
-      return {
-        ok: false,
-        text: '',
-        from,
-        to,
-        error: data.quotaFinished ? '무료 번역 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.' : '번역 결과를 받지 못했습니다.',
-      }
-    }
-    // MyMemory sometimes echoes weird empty/garbage
-    if (out === q && from !== to && q.length < 3) {
-      return { ok: false, text: '', from, to, error: '번역 신뢰도가 낮습니다. 문장을 조금 더 길게 입력해 주세요.' }
-    }
-    return { ok: true, text: out, from, to }
+    if (!out || status !== 200) return null
+    if (out === text && from !== to && text.length < 3) return null
+    rememberTranslation(from, to, text, out)
+    return { ok: true, text: out, from, to, offline: false }
   } catch {
-    return { ok: false, text: '', from, to, error: '네트워크 오류로 번역하지 못했습니다.' }
+    return null
+  }
+}
+
+/**
+ * Offline-first translation.
+ * 1) local phrase dictionary / cache (no data needed)
+ * 2) optional online MyMemory when connected (result cached for later offline use)
+ */
+export async function translateText(text: string, from: string, to: string): Promise<TranslateResult> {
+  const q = text.trim()
+  if (!q) return { ok: false, text: '', from, to, error: '번역할 문장이 없습니다.' }
+  if (from === to) return { ok: true, text: q, from, to, offline: true }
+
+  const resolvedFrom = from === 'auto' ? detectLangCode(q) : from
+  const offline = translateOffline(q, resolvedFrom, to)
+
+  // Prefer solid offline hit immediately (works with airplane mode / no data)
+  if (offline.ok && !offline.partial) {
+    // Still refresh from network in background when online for short phrases? Skip — keep instant offline.
+    return {
+      ok: true,
+      text: offline.text,
+      from: resolvedFrom,
+      to,
+      offline: true,
+      partial: false,
+    }
+  }
+
+  const online = await translateOnline(q, resolvedFrom, to)
+  if (online?.ok) return online
+
+  if (offline.ok) {
+    return {
+      ok: true,
+      text: offline.text + (offline.partial ? ' …' : ''),
+      from: resolvedFrom,
+      to,
+      offline: true,
+      partial: offline.partial,
+    }
+  }
+
+  return {
+    ok: false,
+    text: '',
+    from: resolvedFrom,
+    to,
+    error:
+      '오프라인 사전에 없는 문장입니다. 기본 여행·일상 표현은 데이터 없이 되고, 한번 온라인으로 번역한 문장은 다음에 오프라인에서도 됩니다.',
+    offline: true,
   }
 }
 

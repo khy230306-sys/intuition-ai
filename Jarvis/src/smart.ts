@@ -86,11 +86,7 @@ export function convertUnit(text: string): string | null {
   if (m && /마일|mile|변환/i.test(t)) return `${m[1]} km = ${(parseFloat(m[1]) * 0.621371).toFixed(2)} mi`
   m = t.match(/([\d.]+)\s*(mi|마일)/i)
   if (m && /km|킬로|변환/i.test(t)) return `${m[1]} mi = ${(parseFloat(m[1]) / 0.621371).toFixed(2)} km`
-  m = t.match(/([\d.]+)\s*(달러|불|\$)/)
-  if (m && /원|환율/i.test(t)) {
-    const rate = 1350
-    return `${m[1]} USD ≈ ${Math.round(parseFloat(m[1]) * rate).toLocaleString('ko-KR')}원 (가정환율 ${rate}원, 실제와 다를 수 있음)`
-  }
+  // FX moved to fx.ts (live rates). Keep other unit conversions here.
   return null
 }
 

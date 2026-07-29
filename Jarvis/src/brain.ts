@@ -36,6 +36,9 @@ import {
   safeEvalMath,
   tipSplit,
 } from './smart'
+import { answerFx } from './fx'
+import { parseExpenseLine } from './expenseParse'
+import { buildAlarmFromText, formatWhenAt, wantsLocalAlarm } from './notify'
 import {
   addExpense,
   addHabit,
@@ -75,13 +78,17 @@ function helpText(name: string): string {
   return [
     `${name}, JARVIS 만능 비서입니다.`,
     '',
-    '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 계산 · 변환',
-    '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식',
+    '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림',
+    '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식 · 장시간',
     '【세계】 국가·도시·지리·시차 · 실시간 다국어 통역',
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
     '• 브리핑 / 오늘 뭐하지',
+    '• 100달러 환율 / 엔화 10000엔 / 환율',
+    '• 커피 4500 / 지출 택시 12000 / 지출 현황',
+    '• 알림 30분 뒤 약 / 오후 3시에 알려줘 회의',
+    '• 장시간 / 장 열렸어',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
     '• 게임 / 스네이크 / 벽돌깨기 / 스페이스 (오프라인 아케이드)',
@@ -97,7 +104,8 @@ function helpText(name: string): string {
     '• 적립식 매달 50만 10년 연7%',
     '• 삼성전자 투자체크',
     '',
-    '종목 추천은 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
+    '종목 추천·환율은 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
+    '로컬 알림은 앱/탭이 열려 있을 때 가장 확실합니다(iOS 백그라운드 제한).',
     '면책: 투자 조언이 아니며 손실 책임은 본인에게 있습니다.',
   ].join('\n')
 }
@@ -159,7 +167,11 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
     return { text: report, speak: true }
   }
 
-  if (/장\s*시간|시장\s*개장|장중|마켓\s*아워|market\s*hours/i.test(text)) {
+  if (
+    /장\s*시간|시장\s*개장|장중|마켓\s*아워|market\s*hours|장\s*열렸|개장했|개장\s*했|휴장|장\s*마감|거래\s*시간|개장\s*시간/i.test(
+      text,
+    )
+  ) {
     return { text: marketSessionNow(), speak: true }
   }
 
@@ -481,6 +493,26 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     return { text: `오늘은 ${nowText()}입니다.`, speak: true }
   }
 
+  // Local timed alarms before generic reminders
+  if (wantsLocalAlarm(text)) {
+    const built = buildAlarmFromText(text)
+    if (built) {
+      const whenStr = formatWhenAt(built.alarm.whenAt)
+      addReminder(built.alarm.body, whenStr, built.alarm.whenAt)
+      return {
+        text: `알림 예약: ${built.alarm.body}\n시간: ${whenStr} (${built.whenLabel})\n앱이 열려 있으면 알림·진동으로 알려 드립니다.`,
+        speak: true,
+      }
+    }
+    return {
+      text: '시간을 함께 말해 주세요.\n예: "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
+      speak: true,
+    }
+  }
+
+  const fx = await answerFx(text)
+  if (fx) return { text: fx, speak: true }
+
   const converted = convertUnit(text)
   if (converted) return { text: converted, speak: true }
 
@@ -529,30 +561,14 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     return { text: `완료 항목 ${n}개를 정리했습니다.` }
   }
 
-  const expenseMatch =
-    text.match(/(?:지출|썼어|결제)\s*(.+?)\s*([\d,]+)\s*원/) ||
-    text.match(/([\d,]+)\s*원\s*(?:지출|썼|결제)\s*(.*)/)
-  if (expenseMatch) {
-    let category = '기타'
-    let amount = 0
-    let note = ''
-    if (/원/.test(expenseMatch[2] || '')) {
-      amount = parseFloat(expenseMatch[1].replace(/,/g, ''))
-      note = (expenseMatch[2] || '').trim()
-    } else {
-      category = expenseMatch[1].replace(/\s*([\d,]+).*/, '').trim() || expenseMatch[1].trim()
-      const num = expenseMatch[0].match(/([\d,]+)\s*원/)
-      amount = num ? parseFloat(num[1].replace(/,/g, '')) : parseFloat((expenseMatch[2] || '0').replace(/,/g, ''))
-      note = expenseMatch[1]
-      if (/([\d,]+)/.test(expenseMatch[1])) {
-        const parts = expenseMatch[1].split(/\s+/)
-        category = parts[0]
-      }
-    }
-    const item = addExpense(amount, category || '기타', note)
+  const parsedExpense = parseExpenseLine(text)
+  if (parsedExpense) {
+    const item = addExpense(parsedExpense.amount, parsedExpense.category, parsedExpense.note)
     const totals = expenseTotals()
     return {
-      text: `지출 기록: ${item.category} ${formatMoney(item.amount, 'KRW')}\n오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}`,
+      text: `지출 기록: ${item.category} ${formatMoney(item.amount, 'KRW')}${
+        item.note && item.note !== item.category ? ` (${item.note})` : ''
+      }\n오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}`,
       speak: true,
     }
   }

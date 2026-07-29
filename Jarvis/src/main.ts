@@ -53,14 +53,20 @@ import {
   type ArcadeHandle,
   type ArcadeId,
 } from './arcadeGames'
+import {
+  ensureNotificationPermission,
+  setAlarmUiHandler,
+  startAlarmScheduler,
+} from './notify'
 
-const APP_VERSION = '1.5.3'
+const APP_VERSION = '1.5.4'
 
 const SUGGESTIONS = [
-  '지금부터 스톱할 때까지 베트남어로 번역해줘',
-  '내 말을 영어로 번역해줘',
+  '100달러 환율',
+  '장시간',
+  '커피 4500',
+  '알림 1분 뒤 테스트',
   '주식 종목 추천',
-  '프랑스 정보',
   '도움말',
 ]
 
@@ -477,7 +483,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.2'
+          : '언어 버튼 → 말한 뒤 스톱 · 실용 업데이트 · v' + APP_VERSION
       }</p>
     </div>
   `
@@ -514,6 +520,7 @@ function renderInvest(): string {
         <button type="button" data-suggest="포트폴리오">포트폴리오 새로고침</button>
         <button type="button" data-suggest="관심종목 목록">관심 시세</button>
         <button type="button" data-suggest="장시간">장 시간</button>
+        <button type="button" data-suggest="환율">환율</button>
       </div>
 
       <h2 class="section-title">HOLDINGS</h2>
@@ -630,6 +637,9 @@ function renderLife(): string {
       <p class="hint">오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}</p>
       <div class="chips left">
         <button type="button" data-suggest="브리핑">브리핑</button>
+        <button type="button" data-suggest="환율">환율</button>
+        <button type="button" data-suggest="커피 4500">커피 4500</button>
+        <button type="button" data-suggest="알림 30분 뒤 약">30분 알림</button>
         <button type="button" data-suggest="장바구니 목록">장바구니</button>
         <button type="button" data-suggest="지출 현황">지출 현황</button>
       </div>
@@ -637,13 +647,15 @@ function renderLife(): string {
       <h2 class="section-title">TODO</h2>
       ${
         reminders.length === 0
-          ? '<div class="empty">"할 일 운동하기"</div>'
+          ? '<div class="empty">"할 일 운동하기" · "알림 30분 뒤 약"</div>'
           : reminders
               .map(
                 (r) => `
           <div class="list-item">
             <button type="button" data-toggle-reminder="${r.id}">${r.done ? '✓' : '○'}</button>
-            <div class="body"><strong style="${r.done ? 'opacity:.5;text-decoration:line-through' : ''}">${escapeHtml(r.text)}</strong></div>
+            <div class="body"><strong style="${r.done ? 'opacity:.5;text-decoration:line-through' : ''}">${escapeHtml(r.text)}</strong>${
+              r.when ? `<p class="hint">${escapeHtml(r.when)}</p>` : ''
+            }</div>
             <button type="button" data-del-reminder="${r.id}">삭제</button>
           </div>`,
               )
@@ -684,7 +696,7 @@ function renderLife(): string {
       <h2 class="section-title">EXPENSES</h2>
       ${
         expenses.length === 0
-          ? '<div class="empty">"지출 커피 4500원"</div>'
+          ? '<div class="empty">"커피 4500" / "지출 택시 12000"</div>'
           : expenses
               .map(
                 (e) => `
@@ -1177,6 +1189,16 @@ function boot(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
   refreshInstallHint()
+  startAlarmScheduler()
+  setAlarmUiHandler((alarm) => {
+    pushMsg('assistant', `⏰ 알림: ${alarm.body}`)
+    if (state.settings.speakReplies) {
+      void speakAsync(`알림. ${alarm.body}`.slice(0, 160), 'ko-KR')
+    }
+    showFlash(`알림: ${alarm.body}`)
+    if (state.locationReady) render()
+  })
+  void ensureNotificationPermission()
   window.addEventListener('online', () => {
     state.online = true
     if (state.locationReady) render()

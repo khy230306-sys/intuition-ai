@@ -232,20 +232,117 @@ export function formatQuote(q: QuoteSnapshot): string {
   return lines.join('\n')
 }
 
-export function marketSessionNow(): string {
-  const now = new Date()
-  const seoul = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
-  const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const sDay = seoul.getDay()
-  const nDay = ny.getDay()
-  const sMin = seoul.getHours() * 60 + seoul.getMinutes()
-  const nMin = ny.getHours() * 60 + ny.getMinutes()
-  const krOpen = sDay >= 1 && sDay <= 5 && sMin >= 9 * 60 && sMin < 15 * 60 + 30
-  const usOpen = nDay >= 1 && nDay <= 5 && nMin >= 9 * 60 + 30 && nMin < 16 * 60
+function zonedParts(timeZone: string, date = new Date()): {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  weekday: number
+} {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    weekday: 'short',
+    hour12: false,
+  })
+  const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]))
+  const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute),
+    weekday: weekdayMap[parts.weekday] ?? 0,
+  }
+}
+
+function minutesUntil(targetMin: number, nowMin: number): number {
+  let d = targetMin - nowMin
+  if (d < 0) d += 24 * 60
+  return d
+}
+
+function fmtDuration(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h <= 0) return `${m}분`
+  if (m === 0) return `${h}시간`
+  return `${h}시간 ${m}분`
+}
+
+function sessionLine(
+  name: string,
+  openMin: number,
+  closeMin: number,
+  weekday: number,
+  nowMin: number,
+  schedule: string,
+): string {
+  const weekdayOk = weekday >= 1 && weekday <= 5
+  const open = weekdayOk && nowMin >= openMin && nowMin < closeMin
+  if (open) {
+    return `${name}: 개장 중 · 마감까지 ${fmtDuration(closeMin - nowMin)} · ${schedule}`
+  }
+  if (!weekdayOk) {
+    return `${name}: 주말 휴장 · ${schedule}`
+  }
+  if (nowMin < openMin) {
+    return `${name}: 장전 · 개장까지 ${fmtDuration(openMin - nowMin)} · ${schedule}`
+  }
+  return `${name}: 장후 · 다음 개장까지 약 ${fmtDuration(minutesUntil(openMin, nowMin) + (weekday === 5 ? 2 * 24 * 60 : 0))} · ${schedule}`
+}
+
+export function marketSessionNow(now = new Date()): string {
+  const seoul = zonedParts('Asia/Seoul', now)
+  const ny = zonedParts('America/New_York', now)
+  const sMin = seoul.hour * 60 + seoul.minute
+  const nMin = ny.hour * 60 + ny.minute
+  const krKey = `${seoul.year}-${String(seoul.month).padStart(2, '0')}-${String(seoul.day).padStart(2, '0')}`
+  // Light KR holiday check (same calendar as smart.ts 2026 set)
+  const krHolidays = new Set([
+    '2026-01-01',
+    '2026-02-16',
+    '2026-02-17',
+    '2026-02-18',
+    '2026-03-01',
+    '2026-05-05',
+    '2026-05-24',
+    '2026-06-06',
+    '2026-08-15',
+    '2026-09-24',
+    '2026-09-25',
+    '2026-09-26',
+    '2026-10-03',
+    '2026-10-09',
+    '2026-12-25',
+  ])
+  const krHoliday = krHolidays.has(krKey)
+
+  const krLine = krHoliday
+    ? `한국(KRX): 공휴일 휴장 가능성 · 평일 09:00–15:30 KST`
+    : sessionLine('한국(KRX)', 9 * 60, 15 * 60 + 30, seoul.weekday, sMin, '평일 09:00–15:30 KST')
+
+  const usLine = sessionLine(
+    '미국(NYSE/Nasdaq)',
+    9 * 60 + 30,
+    16 * 60,
+    ny.weekday,
+    nMin,
+    '평일 09:30–16:00 ET',
+  )
+
   return [
-    `한국(KRX): ${krOpen ? '개장 중' : '휴장/장외'} · 평일 09:00–15:30`,
-    `미국(NYSE/Nasdaq): ${usOpen ? '개장 중' : '휴장/장외'} · 평일 09:30–16:00 ET`,
-    `참고: 공휴일·서머타임에 따라 달라질 수 있습니다.`,
+    '【장 시간】',
+    krLine,
+    usLine,
+    `서울 ${String(seoul.hour).padStart(2, '0')}:${String(seoul.minute).padStart(2, '0')} · 뉴욕 ${String(ny.hour).padStart(2, '0')}:${String(ny.minute).padStart(2, '0')} ET`,
+    '참고: 공휴일·서머타임·조기폐장에 따라 달라질 수 있습니다.',
   ].join('\n')
 }
 

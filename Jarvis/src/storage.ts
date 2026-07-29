@@ -133,11 +133,12 @@ export function saveReminders(items: ReminderItem[]): void {
   writeJson(KEYS.reminders, items)
 }
 
-export function addReminder(text: string, when?: string): ReminderItem {
+export function addReminder(text: string, when?: string, whenAt?: number): ReminderItem {
   const item: ReminderItem = {
     id: crypto.randomUUID(),
     text: text.trim(),
     when,
+    whenAt,
     done: false,
     createdAt: Date.now(),
   }

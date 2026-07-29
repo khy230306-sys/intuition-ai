@@ -19,6 +19,8 @@ export interface ReminderItem {
   id: string
   text: string
   when?: string
+  /** Absolute fire time (ms) for local alarms */
+  whenAt?: number
   done: boolean
   createdAt: number
 }

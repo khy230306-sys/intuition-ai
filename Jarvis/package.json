@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "deploy:web": "npx -y @shipstatic/ship ./dist",
     "test": "vitest run",
-    "test:voice": "npm run build && node scripts/voice-e2e.mjs"
+    "test:voice": "npm run build && node scripts/voice-e2e.mjs",
+    "test:practical": "npm run build && node scripts/practical-e2e.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^24.22.3",

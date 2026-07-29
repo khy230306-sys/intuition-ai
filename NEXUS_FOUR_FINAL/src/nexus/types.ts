@@ -178,7 +178,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   tieMode: 'EXCLUDE_FOR_DIRECTION',
   allowWait: true,
   enableScanner: false,
-  websocketUrl: 'ws://localhost:8765',
+  // 개발 서버 프록시(/scanner-ws) 사용. 앱이 열린 호스트와 동일하게 연결됨.
+  websocketUrl: 'auto',
   scannerHeartbeatMs: 5000,
   autoBetMasterSwitch: false,
   autoBetTestingMode: true,

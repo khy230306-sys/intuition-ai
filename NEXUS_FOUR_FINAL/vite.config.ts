@@ -9,8 +9,6 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       strategies: 'generateSW',
-      // dist 빌드에서 service worker를 생성/주입하기 위해 manifest와 기본 precache만 사용합니다.
-      // (정교한 offline fallback은 dist 산출물 기준으로 서비스 워커 캐시 정책으로 동작)
       manifest: {
         name: 'NEXUS FOUR FINAL',
         short_name: 'NEXUS FOUR',
@@ -41,4 +39,17 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    // 앱(5173)과 같은 호스트로 WebSocket을 열어 모바일/클라우드 포트포워딩에서도 스캐너 연동이 되게 함
+    proxy: {
+      '/scanner-ws': {
+        target: 'ws://127.0.0.1:8765',
+        ws: true,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/scanner-ws/, ''),
+      },
+    },
+  },
 })

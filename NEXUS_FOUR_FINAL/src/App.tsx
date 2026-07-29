@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppSettings, BalanceSnapshot, RoundResult, Side } from './nexus/types'
 import { DEFAULT_APP_SETTINGS, type ActualResult } from './nexus/types'
 import { analyzeSession, type SessionAnalysis } from './nexus/engines'
-import { db, exportBackup, importBackup, getLatestShoeId, loadAppSettings, saveMartingaleState } from './nexus/db'
+import { db, exportBackup, importBackup, getLatestShoeId, loadAppSettings, saveAppSettings, saveMartingaleState } from './nexus/db'
 import { simulateMartingale } from './nexus/martingale'
 import { createInitialScannerState, ScannerClient, type ScannerState } from './nexus/scannerClient'
 import { deriveSeedFromString } from './nexus/prng'
+import { resolveScannerWebSocketUrl } from './nexus/wsUrl'
 import './nexus/app.css'
 
 function formatSide(s: Side | null) {
@@ -24,6 +25,19 @@ function toActualResult(actual: RoundResult['actual']): ActualResult {
   return { type: 'BANKER', side: 'BANKER' }
 }
 
+function connLabel(state: ScannerState['connectionState']) {
+  switch (state) {
+    case 'CONNECTED':
+      return '연결됨'
+    case 'CONNECTING':
+      return '연결 중…'
+    case 'ERROR':
+      return '오류'
+    default:
+      return '끊김'
+  }
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
   const [shoeId, setShoeId] = useState<number>(1)
@@ -33,11 +47,20 @@ export default function App() {
 
   const [autoBetOn, setAutoBetOn] = useState<boolean>(false)
   const [scannerState, setScannerState] = useState<ScannerState>(createInitialScannerState(DEFAULT_APP_SETTINGS.tableId))
+  const [wsUrlDraft, setWsUrlDraft] = useState<string>('auto')
+  const [tableIdDraft, setTableIdDraft] = useState<string>('LOCAL')
+  const [lastScannerMsg, setLastScannerMsg] = useState<string>('스캐너 대기 중')
 
   const scannerClientRef = useRef<ScannerClient | null>(null)
+  const scannerStateRef = useRef(scannerState)
   const lastAutoBetRoundRef = useRef<number | null>(null)
 
+  useEffect(() => {
+    scannerStateRef.current = scannerState
+  }, [scannerState])
+
   const randomSeed = useMemo(() => deriveSeedFromString(`nexus-four-final|${settings.tableId}|seed1`), [settings.tableId])
+  const resolvedWsUrl = useMemo(() => resolveScannerWebSocketUrl(settings.websocketUrl), [settings.websocketUrl])
 
   async function refreshFromDb() {
     const latest = await getLatestShoeId()
@@ -45,6 +68,8 @@ export default function App() {
 
     const loadedSettings = await loadAppSettings()
     setSettings(loadedSettings)
+    setWsUrlDraft(loadedSettings.websocketUrl || 'auto')
+    setTableIdDraft(loadedSettings.tableId || 'LOCAL')
 
     const allRounds = await db.gameResults.toArray()
     const tableRounds = allRounds
@@ -66,7 +91,6 @@ export default function App() {
     })
     setAnalysis(next)
 
-    // 현재 shoe 구간만 마틴을 재구성
     const currentShoeRounds = tableRounds.filter((r) => r.shoeId === latest).sort((a, b) => a.roundIndex - b.roundIndex)
     const shoeRoundIndexSet = new Set(currentShoeRounds.map((r) => r.roundIndex))
     const multiSlice = next.multiHistory.filter((m) => shoeRoundIndexSet.has(m.roundIndex))
@@ -86,25 +110,44 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!settings.enableScanner || !settings.websocketUrl.startsWith('ws')) {
+    if (!settings.enableScanner) {
       scannerClientRef.current?.disconnect()
       scannerClientRef.current = null
       setScannerState(createInitialScannerState(settings.tableId))
+      setLastScannerMsg('스캐너 OFF')
       return
     }
 
+    const url = resolveScannerWebSocketUrl(settings.websocketUrl)
     scannerClientRef.current?.disconnect()
 
     const initState = createInitialScannerState(settings.tableId)
     setScannerState(initState)
+    scannerStateRef.current = initState
+    setLastScannerMsg(`연결 시도: ${url}`)
 
     const client = new ScannerClient(
-      settings.websocketUrl,
+      url,
       (msg) => {
+        if (msg.type === 'scanner_status') {
+          setLastScannerMsg(`스캐너 상태: ${msg.status}`)
+          if (msg.tableId) {
+            setScannerState((s) => ({ ...s, tableId: msg.tableId! }))
+          }
+        }
+        if (msg.type === 'heartbeat') {
+          setScannerState((s) => ({ ...s, lastHeartbeatAt: Date.now(), connectionState: 'CONNECTED' }))
+        }
+        if (msg.type === 'betting_open') {
+          setScannerState((s) => ({ ...s, bettingOpenAt: msg.timestamp, bettingCloseAt: null }))
+          setLastScannerMsg('배팅 OPEN')
+        }
+        if (msg.type === 'betting_closed') {
+          setScannerState((s) => ({ ...s, bettingCloseAt: msg.timestamp }))
+          setLastScannerMsg('배팅 CLOSED')
+        }
         if (msg.type === 'round_result') {
           ;(async () => {
-            // 스캐너가 제공한 shoeId/roundIndex를 그대로 신뢰하기 어렵기 때문에,
-            // 현재 구현은 "현재 최신 shoe"로 묶되, 라운드 인덱스는 스캐너 값을 우선합니다.
             const currentShoe = await getLatestShoeId()
             const id = `${msg.tableId}-${msg.roundId}-${msg.timestamp}`
             const row: RoundResult = {
@@ -119,6 +162,7 @@ export default function App() {
               dataSource: 'scanner',
             }
             await db.gameResults.put(row)
+            setLastScannerMsg(`라운드 수신: ${msg.result} (#${msg.roundIndex})`)
             await refreshFromDb()
           })().catch(console.error)
         }
@@ -138,13 +182,29 @@ export default function App() {
               meta: msg.meta,
             }
             await db.balanceSnapshots.put(row)
-            await refreshFromDb()
+            if (msg.meta?.bettingOpenAt) {
+              setScannerState((s) => ({
+                ...s,
+                bettingOpenAt: Number(msg.meta?.bettingOpenAt) || s.bettingOpenAt,
+                bettingCloseAt: Number(msg.meta?.bettingCloseAt) || s.bettingCloseAt,
+              }))
+            }
           })().catch(console.error)
         }
-        if (msg.type === 'scanner_error') setScannerState((s) => ({ ...s, lastError: msg.message }))
+        if (msg.type === 'auto_bet_result') {
+          setLastScannerMsg(`자동배팅 응답: ${msg.ok ? 'OK' : 'FAIL'} ${msg.message || ''}`)
+        }
+        if (msg.type === 'scanner_error') {
+          setScannerState((s) => ({ ...s, lastError: msg.message, connectionState: 'ERROR' }))
+          setLastScannerMsg(`오류: ${msg.message}`)
+          setAutoBetOn(false)
+        }
       },
-      () => scannerState,
-      (next) => setScannerState(next),
+      () => scannerStateRef.current,
+      (next) => {
+        scannerStateRef.current = next
+        setScannerState(next)
+      },
     )
 
     scannerClientRef.current = client
@@ -154,7 +214,7 @@ export default function App() {
       client.disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.enableScanner, settings.websocketUrl])
+  }, [settings.enableScanner, settings.websocketUrl, settings.tableId])
 
   useEffect(() => {
     if (!autoBetOn) return
@@ -169,8 +229,9 @@ export default function App() {
       setAutoBetOn(false)
       return
     }
-    if (!scannerState.bettingOpenAt || !scannerState.bettingCloseAt) return
-    if (Date.now() > scannerState.bettingCloseAt) return
+    // betting window이 아직 없으면(스텁 초기) 전송 허용하지 않음
+    if (!scannerState.bettingOpenAt) return
+    if (scannerState.bettingCloseAt && Date.now() > scannerState.bettingCloseAt) return
 
     const ok = scannerClientRef.current.sendAutoBet({
       tableId: settings.tableId,
@@ -182,6 +243,27 @@ export default function App() {
     if (ok) lastAutoBetRoundRef.current = nextRoundIndex
     else setAutoBetOn(false)
   }, [autoBetOn, analysis, martingaleState, scannerState.bettingCloseAt, scannerState.bettingOpenAt, scannerState.connectionState, settings.enableScanner, settings.tableId])
+
+  async function persistSettings(next: AppSettings) {
+    await saveAppSettings(next)
+    setSettings(next)
+  }
+
+  async function connectScanner() {
+    const next: AppSettings = {
+      ...settings,
+      enableScanner: true,
+      websocketUrl: (wsUrlDraft || 'auto').trim() || 'auto',
+      tableId: (tableIdDraft || 'LOCAL').trim() || 'LOCAL',
+    }
+    await persistSettings(next)
+  }
+
+  async function disconnectScanner() {
+    setAutoBetOn(false)
+    const next: AppSettings = { ...settings, enableScanner: false }
+    await persistSettings(next)
+  }
 
   async function addRound(actual: Side | 'TIE') {
     const loadedSettings = await loadAppSettings()
@@ -213,7 +295,6 @@ export default function App() {
     const last = tableRounds[0]
     if (!last) return
     await db.gameResults.delete(last.id)
-    // 스캐너 밸런스 스냅샷까지 완벽히 연동하는 것은 스캐너 규약에 의존합니다.
     await refreshFromDb()
   }
 
@@ -247,7 +328,9 @@ export default function App() {
       <header className="nexusTop">
         <div className="nexusTitle">NEXUS FOUR FINAL</div>
         <div className="nexusStatusRow">
-          <span className="pill">스캐너: {scannerState.connectionState}</span>
+          <span className={`pill ${scannerState.connectionState === 'CONNECTED' ? 'ok' : ''}`}>
+            스캐너: {connLabel(scannerState.connectionState)}
+          </span>
           <span className="pill">테이블: {settings.tableId}</span>
           <span className="pill">슈 번호: {shoeId}</span>
           <span className="pill">{autoBetOn ? '자동배팅 ON' : '자동배팅 OFF'}</span>
@@ -255,6 +338,57 @@ export default function App() {
       </header>
 
       <main className="nexusGrid">
+        <section className="card cardConnect">
+          <h2>웹사이트 / 스캐너 연동</h2>
+          <p className="connectHelp">
+            카지노 사이트에 직접 임베드하지 않습니다. 스캐너(WebSocket)가 결과를 보내면 앱이 수신·분석합니다.
+            아래 <b>연결</b>을 누르면 로컬 스캐너(`:8765`, Vite 프록시 `/scanner-ws`)에 붙습니다.
+          </p>
+          <div className="formRow">
+            <label>
+              WebSocket URL
+              <input
+                value={wsUrlDraft}
+                onChange={(e) => setWsUrlDraft(e.target.value)}
+                placeholder="auto 또는 ws://호스트:8765"
+              />
+            </label>
+            <label>
+              테이블 ID
+              <input value={tableIdDraft} onChange={(e) => setTableIdDraft(e.target.value)} placeholder="LOCAL" />
+            </label>
+          </div>
+          <div className="btnRow">
+            <button className="btn p" type="button" onClick={() => connectScanner().catch(console.error)} disabled={settings.enableScanner && scannerState.connectionState === 'CONNECTED'}>
+              연결
+            </button>
+            <button className="btn neutral" type="button" onClick={() => disconnectScanner().catch(console.error)}>
+              끊기
+            </button>
+            <button
+              className="btn neutral"
+              type="button"
+              onClick={() => {
+                // 재연결
+                disconnectScanner()
+                  .then(() => connectScanner())
+                  .catch(console.error)
+              }}
+            >
+              재연결
+            </button>
+          </div>
+          <div className="connectMeta">
+            <div>실제 연결 URL: <code>{resolvedWsUrl}</code></div>
+            <div>상태: {connLabel(scannerState.connectionState)}</div>
+            <div>최근 메시지: {lastScannerMsg}</div>
+            {scannerState.lastError ? <div className="stopReason">오류: {scannerState.lastError}</div> : null}
+          </div>
+          <div className="note">
+            * 실제 사이트 자동 클릭/로그인은 별도 스캐너가 필요합니다. 현재 기본 스캐너는 연동 테스트용이며, 시뮬레이션 데이터를 보낼 수 있습니다.
+          </div>
+        </section>
+
         <section className="card cardFinal">
           <h2>종합 멀티 최종픽</h2>
           <div className="bigSide" style={{ color: colorForSide(analysis?.multiPick.predictedSide ?? null) }}>
@@ -365,8 +499,9 @@ export default function App() {
                 type="checkbox"
                 checked={autoBetOn}
                 onChange={(e) => setAutoBetOn(e.target.checked)}
+                disabled={scannerState.connectionState !== 'CONNECTED'}
               />
-              <span>자동배팅 ON/OFF</span>
+              <span>자동배팅 ON/OFF (스캐너 연결 시에만)</span>
             </label>
           </div>
 

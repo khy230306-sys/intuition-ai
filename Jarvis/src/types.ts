@@ -130,7 +130,7 @@ export interface ActionResult {
   opened?: string
 }
 
-export type View = 'chat' | 'invest' | 'life' | 'family' | 'games' | 'actions' | 'settings'
+export type View = 'chat' | 'invest' | 'life' | 'family' | 'friends' | 'games' | 'actions' | 'settings'
 
 export interface BrainReply {
   text: string

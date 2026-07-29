@@ -1117,6 +1117,21 @@ body {
   letter-spacing: 0.02em;
 }
 
+.nav.nav-8 {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.nav.nav-8 button {
+  padding: 8px 1px 6px;
+  font-size: 0.56rem;
+}
+
+.nav.nav-8 .nav-ico {
+  font-size: 0.52rem;
+  letter-spacing: 0.01em;
+}
+
 .family-panel .family-head {
   margin-bottom: 8px;
 }

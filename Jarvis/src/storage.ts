@@ -1,5 +1,7 @@
 import { loadFamilyRoom, saveFamilyRoom } from './familyStore'
 import type { FamilyRoom } from './familyTypes'
+import { loadFriendsRoom, saveFriendsRoom } from './friendsStore'
+import type { FriendsRoom } from './friendsTypes'
 import type {
   ChatMessage,
   DataSeries,
@@ -559,7 +561,7 @@ export function saveSettings(settings: JarvisSettings): void {
 export function exportBackup(): string {
   return JSON.stringify(
     {
-      version: 5,
+      version: 6,
       exportedAt: new Date().toISOString(),
       chat: loadChat(),
       memory: loadMemory(),
@@ -575,6 +577,7 @@ export function exportBackup(): string {
       series: loadSeriesList(),
       activeSeries: getActiveSeriesName(),
       family: loadFamilyRoom(),
+      friends: loadFriendsRoom(),
       settings: { ...loadSettings(), apiKey: '' },
     },
     null,
@@ -599,6 +602,7 @@ export function importBackup(json: string): { ok: boolean; message: string } {
       series?: DataSeries[]
       activeSeries?: string
       family?: FamilyRoom | null
+      friends?: FriendsRoom | null
       settings?: Partial<JarvisSettings>
     }
     if (data.chat) saveChat(data.chat)
@@ -615,6 +619,7 @@ export function importBackup(json: string): { ok: boolean; message: string } {
     if (data.series) saveSeriesList(data.series)
     if (data.activeSeries) setActiveSeriesName(data.activeSeries)
     if (data.family) saveFamilyRoom(data.family)
+    if (data.friends) saveFriendsRoom(data.friends)
     if (data.settings) {
       const current = loadSettings()
       saveSettings({

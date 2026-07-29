@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.6.3",
+  "version": "1.6.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "test:voice": "npm run build && node scripts/voice-e2e.mjs",
     "test:practical": "npm run build && node scripts/practical-e2e.mjs",
     "test:share": "npm run build && node scripts/share-home-e2e.mjs",
-    "test:family": "npm run build && node scripts/family-e2e.mjs"
+    "test:family": "npm run build && node scripts/family-e2e.mjs",
+    "test:friends": "npm run build && node scripts/friends-e2e.mjs"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",

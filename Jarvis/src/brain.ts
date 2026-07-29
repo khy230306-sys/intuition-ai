@@ -78,6 +78,12 @@ import {
   loadFamilyRoom,
   upcomingFamilyEvents,
 } from './familyStore'
+import {
+  addFriendsNotice,
+  createFriendsRoom,
+  loadFriendsRoom,
+  upcomingFriendsEvents,
+} from './friendsStore'
 import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
 
@@ -87,6 +93,7 @@ function helpText(name: string): string {
     '',
     '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【가족】 단체대화 · 공지 · 일정 (하단 가족 탭 / 코드 공유)',
+    '【친구】 단체대화 · 공지 · 일정 (하단 친구 탭 / 코드 공유)',
     '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식 · 장시간',
     '【세계】 국가·도시·지리·시차 · 실시간 다국어 통역',
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
@@ -94,6 +101,7 @@ function helpText(name: string): string {
     '예시',
     '• 브리핑 / 오늘 뭐하지',
     '• 가족 공간 / 가족 공지 / 가족 일정',
+    '• 친구 공간 / 친구 공지 / 친구 일정',
     '• 앱 공유 / QR / 백업 공유',
     '• 100달러 환율 / 엔화 10000엔 / 환율',
     '• 커피 4500 / 지출 택시 12000 / 지출 현황',
@@ -784,6 +792,62 @@ export async function think(
       text: `가족 공간 생성: ${room.name}\n초대 코드: ${room.code}\n가족에게 코드를 알려 주세요.`,
       speak: true,
       view: 'family',
+    }
+  }
+
+  if (/친구\s*(공간|채팅|대화|탭)|프렌즈|friends?\s*space/i.test(text)) {
+    const room = loadFriendsRoom()
+    return {
+      text: room
+        ? `친구 공간「${room.name}」코드 ${room.code}로 이동합니다.\n멤버 ${room.members.length}명 · 메시지 ${room.messages.length} · 공지 ${room.notices.length} · 일정 ${room.events.length}`
+        : '친구 탭으로 이동합니다. 새 공간을 만들거나 초대 코드로 참여하세요.',
+      speak: true,
+      view: 'friends',
+    }
+  }
+
+  if (/친구\s*공지/.test(text)) {
+    const room = loadFriendsRoom()
+    if (!room) {
+      return { text: '먼저 친구 공간을 만들어 주세요.', view: 'friends', speak: true }
+    }
+    const m = text.match(/친구\s*공지\s*(.+)$/)
+    if (m) {
+      const notice = addFriendsNotice(m[1].slice(0, 40), m[1])
+      return {
+        text: notice ? `공지 등록: ${notice.title}` : '공지 등록에 실패했습니다.',
+        speak: true,
+        view: 'friends',
+      }
+    }
+    const lines = room.notices.slice(0, 5).map((n) => `• ${n.pinned ? '[고정] ' : ''}${n.title}`)
+    return {
+      text: lines.length ? `【친구 공지】\n${lines.join('\n')}` : '등록된 친구 공지가 없습니다.',
+      speak: true,
+      view: 'friends',
+    }
+  }
+
+  if (/친구\s*일정/.test(text)) {
+    const room = loadFriendsRoom()
+    if (!room) return { text: '먼저 친구 공간을 만들어 주세요.', view: 'friends', speak: true }
+    const upcoming = upcomingFriendsEvents(5)
+    return {
+      text: upcoming.length
+        ? `【친구 일정】\n${upcoming.map((e) => `• ${e.date}${e.time ? ' ' + e.time : ''} ${e.title}`).join('\n')}`
+        : '다가오는 친구 일정이 없습니다. 친구 탭에서 추가하세요.',
+      speak: true,
+      view: 'friends',
+    }
+  }
+
+  if (/친구\s*(만들|생성)|친구\s*공간\s*(만들|생성)/.test(text)) {
+    const settings = loadSettings()
+    const room = createFriendsRoom('우리 친구', settings.displayName)
+    return {
+      text: `친구 공간 생성: ${room.name}\n초대 코드: ${room.code}\n친구에게 코드를 알려 주세요.`,
+      speak: true,
+      view: 'friends',
     }
   }
 

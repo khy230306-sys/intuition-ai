@@ -32,7 +32,7 @@ import {
   toggleShopping,
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
-import { VoiceListener, canListen, speak, stopSpeaking } from './voice'
+import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
 
 const SUGGESTIONS = [
   '브리핑',
@@ -48,6 +48,7 @@ const state = {
   draft: '',
   busy: false,
   listening: false,
+  voiceHint: '',
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   showInstall: false,
   settings: loadSettings(),
@@ -98,6 +99,8 @@ async function handleUserText(raw: string): Promise<void> {
   const text = raw.trim()
   if (!text || state.busy) return
   state.busy = true
+  state.listening = false
+  state.voiceHint = ''
   state.draft = ''
   pushMsg('user', text)
   render()
@@ -117,7 +120,7 @@ async function handleUserText(raw: string): Promise<void> {
       pushMsg('assistant', reply.text)
     }
     if (reply.speak !== false && state.settings.speakReplies) {
-      speak(reply.text.replace(/\n+/g, '. ').slice(0, 220))
+      await speakAsync(reply.text.replace(/\n+/g, '. ').slice(0, 220))
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
@@ -126,6 +129,39 @@ async function handleUserText(raw: string): Promise<void> {
     state.busy = false
     render()
     scrollChat()
+  }
+}
+
+/** Update mic/caption/draft without destroying the recognition session via full remount. */
+function patchVoiceUi(): void {
+  const mic = document.querySelector<HTMLButtonElement>('[data-action="mic"]')
+  if (mic) {
+    mic.classList.toggle('listening', state.listening)
+    mic.textContent = state.listening ? 'STOP' : 'MIC'
+    mic.setAttribute('aria-pressed', state.listening ? 'true' : 'false')
+  }
+  const status = document.querySelector('.status-pill')
+  if (status) {
+    status.textContent = state.listening
+      ? '듣는 중'
+      : state.busy
+        ? '분석 중'
+        : state.online
+          ? '대기'
+          : '오프라인'
+  }
+  const caption = document.getElementById('voice-caption')
+  if (caption) {
+    caption.hidden = !state.listening && !state.voiceHint
+    caption.textContent = state.listening
+      ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
+      : state.voiceHint
+    caption.classList.toggle('live', state.listening)
+  }
+  const input = document.getElementById('draft') as HTMLInputElement | null
+  if (input && state.listening) {
+    input.value = state.draft
+    input.placeholder = '음성 인식 중…'
   }
 }
 
@@ -226,9 +262,12 @@ function renderChat(): string {
   return `
     <section class="panel chat-panel">
       <div class="messages">${body}</div>
+      <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
+        state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
+      )}</div>
       <form class="composer" id="composer">
-        <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력">${state.listening ? 'STOP' : 'MIC'}</button>
-        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="시세, 브리핑, 명령..." value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
+        <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
+        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${state.listening ? '음성 인식 중…' : '시세, 브리핑, 명령...'}" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
         <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
       </form>
     </section>
@@ -467,8 +506,9 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">백업</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
+      <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
-      <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. API 키 없이도 시세·포트·생활 비서가 동작합니다.</p>
+      <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다.</p>
     </section>
   `
 }
@@ -543,34 +583,72 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {
+    if (state.busy) {
+      showFlash('처리 중입니다. 잠시만 기다려 주세요.')
+      return
+    }
     if (!canListen()) {
-      showFlash('Safari에서 마이크 권한을 허용해 주세요.')
+      showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
       return
     }
     if (state.listening) {
+      const partial = voice.transcript.trim()
       voice.stop()
       state.listening = false
-      render()
+      state.voiceHint = ''
+      patchVoiceUi()
+      if (partial) void handleUserText(partial)
+      else render()
       return
     }
     stopSpeaking()
-    const ok = voice.start(
-      (text, final) => {
+    state.draft = ''
+    state.voiceHint = '듣고 있습니다… 말씀해 주세요'
+    const ok = voice.start({
+      onInterim: (text) => {
         state.draft = text
-        const input = document.getElementById('draft') as HTMLInputElement | null
-        if (input) input.value = text
-        if (final) {
-          state.listening = false
-          void handleUserText(text)
-        }
+        state.voiceHint = text || '듣고 있습니다…'
+        patchVoiceUi()
       },
-      (err) => {
+      onFinal: (text) => {
         state.listening = false
+        state.voiceHint = ''
+        state.draft = text
+        patchVoiceUi()
+        void handleUserText(text)
+      },
+      onState: (s) => {
+        state.listening = s === 'listening' || s === 'processing'
+        if (s === 'listening' && !state.voiceHint) state.voiceHint = '듣고 있습니다… 말씀해 주세요'
+        if (s === 'idle' && !state.busy) {
+          state.listening = false
+        }
+        patchVoiceUi()
+      },
+      onError: (err) => {
+        state.listening = false
+        state.voiceHint = ''
         showFlash(err)
+        patchVoiceUi()
         render()
       },
-    )
+    })
     state.listening = ok
+    if (!ok) state.voiceHint = ''
+    // One render to show caption shell; later updates use patchVoiceUi only
+    render()
+  })
+
+  document.querySelector('[data-action="voice-test"]')?.addEventListener('click', () => {
+    const probe = probeVoiceSupport()
+    const lines = [
+      '【음성 시스템 점검】',
+      probe.details,
+      canListen() ? 'MIC 버튼을 눌러 실제 인식도 확인해 주세요.' : 'Safari(iPhone)에서 다시 열어 주세요.',
+    ]
+    showFlash(probe.recognition && probe.secureContext ? '음성 준비 완료' : '음성 환경 확인 필요')
+    state.view = 'chat'
+    pushMsg('assistant', lines.join('\n'))
     render()
   })
 

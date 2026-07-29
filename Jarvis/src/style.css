@@ -206,6 +206,38 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.voice-caption {
+  margin: 0 10px 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--cyan-bright);
+  background: rgba(0, 210, 190, 0.08);
+  border: 1px solid rgba(0, 210, 190, 0.22);
+  min-height: 1.2em;
+}
+
+.voice-caption[hidden] {
+  display: none !important;
+}
+
+.voice-caption.live {
+  animation: captionPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes captionPulse {
+  0%,
+  100% {
+    border-color: rgba(0, 210, 190, 0.22);
+    box-shadow: none;
+  }
+  50% {
+    border-color: rgba(0, 210, 190, 0.55);
+    box-shadow: 0 0 18px rgba(0, 210, 190, 0.12);
+  }
+}
+
 .composer input,
 .settings-form input,
 .settings-form select {

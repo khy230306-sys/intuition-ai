@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.5.4",
+  "version": "1.5.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,14 +11,19 @@
     "deploy:web": "npx -y @shipstatic/ship ./dist",
     "test": "vitest run",
     "test:voice": "npm run build && node scripts/voice-e2e.mjs",
-    "test:practical": "npm run build && node scripts/practical-e2e.mjs"
+    "test:practical": "npm run build && node scripts/practical-e2e.mjs",
+    "test:share": "npm run build && node scripts/share-home-e2e.mjs"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "puppeteer-core": "^24.22.3",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^3.2.7",
     "workbox-window": "^7.4.0"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

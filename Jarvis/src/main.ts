@@ -14,7 +14,6 @@ import {
   deleteShopping,
   deleteTrade,
   expenseTotals,
-  exportBackup,
   getActiveSeriesName,
   importBackup,
   loadChat,
@@ -58,15 +57,27 @@ import {
   setAlarmUiHandler,
   startAlarmScheduler,
 } from './notify'
+import { buildHomeSummary } from './homeSummary'
+import {
+  appShareMessage,
+  appShareUrl,
+  buildBackupQrPayload,
+  downloadBackupBlob,
+  qrSvg,
+  registerShareModal,
+  shareAppLink,
+  shareBackupFile,
+} from './shareKit'
+import { fetchWeather, type WeatherSnap } from './weather'
 
-const APP_VERSION = '1.5.4'
+const APP_VERSION = '1.5.5'
 
 const SUGGESTIONS = [
+  '앱 공유',
   '100달러 환율',
   '장시간',
   '커피 4500',
   '알림 1분 뒤 테스트',
-  '주식 종목 추천',
   '도움말',
 ]
 
@@ -97,6 +108,10 @@ const state = {
   lastFix: null as GeoFix | null,
   arcadeId: 'snake' as ArcadeId,
   arcadeScore: 0,
+  weather: null as WeatherSnap | null,
+  shareModal: null as null | 'app' | 'backup',
+  shareQrSvg: '',
+  shareHint: '',
 }
 
 let arcade: ArcadeHandle | null = null
@@ -137,6 +152,49 @@ function showFlash(msg: string): void {
   el.textContent = msg
   el.classList.add('show')
   window.setTimeout(() => el.classList.remove('show'), 1800)
+}
+
+async function openShareModal(kind: 'app' | 'backup'): Promise<void> {
+  state.shareModal = kind
+  state.shareQrSvg = ''
+  state.shareHint = kind === 'app' ? appShareUrl() : 'QR 생성 중…'
+  render()
+  try {
+    if (kind === 'app') {
+      const url = appShareUrl()
+      state.shareQrSvg = await qrSvg(url)
+      state.shareHint = url
+    } else {
+      const built = buildBackupQrPayload()
+      state.shareQrSvg = await qrSvg(built.payload)
+      state.shareHint =
+        built.kind === 'full'
+          ? `전체 백업 QR (${built.bytes}B) — 카메라로 스캔해 저장하세요.`
+          : built.reason
+    }
+  } catch (err) {
+    state.shareHint = err instanceof Error ? err.message : 'QR 생성 실패'
+  }
+  render()
+}
+
+async function refreshWeather(): Promise<void> {
+  const fix = state.lastFix
+  if (!fix) return
+  const place = state.settings.city || '현재 위치'
+  const w = await fetchWeather(fix.lat, fix.lon, place)
+  if (w) {
+    state.weather = w
+    if (state.locationReady && state.view === 'chat' && !state.busy) {
+      const widget = document.querySelector('[data-home-widget] .home-weather')
+      if (widget) {
+        const s = buildHomeSummary(w)
+        widget.textContent = s.weatherLine
+      } else {
+        render()
+      }
+    }
+  }
 }
 
 function pushMsg(role: ChatMessage['role'], text: string): ChatMessage {
@@ -442,6 +500,67 @@ function mountActiveArcade(): void {
   canvas.addEventListener('mouseup', onUp)
 }
 
+function renderHomeWidget(): string {
+  const s = buildHomeSummary(state.weather)
+  const todos =
+    s.todos.length > 0
+      ? s.todos.map((t) => `<li>${escapeHtml(t)}</li>`).join('')
+      : '<li class="muted">할 일 없음</li>'
+  return `
+    <div class="home-widget" data-home-widget="1">
+      <div class="home-widget-top">
+        <div>
+          <p class="home-kicker">TODAY</p>
+          <strong class="home-weather">${escapeHtml(s.weatherLine)}</strong>
+        </div>
+        <button type="button" class="ghost-btn tiny" data-action="open-share-app" aria-label="앱 공유">QR</button>
+      </div>
+      <div class="home-grid">
+        <div>
+          <span class="home-label">할 일</span>
+          <ul class="home-todos">${todos}</ul>
+        </div>
+        <div>
+          <span class="home-label">오늘 지출</span>
+          <p class="home-value">${escapeHtml(s.spendLabel)}</p>
+          <span class="home-label">다음 알림</span>
+          <p class="home-value small">${escapeHtml(s.nextAlarm || '없음')}</p>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function renderShareModal(): string {
+  if (!state.shareModal) return ''
+  const title = state.shareModal === 'app' ? '앱 공유 QR' : '백업 QR / 공유'
+  return `
+    <div class="share-modal" role="dialog" aria-modal="true" aria-label="${title}" data-action="close-share-backdrop">
+      <div class="share-sheet" data-share-sheet="1">
+        <div class="share-sheet-head">
+          <strong>${title}</strong>
+          <button type="button" class="ghost-btn tiny" data-action="close-share">닫기</button>
+        </div>
+        <div class="share-qr">${state.shareQrSvg || '<p class="hint">QR 생성 중…</p>'}</div>
+        <p class="hint share-hint">${escapeHtml(state.shareHint || appShareUrl())}</p>
+        <div class="row-btns">
+          ${
+            state.shareModal === 'app'
+              ? `
+            <button type="button" class="primary-btn" data-action="share-app-native">공유하기</button>
+            <button type="button" class="ghost-btn" data-action="copy-app-link">링크 복사</button>
+          `
+              : `
+            <button type="button" class="primary-btn" data-action="share-backup-native">백업 공유</button>
+            <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
+          `
+          }
+        </div>
+      </div>
+    </div>
+  `
+}
+
 function renderChat(): string {
   const mode = loadInterpretMode()
   const body =
@@ -483,13 +602,14 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 실용 업데이트 · v' + APP_VERSION
+          : '언어 버튼 → 말한 뒤 스톱 · 홈요약·QR · v' + APP_VERSION
       }</p>
     </div>
   `
 
   return `
     <section class="panel chat-panel">
+      ${renderHomeWidget()}
       <div class="messages">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
@@ -498,10 +618,11 @@ function renderChat(): string {
       <form class="composer" id="composer">
         <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
         <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
-          mode.active ? '한국말로 입력 → 번역' : state.listening ? '음성 인식 중…' : '시세, 브리핑, 번역…'
+          mode.active ? '한국말로 입력 → 번역' : state.listening ? '음성 인식 중…' : '시세, 브리핑, 공유…'
         }" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
         <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
       </form>
+      ${renderShareModal()}
     </section>
   `
 }
@@ -731,6 +852,14 @@ function renderActions(): string {
     <section class="panel view-scroll">
       <h2 class="section-title">QUICK RUN</h2>
       <div class="action-grid">
+        <button type="button" class="action-card" data-action="open-share-app">
+          <span>QR</span>
+          <span>앱 공유</span>
+        </button>
+        <button type="button" class="action-card" data-action="share-backup-native">
+          <span>BK</span>
+          <span>백업 공유</span>
+        </button>
         ${quickActions
           .map(
             (a) => `
@@ -742,6 +871,7 @@ function renderActions(): string {
           )
           .join('')}
       </div>
+      ${renderShareModal()}
     </section>
   `
 }
@@ -774,12 +904,19 @@ function renderSettings(): string {
         <button class="primary-btn" type="submit">설정 저장</button>
       </form>
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="export">백업</button>
+        <button type="button" class="primary-btn" data-action="open-share-app">앱 QR 공유</button>
+        <button type="button" class="ghost-btn" data-action="open-share-backup">백업 QR</button>
+      </div>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="share-backup-native">백업 공유보내기</button>
+        <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
+      <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
       <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다.</p>
+      ${renderShareModal()}
     </section>
   `
 }
@@ -841,6 +978,7 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
     state.locationError = ''
     if (interactive) showFlash('위치 허용 완료')
     render()
+    void refreshWeather()
     return true
   } catch (err) {
     state.locationReady = false
@@ -1151,14 +1289,45 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
-    const blob = new Blob([exportBackup()], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `jarvis-backup-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBackupBlob()
     showFlash('백업을 내보냈습니다.')
+  })
+
+  document.querySelector('[data-action="share-backup-native"]')?.addEventListener('click', () => {
+    void shareBackupFile().then((r) => showFlash(r.message))
+  })
+
+  document.querySelector('[data-action="share-app-native"]')?.addEventListener('click', () => {
+    void shareAppLink().then((r) => showFlash(r.message))
+  })
+
+  document.querySelector('[data-action="copy-app-link"]')?.addEventListener('click', () => {
+    void navigator.clipboard.writeText(appShareMessage()).then(
+      () => showFlash('앱 링크를 복사했습니다.'),
+      () => showFlash('복사에 실패했습니다.'),
+    )
+  })
+
+  document.querySelector('[data-action="close-share"]')?.addEventListener('click', () => {
+    state.shareModal = null
+    state.shareQrSvg = ''
+    render()
+  })
+
+  document.querySelector('[data-action="close-share-backdrop"]')?.addEventListener('click', (ev) => {
+    if ((ev.target as HTMLElement).dataset.action === 'close-share-backdrop') {
+      state.shareModal = null
+      state.shareQrSvg = ''
+      render()
+    }
+  })
+
+  document.querySelector('[data-action="open-share-app"]')?.addEventListener('click', () => {
+    void openShareModal('app')
+  })
+
+  document.querySelector('[data-action="open-share-backup"]')?.addEventListener('click', () => {
+    void openShareModal('backup')
   })
 
   document.querySelector('[data-action="import"]')?.addEventListener('click', () => {
@@ -1189,6 +1358,7 @@ function boot(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
   refreshInstallHint()
+  registerShareModal(openShareModal)
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {
     pushMsg('assistant', `⏰ 알림: ${alarm.body}`)
@@ -1213,6 +1383,7 @@ function boot(): void {
     const perm = await queryPermissionState()
     if (perm === 'granted' || wasLocationGranted()) {
       const ok = await ensureLocation(false)
+      if (ok) void refreshWeather()
       if (!ok) render()
       return
     }

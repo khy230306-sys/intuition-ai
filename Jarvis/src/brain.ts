@@ -72,19 +72,21 @@ import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
 import { handleTranslate, loadInterpretMode } from './translateBrain'
 import { getLocationReport } from './location'
+import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
 
 function helpText(name: string): string {
   return [
     `${name}, JARVIS 만능 비서입니다.`,
     '',
-    '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림',
+    '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식 · 장시간',
     '【세계】 국가·도시·지리·시차 · 실시간 다국어 통역',
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
     '• 브리핑 / 오늘 뭐하지',
+    '• 앱 공유 / QR / 백업 공유',
     '• 100달러 환율 / 엔화 10000엔 / 환율',
     '• 커피 4500 / 지출 택시 12000 / 지출 현황',
     '• 알림 30분 뒤 약 / 오후 3시에 알려줘 회의',
@@ -795,8 +797,38 @@ export async function think(
     return { text: '클립보드에 복사합니다.', action: () => copyText(payload) }
   }
 
+  if (/^(?:앱\s*공유|공유\s*QR|QR\s*공유|친구에게\s*공유)$/i.test(text) || /앱\s*공유|QR\s*코드|큐알/.test(text)) {
+    return {
+      text: '앱 공유 QR을 엽니다.',
+      speak: true,
+      action: async () => ({ ok: true, message: await openShareUi('app') }),
+    }
+  }
+
+  if (/백업\s*(?:공유|QR|보내)|데이터\s*공유|백업\s*내보내/.test(text)) {
+    return {
+      text: '백업 공유 화면을 엽니다.',
+      speak: true,
+      action: async () => ({ ok: true, message: await openShareUi('backup') }),
+    }
+  }
+
+  if (/^공유해?$|^공유해\s*줘$/.test(text)) {
+    return {
+      text: '앱 공유 QR을 엽니다.',
+      speak: true,
+      action: async () => ({ ok: true, message: await openShareUi('app') }),
+    }
+  }
+
   if (/공유해/.test(text)) {
     const payload = text.replace(/공유해(?:줘)?/gi, '').trim() || text
+    if (/백업|데이터/.test(payload)) {
+      return {
+        text: '백업을 공유합니다.',
+        action: async () => shareBackupFile(),
+      }
+    }
     return { text: '공유 시트를 엽니다.', action: () => shareText(payload) }
   }
 

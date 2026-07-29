@@ -860,3 +860,129 @@ body {
   color: var(--muted);
   font-size: 0.82rem;
 }
+
+.home-widget {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 210, 190, 0.2);
+  background:
+    linear-gradient(135deg, rgba(0, 210, 190, 0.1), transparent 55%),
+    rgba(10, 18, 28, 0.9);
+  animation: rise 0.45s ease both;
+}
+
+.home-widget-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.home-kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+  font-family: var(--font-display);
+}
+
+.home-weather {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.home-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.home-todos {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.home-todos .muted {
+  color: var(--muted);
+  list-style: none;
+  margin-left: -1.1rem;
+}
+
+.home-value {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.home-value.small {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ghost-btn.tiny {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  min-height: auto;
+}
+
+.share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.share-sheet {
+  width: min(420px, 100%);
+  border-radius: 20px 20px 16px 16px;
+  border: 1px solid var(--line);
+  background: #0e1826;
+  box-shadow: var(--shadow);
+  padding: 14px 16px 18px;
+  animation: rise 0.3s ease both;
+}
+
+.share-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.share-qr {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.share-qr svg {
+  width: min(220px, 70vw);
+  height: auto;
+  display: block;
+}
+
+.share-hint {
+  word-break: break-all;
+  margin: 10px 0 12px;
+}

@@ -38,8 +38,15 @@ import {
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
+import {
+  canUseGeolocation,
+  queryPermissionState,
+  requestLocation,
+  wasLocationGranted,
+  type GeoFix,
+} from './location'
 
-const APP_VERSION = '1.2.1'
+const APP_VERSION = '1.3.0'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -69,6 +76,11 @@ const state = {
   settings: loadSettings(),
   quoteCache: {} as Record<string, QuoteSnapshot | null>,
   listenLang: 'ko-KR',
+  /** App stays locked until device location is allowed */
+  locationReady: false,
+  locationError: '',
+  locationBusy: false,
+  lastFix: null as GeoFix | null,
 }
 
 const voice = new VoiceListener()
@@ -238,10 +250,39 @@ function renderInstall(): string {
     <div class="install-banner">
       <div>
         <strong>홈 화면에 추가</strong><br />
-        Safari 공유 → <strong>홈 화면에 추가</strong>
+        Safari 공유 → <strong>홈 화면에 추가</strong><br />
+        <span style="opacity:.85">앱을 열면 위치 허용이 필요합니다.</span>
       </div>
       <button type="button" data-action="dismiss-install" aria-label="닫기">×</button>
     </div>
+  `
+}
+
+function renderLocationGate(): string {
+  const err = state.locationError
+    ? `<p class="loc-error">${escapeHtml(state.locationError)}</p>`
+    : ''
+  return `
+    <section class="location-gate">
+      <div class="loc-card">
+        <div class="big-orb"></div>
+        <h1>JARVIS</h1>
+        <p class="loc-lead">위치 권한이 <strong>필수</strong>입니다.</p>
+        <p class="loc-body">
+          홈 화면에 추가한 뒤 앱을 실행하면,<br/>
+          이 기기 위치를 허용해야 JARVIS를 사용할 수 있습니다.<br/>
+          <span class="muted">위치는 이 아이폰의 JARVIS 안에서만 쓰입니다.</span>
+        </p>
+        ${err}
+        <button type="button" class="primary-btn loc-allow" data-action="allow-location" ${
+          state.locationBusy ? 'disabled' : ''
+        }>
+          ${state.locationBusy ? '확인 중…' : '위치 허용하고 시작'}
+        </button>
+        <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/JARVIS → 허용</p>
+        <p class="translate-hint">v${APP_VERSION}</p>
+      </div>
+    </section>
   `
 }
 
@@ -310,7 +351,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱. (이 화면이 v1.2.1인지 확인)'
+          : '언어 버튼 → 말한 뒤 스톱 · 위치 필수 v1.3.0'
       }</p>
     </div>
   `
@@ -608,6 +649,11 @@ function renderSettings(): string {
 function render(): void {
   const app = document.getElementById('app')
   if (!app) return
+  if (!state.locationReady) {
+    app.innerHTML = renderLocationGate()
+    bindLocationGate()
+    return
+  }
   const main =
     state.view === 'chat'
       ? renderChat()
@@ -620,6 +666,45 @@ function render(): void {
             : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}`
   bind()
+}
+
+function bindLocationGate(): void {
+  document.querySelector('[data-action="allow-location"]')?.addEventListener('click', () => {
+    void ensureLocation(true)
+  })
+}
+
+async function ensureLocation(interactive: boolean): Promise<boolean> {
+  if (!canUseGeolocation()) {
+    state.locationError = '이 브라우저는 위치를 지원하지 않습니다. iPhone Safari를 사용해 주세요.'
+    state.locationReady = false
+    render()
+    return false
+  }
+  state.locationBusy = true
+  state.locationError = ''
+  render()
+  try {
+    const perm = await queryPermissionState()
+    if (perm === 'denied') {
+      throw new Error('위치가 차단되어 있습니다. 설정 → 위치 서비스에서 JARVIS/Safari를 허용해 주세요.')
+    }
+    const fix = await requestLocation()
+    state.lastFix = fix
+    state.locationReady = true
+    state.locationError = ''
+    if (interactive) showFlash('위치 허용 완료')
+    render()
+    return true
+  } catch (err) {
+    state.locationReady = false
+    state.locationError = err instanceof Error ? err.message : '위치 권한이 필요합니다.'
+    render()
+    return false
+  } finally {
+    state.locationBusy = false
+    if (!state.locationReady) render()
+  }
 }
 
 async function refreshQuotes(): Promise<void> {
@@ -927,12 +1012,24 @@ function boot(): void {
   refreshInstallHint()
   window.addEventListener('online', () => {
     state.online = true
-    render()
+    if (state.locationReady) render()
   })
   window.addEventListener('offline', () => {
     state.online = false
-    render()
+    if (state.locationReady) render()
   })
+
+  // Always require a fresh location grant on launch (standalone / Safari)
+  void (async () => {
+    const perm = await queryPermissionState()
+    if (perm === 'granted' || wasLocationGranted()) {
+      const ok = await ensureLocation(false)
+      if (!ok) render()
+      return
+    }
+    state.locationReady = false
+    render()
+  })()
   render()
 }
 

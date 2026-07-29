@@ -206,6 +206,74 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.location-gate {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: calc(24px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+}
+
+.loc-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  padding: 28px 22px;
+  border-radius: 22px;
+  background: rgba(14, 24, 38, 0.88);
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  box-shadow: var(--shadow);
+}
+
+.loc-card h1 {
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  margin: 8px 0 12px;
+}
+
+.loc-lead {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+.loc-body {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0 0 18px;
+}
+
+.loc-body .muted {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.loc-error {
+  color: #ffb4a8;
+  background: rgba(255, 80, 60, 0.12);
+  border: 1px solid rgba(255, 120, 100, 0.35);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+.loc-allow {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+.loc-help {
+  margin: 14px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .translate-bar {
   margin: 0 10px 8px;
   padding: 10px 12px;

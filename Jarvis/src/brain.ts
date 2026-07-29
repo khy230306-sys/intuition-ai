@@ -68,6 +68,7 @@ import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
 import { handleTranslate, loadInterpretMode } from './translateBrain'
+import { getLocationReport } from './location'
 import type { BrainReply, JarvisSettings } from './types'
 
 function helpText(name: string): string {
@@ -83,6 +84,7 @@ function helpText(name: string): string {
     '• 브리핑 / 오늘 뭐하지',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
+    '• 내 위치 / 지금 어디야',
     '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
     '• 데이터 수익률 1.2 -0.5 3.1 → 통계',
@@ -677,6 +679,24 @@ export async function think(
 
   const geo = await handleGeo(text)
   if (geo) return geo
+
+  // My device location
+  if (/^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) || /내\s*위치|지금\s*어디야/.test(text)) {
+    try {
+      const report = await getLocationReport()
+      const fixMatch = report.match(/좌표:\s*([-\d.]+),\s*([-\d.]+)/)
+      return {
+        text: `【내 위치】\n${report}`,
+        speak: true,
+        action: fixMatch ? () => openMaps(`${fixMatch[1]},${fixMatch[2]}`) : undefined,
+      }
+    } catch (err) {
+      return {
+        text: err instanceof Error ? err.message : '위치를 가져오지 못했습니다.',
+        speak: true,
+      }
+    }
+  }
 
   const life = await handleLife(text)
   if (life) return life

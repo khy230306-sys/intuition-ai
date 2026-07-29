@@ -5,9 +5,10 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://hovering-halo-03tr6h1.shipstatic.com
+**앱 URL:** https://virtual-flow-7sydp84.shipstatic.com
 
-> 화면 아래 번역 바에 **v1.2.1**이 보여야 최신입니다. 예전 shipstatic 주소는 동작하지 않습니다.
+> 게이트/번역 바에 **v1.3.0**이 보여야 최신입니다.  
+> 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**

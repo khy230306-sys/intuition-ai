@@ -47,23 +47,14 @@ import {
 } from './location'
 
 import {
-  GAME_META,
-  guessUpdown,
-  loadBest,
-  memoryStartRound,
-  memoryTap,
-  newMemory,
-  newReaction,
-  newUpdown,
-  randomReactionDelay,
-  reactionArm,
-  reactionGo,
-  reactionTap,
-  runMemoryDemo,
-  type GameId,
-} from './gamesLogic'
+  ARCADE_META,
+  loadArcadeBest,
+  mountArcade,
+  type ArcadeHandle,
+  type ArcadeId,
+} from './arcadeGames'
 
-const APP_VERSION = '1.4.0'
+const APP_VERSION = '1.5.0'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -98,54 +89,17 @@ const state = {
   locationError: '',
   locationBusy: false,
   lastFix: null as GeoFix | null,
-  gameId: 'updown' as GameId,
-  updown: newUpdown(),
-  memory: newMemory(),
-  reaction: newReaction(),
-  updownDraft: '',
-  memoryDemoBusy: false,
-  reactionTimer: null as number | null,
+  arcadeId: 'snake' as ArcadeId,
+  arcadeScore: 0,
 }
+
+let arcade: ArcadeHandle | null = null
 
 const voice = new VoiceListener()
 
-function clearReactionTimer(): void {
-  if (state.reactionTimer != null) {
-    clearTimeout(state.reactionTimer)
-    state.reactionTimer = null
-  }
-}
-
-async function startMemoryRound(): Promise<void> {
-  if (state.memoryDemoBusy) return
-  state.memoryDemoBusy = true
-  const base = state.memory.phase === 'clear' ? state.memory : newMemory()
-  const primed = memoryStartRound(base)
-  state.memory = primed
-  render()
-  try {
-    state.memory = await runMemoryDemo(primed, (pad) => {
-      document.querySelectorAll<HTMLButtonElement>('[data-mem-pad]').forEach((btn) => {
-        const i = Number(btn.dataset.memPad)
-        btn.classList.toggle('flash', pad === i)
-        btn.disabled = true
-      })
-    })
-  } finally {
-    state.memoryDemoBusy = false
-    render()
-  }
-}
-
-function armReaction(): void {
-  clearReactionTimer()
-  const delay = randomReactionDelay()
-  state.reaction = reactionArm(state.reaction, delay).state
-  render()
-  state.reactionTimer = window.setTimeout(() => {
-    state.reaction = reactionGo(state.reaction)
-    render()
-  }, delay) as unknown as number
+function stopArcade(): void {
+  arcade?.stop()
+  arcade = null
 }
 
 function uid(): string {
@@ -212,6 +166,7 @@ async function handleUserText(raw: string): Promise<void> {
       pushMsg('assistant', reply.text)
     }
     if (reply.view) state.view = reply.view
+    if (reply.arcadeId) state.arcadeId = reply.arcadeId
     // Release busy BEFORE TTS so MIC is usable immediately
     state.busy = false
     render()
@@ -376,85 +331,94 @@ function renderNav(): string {
 }
 
 function renderGames(): string {
-  const best = loadBest()
-  const tabs = (Object.keys(GAME_META) as GameId[])
+  const best = loadArcadeBest()
+  const meta = ARCADE_META[state.arcadeId]
+  const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
     .map(
       (id) =>
-        `<button type="button" class="game-tab ${state.gameId === id ? 'active' : ''}" data-game="${id}">${GAME_META[id].title}</button>`,
+        `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}" data-arcade="${id}">${ARCADE_META[id].title}</button>`,
     )
     .join('')
-
-  let body = ''
-  if (state.gameId === 'updown') {
-    const g = state.updown
-    body = `
-      <p class="hint">${GAME_META.updown.blurb} · 최고 ${best.updown ?? '—'}회</p>
-      <div class="game-status">${escapeHtml(g.lastHint)}</div>
-      <p class="game-meta">시도 ${g.attempts}${g.status === 'won' ? ' · 클리어!' : ''}</p>
-      <form class="game-form" id="updown-form">
-        <input id="updown-input" type="number" inputmode="numeric" min="1" max="100" placeholder="1~100" value="${escapeAttr(state.updownDraft)}" ${g.status === 'won' ? 'disabled' : ''} />
-        <button class="primary-btn" type="submit" ${g.status === 'won' ? 'disabled' : ''}>확인</button>
-      </form>
-      <button type="button" class="ghost-btn" data-game-action="updown-reset">새 게임</button>
-    `
-  } else if (state.gameId === 'memory') {
-    const g = state.memory
-    const pads = [0, 1, 2, 3]
-      .map(
-        (i) =>
-          `<button type="button" class="mem-pad p${i} ${g.flash === i ? 'flash' : ''}" data-mem-pad="${i}" ${
-            g.phase !== 'input' || state.memoryDemoBusy ? 'disabled' : ''
-          }></button>`,
-      )
-      .join('')
-    const status =
-      g.phase === 'idle'
-        ? '시작을 눌러 주세요'
-        : g.phase === 'demo'
-          ? '순서를 기억하세요…'
-          : g.phase === 'input'
-            ? '같은 순서로 누르세요'
-            : g.phase === 'clear'
-              ? `레벨 ${g.level} 클리어!`
-              : '틀렸어요. 다시 도전!'
-    body = `
-      <p class="hint">${GAME_META.memory.blurb} · 최고 레벨 ${best.memory ?? '—'}</p>
-      <div class="game-status">${escapeHtml(status)}</div>
-      <p class="game-meta">현재 레벨 ${g.level || 0}</p>
-      <div class="mem-grid">${pads}</div>
-      <button type="button" class="primary-btn" data-game-action="memory-start" ${state.memoryDemoBusy ? 'disabled' : ''}>
-        ${g.phase === 'idle' || g.phase === 'fail' ? '시작' : g.phase === 'clear' ? '다음 레벨' : '다시'}
-      </button>
-    `
-  } else {
-    const g = state.reaction
-    const label =
-      g.phase === 'idle'
-        ? '준비되면 아래를 탭'
-        : g.phase === 'wait'
-          ? '초록이 될 때까지 기다리세요…'
-          : g.phase === 'go'
-            ? '지금!'
-            : g.phase === 'early'
-              ? '너무 빨랐어요!'
-              : `${g.resultMs} ms`
-    body = `
-      <p class="hint">${GAME_META.reaction.blurb} · 최고 ${best.reaction != null ? `${best.reaction}ms` : '—'}</p>
-      <button type="button" class="react-pad phase-${g.phase}" data-game-action="reaction-tap">
-        <span>${escapeHtml(label)}</span>
-      </button>
-      <button type="button" class="ghost-btn" data-game-action="reaction-reset">다시</button>
-    `
-  }
+  const hi = best[state.arcadeId]
+  const controls =
+    state.arcadeId === 'snake'
+      ? `
+      <div class="arcade-pad">
+        <button type="button" data-dir="0,-1">▲</button>
+        <div class="arcade-pad-mid">
+          <button type="button" data-dir="-1,0">◀</button>
+          <button type="button" data-dir="1,0">▶</button>
+        </div>
+        <button type="button" data-dir="0,1">▼</button>
+      </div>
+      <p class="game-meta">방향 버튼으로 조작</p>`
+      : state.arcadeId === 'breakout'
+        ? `<p class="game-meta">화면을 좌우로 드래그해 패들을 움직이세요</p>`
+        : `<p class="game-meta">화면을 좌우로 드래그 · 자동 발사</p>`
 
   return `
     <section class="panel view-scroll games-panel">
-      <h2 class="section-title">GAMES</h2>
-      <p class="hint">데이터·인터넷 없이 플레이 · 점수는 이 기기에만 저장</p>
+      <h2 class="section-title">ARCADE</h2>
+      <p class="hint">오프라인 아케이드 · 점수 기기 저장</p>
       <div class="game-tabs">${tabs}</div>
-      <div class="game-body">${body}</div>
+      <p class="hint">${escapeHtml(meta.blurb)}</p>
+      <div class="arcade-hud">SCORE ${state.arcadeScore} · BEST ${hi ?? '—'}</div>
+      <div class="arcade-stage">
+        <canvas id="arcade-canvas" width="360" height="440"></canvas>
+      </div>
+      ${controls}
+      <button type="button" class="primary-btn" data-arcade-restart="1">다시 시작</button>
     </section>
   `
+}
+
+function mountActiveArcade(): void {
+  stopArcade()
+  const canvas = document.getElementById('arcade-canvas') as HTMLCanvasElement | null
+  if (!canvas || state.view !== 'games') return
+  state.arcadeScore = 0
+  arcade = mountArcade(state.arcadeId, canvas, (n) => {
+    state.arcadeScore = n
+    const hud = document.querySelector('.arcade-hud')
+    if (hud) {
+      const best = loadArcadeBest()[state.arcadeId]
+      hud.textContent = `SCORE ${n} · BEST ${best ?? '—'}`
+    }
+  })
+
+  const toLocal = (ev: TouchEvent | MouseEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in ev) {
+      const t = ev.touches[0] || ev.changedTouches[0]
+      if (!t) return null
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top }
+    }
+    return { x: ev.clientX - rect.left, y: ev.clientY - rect.top }
+  }
+
+  const onDown = (ev: TouchEvent | MouseEvent) => {
+    const p = toLocal(ev)
+    if (!p) return
+    ev.preventDefault()
+    arcade?.pointer(p.x, p.y, 'down')
+  }
+  const onMove = (ev: TouchEvent | MouseEvent) => {
+    const p = toLocal(ev)
+    if (!p) return
+    ev.preventDefault()
+    arcade?.pointer(p.x, p.y, 'move')
+  }
+  const onUp = (ev: TouchEvent | MouseEvent) => {
+    const p = toLocal(ev)
+    if (!p) return
+    arcade?.pointer(p.x, p.y, 'up')
+  }
+  canvas.addEventListener('touchstart', onDown, { passive: false })
+  canvas.addEventListener('touchmove', onMove, { passive: false })
+  canvas.addEventListener('touchend', onUp)
+  canvas.addEventListener('mousedown', onDown)
+  canvas.addEventListener('mousemove', onMove)
+  canvas.addEventListener('mouseup', onUp)
 }
 
 function renderChat(): string {
@@ -498,7 +462,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 게임 탭 · v1.4.0'
+          : '언어 버튼 → 말한 뒤 스톱 · 아케이드 · v1.5.0'
       }</p>
     </div>
   `
@@ -815,6 +779,12 @@ function render(): void {
               : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}`
   bind()
+  if (state.view === 'games') {
+    // remount after DOM ready
+    requestAnimationFrame(() => mountActiveArcade())
+  } else {
+    stopArcade()
+  }
 }
 
 function bindLocationGate(): void {
@@ -876,7 +846,7 @@ async function refreshQuotes(): Promise<void> {
 function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      clearReactionTimer()
+      stopArcade()
       state.view = btn.dataset.view as View
       stopSpeaking()
       voice.stop()
@@ -928,61 +898,30 @@ function bind(): void {
     }
   })
 
-  // —— Games ——
-  document.querySelectorAll<HTMLButtonElement>('[data-game]').forEach((btn) => {
+  // —— Arcade ——
+  document.querySelectorAll<HTMLButtonElement>('[data-arcade]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      clearReactionTimer()
-      state.gameId = btn.dataset.game as GameId
+      stopArcade()
+      state.arcadeId = btn.dataset.arcade as ArcadeId
+      state.arcadeScore = 0
       render()
     })
   })
 
-  document.getElementById('updown-form')?.addEventListener('submit', (e) => {
-    e.preventDefault()
-    const input = document.getElementById('updown-input') as HTMLInputElement | null
-    const n = Number(input?.value)
-    state.updownDraft = ''
-    state.updown = guessUpdown(state.updown, n)
-    render()
-  })
-
-  document.querySelector('[data-game-action="updown-reset"]')?.addEventListener('click', () => {
-    state.updown = newUpdown()
-    state.updownDraft = ''
-    render()
-  })
-
-  document.querySelector('[data-game-action="memory-start"]')?.addEventListener('click', () => {
-    void startMemoryRound()
-  })
-
-  document.querySelectorAll<HTMLButtonElement>('[data-mem-pad]').forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>('[data-dir]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const pad = Number(btn.dataset.memPad)
-      state.memory = memoryTap(state.memory, pad)
-      render()
-      if (state.memory.phase === 'clear') {
-        window.setTimeout(() => {
-          if (state.memory.phase === 'clear') void startMemoryRound()
-        }, 650)
-      }
+      const raw = btn.dataset.dir || '0,0'
+      const [dx, dy] = raw.split(',').map(Number)
+      arcade?.setDir?.(dx, dy)
     })
   })
 
-  document.querySelector('[data-game-action="reaction-tap"]')?.addEventListener('click', () => {
-    if (state.reaction.phase === 'idle' || state.reaction.phase === 'result' || state.reaction.phase === 'early') {
-      armReaction()
-      return
-    }
-    clearReactionTimer()
-    state.reaction = reactionTap(state.reaction)
-    render()
-  })
-
-  document.querySelector('[data-game-action="reaction-reset"]')?.addEventListener('click', () => {
-    clearReactionTimer()
-    state.reaction = newReaction()
-    render()
+  document.querySelector('[data-arcade-restart]')?.addEventListener('click', () => {
+    arcade?.restart()
+    state.arcadeScore = 0
+    const hud = document.querySelector('.arcade-hud')
+    const best = loadArcadeBest()[state.arcadeId]
+    if (hud) hud.textContent = `SCORE 0 · BEST ${best ?? '—'}`
   })
 
   document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {

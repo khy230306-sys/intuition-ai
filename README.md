@@ -4,7 +4,7 @@
 
 독립 PWA: [DoriJitGoTtaeng-PICK-AI/README.md](DoriJitGoTtaeng-PICK-AI/README.md)
 
-**바로 실행 (HTTPS):** https://ethereal-byte-ygs5qg3.shipstatic.com
+**바로 실행 (HTTPS):** https://runic-grid-3r1dfyp.shipstatic.com
 
 ```bash
 cd DoriJitGoTtaeng-PICK-AI && npm install && npm run dev

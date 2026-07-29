@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && cp dist/index.html dist/404.html && cp ship.json dist/ship.json",
+    "build": "tsc && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "deploy:web": "npx -y @shipstatic/ship ./dist",
     "test": "vitest run"

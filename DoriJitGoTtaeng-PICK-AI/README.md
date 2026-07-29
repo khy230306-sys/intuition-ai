@@ -7,10 +7,10 @@
 ## 실행 URL
 
 ### 공개 HTTPS (지금 바로 사용)
-**https://ethereal-byte-ygs5qg3.shipstatic.com**
+**https://runic-grid-3r1dfyp.shipstatic.com**
 
 iPhone Safari에서 위 주소를 연 뒤 홈 화면에 추가하면 됩니다.  
-(익명 배포는 약 3일 후 만료될 수 있습니다. 영구 보관: [클레임 링크](https://my.shipstatic.com/claim/bf653f6d674ce07220552716e9321de032714702db788e103abb9966816e341f))
+(익명 배포는 약 3일 후 만료될 수 있습니다. 영구 보관: [클레임 링크](https://my.shipstatic.com/claim/7ef4eede184c5e9615f226839239fe3d97cad2a1bd99af2d7b0be938c7246dab))
 
 재배포:
 ```bash

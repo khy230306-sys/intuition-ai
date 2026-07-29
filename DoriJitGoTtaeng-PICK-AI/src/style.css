@@ -59,6 +59,46 @@ body {
   gap: 14px;
 }
 
+.install-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(201, 162, 39, 0.14);
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ivory-dim);
+  animation: fadeDown 0.4s ease both;
+}
+
+.install-banner strong {
+  color: var(--gold-bright);
+  font-weight: 700;
+}
+
+.install-banner button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.offline-badge {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffb4a8;
+  padding: 4px 0 0;
+}
+
 /* Header */
 .header {
   text-align: center;

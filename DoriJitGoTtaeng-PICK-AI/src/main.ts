@@ -23,12 +23,35 @@ import type { AnalysisResult, CardNumber, GameRecord, Position } from './types'
 
 type View = 'play' | 'stats' | 'data'
 
+const INSTALL_DISMISS_KEY = 'djgt_pick_ai_install_dismissed'
+
 const state = {
   cards: [null, null, null] as (CardNumber | null)[],
   analysis: null as AnalysisResult | null,
   view: 'play' as View,
   records: [] as GameRecord[],
   search: '',
+  online: typeof navigator === 'undefined' ? true : navigator.onLine,
+  showInstall: false,
+}
+
+function isStandalone(): boolean {
+  const mq = window.matchMedia('(display-mode: standalone)').matches
+  const ios = 'standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  return mq || ios
+}
+
+function isIosSafari(): boolean {
+  const ua = navigator.userAgent
+  const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const webkit = /WebKit/.test(ua)
+  const notOther = !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/.test(ua)
+  return iOS && webkit && notOther
+}
+
+function refreshInstallHint(): void {
+  const dismissed = localStorage.getItem(INSTALL_DISMISS_KEY) === '1'
+  state.showInstall = !dismissed && !isStandalone() && (isIosSafari() || /Android/i.test(navigator.userAgent))
 }
 
 function pct(n: number | null, digits = 1): string {
@@ -105,9 +128,20 @@ function submitWinner(winner: Position): void {
 
 function renderHeader(root: HTMLElement): void {
   const h = getHeaderStats(state.records)
+  const offline = state.online
+    ? ''
+    : `<div class="offline-badge">오프라인 · 저장된 데이터로 분석 가능</div>`
+  const install = state.showInstall
+    ? `<div class="install-banner" id="install-banner">
+        <div><strong>홈 화면에 추가</strong><br/>Safari 공유(□↑) → 「홈 화면에 추가」하면 앱처럼 실행됩니다.</div>
+        <button type="button" id="dismiss-install" aria-label="닫기">×</button>
+      </div>`
+    : ''
   root.innerHTML = `
     <header class="header">
       <h1 class="brand">DoriJitGoTtaeng<span>PICK AI</span></h1>
+      ${offline}
+      ${install}
       <div class="stats-row">
         <div class="stat-chip"><span class="label">데이터</span><span class="value">${h.total}</span></div>
         <div class="stat-chip"><span class="label">최근 적중</span><span class="value">${pct(h.recentHitRate, 0)}</span></div>
@@ -116,6 +150,11 @@ function renderHeader(root: HTMLElement): void {
       </div>
     </header>
   `
+  root.querySelector('#dismiss-install')?.addEventListener('click', () => {
+    localStorage.setItem(INSTALL_DISMISS_KEY, '1')
+    state.showInstall = false
+    render()
+  })
 }
 
 function renderPlay(root: HTMLElement): void {
@@ -506,11 +545,20 @@ function render(): void {
 
 function boot(): void {
   refreshRecords()
+  refreshInstallHint()
   // 자동 복원: 메인 키가 비어 있고 백업이 있으면 복원
   if (state.records.length === 0) {
     const n = restoreFromAutoBackup()
     if (n) refreshRecords()
   }
+  window.addEventListener('online', () => {
+    state.online = true
+    render()
+  })
+  window.addEventListener('offline', () => {
+    state.online = false
+    render()
+  })
   render()
 }
 

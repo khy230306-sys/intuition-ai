@@ -4,28 +4,42 @@
 
 기존 FlowMate 프로젝트와 **완전히 분리**된 독립 앱입니다. 데이터는 브라우저(LocalStorage)에만 저장됩니다.
 
-## 실행
+## 실행 URL
 
+### 공개 HTTPS (지금 바로 사용)
+**https://ethereal-byte-ygs5qg3.shipstatic.com**
+
+iPhone Safari에서 위 주소를 연 뒤 홈 화면에 추가하면 됩니다.  
+(익명 배포는 약 3일 후 만료될 수 있습니다. 영구 보관: [클레임 링크](https://my.shipstatic.com/claim/bf653f6d674ce07220552716e9321de032714702db788e103abb9966816e341f))
+
+재배포:
+```bash
+npm run build && npm run deploy:web
+```
+
+### 로컬
 ```bash
 cd DoriJitGoTtaeng-PICK-AI
 npm install
 npm run dev
 ```
+- 개발: `http://localhost:5173/`
+- 미리보기: `npm run build && npm run preview` → `http://localhost:4173/`
 
-- 개발 서버: `http://localhost:5173/`
-- 프로덕션 미리보기:
+### GitHub Pages (영구 HTTPS)
+목표 URL: **https://khy230306-sys.github.io/intuition-ai/**
 
-```bash
-npm run build
-npm run preview
-```
+1. 저장소 **Settings → Pages**
+2. Source: **Deploy from a branch** → branch `gh-pages` / folder `/ (root)`  
+   또는 Source: **GitHub Actions** (워크플로 `Deploy PICK AI to GitHub Pages` 사용)
+3. 저장 후 1~2분 뒤 위 URL로 접속
 
-미리보기: `http://localhost:4173/`
+`gh-pages` 브랜치에는 최신 정적 빌드가 이미 푸시되어 있습니다.
 
 ## iPhone 홈 화면 설치
 
-1. **Safari**로 앱 URL을 엽니다.
-2. 하단(또는 상단) **공유(□↑)** 버튼을 탭합니다.
+1. **Safari**로 HTTPS 앱 URL을 엽니다.
+2. 공유 버튼(□↑)을 탭합니다.
 3. **홈 화면에 추가**를 선택합니다.
 4. 추가된 아이콘으로 실행하면 전체 화면(standalone) 앱처럼 동작합니다.
 5. Service Worker 캐시로 **오프라인에서도 저장된 데이터 조회·분석**이 가능합니다.
@@ -62,3 +76,4 @@ npm run preview
 - Vite + TypeScript
 - vite-plugin-pwa (manifest · Service Worker · 오프라인 캐시)
 - LocalStorage + 자동 JSON 백업
+- GitHub Actions → GitHub Pages 배포

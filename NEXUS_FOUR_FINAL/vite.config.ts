@@ -42,6 +42,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // 모바일/터널(loca.lt 등)에서 접속 가능하도록 허용
+    allowedHosts: true,
     // 앱(5173)과 같은 호스트로 WebSocket을 열어 모바일/클라우드 포트포워딩에서도 스캐너 연동이 되게 함
     proxy: {
       '/scanner-ws': {

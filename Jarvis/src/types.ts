@@ -23,12 +23,96 @@ export interface ReminderItem {
   createdAt: number
 }
 
+export interface ShoppingItem {
+  id: string
+  name: string
+  done: boolean
+  createdAt: number
+}
+
+export interface ExpenseItem {
+  id: string
+  amount: number
+  category: string
+  note: string
+  createdAt: number
+}
+
+export interface HabitItem {
+  id: string
+  name: string
+  streak: number
+  lastDone?: string
+  createdAt: number
+}
+
+export interface JournalEntry {
+  id: string
+  text: string
+  mood?: string
+  createdAt: number
+}
+
+export interface UserProfile {
+  city: string
+  wakeHour: number
+  focus: string
+  diet: string
+  notes: string
+  riskTolerance: 'conservative' | 'balanced' | 'aggressive'
+  investHorizon: string
+}
+
+export interface WatchItem {
+  id: string
+  symbol: string
+  name: string
+  targetPrice?: number
+  note?: string
+  createdAt: number
+}
+
+export interface Holding {
+  id: string
+  symbol: string
+  name: string
+  shares: number
+  avgPrice: number
+  currency: 'KRW' | 'USD'
+  note?: string
+  updatedAt: number
+}
+
+export interface TradeNote {
+  id: string
+  symbol: string
+  side: 'buy' | 'sell' | 'watch' | 'idea'
+  thesis: string
+  createdAt: number
+}
+
+export interface QuoteSnapshot {
+  symbol: string
+  name: string
+  price: number
+  currency: string
+  changePct: number | null
+  dayHigh: number | null
+  dayLow: number | null
+  fiftyTwoHigh: number | null
+  fiftyTwoLow: number | null
+  volume: number | null
+  marketState?: string
+  fetchedAt: number
+}
+
 export interface JarvisSettings {
   displayName: string
   speakReplies: boolean
   apiKey: string
   apiBase: string
   model: string
+  city: string
 }
 
 export interface ActionResult {
@@ -37,7 +121,7 @@ export interface ActionResult {
   opened?: string
 }
 
-export type View = 'chat' | 'actions' | 'memory' | 'settings'
+export type View = 'chat' | 'invest' | 'life' | 'actions' | 'settings'
 
 export interface BrainReply {
   text: string

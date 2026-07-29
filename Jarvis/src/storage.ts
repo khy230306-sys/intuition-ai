@@ -1,9 +1,30 @@
-import type { ChatMessage, JarvisSettings, MemoryItem, ReminderItem } from './types'
+import type {
+  ChatMessage,
+  ExpenseItem,
+  HabitItem,
+  Holding,
+  JarvisSettings,
+  JournalEntry,
+  MemoryItem,
+  ReminderItem,
+  ShoppingItem,
+  TradeNote,
+  UserProfile,
+  WatchItem,
+} from './types'
 
 const KEYS = {
   chat: 'jarvis_chat_v1',
   memory: 'jarvis_memory_v1',
   reminders: 'jarvis_reminders_v1',
+  shopping: 'jarvis_shopping_v1',
+  expenses: 'jarvis_expenses_v1',
+  habits: 'jarvis_habits_v1',
+  journal: 'jarvis_journal_v1',
+  profile: 'jarvis_profile_v1',
+  watchlist: 'jarvis_watchlist_v1',
+  holdings: 'jarvis_holdings_v1',
+  trades: 'jarvis_trades_v1',
   settings: 'jarvis_settings_v1',
   installDismiss: 'jarvis_install_dismissed',
 } as const
@@ -16,6 +37,17 @@ const defaultSettings: JarvisSettings = {
   apiKey: '',
   apiBase: 'https://api.openai.com/v1',
   model: 'gpt-4o-mini',
+  city: '서울',
+}
+
+const defaultProfile: UserProfile = {
+  city: '서울',
+  wakeHour: 7,
+  focus: '일과 건강의 균형',
+  diet: '특별히 없음',
+  notes: '',
+  riskTolerance: 'balanced',
+  investHorizon: '5년+',
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -30,6 +62,10 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value))
+}
+
+function dayKey(d = new Date()): string {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
 export function loadChat(): ChatMessage[] {
@@ -121,6 +157,324 @@ export function deleteReminder(id: string): void {
   saveReminders(loadReminders().filter((r) => r.id !== id))
 }
 
+export function loadShopping(): ShoppingItem[] {
+  return readJson(KEYS.shopping, [])
+}
+
+export function saveShopping(items: ShoppingItem[]): void {
+  writeJson(KEYS.shopping, items)
+}
+
+export function addShoppingItems(names: string[]): ShoppingItem[] {
+  const items = loadShopping()
+  const created: ShoppingItem[] = []
+  for (const name of names) {
+    const n = name.trim()
+    if (!n) continue
+    const exists = items.find((i) => !i.done && i.name.toLowerCase() === n.toLowerCase())
+    if (exists) continue
+    const item: ShoppingItem = {
+      id: crypto.randomUUID(),
+      name: n,
+      done: false,
+      createdAt: Date.now(),
+    }
+    items.unshift(item)
+    created.push(item)
+  }
+  saveShopping(items)
+  return created
+}
+
+export function toggleShopping(id: string): void {
+  const items = loadShopping()
+  const found = items.find((i) => i.id === id)
+  if (found) {
+    found.done = !found.done
+    saveShopping(items)
+  }
+}
+
+export function clearDoneShopping(): number {
+  const before = loadShopping()
+  const next = before.filter((i) => !i.done)
+  const removed = before.length - next.length
+  saveShopping(next)
+  return removed
+}
+
+export function deleteShopping(id: string): void {
+  saveShopping(loadShopping().filter((i) => i.id !== id))
+}
+
+export function loadExpenses(): ExpenseItem[] {
+  return readJson(KEYS.expenses, [])
+}
+
+export function saveExpenses(items: ExpenseItem[]): void {
+  writeJson(KEYS.expenses, items.slice(0, 500))
+}
+
+export function addExpense(amount: number, category: string, note = ''): ExpenseItem {
+  const item: ExpenseItem = {
+    id: crypto.randomUUID(),
+    amount,
+    category: category.trim() || '기타',
+    note: note.trim(),
+    createdAt: Date.now(),
+  }
+  const items = loadExpenses()
+  items.unshift(item)
+  saveExpenses(items)
+  return item
+}
+
+export function deleteExpense(id: string): void {
+  saveExpenses(loadExpenses().filter((e) => e.id !== id))
+}
+
+export function expenseTotals(): { today: number; month: number; byCategory: Record<string, number> } {
+  const items = loadExpenses()
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+  let today = 0
+  let month = 0
+  const byCategory: Record<string, number> = {}
+  for (const e of items) {
+    if (e.createdAt >= monthStart) {
+      month += e.amount
+      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount
+    }
+    if (e.createdAt >= todayStart) today += e.amount
+  }
+  return { today, month, byCategory }
+}
+
+export function loadHabits(): HabitItem[] {
+  return readJson(KEYS.habits, [])
+}
+
+export function saveHabits(items: HabitItem[]): void {
+  writeJson(KEYS.habits, items)
+}
+
+export function addHabit(name: string): HabitItem {
+  const items = loadHabits()
+  const existing = items.find((h) => h.name.toLowerCase() === name.trim().toLowerCase())
+  if (existing) return existing
+  const item: HabitItem = {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    streak: 0,
+    createdAt: Date.now(),
+  }
+  items.unshift(item)
+  saveHabits(items)
+  return item
+}
+
+export function checkHabit(nameOrId: string): HabitItem | null {
+  const items = loadHabits()
+  const today = dayKey()
+  const found = items.find(
+    (h) => h.id === nameOrId || h.name.toLowerCase() === nameOrId.trim().toLowerCase(),
+  )
+  if (!found) return null
+  if (found.lastDone === today) return found
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yKey = dayKey(yesterday)
+  found.streak = found.lastDone === yKey ? found.streak + 1 : 1
+  found.lastDone = today
+  saveHabits(items)
+  return found
+}
+
+export function deleteHabit(id: string): void {
+  saveHabits(loadHabits().filter((h) => h.id !== id))
+}
+
+export function habitsDueToday(): HabitItem[] {
+  const today = dayKey()
+  return loadHabits().filter((h) => h.lastDone !== today)
+}
+
+export function loadJournal(): JournalEntry[] {
+  return readJson(KEYS.journal, [])
+}
+
+export function saveJournal(items: JournalEntry[]): void {
+  writeJson(KEYS.journal, items.slice(0, 200))
+}
+
+export function addJournal(text: string, mood?: string): JournalEntry {
+  const item: JournalEntry = {
+    id: crypto.randomUUID(),
+    text: text.trim(),
+    mood,
+    createdAt: Date.now(),
+  }
+  const items = loadJournal()
+  items.unshift(item)
+  saveJournal(items)
+  return item
+}
+
+export function loadProfile(): UserProfile {
+  return { ...defaultProfile, ...readJson(KEYS.profile, {}) }
+}
+
+export function saveProfile(profile: UserProfile): void {
+  writeJson(KEYS.profile, profile)
+}
+
+export function loadWatchlist(): WatchItem[] {
+  return readJson(KEYS.watchlist, [])
+}
+
+export function saveWatchlist(items: WatchItem[]): void {
+  writeJson(KEYS.watchlist, items)
+}
+
+export function addWatch(symbol: string, name: string, targetPrice?: number, note?: string): WatchItem {
+  const items = loadWatchlist()
+  const existing = items.find((w) => w.symbol.toUpperCase() === symbol.toUpperCase())
+  if (existing) {
+    if (targetPrice != null) existing.targetPrice = targetPrice
+    if (note) existing.note = note
+    saveWatchlist(items)
+    return existing
+  }
+  const item: WatchItem = {
+    id: crypto.randomUUID(),
+    symbol,
+    name,
+    targetPrice,
+    note,
+    createdAt: Date.now(),
+  }
+  items.unshift(item)
+  saveWatchlist(items)
+  return item
+}
+
+export function removeWatch(idOrSymbol: string): boolean {
+  const before = loadWatchlist()
+  const next = before.filter(
+    (w) => w.id !== idOrSymbol && w.symbol.toUpperCase() !== idOrSymbol.toUpperCase(),
+  )
+  saveWatchlist(next)
+  return next.length !== before.length
+}
+
+export function loadHoldings(): Holding[] {
+  return readJson(KEYS.holdings, [])
+}
+
+export function saveHoldings(items: Holding[]): void {
+  writeJson(KEYS.holdings, items)
+}
+
+export function upsertHolding(input: {
+  symbol: string
+  name: string
+  shares: number
+  avgPrice: number
+  currency: 'KRW' | 'USD'
+  note?: string
+}): Holding {
+  const items = loadHoldings()
+  const existing = items.find((h) => h.symbol.toUpperCase() === input.symbol.toUpperCase())
+  if (existing) {
+    const totalShares = existing.shares + input.shares
+    if (totalShares <= 0) {
+      saveHoldings(items.filter((h) => h.id !== existing.id))
+      return { ...existing, shares: 0 }
+    }
+    const totalCost = existing.avgPrice * existing.shares + input.avgPrice * input.shares
+    existing.shares = totalShares
+    existing.avgPrice = totalCost / totalShares
+    existing.name = input.name
+    existing.currency = input.currency
+    if (input.note) existing.note = input.note
+    existing.updatedAt = Date.now()
+    saveHoldings(items)
+    return existing
+  }
+  const item: Holding = {
+    id: crypto.randomUUID(),
+    symbol: input.symbol,
+    name: input.name,
+    shares: input.shares,
+    avgPrice: input.avgPrice,
+    currency: input.currency,
+    note: input.note,
+    updatedAt: Date.now(),
+  }
+  items.unshift(item)
+  saveHoldings(items)
+  return item
+}
+
+export function setHolding(input: {
+  symbol: string
+  name: string
+  shares: number
+  avgPrice: number
+  currency: 'KRW' | 'USD'
+  note?: string
+}): Holding {
+  const items = loadHoldings().filter((h) => h.symbol.toUpperCase() !== input.symbol.toUpperCase())
+  const item: Holding = {
+    id: crypto.randomUUID(),
+    ...input,
+    updatedAt: Date.now(),
+  }
+  items.unshift(item)
+  saveHoldings(items)
+  return item
+}
+
+export function removeHolding(idOrSymbol: string): boolean {
+  const before = loadHoldings()
+  const next = before.filter(
+    (h) => h.id !== idOrSymbol && h.symbol.toUpperCase() !== idOrSymbol.toUpperCase(),
+  )
+  saveHoldings(next)
+  return next.length !== before.length
+}
+
+export function loadTrades(): TradeNote[] {
+  return readJson(KEYS.trades, [])
+}
+
+export function saveTrades(items: TradeNote[]): void {
+  writeJson(KEYS.trades, items.slice(0, 300))
+}
+
+export function addTradeNote(
+  symbol: string,
+  side: TradeNote['side'],
+  thesis: string,
+): TradeNote {
+  const item: TradeNote = {
+    id: crypto.randomUUID(),
+    symbol,
+    side,
+    thesis: thesis.trim(),
+    createdAt: Date.now(),
+  }
+  const items = loadTrades()
+  items.unshift(item)
+  saveTrades(items)
+  return item
+}
+
+export function deleteTrade(id: string): void {
+  saveTrades(loadTrades().filter((t) => t.id !== id))
+}
+
 export function loadSettings(): JarvisSettings {
   return { ...defaultSettings, ...readJson(KEYS.settings, {}) }
 }
@@ -132,11 +486,19 @@ export function saveSettings(settings: JarvisSettings): void {
 export function exportBackup(): string {
   return JSON.stringify(
     {
-      version: 1,
+      version: 3,
       exportedAt: new Date().toISOString(),
       chat: loadChat(),
       memory: loadMemory(),
       reminders: loadReminders(),
+      shopping: loadShopping(),
+      expenses: loadExpenses(),
+      habits: loadHabits(),
+      journal: loadJournal(),
+      profile: loadProfile(),
+      watchlist: loadWatchlist(),
+      holdings: loadHoldings(),
+      trades: loadTrades(),
       settings: { ...loadSettings(), apiKey: '' },
     },
     null,
@@ -150,11 +512,27 @@ export function importBackup(json: string): { ok: boolean; message: string } {
       chat?: ChatMessage[]
       memory?: MemoryItem[]
       reminders?: ReminderItem[]
+      shopping?: ShoppingItem[]
+      expenses?: ExpenseItem[]
+      habits?: HabitItem[]
+      journal?: JournalEntry[]
+      profile?: Partial<UserProfile>
+      watchlist?: WatchItem[]
+      holdings?: Holding[]
+      trades?: TradeNote[]
       settings?: Partial<JarvisSettings>
     }
     if (data.chat) saveChat(data.chat)
     if (data.memory) saveMemory(data.memory)
     if (data.reminders) saveReminders(data.reminders)
+    if (data.shopping) saveShopping(data.shopping)
+    if (data.expenses) saveExpenses(data.expenses)
+    if (data.habits) saveHabits(data.habits)
+    if (data.journal) saveJournal(data.journal)
+    if (data.profile) saveProfile({ ...loadProfile(), ...data.profile })
+    if (data.watchlist) saveWatchlist(data.watchlist)
+    if (data.holdings) saveHoldings(data.holdings)
+    if (data.trades) saveTrades(data.trades)
     if (data.settings) {
       const current = loadSettings()
       saveSettings({
@@ -167,4 +545,37 @@ export function importBackup(json: string): { ok: boolean; message: string } {
   } catch {
     return { ok: false, message: '백업 파일이 올바르지 않습니다.' }
   }
+}
+
+export function lifeContextBlock(): string {
+  const profile = loadProfile()
+  const settings = loadSettings()
+  const openReminders = loadReminders().filter((r) => !r.done).slice(0, 8)
+  const shopping = loadShopping().filter((s) => !s.done).slice(0, 12)
+  const habits = habitsDueToday()
+  const totals = expenseTotals()
+  const memories = loadMemory().slice(0, 8)
+  const holdings = loadHoldings().slice(0, 10)
+  const watch = loadWatchlist().slice(0, 10)
+  return [
+    `사용자 호칭: ${settings.displayName}`,
+    `도시: ${settings.city || profile.city}`,
+    `목표/포커스: ${profile.focus}`,
+    `투자 성향: ${profile.riskTolerance} · horizon: ${profile.investHorizon}`,
+    `식습관: ${profile.diet}`,
+    profile.notes ? `메모: ${profile.notes}` : '',
+    `오늘 지출: ${totals.today.toLocaleString('ko-KR')}원 / 이번달: ${totals.month.toLocaleString('ko-KR')}원`,
+    openReminders.length ? `할 일: ${openReminders.map((r) => r.text).join(', ')}` : '할 일: 없음',
+    shopping.length ? `장바구니: ${shopping.map((s) => s.name).join(', ')}` : '장바구니: 비어 있음',
+    habits.length ? `오늘 습관 미완료: ${habits.map((h) => h.name).join(', ')}` : '습관: 오늘 전부 완료 또는 없음',
+    holdings.length
+      ? `보유: ${holdings.map((h) => `${h.name} ${h.shares}주@${h.avgPrice}`).join(' | ')}`
+      : '보유 종목: 없음',
+    watch.length ? `관심: ${watch.map((w) => w.name).join(', ')}` : '관심종목: 없음',
+    memories.length
+      ? `기억: ${memories.map((m) => `${m.key}=${m.value}`).join(' | ')}`
+      : '기억: 없음',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }

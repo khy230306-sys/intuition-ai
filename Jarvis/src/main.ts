@@ -1,25 +1,46 @@
 import './style.css'
 import { quickActions } from './actions'
 import { think } from './brain'
+import { fetchQuote, formatMoney, formatQuote } from './finance'
 import {
   INSTALL_DISMISS_KEY,
   clearChat,
+  deleteExpense,
+  deleteHabit,
   deleteMemory,
   deleteReminder,
+  deleteShopping,
+  deleteTrade,
+  expenseTotals,
   exportBackup,
   importBackup,
   loadChat,
+  loadExpenses,
+  loadHabits,
+  loadHoldings,
   loadMemory,
   loadReminders,
   loadSettings,
+  loadShopping,
+  loadTrades,
+  loadWatchlist,
+  removeHolding,
+  removeWatch,
   saveChat,
   saveSettings,
   toggleReminder,
+  toggleShopping,
 } from './storage'
-import type { ChatMessage, JarvisSettings, View } from './types'
+import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, speak, stopSpeaking } from './voice'
 
-const SUGGESTIONS = ['지금 몇 시야', '유튜브 열어', '도움말', '할 일 장보기', '서울 날씨']
+const SUGGESTIONS = [
+  '브리핑',
+  '삼성전자 시세',
+  '포트폴리오',
+  '관심종목 엔비디아 추가',
+  '도움말',
+]
 
 const state = {
   view: 'chat' as View,
@@ -30,6 +51,7 @@ const state = {
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   showInstall: false,
   settings: loadSettings(),
+  quoteCache: {} as Record<string, QuoteSnapshot | null>,
 }
 
 const voice = new VoiceListener()
@@ -65,7 +87,7 @@ function showFlash(msg: string): void {
   window.setTimeout(() => el.classList.remove('show'), 1800)
 }
 
-function pushMessage(role: ChatMessage['role'], text: string): ChatMessage {
+function pushMsg(role: ChatMessage['role'], text: string): ChatMessage {
   const msg: ChatMessage = { id: uid(), role, text, createdAt: Date.now() }
   state.messages.push(msg)
   saveChat(state.messages)
@@ -77,7 +99,7 @@ async function handleUserText(raw: string): Promise<void> {
   if (!text || state.busy) return
   state.busy = true
   state.draft = ''
-  pushMessage('user', text)
+  pushMsg('user', text)
   render()
   scrollChat()
 
@@ -87,19 +109,19 @@ async function handleUserText(raw: string): Promise<void> {
     if (reply.action) {
       const result = await reply.action()
       if (result && 'message' in result && result.message && result.message !== reply.text) {
-        pushMessage('assistant', `${reply.text}\n(${result.message})`)
+        pushMsg('assistant', `${reply.text}\n(${result.message})`)
       } else {
-        pushMessage('assistant', reply.text)
+        pushMsg('assistant', reply.text)
       }
     } else {
-      pushMessage('assistant', reply.text)
+      pushMsg('assistant', reply.text)
     }
     if (reply.speak !== false && state.settings.speakReplies) {
       speak(reply.text.replace(/\n+/g, '. ').slice(0, 220))
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
-    pushMessage('assistant', msg)
+    pushMsg('assistant', msg)
   } finally {
     state.busy = false
     render()
@@ -112,15 +134,27 @@ function scrollChat(): void {
   if (el) el.scrollTop = el.scrollHeight
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/'/g, '&#39;')
+}
+
 function renderBrand(): string {
-  const status = state.listening ? '듣는 중' : state.busy ? '생각 중' : state.online ? '대기' : '오프라인'
+  const status = state.listening ? '듣는 중' : state.busy ? '분석 중' : state.online ? '대기' : '오프라인'
   return `
     <header class="brand-bar">
       <div class="brand">
         <div class="orb" aria-hidden="true"></div>
         <div>
           <h1>JARVIS</h1>
-          <p>만능 AI 비서 · ${state.settings.displayName}</p>
+          <p>만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}</p>
         </div>
       </div>
       <div class="status-pill">${status}</div>
@@ -134,7 +168,7 @@ function renderInstall(): string {
     <div class="install-banner">
       <div>
         <strong>홈 화면에 추가</strong><br />
-        Safari 공유 → <strong>홈 화면에 추가</strong>하면 앱처럼 실행됩니다.
+        Safari 공유 → <strong>홈 화면에 추가</strong>
       </div>
       <button type="button" data-action="dismiss-install" aria-label="닫기">×</button>
     </div>
@@ -144,12 +178,13 @@ function renderInstall(): string {
 function renderNav(): string {
   const items: Array<{ id: View; label: string; ico: string }> = [
     { id: 'chat', label: '대화', ico: 'CHAT' },
+    { id: 'invest', label: '투자', ico: 'INV' },
+    { id: 'life', label: '생활', ico: 'LIFE' },
     { id: 'actions', label: '실행', ico: 'RUN' },
-    { id: 'memory', label: '기억', ico: 'MEM' },
     { id: 'settings', label: '설정', ico: 'SET' },
   ]
   return `
-    <nav class="nav">
+    <nav class="nav nav-5">
       ${items
         .map(
           (i) => `
@@ -171,7 +206,7 @@ function renderChat(): string {
         <div class="hero-empty">
           <div class="big-orb"></div>
           <h2>JARVIS</h2>
-          <p>무엇을 도와드릴까요?<br />말하거나 입력해 주세요.</p>
+          <p>실생활 + 주식 투자까지.<br />브리핑부터 시세·포트폴리오를 물어보세요.</p>
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>
@@ -193,9 +228,190 @@ function renderChat(): string {
       <div class="messages">${body}</div>
       <form class="composer" id="composer">
         <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력">${state.listening ? 'STOP' : 'MIC'}</button>
-        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="명령 또는 질문..." value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
+        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="시세, 브리핑, 명령..." value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
         <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
       </form>
+    </section>
+  `
+}
+
+function renderInvest(): string {
+  const holdings = loadHoldings()
+  const watch = loadWatchlist()
+  const trades = loadTrades().slice(0, 8)
+
+  return `
+    <section class="panel view-scroll">
+      <h2 class="section-title">INVEST</h2>
+      <p class="hint">실시간 시세(Yahoo) · 포트폴리오 · 관심종목 · 매매노트. 투자 조언이 아닌 참고 도구입니다.</p>
+      <div class="chips left">
+        <button type="button" data-suggest="포트폴리오">포트폴리오 새로고침</button>
+        <button type="button" data-suggest="관심종목 목록">관심 시세</button>
+        <button type="button" data-suggest="장시간">장 시간</button>
+        <button type="button" data-suggest="적립식 매달 50만 10년 연7%">적립식 계산</button>
+      </div>
+
+      <h2 class="section-title">HOLDINGS</h2>
+      ${
+        holdings.length === 0
+          ? '<div class="empty">예: 대화에서 "보유 삼성전자 10주 평단 70000"</div>'
+          : holdings
+              .map((h) => {
+                const q = state.quoteCache[h.symbol]
+                const price = q?.price ?? h.avgPrice
+                const pnl = (price - h.avgPrice) * h.shares
+                const pnlPct = h.avgPrice ? ((price - h.avgPrice) / h.avgPrice) * 100 : 0
+                return `
+                <div class="list-item">
+                  <div class="body">
+                    <strong>${escapeHtml(h.name)} <span class="tag">${escapeHtml(h.symbol)}</span></strong>
+                    <p>${h.shares}주 · 평단 ${formatMoney(h.avgPrice, h.currency)}
+                    ${q ? ` · 현재 ${formatMoney(q.price, q.currency)}` : ''}
+                    <br/><span class="${pnl >= 0 ? 'up' : 'down'}">${pnl >= 0 ? '+' : ''}${formatMoney(pnl, h.currency)} (${pnlPct.toFixed(1)}%)</span></p>
+                  </div>
+                  <button type="button" data-del-holding="${escapeAttr(h.symbol)}">삭제</button>
+                </div>`
+              })
+              .join('')
+      }
+
+      <h2 class="section-title">WATCHLIST</h2>
+      ${
+        watch.length === 0
+          ? '<div class="empty">예: "관심종목 엔비디아 추가"</div>'
+          : watch
+              .map((w) => {
+                const q = state.quoteCache[w.symbol]
+                return `
+                <div class="list-item">
+                  <div class="body">
+                    <strong>${escapeHtml(w.name)}</strong>
+                    <p>${q ? escapeHtml(formatQuote(q).split('\n').slice(0, 2).join(' · ')) : escapeHtml(w.symbol)}
+                    ${w.targetPrice ? `<br/>목표가 ${w.targetPrice}` : ''}</p>
+                  </div>
+                  <button type="button" data-quote="${escapeAttr(w.symbol)}">시세</button>
+                  <button type="button" data-del-watch="${escapeAttr(w.symbol)}">삭제</button>
+                </div>`
+              })
+              .join('')
+      }
+
+      <h2 class="section-title">TRADE NOTES</h2>
+      ${
+        trades.length === 0
+          ? '<div class="empty">예: "삼성전자 매수아이디어 반도체 회복"</div>'
+          : trades
+              .map(
+                (t) => `
+          <div class="list-item">
+            <div class="body">
+              <strong>[${t.side}] ${escapeHtml(t.symbol)}</strong>
+              <p>${escapeHtml(t.thesis)}</p>
+            </div>
+            <button type="button" data-del-trade="${t.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
+      <button type="button" class="ghost-btn" data-action="refresh-quotes">시세 새로고침</button>
+    </section>
+  `
+}
+
+function renderLife(): string {
+  const shopping = loadShopping()
+  const expenses = loadExpenses().slice(0, 8)
+  const habits = loadHabits()
+  const reminders = loadReminders().slice(0, 8)
+  const memories = loadMemory().slice(0, 6)
+  const totals = expenseTotals()
+
+  return `
+    <section class="panel view-scroll">
+      <h2 class="section-title">LIFE</h2>
+      <p class="hint">오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}</p>
+      <div class="chips left">
+        <button type="button" data-suggest="브리핑">브리핑</button>
+        <button type="button" data-suggest="장바구니 목록">장바구니</button>
+        <button type="button" data-suggest="지출 현황">지출 현황</button>
+      </div>
+
+      <h2 class="section-title">TODO</h2>
+      ${
+        reminders.length === 0
+          ? '<div class="empty">"할 일 운동하기"</div>'
+          : reminders
+              .map(
+                (r) => `
+          <div class="list-item">
+            <button type="button" data-toggle-reminder="${r.id}">${r.done ? '✓' : '○'}</button>
+            <div class="body"><strong style="${r.done ? 'opacity:.5;text-decoration:line-through' : ''}">${escapeHtml(r.text)}</strong></div>
+            <button type="button" data-del-reminder="${r.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
+
+      <h2 class="section-title">SHOPPING</h2>
+      ${
+        shopping.length === 0
+          ? '<div class="empty">"장바구니 우유 계란"</div>'
+          : shopping
+              .map(
+                (s) => `
+          <div class="list-item">
+            <button type="button" data-toggle-shop="${s.id}">${s.done ? '✓' : '○'}</button>
+            <div class="body"><strong style="${s.done ? 'opacity:.5;text-decoration:line-through' : ''}">${escapeHtml(s.name)}</strong></div>
+            <button type="button" data-del-shop="${s.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
+
+      <h2 class="section-title">HABITS</h2>
+      ${
+        habits.length === 0
+          ? '<div class="empty">"습관 추가 운동" → "습관 완료 운동"</div>'
+          : habits
+              .map(
+                (h) => `
+          <div class="list-item">
+            <div class="body"><strong>${escapeHtml(h.name)}</strong><p>연속 ${h.streak}일 ${h.lastDone ? `· 최근 ${h.lastDone}` : ''}</p></div>
+            <button type="button" data-del-habit="${h.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
+
+      <h2 class="section-title">EXPENSES</h2>
+      ${
+        expenses.length === 0
+          ? '<div class="empty">"지출 커피 4500원"</div>'
+          : expenses
+              .map(
+                (e) => `
+          <div class="list-item">
+            <div class="body"><strong>${escapeHtml(e.category)} ${formatMoney(e.amount, 'KRW')}</strong><p>${escapeHtml(e.note || '')}</p></div>
+            <button type="button" data-del-expense="${e.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
+
+      <h2 class="section-title">MEMORY</h2>
+      ${
+        memories.length === 0
+          ? '<div class="empty">"기억해 와이파이는 cafe123"</div>'
+          : memories
+              .map(
+                (m) => `
+          <div class="list-item">
+            <div class="body"><strong>${escapeHtml(m.key)}</strong><p>${escapeHtml(m.value)}</p></div>
+            <button type="button" data-del-memory="${m.id}">삭제</button>
+          </div>`,
+              )
+              .join('')
+      }
     </section>
   `
 }
@@ -204,7 +420,6 @@ function renderActions(): string {
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">QUICK RUN</h2>
-      <p class="hint">자주 쓰는 앱과 기능을 원터치로 실행합니다.</p>
       <div class="action-grid">
         ${quickActions
           .map(
@@ -221,52 +436,6 @@ function renderActions(): string {
   `
 }
 
-function renderMemory(): string {
-  const memories = loadMemory()
-  const reminders = loadReminders()
-  return `
-    <section class="panel view-scroll">
-      <h2 class="section-title">REMINDERS</h2>
-      ${
-        reminders.length === 0
-          ? '<div class="empty">할 일이 없습니다. 대화에서 "할 일 장보기"라고 말해 보세요.</div>'
-          : reminders
-              .map(
-                (r) => `
-          <div class="list-item">
-            <button type="button" data-toggle-reminder="${r.id}" aria-label="완료 토글">${r.done ? '✓' : '○'}</button>
-            <div class="body">
-              <strong style="${r.done ? 'text-decoration:line-through;opacity:.55' : ''}">${escapeHtml(r.text)}</strong>
-              <p>${new Date(r.createdAt).toLocaleString('ko-KR')}</p>
-            </div>
-            <button type="button" data-del-reminder="${r.id}">삭제</button>
-          </div>
-        `,
-              )
-              .join('')
-      }
-      <h2 class="section-title">MEMORY</h2>
-      ${
-        memories.length === 0
-          ? '<div class="empty">기억이 없습니다. "기억해 와이파이는 1234"처럼 저장하세요.</div>'
-          : memories
-              .map(
-                (m) => `
-          <div class="list-item">
-            <div class="body">
-              <strong>${escapeHtml(m.key)}</strong>
-              <p>${escapeHtml(m.value)}</p>
-            </div>
-            <button type="button" data-del-memory="${m.id}">삭제</button>
-          </div>
-        `,
-              )
-              .join('')
-      }
-    </section>
-  `
-}
-
 function renderSettings(): string {
   const s = state.settings
   return `
@@ -274,13 +443,16 @@ function renderSettings(): string {
       <h2 class="section-title">SETTINGS</h2>
       <form class="settings-form" id="settings-form">
         <label>호칭
-          <input name="displayName" value="${escapeAttr(s.displayName)}" placeholder="주인님" />
+          <input name="displayName" value="${escapeAttr(s.displayName)}" />
+        </label>
+        <label>기본 도시
+          <input name="city" value="${escapeAttr(s.city)}" placeholder="서울" />
         </label>
         <div class="toggle-row">
           <span>답변 읽어주기</span>
           <input type="checkbox" name="speakReplies" ${s.speakReplies ? 'checked' : ''} />
         </div>
-        <label>OpenAI API Key (선택)
+        <label>OpenAI API Key (심화 분석용)
           <input name="apiKey" type="password" value="${escapeAttr(s.apiKey)}" placeholder="sk-..." autocomplete="off" />
         </label>
         <label>API Base
@@ -292,25 +464,13 @@ function renderSettings(): string {
         <button class="primary-btn" type="submit">설정 저장</button>
       </form>
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="export">백업 내보내기</button>
-        <button type="button" class="ghost-btn" data-action="import">백업 가져오기</button>
+        <button type="button" class="ghost-btn" data-action="export">백업</button>
+        <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <button type="button" class="ghost-btn" data-action="clear-chat">대화 기록 삭제</button>
-      <p class="hint">API 키 없이도 계산·기억·앱 실행·검색·날씨·번역 등 로컬 비서 기능을 사용할 수 있습니다. 키를 넣으면 자유 대화가 가능합니다.</p>
+      <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
+      <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. API 키 없이도 시세·포트·생활 비서가 동작합니다.</p>
     </section>
   `
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/'/g, '&#39;')
 }
 
 function render(): void {
@@ -319,14 +479,32 @@ function render(): void {
   const main =
     state.view === 'chat'
       ? renderChat()
-      : state.view === 'actions'
-        ? renderActions()
-        : state.view === 'memory'
-          ? renderMemory()
-          : renderSettings()
-
+      : state.view === 'invest'
+        ? renderInvest()
+        : state.view === 'life'
+          ? renderLife()
+          : state.view === 'actions'
+            ? renderActions()
+            : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}`
   bind()
+}
+
+async function refreshQuotes(): Promise<void> {
+  const symbols = [
+    ...loadHoldings().map((h) => h.symbol),
+    ...loadWatchlist().map((w) => w.symbol),
+  ]
+  await Promise.all(
+    [...new Set(symbols)].map(async (sym) => {
+      try {
+        state.quoteCache[sym] = await fetchQuote(sym)
+      } catch {
+        state.quoteCache[sym] = null
+      }
+    }),
+  )
+  if (state.view === 'invest') render()
 }
 
 function bind(): void {
@@ -337,6 +515,7 @@ function bind(): void {
       voice.stop()
       state.listening = false
       render()
+      if (state.view === 'invest') void refreshQuotes()
     })
   })
 
@@ -358,6 +537,7 @@ function bind(): void {
 
   document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      state.view = 'chat'
       void handleUserText(btn.dataset.suggest || '')
     })
   })
@@ -398,8 +578,7 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const action = quickActions.find((a) => a.id === btn.dataset.quick)
       if (!action) return
-      const result = action.run()
-      showFlash(result.message)
+      showFlash(action.run().message)
     })
   })
 
@@ -409,19 +588,68 @@ function bind(): void {
       render()
     })
   })
-
   document.querySelectorAll<HTMLButtonElement>('[data-del-reminder]').forEach((btn) => {
     btn.addEventListener('click', () => {
       deleteReminder(btn.dataset.delReminder || '')
       render()
     })
   })
-
   document.querySelectorAll<HTMLButtonElement>('[data-toggle-reminder]').forEach((btn) => {
     btn.addEventListener('click', () => {
       toggleReminder(btn.dataset.toggleReminder || '')
       render()
     })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-shop]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteShopping(btn.dataset.delShop || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-toggle-shop]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      toggleShopping(btn.dataset.toggleShop || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-habit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteHabit(btn.dataset.delHabit || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-expense]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteExpense(btn.dataset.delExpense || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-holding]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      removeHolding(btn.dataset.delHolding || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-watch]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      removeWatch(btn.dataset.delWatch || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-del-trade]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      deleteTrade(btn.dataset.delTrade || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-quote]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.view = 'chat'
+      void handleUserText(`${btn.dataset.quote} 시세`)
+    })
+  })
+  document.querySelector('[data-action="refresh-quotes"]')?.addEventListener('click', () => {
+    void refreshQuotes().then(() => showFlash('시세를 갱신했습니다.'))
   })
 
   const settingsForm = document.getElementById('settings-form') as HTMLFormElement | null
@@ -434,6 +662,7 @@ function bind(): void {
       apiKey: String(fd.get('apiKey') || '').trim(),
       apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
       model: String(fd.get('model') || 'gpt-4o-mini').trim(),
+      city: String(fd.get('city') || '서울').trim() || '서울',
     }
     state.settings = next
     saveSettings(next)
@@ -459,8 +688,7 @@ function bind(): void {
     input.addEventListener('change', async () => {
       const file = input.files?.[0]
       if (!file) return
-      const text = await file.text()
-      const result = importBackup(text)
+      const result = importBackup(await file.text())
       state.settings = loadSettings()
       state.messages = loadChat()
       showFlash(result.message)

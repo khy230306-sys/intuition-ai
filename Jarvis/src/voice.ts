@@ -39,7 +39,6 @@ export type SpeechRecognitionLike = {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
-/** Exported for tests — inject a fake constructor. */
 let recognitionCtorOverride: SpeechRecognitionCtor | null = null
 
 export function __setRecognitionCtorForTests(ctor: SpeechRecognitionCtor | null): void {
@@ -74,18 +73,17 @@ export function speakAsync(text: string, lang = 'ko-KR'): Promise<void> {
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang
-    u.rate = 1.02
+    u.rate = 1.12
     u.pitch = 1
     u.onend = () => resolve()
     u.onerror = () => resolve()
-    // iOS sometimes needs a tick after cancel
     setTimeout(() => {
       try {
         window.speechSynthesis.speak(u)
       } catch {
         resolve()
       }
-    }, 40)
+    }, 0)
   })
 }
 
@@ -98,13 +96,13 @@ function errorMessage(code: string): string | null {
     case 'aborted':
       return null
     case 'no-speech':
-      return '음성이 감지되지 않았습니다. 다시 MIC를 눌러 말씀해 주세요.'
+      return '음성이 감지되지 않았습니다. 다시 MIC를 눌러 주세요.'
     case 'audio-capture':
-      return '마이크를 찾을 수 없습니다. 권한과 연결을 확인해 주세요.'
+      return '마이크를 찾을 수 없습니다.'
     case 'not-allowed':
-      return '마이크 권한이 필요합니다. Safari 설정 → 웹사이트 → 마이크를 허용해 주세요.'
+      return '마이크 권한이 필요합니다. Safari 설정에서 마이크를 허용해 주세요.'
     case 'network':
-      return '음성 인식 네트워크 오류입니다. Wi‑Fi/데이터를 확인한 뒤 다시 시도해 주세요.'
+      return '음성 인식 네트워크 오류입니다. 연결을 확인해 주세요.'
     case 'service-not-allowed':
       return '이 환경에서는 음성 인식 서비스를 사용할 수 없습니다.'
     case 'bad-grammar':
@@ -116,11 +114,10 @@ function errorMessage(code: string): string | null {
 }
 
 /**
- * Smooth voice session tuned for iPhone Safari:
- * - accumulates final segments
- * - shows interim text live
- * - auto-restarts when Safari ends the session early
- * - finalizes after short silence following speech
+ * Speed-first voice session for iPhone Safari.
+ * - final result → submit immediately (no long silence wait)
+ * - continuous=false (faster single utterance on iOS)
+ * - tiny fallback silence only for interim-only paths
  */
 export class VoiceListener {
   private recognition: SpeechRecognitionLike | null = null
@@ -134,14 +131,14 @@ export class VoiceListener {
   private safetyTimer: number | null = null
   private heardSpeech = false
   private starting = false
+  private finishing = false
   private sessionId = 0
+  private emptyEnds = 0
 
-  /** Silence after speech before auto-submit (ms). */
-  silenceMs = 1400
-  /** Max listen duration (ms). */
-  maxListenMs = 28000
-  /** Gap before restarting a Safari-ended session (ms). */
-  restartDelayMs = 220
+  /** Fallback only when we have interim but no final yet. */
+  silenceMs = 420
+  maxListenMs = 12000
+  restartDelayMs = 80
 
   get listening(): boolean {
     return this.state === 'listening' || this.wanted
@@ -163,9 +160,11 @@ export class VoiceListener {
     this.stopInternal(false)
     this.callbacks = callbacks
     this.wanted = true
+    this.finishing = false
     this.finals = []
     this.interim = ''
     this.heardSpeech = false
+    this.emptyEnds = 0
     this.sessionId += 1
     stopSpeaking()
     this.setState('listening')
@@ -173,7 +172,6 @@ export class VoiceListener {
     return this.bootRecognition()
   }
 
-  /** Compatible with older call sites. */
   startLegacy(
     onText: (text: string, final: boolean) => void,
     onError?: (msg: string) => void,
@@ -191,6 +189,7 @@ export class VoiceListener {
 
   private stopInternal(notifyIdle: boolean): void {
     this.wanted = false
+    this.finishing = false
     this.clearTimers()
     if (this.recognition) {
       const rec = this.recognition
@@ -236,7 +235,7 @@ export class VoiceListener {
     if (this.safetyTimer != null) clearTimeout(this.safetyTimer)
     this.safetyTimer = setTimeout(() => {
       if (!this.wanted) return
-      const text = this.compose('').trim()
+      const text = this.compose(this.interim).trim()
       if (text) this.finishWith(text)
       else {
         this.callbacks.onError?.('시간이 초과되었습니다. 다시 MIC를 눌러 주세요.')
@@ -253,43 +252,53 @@ export class VoiceListener {
 
   private bumpSilenceWatch(): void {
     if (this.silenceTimer != null) clearTimeout(this.silenceTimer)
-    if (!this.heardSpeech) return
+    if (!this.heardSpeech || this.finishing) return
     this.silenceTimer = setTimeout(() => {
-      if (!this.wanted) return
-      const text = this.compose('').trim() || this.compose(this.interim).trim()
+      if (!this.wanted || this.finishing) return
+      const text = this.compose(this.interim).trim()
       if (text) this.finishWith(text)
     }, this.silenceMs) as unknown as number
   }
 
   private finishWith(text: string): void {
+    if (this.finishing) return
+    this.finishing = true
     const cleaned = text.replace(/\s+/g, ' ').trim()
     this.wanted = false
     this.clearTimers()
     if (this.recognition) {
-      try {
-        this.recognition.onend = null
-        this.recognition.stop()
-      } catch {
-        /* ignore */
-      }
+      const rec = this.recognition
       this.recognition = null
+      rec.onend = null
+      rec.onresult = null
+      rec.onerror = null
+      try {
+        rec.abort()
+      } catch {
+        try {
+          rec.stop()
+        } catch {
+          /* ignore */
+        }
+      }
     }
     this.starting = false
     this.setState('processing')
     if (cleaned) this.callbacks.onFinal?.(cleaned)
     this.setState('idle')
+    this.finishing = false
   }
 
   private bootRecognition(): boolean {
     const Ctor = getRecognitionCtor()
-    if (!Ctor || !this.wanted) return false
+    if (!Ctor || !this.wanted || this.finishing) return false
     if (this.starting) return true
     this.starting = true
     const rec = new Ctor()
     const sid = this.sessionId
     rec.lang = 'ko-KR'
-    // continuous helps on desktop; Safari may ignore — we still auto-restart onend
-    rec.continuous = true
+    // false = faster single-utterance path on iOS Safari
+    rec.continuous = false
     rec.interimResults = true
     rec.maxAlternatives = 1
 
@@ -301,44 +310,57 @@ export class VoiceListener {
 
     rec.onspeechstart = () => {
       this.heardSpeech = true
-      this.bumpSilenceWatch()
     }
 
     rec.onspeechend = () => {
-      this.bumpSilenceWatch()
+      // If we already have finals, finish immediately — do not wait
+      const ready = this.compose('').trim()
+      if (ready) this.finishWith(ready)
+      else this.bumpSilenceWatch()
     }
 
     rec.onresult = (event) => {
-      if (this.sessionId !== sid || !this.wanted) return
+      if (this.sessionId !== sid || !this.wanted || this.finishing) return
       let interim = ''
+      let gotFinal = false
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         const piece = result?.[0]?.transcript?.trim()
         if (!piece) continue
         this.heardSpeech = true
-        if (result.isFinal) this.finals.push(piece)
-        else interim = piece
+        if (result.isFinal) {
+          this.finals.push(piece)
+          gotFinal = true
+        } else {
+          interim = piece
+        }
       }
       this.interim = interim
       const live = this.compose(interim)
       this.callbacks.onInterim?.(live)
+
+      // SPEED: submit the moment Safari marks a final result
+      if (gotFinal) {
+        this.finishWith(this.compose(''))
+        return
+      }
       this.bumpSilenceWatch()
     }
 
     rec.onerror = (event) => {
       this.starting = false
-      if (this.sessionId !== sid) return
-      const msg = errorMessage(event.error)
-      if (event.error === 'no-speech' && this.compose(this.interim).trim()) {
-        // finalize what we have instead of failing
-        this.finishWith(this.compose(this.interim))
-        return
-      }
+      if (this.sessionId !== sid || this.finishing) return
       if (event.error === 'aborted') return
-      if (event.error === 'no-speech' && !this.heardSpeech) {
-        // keep session; Safari often fires this then onend — restart path handles it
+      const text = this.compose(this.interim).trim()
+      if (text && (event.error === 'no-speech' || event.error === 'network')) {
+        this.finishWith(text)
         return
       }
+      if (event.error === 'no-speech' && !this.heardSpeech) {
+        // let onend restart once quickly
+        return
+      }
+      const msg = errorMessage(event.error)
       if (msg) this.callbacks.onError?.(msg)
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
         this.stop()
@@ -348,16 +370,24 @@ export class VoiceListener {
     rec.onend = () => {
       this.starting = false
       this.recognition = null
-      if (this.sessionId !== sid || !this.wanted) return
-      // Safari ends frequently — restart while user still wants to talk
-      if (this.heardSpeech && this.compose('').trim() && !this.interim) {
-        // already have finals and no interim: let silence timer finish, or finalize soon
-        this.bumpSilenceWatch()
+      if (this.sessionId !== sid || this.finishing) return
+      const text = this.compose(this.interim).trim()
+      if (text) {
+        this.finishWith(text)
+        return
       }
-      this.restartTimer = setTimeout(() => {
-        if (!this.wanted || this.sessionId !== sid) return
-        this.bootRecognition()
-      }, this.restartDelayMs) as unknown as number
+      if (!this.wanted) return
+      this.emptyEnds += 1
+      // one fast retry if Safari ended before speech; then stop
+      if (this.emptyEnds <= 1) {
+        this.restartTimer = setTimeout(() => {
+          if (!this.wanted || this.sessionId !== sid) return
+          this.bootRecognition()
+        }, this.restartDelayMs) as unknown as number
+        return
+      }
+      this.callbacks.onError?.('음성이 감지되지 않았습니다. 다시 MIC를 눌러 주세요.')
+      this.stop()
     }
 
     this.recognition = rec
@@ -367,17 +397,15 @@ export class VoiceListener {
     } catch {
       this.starting = false
       this.recognition = null
-      // rare InvalidStateError — retry once
       this.restartTimer = setTimeout(() => {
         if (!this.wanted || this.sessionId !== sid) return
         this.bootRecognition()
-      }, 320) as unknown as number
+      }, 120) as unknown as number
       return true
     }
   }
 }
 
-/** Lightweight capability probe used by settings "음성 테스트". */
 export function probeVoiceSupport(): {
   recognition: boolean
   speechSynthesis: boolean
@@ -391,6 +419,7 @@ export function probeVoiceSupport(): {
     recognition ? '음성인식: 지원' : '음성인식: 미지원 (Safari 권장)',
     speechSynthesis ? 'TTS: 지원' : 'TTS: 미지원',
     secureContext ? '보안맥락(HTTPS): OK' : '보안맥락: 필요 (HTTPS 또는 localhost)',
+    '모드: 고속(최종 인식 즉시 전송)',
   ].join('\n')
   return { recognition, speechSynthesis, secureContext, details }
 }

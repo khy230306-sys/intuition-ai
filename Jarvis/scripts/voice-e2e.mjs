@@ -136,7 +136,7 @@ async function main() {
       const msgs = [...document.querySelectorAll('.msg.user')]
       return msgs.some((m) => (m.textContent || '').includes('지금 몇 시야'))
     },
-    { timeout: 5000 },
+    { timeout: 2500 },
   )
 
   await page.waitForFunction(
@@ -144,7 +144,7 @@ async function main() {
       const msgs = [...document.querySelectorAll('.msg.assistant')]
       return msgs.some((m) => (m.textContent || '').includes('지금은'))
     },
-    { timeout: 5000 },
+    { timeout: 2500 },
   )
 
   const listeningAfter = await page.$eval('[data-action="mic"]', (el) =>

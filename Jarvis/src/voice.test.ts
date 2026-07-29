@@ -65,7 +65,7 @@ class FakeRecognition implements SpeechRecognitionLike {
 
 let lastFake: FakeRecognition | null = null
 
-describe('VoiceListener smoothness', () => {
+describe('VoiceListener speed mode', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     lastFake = null
@@ -91,65 +91,55 @@ describe('VoiceListener smoothness', () => {
 
   it('reports recognition capability when ctor injected', () => {
     expect(canListen()).toBe(true)
-    expect(probeVoiceSupport().recognition).toBe(true)
+    expect(probeVoiceSupport().details).toContain('고속')
   })
 
-  it('streams interim text then auto-finalizes after silence', () => {
+  it('finalizes immediately on final result (no silence wait)', () => {
     const listener = new VoiceListener()
-    listener.silenceMs = 500
-    const interims: string[] = []
+    listener.silenceMs = 5000
     let finalText = ''
-
-    const ok = listener.start({
-      onInterim: (t) => interims.push(t),
-      onFinal: (t) => {
-        finalText = t
-      },
-    })
-    expect(ok).toBe(true)
-    expect(lastFake).toBeTruthy()
-
-    lastFake!.onspeechstart?.()
-    lastFake!.emitInterim('삼성전자')
-    lastFake!.emitFinal('삼성전자')
-    lastFake!.emitInterim('시세')
-    expect(interims.at(-1)).toContain('시세')
-
-    vi.advanceTimersByTime(600)
-    expect(finalText).toMatch(/삼성전자/)
-    expect(listener.currentState).toBe('idle')
-  })
-
-  it('restarts when Safari ends the session early while still wanted', () => {
-    const listener = new VoiceListener()
-    listener.restartDelayMs = 100
-    listener.start({ onInterim: () => undefined })
-    const first = lastFake
-    expect(first?.started).toBe(true)
-
-    // Safari drops session
-    first!.onend?.()
-    vi.advanceTimersByTime(150)
-    expect(lastFake).not.toBe(first)
-    expect(listener.listening).toBe(true)
-    listener.stop()
-  })
-
-  it('accumulates multiple final segments smoothly', () => {
-    const listener = new VoiceListener()
-    listener.silenceMs = 400
-    let finalText = ''
+    const t0 = Date.now()
     listener.start({
       onFinal: (t) => {
         finalText = t
       },
     })
     lastFake!.onspeechstart?.()
-    lastFake!.emitFinal('관심종목')
-    lastFake!.emitFinal('엔비디아')
-    lastFake!.emitFinal('추가')
-    vi.advanceTimersByTime(500)
-    expect(finalText).toBe('관심종목 엔비디아 추가')
+    lastFake!.emitInterim('지금')
+    lastFake!.emitFinal('지금 몇 시야')
+    expect(finalText).toBe('지금 몇 시야')
+    expect(Date.now() - t0).toBeLessThan(50)
+    expect(listener.currentState).toBe('idle')
+  })
+
+  it('finishes on speechend when finals already present', () => {
+    const listener = new VoiceListener()
+    let finalText = ''
+    listener.start({
+      onFinal: (t) => {
+        finalText = t
+      },
+    })
+    // manually push via final
+    lastFake!.emitFinal('브리핑')
+    expect(finalText).toBe('브리핑')
+  })
+
+  it('retries once on empty end then errors', () => {
+    const listener = new VoiceListener()
+    listener.restartDelayMs = 50
+    let err = ''
+    listener.start({
+      onError: (m) => {
+        err = m
+      },
+    })
+    const first = lastFake
+    first!.onend?.()
+    vi.advanceTimersByTime(60)
+    expect(lastFake).not.toBe(first)
+    lastFake!.onend?.()
+    expect(err).toContain('음성이 감지되지 않았습니다')
   })
 
   it('maps not-allowed to Korean guidance', () => {

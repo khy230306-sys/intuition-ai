@@ -106,6 +106,7 @@ async function handleUserText(raw: string): Promise<void> {
   state.listening = false
   state.voiceHint = ''
   state.draft = ''
+  stopSpeaking()
   pushMsg('user', text)
   render()
   scrollChat()
@@ -123,13 +124,16 @@ async function handleUserText(raw: string): Promise<void> {
     } else {
       pushMsg('assistant', reply.text)
     }
+    // Release busy BEFORE TTS so MIC is usable immediately
+    state.busy = false
+    render()
+    scrollChat()
     if (reply.speak !== false && state.settings.speakReplies) {
-      await speakAsync(reply.text.replace(/\n+/g, '. ').slice(0, 220))
+      void speakAsync(reply.text.replace(/\n+/g, '. ').slice(0, 180))
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
     pushMsg('assistant', msg)
-  } finally {
     state.busy = false
     render()
     scrollChat()
@@ -620,8 +624,10 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {
+    // Never block MIC on TTS; only soft-block while thinking
     if (state.busy) {
-      showFlash('처리 중입니다. 잠시만 기다려 주세요.')
+      stopSpeaking()
+      showFlash('답변 준비 중… 곧 MIC를 쓸 수 있습니다')
       return
     }
     if (!canListen()) {
@@ -640,7 +646,16 @@ function bind(): void {
     }
     stopSpeaking()
     state.draft = ''
-    state.voiceHint = '듣고 있습니다… 말씀해 주세요'
+    state.voiceHint = '듣고 있습니다… 바로 말씀해 주세요'
+    // Ensure chat shell exists without heavy remount when already on chat
+    if (state.view !== 'chat' || !document.getElementById('voice-caption')) {
+      state.view = 'chat'
+      state.listening = true
+      render()
+    } else {
+      state.listening = true
+      patchVoiceUi()
+    }
     const ok = voice.start({
       onInterim: (text) => {
         state.draft = text
@@ -649,17 +664,15 @@ function bind(): void {
       },
       onFinal: (text) => {
         state.listening = false
-        state.voiceHint = ''
+        state.voiceHint = '인식 완료'
         state.draft = text
         patchVoiceUi()
         void handleUserText(text)
       },
       onState: (s) => {
         state.listening = s === 'listening' || s === 'processing'
-        if (s === 'listening' && !state.voiceHint) state.voiceHint = '듣고 있습니다… 말씀해 주세요'
-        if (s === 'idle' && !state.busy) {
-          state.listening = false
-        }
+        if (s === 'listening' && !state.voiceHint) state.voiceHint = '듣고 있습니다… 바로 말씀해 주세요'
+        if (s === 'idle' && !state.busy) state.listening = false
         patchVoiceUi()
       },
       onError: (err) => {
@@ -667,13 +680,13 @@ function bind(): void {
         state.voiceHint = ''
         showFlash(err)
         patchVoiceUi()
-        render()
       },
     })
-    state.listening = ok
-    if (!ok) state.voiceHint = ''
-    // One render to show caption shell; later updates use patchVoiceUi only
-    render()
+    if (!ok) {
+      state.listening = false
+      state.voiceHint = ''
+      patchVoiceUi()
+    }
   })
 
   document.querySelector('[data-action="voice-test"]')?.addEventListener('click', () => {

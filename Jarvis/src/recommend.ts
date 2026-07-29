@@ -57,7 +57,12 @@ async function cachedQuote(symbol: string): Promise<QuoteSnapshot | null> {
   const hit = quoteCache.get(symbol)
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.quote
   try {
-    const quote = await fetchQuote(symbol)
+    // Screening must be fast: snapshot first, no hanging CORS proxies
+    const quote = await fetchQuote(symbol, {
+      preferSnapshot: true,
+      allowProxy: false,
+      timeoutMs: 2000,
+    })
     quoteCache.set(symbol, { at: Date.now(), quote })
     return quote
   } catch {
@@ -238,8 +243,8 @@ export async function buildColdRecommendations(text: string): Promise<string> {
     return true
   })
 
-  // Limit concurrency — Yahoo rate-limits / browsers choke on 20+ parallel calls
-  const quotes = await mapPool(universe, 3, async (c) => ({ c, q: await cachedQuote(c.symbol) }))
+  // Limit concurrency — snapshot-first, short timeouts
+  const quotes = await mapPool(universe, 6, async (c) => ({ c, q: await cachedQuote(c.symbol) }))
   const scored = quotes
     .filter((x): x is { c: RecCandidate; q: QuoteSnapshot } => Boolean(x.q))
     .map(({ c, q }) => scorePick(c, q, risk, owned, watched))

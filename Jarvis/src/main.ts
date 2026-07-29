@@ -54,7 +54,7 @@ import {
   type ArcadeId,
 } from './arcadeGames'
 
-const APP_VERSION = '1.5.2'
+const APP_VERSION = '1.5.3'
 
 const SUGGESTIONS = [
   '지금부터 스톱할 때까지 베트남어로 번역해줘',
@@ -154,9 +154,18 @@ async function handleUserText(raw: string): Promise<void> {
 
   try {
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
-    const reply = await think(text, history.slice(0, -1))
+    const thinkPromise = think(text, history.slice(0, -1))
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error('응답 시간이 초과되었습니다. 다시 시도해 주세요.')), 12_000)
+    })
+    const reply = await Promise.race([thinkPromise, timeoutPromise])
     if (reply.action) {
-      const result = await reply.action()
+      const result = await Promise.race([
+        Promise.resolve(reply.action()),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new Error('실행 시간이 초과되었습니다.')), 8_000)
+        }),
+      ])
       if (result && 'message' in result && result.message && result.message !== reply.text) {
         pushMsg('assistant', `${reply.text}\n(${result.message})`)
       } else {
@@ -167,14 +176,9 @@ async function handleUserText(raw: string): Promise<void> {
     }
     if (reply.view) state.view = reply.view
     if (reply.arcadeId) state.arcadeId = reply.arcadeId
-    // Release busy BEFORE TTS so MIC is usable immediately
-    state.busy = false
-    render()
-    scrollChat()
     if (reply.listenLang) state.listenLang = reply.listenLang
     if (reply.speak !== false && state.settings.speakReplies) {
       const lang = reply.speakLang || 'ko-KR'
-      // Prefer speaking the translated line when present
       const speakText = reply.text.includes('번역:')
         ? reply.text.split('번역:').pop()?.split('\n')[0]?.trim() || reply.text
         : reply.text
@@ -183,6 +187,7 @@ async function handleUserText(raw: string): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
     pushMsg('assistant', msg)
+  } finally {
     state.busy = false
     render()
     scrollChat()

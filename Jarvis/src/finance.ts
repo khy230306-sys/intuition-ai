@@ -82,55 +82,67 @@ function metaToQuote(
   }
 }
 
-async function fetchYahooLive(symbol: string, name: string, currency: string): Promise<QuoteSnapshot | null> {
+async function fetchJson(url: string, ms: number): Promise<unknown | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: ctrl.signal,
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function fetchYahooLive(
+  symbol: string,
+  name: string,
+  currency: string,
+  timeoutMs: number,
+): Promise<QuoteSnapshot | null> {
   const hosts = ['https://query2.finance.yahoo.com', 'https://query1.finance.yahoo.com']
   for (const host of hosts) {
-    try {
-      const url = `${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`
-      const res = await fetch(url, { headers: { Accept: 'application/json' } })
-      if (!res.ok) continue
-      const data = (await res.json()) as YahooChartResponse
-      const q = metaToQuote(data.chart?.result?.[0]?.meta, symbol, name, currency)
-      if (q) return q
-    } catch {
-      /* CORS / network — try next */
-    }
+    const url = `${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`
+    const data = (await fetchJson(url, timeoutMs)) as YahooChartResponse | null
+    if (!data) continue
+    const q = metaToQuote(data.chart?.result?.[0]?.meta, symbol, name, currency)
+    if (q) return q
   }
   return null
 }
 
-/** CORS-friendly proxy fallback (best-effort). */
-async function fetchYahooProxied(symbol: string, name: string, currency: string): Promise<QuoteSnapshot | null> {
+/** Slow CORS proxy — only for single-symbol lookups, never bulk. */
+async function fetchYahooProxied(
+  symbol: string,
+  name: string,
+  currency: string,
+  timeoutMs: number,
+): Promise<QuoteSnapshot | null> {
   const target = encodeURIComponent(
     `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?range=5d&interval=1d`,
   )
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${target}`,
-    `https://api.allorigins.win/get?url=${target}`,
-  ]
-  for (const url of proxies) {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) continue
-      const raw = await res.text()
-      let json: YahooChartResponse | null = null
-      try {
-        const parsed = JSON.parse(raw) as YahooChartResponse | { contents?: string }
-        if ('contents' in parsed && typeof parsed.contents === 'string') {
-          json = JSON.parse(parsed.contents) as YahooChartResponse
-        } else {
-          json = parsed as YahooChartResponse
-        }
-      } catch {
-        continue
-      }
-      const q = metaToQuote(json?.chart?.result?.[0]?.meta, symbol, name, currency)
-      if (q) return q
-    } catch {
-      /* next */
+  const url = `https://api.allorigins.win/get?url=${target}`
+  try {
+    const data = (await fetchJson(url, timeoutMs)) as
+      | YahooChartResponse
+      | { contents?: string }
+      | null
+    if (!data) return null
+    let json: YahooChartResponse | null = null
+    if ('contents' in data && typeof data.contents === 'string') {
+      json = JSON.parse(data.contents) as YahooChartResponse
+    } else {
+      json = data as YahooChartResponse
     }
+    return metaToQuote(json?.chart?.result?.[0]?.meta, symbol, name, currency)
+  } catch {
+    return null
   }
-  return null
 }
 
 async function fetchFromSnapshot(symbol: string): Promise<QuoteSnapshot | null> {
@@ -143,26 +155,56 @@ async function fetchFromSnapshot(symbol: string): Promise<QuoteSnapshot | null> 
 
 export type QuoteSource = 'live' | 'proxy' | 'snapshot'
 
+export type FetchQuoteOptions = {
+  /** Prefer bundled snapshot (fast). Default false for single quotes, true for screening. */
+  preferSnapshot?: boolean
+  /** Allow slow CORS proxy. Default true for single, false for bulk. */
+  allowProxy?: boolean
+  /** Per-attempt timeout ms */
+  timeoutMs?: number
+}
+
 export async function fetchQuoteDetailed(
   symbolOrName: string,
+  opts: FetchQuoteOptions = {},
 ): Promise<{ quote: QuoteSnapshot; source: QuoteSource } | null> {
   const resolved = resolveTicker(symbolOrName) || extractTickerFromText(symbolOrName)
   if (!resolved) return null
+  const timeoutMs = opts.timeoutMs ?? 2500
+  const preferSnapshot = opts.preferSnapshot === true
+  const allowProxy = opts.allowProxy !== false && !preferSnapshot
 
-  const live = await fetchYahooLive(resolved.symbol, resolved.name, resolved.currency)
+  if (preferSnapshot) {
+    const snap = await fetchFromSnapshot(resolved.symbol)
+    if (snap) return { quote: snap, source: 'snapshot' }
+  }
+
+  const live = await fetchYahooLive(resolved.symbol, resolved.name, resolved.currency, timeoutMs)
   if (live) return { quote: live, source: 'live' }
 
-  const proxied = await fetchYahooProxied(resolved.symbol, resolved.name, resolved.currency)
-  if (proxied) return { quote: proxied, source: 'proxy' }
+  if (allowProxy) {
+    const proxied = await fetchYahooProxied(
+      resolved.symbol,
+      resolved.name,
+      resolved.currency,
+      Math.min(timeoutMs, 3000),
+    )
+    if (proxied) return { quote: proxied, source: 'proxy' }
+  }
 
-  const snap = await fetchFromSnapshot(resolved.symbol)
-  if (snap) return { quote: snap, source: 'snapshot' }
+  if (!preferSnapshot) {
+    const snap = await fetchFromSnapshot(resolved.symbol)
+    if (snap) return { quote: snap, source: 'snapshot' }
+  }
 
   return null
 }
 
-export async function fetchQuote(symbolOrName: string): Promise<QuoteSnapshot | null> {
-  const detailed = await fetchQuoteDetailed(symbolOrName)
+export async function fetchQuote(
+  symbolOrName: string,
+  opts?: FetchQuoteOptions,
+): Promise<QuoteSnapshot | null> {
+  const detailed = await fetchQuoteDetailed(symbolOrName, opts)
   return detailed?.quote ?? null
 }
 

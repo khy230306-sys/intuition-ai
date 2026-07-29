@@ -42,6 +42,13 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 - 계산·단위변환·더치페이, 날씨·지도·앱 실행, 음성 입·출력
 - 선택적 OpenAI API로 심화 대화
 
+## 음성
+
+- MIC 버튼 → 실시간 자막 → 잠시 침묵 후 자동 전송
+- Safari가 세션을 끊어도 자동 재시작
+- 설정 → **음성 시스템 테스트**로 지원 여부 점검
+- `npm test` (유닛) · `npm run test:voice` (Chrome E2E)
+
 ## 로컬 실행
 
 ```bash

@@ -5,11 +5,11 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL (고정):** https://jarvis-app.shipstatic.com
+**앱 URL (고정 — 앞으로도 이것만):** https://jarvis-app.shipstatic.com
 
 > 게이트/번역 바에 **v1.7.0**이 보여야 최신입니다.  
 > 위치 허용을 권장합니다. 거부해도 **오프라인으로 계속**으로 게임·대화·설정을 쓸 수 있습니다.  
-> 이후 업데이트는 **같은 주소**로 올라갑니다. `lucid-float-…` / `auric-cloaker-…` 등 예전 URL은 쓰지 마세요.
+> **주소는 바뀌지 않습니다.** 업데이트해도 항상 위 링크로 접속하세요.
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**

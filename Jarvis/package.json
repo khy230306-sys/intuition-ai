@@ -9,7 +9,7 @@
     "build": "node scripts/fetch-quotes.mjs && tsc && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "deploy:web": "node scripts/deploy-fixed.mjs",
-    "deploy:web:anon": "npx -y @shipstatic/ship ./dist",
+    "deploy:web:anon": "echo 'Do not use anon deploy — it creates a new random URL. Use npm run deploy:web for https://jarvis-app.shipstatic.com' && exit 1",
     "test": "vitest run",
     "test:voice": "npm run build && node scripts/voice-e2e.mjs",
     "test:practical": "npm run build && node scripts/practical-e2e.mjs",

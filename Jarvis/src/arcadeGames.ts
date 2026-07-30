@@ -11,14 +11,14 @@ export type ArcadeId =
   | 'taprush'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   shooter: { title: '스페이스', blurb: '아이템으로 미사일 진화 · 5기마다 레벨업' },
-  flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
-  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
-  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   zigzag: { title: '지그재그', blurb: '탭으로 방향 전환 · 길 위에서 버텨라' },
   stack: { title: '스택', blurb: '타이밍에 맞춰 쌓기 · 완벽 스택 보너스' },
   taprush: { title: '탭러시', blurb: '빛나는 타겟을 빠르게 탭 · 콤보 가속' },
+  flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
+  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
+  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
+  breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'

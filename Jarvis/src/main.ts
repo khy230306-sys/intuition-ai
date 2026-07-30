@@ -1,3 +1,4 @@
+import { registerSW } from 'virtual:pwa-register'
 import './style.css'
 import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
 import {
@@ -124,7 +125,29 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.7.1'
+const APP_VERSION = '1.7.2'
+const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
+
+async function hardRefreshApp(): Promise<void> {
+  if (sessionStorage.getItem('jarvis.refreshing') === '1') return
+  sessionStorage.setItem('jarvis.refreshing', '1')
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.unregister()))
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+  } catch {
+    /* still reload */
+  }
+  localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
+  const url = new URL(window.location.href)
+  url.searchParams.set('_v', APP_VERSION)
+  window.location.replace(url.toString())
+}
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -798,10 +821,10 @@ function renderGames(): string {
   const best = loadArcadeBest()
   const meta = ARCADE_META[state.arcadeId]
   const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
-    .map(
-      (id) =>
-        `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}" data-arcade="${id}">${ARCADE_META[id].title}</button>`,
-    )
+    .map((id) => {
+      const neu = id === 'zigzag' || id === 'stack' || id === 'taprush'
+      return `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}${neu ? ' is-new' : ''}" data-arcade="${id}">${ARCADE_META[id].title}${neu ? '<span class="game-tab-new">NEW</span>' : ''}</button>`
+    })
     .join('')
   const hi = best[state.arcadeId]
   const bestLv = loadArcadeBestLevel()[state.arcadeId]
@@ -821,7 +844,8 @@ function renderGames(): string {
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 점수·순위 기기 저장</p>
+      <p class="hint">오프라인 아케이드 · 8종 · v${APP_VERSION}</p>
+      <p class="hint arcade-new-hint">새 게임 · 지그재그 · 스택 · 탭러시</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>
@@ -833,6 +857,7 @@ function renderGames(): string {
         <canvas id="arcade-canvas" width="360" height="440"></canvas>
       </div>
       ${controls}
+      <button type="button" class="ghost-btn arcade-refresh-btn" data-action="hard-refresh">게임이 안 보이면 · 앱 새로고침</button>
     </section>
   `
 }
@@ -1644,7 +1669,8 @@ function renderSettings(): string {
       <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
-      <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다.</p>
+      <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
+      <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다. 새 게임이 안 보이면 앱 캐시 새로고침을 누르세요.</p>
     </section>
   `
 }
@@ -2554,9 +2580,35 @@ function bind(): void {
     showFlash('대화 기록을 삭제했습니다.')
     render()
   })
+  document.querySelectorAll('[data-action="hard-refresh"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showFlash('앱을 새로고침합니다…')
+      void hardRefreshApp()
+    })
+  })
 }
 
 function boot(): void {
+  registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      void hardRefreshApp()
+    },
+    onRegisteredSW(_url, reg) {
+      if (!reg) return
+      void reg.update()
+      window.setInterval(() => void reg.update(), 60_000)
+    },
+  })
+  const seen = localStorage.getItem(SEEN_APP_VERSION_KEY)
+  if (seen && seen !== APP_VERSION) {
+    // Old build lingered; clear SW caches once when version changes.
+    void hardRefreshApp()
+    return
+  }
+  localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
+  sessionStorage.removeItem('jarvis.refreshing')
+
   state.messages = loadChat()
   state.settings = loadSettings()
   captureInviteFromUrl()

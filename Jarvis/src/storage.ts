@@ -45,6 +45,9 @@ const defaultSettings: JarvisSettings = {
   apiBase: 'https://api.openai.com/v1',
   model: 'gpt-4o-mini',
   city: '서울',
+  notifyFamilyChat: true,
+  notifyFriendsChat: true,
+  notifyWhileOpen: false,
 }
 
 const defaultProfile: UserProfile = {
@@ -551,7 +554,14 @@ export function deleteSeries(name: string): void {
 }
 
 export function loadSettings(): JarvisSettings {
-  return { ...defaultSettings, ...readJson(KEYS.settings, {}) }
+  const raw = readJson<Partial<JarvisSettings>>(KEYS.settings, {})
+  return {
+    ...defaultSettings,
+    ...raw,
+    notifyFamilyChat: raw.notifyFamilyChat !== false,
+    notifyFriendsChat: raw.notifyFriendsChat !== false,
+    notifyWhileOpen: raw.notifyWhileOpen === true,
+  }
 }
 
 export function saveSettings(settings: JarvisSettings): void {

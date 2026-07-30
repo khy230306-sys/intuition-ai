@@ -216,7 +216,19 @@ export function mergeFamilySnapshot(
   }
 
   const membersMap = new Map<string, FamilyMember>()
-  for (const m of [...local.members, ...remote.members]) membersMap.set(m.id, m)
+  for (const m of [...local.members, ...remote.members]) {
+    const prev = membersMap.get(m.id)
+    if (!prev) {
+      membersMap.set(m.id, m)
+      continue
+    }
+    membersMap.set(m.id, {
+      ...prev,
+      name: m.name || prev.name,
+      joinedAt: Math.min(prev.joinedAt || m.joinedAt, m.joinedAt || prev.joinedAt),
+      push: m.push != null ? m.push : prev.push,
+    })
+  }
 
   return {
     ...local,
@@ -239,7 +251,15 @@ export function mergeFamilySnapshot(
 export function upsertMember(room: FamilyRoom, member: FamilyMember): FamilyRoom {
   const exists = room.members.some((m) => m.id === member.id)
   room.members = exists
-    ? room.members.map((m) => (m.id === member.id ? { ...m, name: member.name } : m))
+    ? room.members.map((m) =>
+        m.id === member.id
+          ? {
+              ...m,
+              name: member.name || m.name,
+              push: member.push !== undefined ? member.push : m.push,
+            }
+          : m,
+      )
     : [...room.members, member]
   return room
 }

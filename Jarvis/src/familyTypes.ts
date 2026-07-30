@@ -1,9 +1,17 @@
 /** Family space models — shared chat, notices, schedule. */
 
+export type PushSubJson = {
+  endpoint: string
+  expirationTime?: number | null
+  keys: { p256dh: string; auth: string }
+}
+
 export type FamilyMember = {
   id: string
   name: string
   joinedAt: number
+  /** Web Push subscription for background chat alerts */
+  push?: PushSubJson | null
 }
 
 export type FamilyChatMsg = {

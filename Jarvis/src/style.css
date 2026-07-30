@@ -489,6 +489,14 @@ body {
   color: var(--cyan-bright);
 }
 
+.subsection-title {
+  margin: 12px 0 0;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
 .hint {
   margin: 0;
   color: var(--muted);

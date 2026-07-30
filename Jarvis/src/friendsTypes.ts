@@ -1,9 +1,16 @@
 /** Friends space models — friends chat, notices, schedule — separate from family. */
 
+export type PushSubJson = {
+  endpoint: string
+  expirationTime?: number | null
+  keys: { p256dh: string; auth: string }
+}
+
 export type FriendsMember = {
   id: string
   name: string
   joinedAt: number
+  push?: PushSubJson | null
 }
 
 export type FriendsChatMsg = {

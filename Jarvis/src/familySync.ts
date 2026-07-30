@@ -79,6 +79,16 @@ function applyPacket(packet: FamilySyncPacket): void {
     if (!local.messages.some((m) => m.id === packet.message.id)) {
       local.messages.push(packet.message)
       saveFamilyRoom(local)
+      if (packet.message.authorId !== local.memberId) {
+        void import('./chatNotify').then((m) =>
+          m.showChatNotification({
+            kind: 'family',
+            title: `가족 · ${packet.message.authorName}`,
+            body: packet.message.text,
+            tag: `family-${packet.message.id}`,
+          }),
+        )
+      }
     }
     return
   }
@@ -130,9 +140,19 @@ async function send(packet: FamilySyncPacket): Promise<void> {
 async function announceSelf(): Promise<void> {
   const current = loadFamilyRoom()
   if (!current || !syncAction) return
+  const { loadStoredPushSubscription } = await import('./chatNotify')
+  const push = loadStoredPushSubscription()
+  const member = {
+    id: current.memberId,
+    name: current.memberName,
+    joinedAt: Date.now(),
+    push,
+  }
+  upsertMember(current, member)
+  saveFamilyRoom(current)
   await send({
     type: 'hello',
-    member: { id: current.memberId, name: current.memberName, joinedAt: Date.now() },
+    member,
     roomName: current.name,
     updatedAt: current.updatedAt,
   })
@@ -160,8 +180,27 @@ function startWatchdogs(): void {
   }, 4_000)
 }
 
+async function fanoutChatPush(message: {
+  id: string
+  authorId: string
+  authorName: string
+  text: string
+}): Promise<void> {
+  const room = loadFamilyRoom()
+  if (!room) return
+  const subs = room.members.filter((m) => m.id !== room.memberId).map((m) => m.push)
+  const { pushChatToSubscriptions } = await import('./chatNotify')
+  await pushChatToSubscriptions(subs, {
+    kind: 'family',
+    title: `가족 · ${message.authorName}`,
+    body: message.text,
+    tag: `family-${message.id}`,
+  })
+}
+
 export async function broadcastFamilyPacket(packet: FamilySyncPacket): Promise<void> {
   await send(packet)
+  if (packet.type === 'chat') void fanoutChatPush(packet.message)
 }
 
 export async function connectFamilySync(): Promise<{ ok: boolean; message: string }> {

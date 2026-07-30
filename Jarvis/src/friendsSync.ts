@@ -79,6 +79,16 @@ function applyPacket(packet: FriendsSyncPacket): void {
     if (!local.messages.some((m) => m.id === packet.message.id)) {
       local.messages.push(packet.message)
       saveFriendsRoom(local)
+      if (packet.message.authorId !== local.memberId) {
+        void import('./chatNotify').then((m) =>
+          m.showChatNotification({
+            kind: 'friends',
+            title: `친구 · ${packet.message.authorName}`,
+            body: packet.message.text,
+            tag: `friends-${packet.message.id}`,
+          }),
+        )
+      }
     }
     return
   }
@@ -130,9 +140,19 @@ async function send(packet: FriendsSyncPacket): Promise<void> {
 async function announceSelf(): Promise<void> {
   const current = loadFriendsRoom()
   if (!current || !syncAction) return
+  const { loadStoredPushSubscription } = await import('./chatNotify')
+  const push = loadStoredPushSubscription()
+  const member = {
+    id: current.memberId,
+    name: current.memberName,
+    joinedAt: Date.now(),
+    push,
+  }
+  upsertMember(current, member)
+  saveFriendsRoom(current)
   await send({
     type: 'hello',
-    member: { id: current.memberId, name: current.memberName, joinedAt: Date.now() },
+    member,
     roomName: current.name,
     updatedAt: current.updatedAt,
   })
@@ -160,8 +180,27 @@ function startWatchdogs(): void {
   }, 4_000)
 }
 
+async function fanoutChatPush(message: {
+  id: string
+  authorId: string
+  authorName: string
+  text: string
+}): Promise<void> {
+  const room = loadFriendsRoom()
+  if (!room) return
+  const subs = room.members.filter((m) => m.id !== room.memberId).map((m) => m.push)
+  const { pushChatToSubscriptions } = await import('./chatNotify')
+  await pushChatToSubscriptions(subs, {
+    kind: 'friends',
+    title: `친구 · ${message.authorName}`,
+    body: message.text,
+    tag: `friends-${message.id}`,
+  })
+}
+
 export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise<void> {
   await send(packet)
+  if (packet.type === 'chat') void fanoutChatPush(packet.message)
 }
 
 export async function connectFriendsSync(): Promise<{ ok: boolean; message: string }> {

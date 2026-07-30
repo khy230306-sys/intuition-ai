@@ -124,6 +124,12 @@ export interface JarvisSettings {
   apiBase: string
   model: string
   city: string
+  /** OS alert when family chat arrives (default on). */
+  notifyFamilyChat?: boolean
+  /** OS alert when friends chat arrives (default on). */
+  notifyFriendsChat?: boolean
+  /** Also banner while the matching tab is open/focused (default off). */
+  notifyWhileOpen?: boolean
 }
 
 export interface ActionResult {

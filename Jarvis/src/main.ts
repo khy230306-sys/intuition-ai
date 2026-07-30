@@ -130,7 +130,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.5'
+const APP_VERSION = '1.7.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -370,6 +370,22 @@ function captureInviteFromUrl(): void {
   try {
     const cleaned = stripInviteParamsFromUrl(window.location.href)
     window.history.replaceState({}, '', cleaned)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Open family/friends from notification click (?view=family|friends). */
+function captureViewFromUrl(): void {
+  try {
+    const u = new URL(window.location.href)
+    const v = u.searchParams.get('view')
+    if (v === 'family' || v === 'friends' || v === 'chat' || v === 'settings') {
+      state.view = v
+      u.searchParams.delete('view')
+      const q = u.searchParams.toString()
+      window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+    }
   } catch {
     /* ignore */
   }
@@ -1750,6 +1766,14 @@ function renderActions(): string {
 
 function renderSettings(): string {
   const s = state.settings
+  const pushPerm =
+    typeof Notification === 'undefined'
+      ? '미지원'
+      : Notification.permission === 'granted'
+        ? '허용됨'
+        : Notification.permission === 'denied'
+          ? '차단됨'
+          : '미요청'
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">SETTINGS</h2>
@@ -1764,6 +1788,21 @@ function renderSettings(): string {
           <span>답변 읽어주기</span>
           <input type="checkbox" name="speakReplies" ${s.speakReplies ? 'checked' : ''} />
         </div>
+        <h3 class="subsection-title">채팅 알림</h3>
+        <div class="toggle-row">
+          <span>가족 대화 알림</span>
+          <input type="checkbox" name="notifyFamilyChat" ${s.notifyFamilyChat !== false ? 'checked' : ''} />
+        </div>
+        <div class="toggle-row">
+          <span>친구 대화 알림</span>
+          <input type="checkbox" name="notifyFriendsChat" ${s.notifyFriendsChat !== false ? 'checked' : ''} />
+        </div>
+        <div class="toggle-row">
+          <span>해당 탭을 보고 있을 때도 알림</span>
+          <input type="checkbox" name="notifyWhileOpen" ${s.notifyWhileOpen ? 'checked' : ''} />
+        </div>
+        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 앱을 쓰지 않을 때(백그라운드) 알림은 iPhone에서 <strong>홈 화면에 추가</strong>한 PWA + 아래 버튼으로 푸시를 켜야 합니다.</p>
+        <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <label>OpenAI API Key (심화 분석용)
           <input name="apiKey" type="password" value="${escapeAttr(s.apiKey)}" placeholder="sk-..." autocomplete="off" />
         </label>
@@ -1818,6 +1857,7 @@ function render(): void {
                   ? renderActions()
                   : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
+  document.body.dataset.jarvisView = state.view
   bind()
   if (state.view === 'games') {
     // remount after DOM ready
@@ -1859,6 +1899,21 @@ async function ensureFriendsSyncOnce(): Promise<void> {
   }
 }
 
+/** Keep MQTT/WebRTC alive for chat alerts even when not on family/friends tab. */
+async function bootSpaceSyncAndPush(): Promise<void> {
+  const s = loadSettings()
+  if (s.notifyFamilyChat !== false || s.notifyFriendsChat !== false) {
+    try {
+      const { subscribeChatPush } = await import('./chatNotify')
+      await subscribeChatPush()
+    } catch {
+      /* permission may be default until user taps settings */
+    }
+  }
+  if (loadFamilyRoom()) await ensureFamilySyncOnce()
+  if (loadFriendsRoom()) await ensureFriendsSyncOnce()
+}
+
 function bindLocationGate(): void {
   document.querySelector('[data-action="allow-location"]')?.addEventListener('click', () => {
     void ensureLocation(true)
@@ -1871,6 +1926,7 @@ function bindLocationGate(): void {
     applyPendingInvite()
     showFlash('오프라인 모드로 시작합니다. 날씨·위치 기능은 제한됩니다.')
     render()
+    void bootSpaceSyncAndPush()
   })
   document.querySelector('[data-action="accept-invite-start"]')?.addEventListener('click', () => {
     state.locationSkipped = true
@@ -1880,6 +1936,7 @@ function bindLocationGate(): void {
     const invited = applyPendingInvite()
     showFlash(invited ? '초대 참여로 시작합니다.' : '초대를 처리하지 못했습니다. 가족/친구 탭에서 코드를 붙여넣으세요.')
     render()
+    void bootSpaceSyncAndPush()
   })
 }
 
@@ -1906,6 +1963,7 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
     if (interactive && !invited) showFlash('위치 허용 완료')
     render()
     void refreshWeather()
+    void bootSpaceSyncAndPush()
     return true
   } catch (err) {
     state.locationReady = false
@@ -2648,11 +2706,56 @@ function bind(): void {
       apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
       model: String(fd.get('model') || 'gpt-4o-mini').trim(),
       city: String(fd.get('city') || '서울').trim() || '서울',
+      notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
+      notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
+      notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
     }
     state.settings = next
     saveSettings(next)
+    if (next.notifyFamilyChat || next.notifyFriendsChat) {
+      void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
+        if (sub) {
+          familySyncBooted = false
+          friendsSyncBooted = false
+          void bootSpaceSyncAndPush()
+        }
+      })
+    }
     showFlash('설정을 저장했습니다.')
     render()
+  })
+
+  document.querySelector('[data-action="enable-chat-push"]')?.addEventListener('click', () => {
+    void (async () => {
+      const m = await import('./chatNotify')
+      const perm = await m.ensureChatNotificationPermission()
+      if (perm !== 'granted') {
+        showFlash(
+          perm === 'denied'
+            ? '알림이 차단되어 있습니다. iPhone 설정 → JARVIS(또는 Safari) → 알림을 켜 주세요.'
+            : '알림 권한을 허용해 주세요.',
+        )
+        render()
+        return
+      }
+      const sub = await m.subscribeChatPush()
+      if (!sub) {
+        showFlash('푸시 구독에 실패했습니다. 홈 화면에 추가한 앱에서 다시 시도해 주세요.')
+        render()
+        return
+      }
+      state.settings = {
+        ...state.settings,
+        notifyFamilyChat: state.settings.notifyFamilyChat !== false,
+        notifyFriendsChat: state.settings.notifyFriendsChat !== false,
+      }
+      saveSettings(state.settings)
+      familySyncBooted = false
+      friendsSyncBooted = false
+      await bootSpaceSyncAndPush()
+      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다.')
+      render()
+    })()
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
@@ -2818,6 +2921,7 @@ function boot(): void {
 
   state.messages = loadChat()
   state.settings = loadSettings()
+  captureViewFromUrl()
   captureInviteFromUrl()
   refreshInstallHint()
   registerShareModal(openShareModal)
@@ -2885,7 +2989,7 @@ function boot(): void {
       const ok = await ensureLocation(false)
       if (ok) {
         void refreshWeather()
-        // ensureLocation already applies pending invite + render
+        // ensureLocation already applies pending invite + render + space sync/push
       } else {
         render()
       }

@@ -723,14 +723,14 @@ export async function think(
   if (/^퐁$|핑퐁|pong/i.test(text) && text.length < 24) {
     return { text: '퐁 아케이드를 엽니다.', speak: true, view: 'games', arcadeId: 'pong' }
   }
-  if (/지그재그|zigzag/i.test(text) && text.length < 24) {
-    return { text: '지그재그 아케이드를 엽니다. 탭으로 방향을 바꾸세요.', speak: true, view: 'games', arcadeId: 'zigzag' }
+  if (/과일\s*받|캐치|catch/i.test(text) && text.length < 24) {
+    return { text: '과일받기 아케이드를 엽니다. 바가지로 과일을 받으세요. 폭탄은 피하세요.', speak: true, view: 'games', arcadeId: 'catch' }
   }
-  if (/스택|쌓기|stack/i.test(text) && text.length < 24) {
-    return { text: '스택 아케이드를 엽니다. 타이밍에 맞춰 쌓으세요.', speak: true, view: 'games', arcadeId: 'stack' }
+  if (/두더지|mole|두더지\s*잡/i.test(text) && text.length < 24) {
+    return { text: '두더지 잡기를 엽니다. 올라온 두더지를 탭하세요.', speak: true, view: 'games', arcadeId: 'mole' }
   }
-  if (/탭\s*러시|탭러시|taprush|타겟\s*탭/i.test(text) && text.length < 24) {
-    return { text: '탭러시 아케이드를 엽니다. 빛나는 타겟을 연속 탭하세요.', speak: true, view: 'games', arcadeId: 'taprush' }
+  if (/차\s*피하|레인|lanes|차선/i.test(text) && text.length < 24) {
+    return { text: '차피하기 아케이드를 엽니다. 좌우로 차선을 바꿔 차를 피하세요.', speak: true, view: 'games', arcadeId: 'lanes' }
   }
   if (/게임\s*순위|아케이드\s*순위|점수\s*순위|친구\s*순위|랭킹/.test(text)) {
     return {

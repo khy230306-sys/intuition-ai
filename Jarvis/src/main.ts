@@ -125,7 +125,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.7.2'
+const APP_VERSION = '1.7.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 
 async function hardRefreshApp(): Promise<void> {
@@ -822,7 +822,7 @@ function renderGames(): string {
   const meta = ARCADE_META[state.arcadeId]
   const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
     .map((id) => {
-      const neu = id === 'zigzag' || id === 'stack' || id === 'taprush'
+      const neu = id === 'catch' || id === 'mole' || id === 'lanes'
       return `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}${neu ? ' is-new' : ''}" data-arcade="${id}">${ARCADE_META[id].title}${neu ? '<span class="game-tab-new">NEW</span>' : ''}</button>`
     })
     .join('')
@@ -831,12 +831,12 @@ function renderGames(): string {
   const controls =
     state.arcadeId === 'flappy'
       ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'zigzag'
-        ? `<p class="game-meta">탭으로 좌↔우 방향 전환 · 길에서 떨어지면 끝 · 게임오버 시 화면 탭</p>`
-        : state.arcadeId === 'stack'
-          ? `<p class="game-meta">타이밍에 탭해서 블록 쌓기 · 완벽 정렬 +2 · 게임오버 시 화면 탭</p>`
-          : state.arcadeId === 'taprush'
-            ? `<p class="game-meta">빛나는 타겟 탭 · 콤보·생명 관리 · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'catch'
+        ? `<p class="game-meta">좌우로 바가지 이동 · 빨간 과일 받기 · 폭탄/놓치면 생명 감소 · 게임오버 시 화면 탭</p>`
+        : state.arcadeId === 'mole'
+          ? `<p class="game-meta">올라온 두더지를 탭 · 3번 놓치면 끝 · 게임오버 시 화면 탭</p>`
+          : state.arcadeId === 'lanes'
+            ? `<p class="game-meta">화면 좌우 탭/스와이프로 차선 변경 · 빨간 차 피하기 · 게임오버 시 화면 탭</p>`
             : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
               ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
               : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
@@ -845,7 +845,7 @@ function renderGames(): string {
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
       <p class="hint">오프라인 아케이드 · 8종 · v${APP_VERSION}</p>
-      <p class="hint arcade-new-hint">새 게임 · 지그재그 · 스택 · 탭러시</p>
+      <p class="hint arcade-new-hint">새 게임 · 과일받기 · 두더지 · 차피하기</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>

@@ -129,6 +129,121 @@ function errorMessage(code: string): string | null {
   }
 }
 
+function compactKo(s: string): string {
+  return s.replace(/\s+/g, '')
+}
+
+/** Longest suffix of `a` that equals a prefix of `b` (compact strings). */
+function longestSuffixPrefixOverlap(a: string, b: string): number {
+  const max = Math.min(a.length, b.length)
+  for (let len = max; len >= 1; len--) {
+    if (a.slice(-len) === b.slice(0, len)) return len
+  }
+  return 0
+}
+
+function sharedCharRatio(a: string, b: string): number {
+  if (!a || !b) return 0
+  const counts = new Map<string, number>()
+  for (const ch of a) counts.set(ch, (counts.get(ch) || 0) + 1)
+  let shared = 0
+  for (const ch of b) {
+    const n = counts.get(ch) || 0
+    if (n > 0) {
+      shared += 1
+      counts.set(ch, n - 1)
+    }
+  }
+  return shared / Math.min(a.length, b.length)
+}
+
+/**
+ * Safari continuous STT often emits progressive *rewrites* as separate finals
+ * ("오늘" → "오늘 날씨" → "오늘 날씨 알려줘"). Appending those causes stutter.
+ * Merge by replace/keep when hypotheses overlap; append only for a new clause.
+ */
+export function mergeUtteranceFinals(finals: string[], piece: string): string[] {
+  const next = piece.replace(/\s+/g, ' ').trim()
+  if (!next) return finals
+  if (finals.length === 0) return [next]
+
+  const last = finals[finals.length - 1] ?? ''
+  const lastC = compactKo(last)
+  const nextC = compactKo(next)
+  if (!nextC) return finals
+  if (nextC === lastC) return finals
+  // Progressive rewrite of the latest final chunk
+  if (nextC.startsWith(lastC)) return [...finals.slice(0, -1), next]
+  if (lastC.startsWith(nextC)) return finals
+
+  const joined = finals.join(' ').replace(/\s+/g, ' ').trim()
+  const joinedC = compactKo(joined)
+  if (nextC === joinedC) return finals
+  if (nextC.startsWith(joinedC)) return [next]
+  if (joinedC.startsWith(nextC)) return finals
+
+  const overlap = longestSuffixPrefixOverlap(joinedC, nextC)
+  const minLen = Math.min(joinedC.length, nextC.length)
+  if (minLen > 0 && overlap / minLen >= 0.5) {
+    return nextC.length >= joinedC.length ? [next] : finals
+  }
+  if (sharedCharRatio(joinedC, nextC) >= 0.7) {
+    return nextC.length >= joinedC.length ? [next] : finals
+  }
+
+  return [...finals, next]
+}
+
+/**
+ * Collapse leftover STT stutter: "오늘 날씨 오늘 날씨 알려줘" → "오늘 날씨 알려줘".
+ */
+export function collapseStutteredTranscript(text: string): string {
+  let s = text.replace(/\s+/g, ' ').trim()
+  if (!s) return s
+
+  // Hangul run repeats: 확인확인 → 확인
+  s = s.replace(/([\uac00-\ud7a3]{2,24})\1+/g, '$1')
+
+  let tokens = s.split(' ').filter(Boolean)
+  for (let win = Math.min(8, Math.floor(tokens.length / 2)); win >= 1; win--) {
+    const out: string[] = []
+    let i = 0
+    while (i < tokens.length) {
+      if (i + 2 * win <= tokens.length) {
+        const a = tokens.slice(i, i + win).join(' ')
+        const b = tokens.slice(i + win, i + 2 * win).join(' ')
+        if (a === b) {
+          out.push(...tokens.slice(i, i + win))
+          i += 2 * win
+          while (i + win <= tokens.length && tokens.slice(i, i + win).join(' ') === a) {
+            i += win
+          }
+          continue
+        }
+      }
+      out.push(tokens[i]!)
+      i += 1
+    }
+    tokens = out
+  }
+  s = tokens.join(' ')
+
+  // Still heavily stuttered (same token 3+ times): prefer the longest clean-ish suffix
+  const freq = new Map<string, number>()
+  for (const t of tokens) freq.set(t, (freq.get(t) || 0) + 1)
+  const maxFreq = tokens.length ? Math.max(...freq.values()) : 0
+  if (maxFreq >= 3 && tokens.length > 6) {
+    for (let start = 1; start < tokens.length - 1; start++) {
+      const slice = tokens.slice(start)
+      const f = new Map<string, number>()
+      for (const t of slice) f.set(t, (f.get(t) || 0) + 1)
+      const mf = Math.max(...f.values())
+      if (mf <= 2) return slice.join(' ')
+    }
+  }
+  return s
+}
+
 /**
  * Patient voice session for iPhone Safari.
  * Safari often emits "final" chunks mid-sentence — we accumulate and only
@@ -265,9 +380,15 @@ export class VoiceListener {
   }
 
   private compose(interim: string): string {
-    const base = this.finals.join(' ').trim()
+    const base = this.finals.join(' ').replace(/\s+/g, ' ').trim()
     if (!interim) return base
-    return `${base} ${interim}`.trim()
+    const interimC = compactKo(interim)
+    const baseC = compactKo(base)
+    // Live rewrite often restates the whole utterance as interim
+    if (baseC && interimC && (interimC.startsWith(baseC) || sharedCharRatio(baseC, interimC) >= 0.75)) {
+      return interim.replace(/\s+/g, ' ').trim()
+    }
+    return `${base} ${interim}`.replace(/\s+/g, ' ').trim()
   }
 
   private markActivity(): void {
@@ -293,7 +414,7 @@ export class VoiceListener {
   private finishWith(text: string): void {
     if (this.finishing) return
     this.finishing = true
-    const cleaned = text.replace(/\s+/g, ' ').trim()
+    const cleaned = collapseStutteredTranscript(text.replace(/\s+/g, ' ').trim())
     this.wanted = false
     this.clearTimers()
     if (this.recognition) {
@@ -359,9 +480,7 @@ export class VoiceListener {
         if (!piece) continue
         this.heardSpeech = true
         if (result.isFinal) {
-          // Avoid duplicating the same final chunk
-          const last = this.finals[this.finals.length - 1]
-          if (piece !== last) this.finals.push(piece)
+          this.finals = mergeUtteranceFinals(this.finals, piece)
           gotFinal = true
         } else {
           interim = piece

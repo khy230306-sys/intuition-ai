@@ -4,6 +4,8 @@ import {
   VoiceListener,
   __setRecognitionCtorForTests,
   canListen,
+  collapseStutteredTranscript,
+  mergeUtteranceFinals,
   probeVoiceSupport,
 } from './voice'
 
@@ -161,5 +163,62 @@ describe('VoiceListener patient mode', () => {
     })
     lastFake!.emitError('not-allowed')
     expect(err).toContain('마이크 권한')
+  })
+
+  it('merges progressive Safari rewrites instead of concatenating', () => {
+    const listener = new VoiceListener()
+    listener.silenceMs = 1500
+    let finalText = ''
+    listener.start({
+      onFinal: (t) => {
+        finalText = t
+      },
+    })
+    lastFake!.onspeechstart?.()
+    lastFake!.emitFinal('오늘')
+    lastFake!.emitFinal('오늘 날씨')
+    lastFake!.emitFinal('오늘 날씨 알려줘')
+    vi.advanceTimersByTime(1600)
+    expect(finalText).toBe('오늘 날씨 알려줘')
+  })
+
+  it('collapses stuttered finals from overlapping hypotheses', () => {
+    const listener = new VoiceListener()
+    listener.silenceMs = 1500
+    let finalText = ''
+    listener.start({
+      onFinal: (t) => {
+        finalText = t
+      },
+    })
+    lastFake!.onspeechstart?.()
+    lastFake!.emitFinal('오늘 날씨 확인')
+    lastFake!.emitFinal('오늘 확인 날씨 알려줘')
+    vi.advanceTimersByTime(1600)
+    expect(finalText).toBe('오늘 확인 날씨 알려줘')
+  })
+})
+
+describe('mergeUtteranceFinals / collapseStutteredTranscript', () => {
+  it('replaces growing rewrites', () => {
+    expect(mergeUtteranceFinals([], '오늘')).toEqual(['오늘'])
+    expect(mergeUtteranceFinals(['오늘'], '오늘 날씨')).toEqual(['오늘 날씨'])
+    expect(mergeUtteranceFinals(['오늘 날씨'], '오늘 날씨 알려줘')).toEqual(['오늘 날씨 알려줘'])
+  })
+
+  it('appends distinct clauses', () => {
+    expect(mergeUtteranceFinals(['안녕하세요'], '만나서 반가워요')).toEqual([
+      '안녕하세요',
+      '만나서 반가워요',
+    ])
+  })
+
+  it('collapses repeated token phrases', () => {
+    expect(
+      collapseStutteredTranscript(
+        '오늘 날씨 확인 오늘 확인 날씨 오늘 확인 날씨 알려줘 오늘 확인 날씨 알려 줘',
+      ),
+    ).toMatch(/날씨/)
+    expect(collapseStutteredTranscript('오늘 날씨 오늘 날씨 알려줘')).toBe('오늘 날씨 알려줘')
   })
 })

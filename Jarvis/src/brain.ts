@@ -86,6 +86,7 @@ import {
 } from './friendsStore'
 import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
+import { formatWeatherLine, loadCachedWeather } from './weather'
 
 function helpText(name: string): string {
   return [
@@ -935,7 +936,22 @@ export async function think(
 
   const weatherMatch = text.match(/^(?:날씨)\s*(.*)$/i) || text.match(/^(.+?)\s*날씨$/i)
   if (weatherMatch || /날씨/.test(text)) {
-    const city = weatherMatch?.[1]?.trim() || settings.city || ''
+    const rawCity = weatherMatch?.[1]?.trim() || settings.city || ''
+    // Strip filler from STT like "오늘 … 알려줘"
+    const city = rawCity
+      .replace(/^(오늘|내일|모레)\s*/u, '')
+      .replace(/\s*(알려줘|알려|어때|확인해?|확인|좀|주세요)\s*$/u, '')
+      .trim()
+    const cached = loadCachedWeather()
+    if (cached) {
+      const place = city || cached.place || '현재 위치'
+      const line = formatWeatherLine(cached)
+      return {
+        text: `${place} 날씨예요. ${line}`,
+        speak: true,
+        action: () => openWeather(city || cached.place),
+      }
+    }
     return {
       text: city ? `${city} 날씨를 확인합니다.` : '날씨를 엽니다.',
       speak: true,

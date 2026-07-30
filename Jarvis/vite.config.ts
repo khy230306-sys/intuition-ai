@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const rootDir = dirname(fileURLToPath(import.meta.url))
+const APP_VERSION = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')).version as string
 
 export default defineConfig({
   base: './',
@@ -19,6 +25,12 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
   },
   plugins: [
+    {
+      name: 'jarvis-version-html',
+      transformIndexHtml(html) {
+        return html.replaceAll('%APP_VERSION%', APP_VERSION)
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'favicon.svg', 'splash.svg', 'quote-snapshot.json'],

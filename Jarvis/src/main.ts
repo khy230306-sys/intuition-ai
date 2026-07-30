@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.4'
+const APP_VERSION = '1.8.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -146,7 +146,15 @@ async function hardRefreshApp(): Promise<void> {
   try {
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(regs.map((r) => r.unregister()))
+      await Promise.all(
+        regs.map(async (r) => {
+          try {
+            await r.unregister()
+          } catch {
+            /* ignore */
+          }
+        }),
+      )
     }
     if ('caches' in window) {
       const keys = await caches.keys()
@@ -155,9 +163,16 @@ async function hardRefreshApp(): Promise<void> {
   } catch {
     /* still reload */
   }
+  // Force next boot to accept the new build even if an old SW served this page
   localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
   const url = new URL(window.location.href)
   url.searchParams.set('_v', APP_VERSION)
+  url.searchParams.set('_t', String(Date.now()))
+  // Prefer the locked production host if user somehow opened a snapshot URL
+  if (/\.shipstatic\.com$/i.test(url.hostname) && url.hostname !== 'jarvis-app.shipstatic.com') {
+    window.location.replace(`https://jarvis-app.shipstatic.com/?_v=${APP_VERSION}&_t=${Date.now()}`)
+    return
+  }
   window.location.replace(url.toString())
 }
 
@@ -737,6 +752,15 @@ async function handleUserText(raw: string): Promise<void> {
     const reply = await think(text, history.slice(0, -1))
     if (gen !== thinkGen || timedOut) return
     window.clearTimeout(timeoutId)
+    if (reply.clearChat) {
+      clearChat()
+      state.messages = []
+      pushMsg('assistant', reply.text)
+      if (reply.speak !== false && state.settings.speakReplies) {
+        void speakAsync(reply.text, reply.speakLang || 'ko-KR')
+      }
+      return
+    }
     if (reply.action) {
       const result = await Promise.race([
         Promise.resolve(reply.action()),

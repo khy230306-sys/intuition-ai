@@ -107,6 +107,7 @@ function helpText(name: string): string {
     '예시',
     '• 오늘 날씨 알려줘 / 서울 날씨 / 우산 챙길까',
     '• 브리핑 / 오늘 뭐하지 / 지금 몇 시야',
+    '• 대화 삭제해줘 / 채팅 삭제',
     '• 가족 공간 / 가족 공지 / 가족 일정',
     '• 친구 공간 / 친구 공지 / 친구 일정',
     '• 앱 공유 / QR / 백업 공유',
@@ -765,6 +766,13 @@ export async function think(
   }
   if (everyday?.kind === 'help') {
     return { text: helpText(name), speak: true }
+  }
+  if (everyday?.kind === 'clearChat') {
+    return {
+      text: '대화 기록을 삭제했습니다.',
+      speak: true,
+      clearChat: true,
+    }
   }
   if (everyday?.kind === 'location') {
     try {

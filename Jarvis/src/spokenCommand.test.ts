@@ -23,11 +23,13 @@ describe('spokenCommand', () => {
     expect(detectEverydayIntent('부산 날씨 어때')).toMatchObject({ city: '부산' })
   })
 
-  it('detects time / briefing / location', () => {
+  it('detects time / briefing / location / clear chat', () => {
     expect(detectEverydayIntent('지금 몇 시야')?.kind).toBe('time')
     expect(detectEverydayIntent('브리핑')?.kind).toBe('briefing')
     expect(detectEverydayIntent('내 위치')?.kind).toBe('location')
     expect(detectEverydayIntent('도움말')?.kind).toBe('help')
+    expect(detectEverydayIntent('대화삭제해줘')?.kind).toBe('clearChat')
+    expect(detectEverydayIntent('채팅 삭제')?.kind).toBe('clearChat')
   })
 
   it('flags STT garbage and scores similar seeds', () => {

@@ -14,7 +14,7 @@
  *   npm run deploy:web
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -148,6 +148,36 @@ function pruneOldDeployments() {
   }
 }
 
+function buildFreshDist() {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  console.log(`Building fresh dist for v${pkg.version}…`)
+  const res = spawnSync('npm', ['run', 'build'], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: 'inherit',
+  })
+  if (res.status !== 0) {
+    throw new Error('npm run build failed — aborting deploy so stale dist is never uploaded')
+  }
+  if (!existsSync(join(dist, 'index.html'))) {
+    throw new Error('dist/index.html missing after build')
+  }
+  const assetsDir = join(dist, 'assets')
+  const jsName = readdirSync(assetsDir).find((f) => /^index-.*\.js$/.test(f))
+  if (!jsName) throw new Error('dist assets index-*.js missing after build')
+  const js = readFileSync(join(assetsDir, jsName), 'utf8')
+  const html = readFileSync(join(dist, 'index.html'), 'utf8')
+  if (!js.includes(pkg.version)) {
+    throw new Error(
+      `Built bundle ${jsName} does not contain APP_VERSION ${pkg.version} — refusing to deploy stale/wrong build`,
+    )
+  }
+  if (!html.includes(pkg.version) && !html.includes(`jarvis-version`)) {
+    console.warn(`[warn] index.html has no version meta; bundle OK (${pkg.version})`)
+  }
+  console.log(`Build OK: ${jsName} contains v${pkg.version}`)
+}
+
 async function main() {
   if (!apiKey) {
     console.error(`
@@ -157,10 +187,7 @@ SHIP_API_KEY 가 없습니다.
     process.exit(1)
   }
 
-  if (!existsSync(join(dist, 'index.html'))) {
-    console.error('dist/ 없음 — 먼저 npm run build')
-    process.exit(1)
-  }
+  buildFreshDist()
 
   console.log(`Fixed public URL: https://${domainHost}`)
   console.log('Checking ShipStatic free-plan snapshot room…')

@@ -1,6 +1,14 @@
 /** Offline arcade games — canvas, no network. Level-up progression. */
 
-export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
+export type ArcadeId =
+  | 'breakout'
+  | 'shooter'
+  | 'flappy'
+  | 'dodge'
+  | 'pong'
+  | 'zigzag'
+  | 'stack'
+  | 'taprush'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
@@ -8,6 +16,9 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
   dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
+  zigzag: { title: '지그재그', blurb: '탭으로 방향 전환 · 길 위에서 버텨라' },
+  stack: { title: '스택', blurb: '타이밍에 맞춰 쌓기 · 완벽 스택 보너스' },
+  taprush: { title: '탭러시', blurb: '빛나는 타겟을 빠르게 탭 · 콤보 가속' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
@@ -19,6 +30,9 @@ export type ArcadeBest = {
   flappy: number | null
   dodge: number | null
   pong: number | null
+  zigzag: number | null
+  stack: number | null
+  taprush: number | null
 }
 
 export type ArcadeBestLevel = ArcadeBest
@@ -29,6 +43,9 @@ const EMPTY_BEST: ArcadeBest = {
   flappy: null,
   dodge: null,
   pong: null,
+  zigzag: null,
+  stack: null,
+  taprush: null,
 }
 
 export function loadArcadeBest(): ArcadeBest {
@@ -92,6 +109,12 @@ export function unitsPerLevel(id: ArcadeId): number {
       return 8
     case 'pong':
       return 5
+    case 'zigzag':
+      return 10
+    case 'stack':
+      return 5
+    case 'taprush':
+      return 8
   }
 }
 
@@ -1048,6 +1071,488 @@ export function mountPong(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeH
   }
 }
 
+/** —— ZIGZAG —— tap to flip left/right on a winding path */
+export function mountZigzag(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  let w = 320
+  let h = 400
+  const path: Array<{ x: number; half: number }> = []
+  let pathY = 0
+  let ballX = 0.5
+  let dir = 1
+  let speed = 0.9
+  let score = 0
+  let level = 1
+  let levelUpUntil = 0
+  let over = false
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+  const ballY = 0.72
+
+  function pushSeg(prevX: number, prevHalf: number): void {
+    const x = Math.max(0.18, Math.min(0.82, prevX + (Math.random() - 0.5) * 0.16))
+    const half = Math.max(0.11, Math.min(0.24, prevHalf + (Math.random() - 0.5) * 0.03))
+    path.push({ x, half })
+  }
+
+  function seedPath(): void {
+    path.length = 0
+    let x = 0.5
+    let half = 0.22
+    for (let i = 0; i < 40; i++) {
+      path.push({ x, half })
+      x = Math.max(0.18, Math.min(0.82, x + (Math.random() - 0.5) * 0.14))
+      half = Math.max(0.11, Math.min(0.24, half + (Math.random() - 0.5) * 0.025))
+    }
+  }
+
+  function reset(): void {
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    seedPath()
+    pathY = 0
+    ballX = 0.5
+    dir = 1
+    speed = 0.9
+    score = 0
+    level = 1
+    levelUpUntil = 0
+    over = false
+    onScore?.(0, level)
+  }
+
+  function finish(): void {
+    if (over) return
+    over = true
+    bumpBest('zigzag', score)
+    bumpBestLevel('zigzag', level)
+  }
+
+  function step(dt: number): void {
+    if (over) return
+    ballX += dir * speed * dt * 0.42
+    pathY += speed * dt * 2.4
+    const nextScore = Math.floor(pathY)
+    if (nextScore > score) {
+      score = nextScore
+      const next = levelFromUnits('zigzag', score)
+      const noted = noteLevel('zigzag', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+      bumpBest('zigzag', score)
+      speed = Math.min(2.1, 0.9 + level * 0.08)
+    }
+    while (pathY >= 1 && path.length > 2) {
+      pathY -= 1
+      path.shift()
+      const last = path[path.length - 1]!
+      pushSeg(last.x, last.half)
+    }
+    const seg = path[Math.floor(pathY)]
+    if (seg && (ballX < seg.x - seg.half || ballX > seg.x + seg.half)) finish()
+    if (ballX < 0.03 || ballX > 0.97) finish()
+  }
+
+  function draw(): void {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    ctx.fillStyle = '#071018'
+    ctx.fillRect(0, 0, w, h)
+    const segH = h * 0.09
+    for (let i = 0; i < path.length; i++) {
+      const seg = path[i]!
+      const y = h - ballY * h - (i - pathY) * segH
+      if (y < -segH || y > h + segH) continue
+      const left = (seg.x - seg.half) * w
+      const ww = seg.half * 2 * w
+      ctx.fillStyle = i % 2 === 0 ? '#1a4a4a' : '#2dd4bf'
+      ctx.fillRect(left, y, ww, segH + 1)
+      ctx.fillStyle = 'rgba(255,255,255,0.08)'
+      ctx.fillRect(left + 3, y + 2, Math.max(0, ww - 6), 3)
+    }
+    const bx = ballX * w
+    const by = ballY * h
+    ctx.fillStyle = '#fbbf24'
+    ctx.beginPath()
+    ctx.arc(bx, by, Math.max(8, w * 0.028), 0, Math.PI * 2)
+    ctx.fill()
+    drawHud(ctx, w, h, score, level, over, 'ZIGZAG', { levelUpUntil })
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    if (!loop.last) loop.last = t
+    const dt = Math.min(0.033, (t - loop.last) / 1000)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (_x, _y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over || type !== 'down') return
+      dir *= -1
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
+/** —— STACK —— timing drops to build a tower */
+export function mountStack(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  let w = 320
+  let h = 400
+  type Block = { x: number; half: number; hue: number }
+  const tower: Block[] = []
+  let mover: Block = { x: 0.2, half: 0.28, hue: 190 }
+  let moverDir = 1
+  let moverSpeed = 0.85
+  let score = 0
+  let level = 1
+  let levelUpUntil = 0
+  let over = false
+  let flash = 0
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+
+  function reset(): void {
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    tower.length = 0
+    tower.push({ x: 0.5, half: 0.28, hue: 190 })
+    mover = { x: 0.15, half: 0.28, hue: 205 }
+    moverDir = 1
+    moverSpeed = 0.85
+    score = 0
+    level = 1
+    levelUpUntil = 0
+    over = false
+    flash = 0
+    onScore?.(0, level)
+  }
+
+  function finish(): void {
+    if (over) return
+    over = true
+    bumpBest('stack', score)
+    bumpBestLevel('stack', level)
+  }
+
+  function drop(): void {
+    if (over) return
+    const base = tower[tower.length - 1]!
+    const left = Math.max(base.x - base.half, mover.x - mover.half)
+    const right = Math.min(base.x + base.half, mover.x + mover.half)
+    const overlap = right - left
+    if (overlap <= 0.018) {
+      finish()
+      return
+    }
+    const perfect = Math.abs(mover.x - base.x) < 0.016
+    const nx = (left + right) / 2
+    const nh = perfect ? mover.half : overlap / 2
+    tower.push({ x: nx, half: nh, hue: (mover.hue + 14) % 360 })
+    if (tower.length > 14) tower.shift()
+    score += perfect ? 2 : 1
+    flash = 1
+    const next = levelFromUnits('stack', score)
+    const noted = noteLevel('stack', level, next, score, onScore)
+    level = noted.level
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+    bumpBest('stack', score)
+    moverSpeed = Math.min(2.0, 0.85 + level * 0.09)
+    mover = {
+      x: moverDir > 0 ? 0.1 : 0.9,
+      half: nh,
+      hue: (mover.hue + 18) % 360,
+    }
+  }
+
+  function step(dt: number): void {
+    flash = Math.max(0, flash - dt * 2.8)
+    if (over) return
+    mover.x += moverDir * moverSpeed * dt * 0.55
+    if (mover.x + mover.half >= 0.98) {
+      mover.x = 0.98 - mover.half
+      moverDir = -1
+    } else if (mover.x - mover.half <= 0.02) {
+      mover.x = 0.02 + mover.half
+      moverDir = 1
+    }
+  }
+
+  function draw(): void {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    ctx.fillStyle = '#0c1929'
+    ctx.fillRect(0, 0, w, h)
+    const blockH = Math.max(16, h * 0.052)
+    const baseY = h * 0.84
+    tower.forEach((b, i) => {
+      const y = baseY - (tower.length - 1 - i) * blockH
+      const left = (b.x - b.half) * w
+      const ww = b.half * 2 * w
+      ctx.fillStyle = `hsl(${b.hue} 70% 48%)`
+      ctx.fillRect(left, y, ww, blockH - 2)
+      ctx.fillStyle = `hsla(${b.hue} 80% 70% / 0.3)`
+      ctx.fillRect(left + 2, y + 2, Math.max(0, ww - 4), 4)
+    })
+    if (!over) {
+      const y = baseY - tower.length * blockH
+      const left = (mover.x - mover.half) * w
+      const ww = mover.half * 2 * w
+      ctx.fillStyle = `hsl(${mover.hue} 85% 55%)`
+      ctx.fillRect(left, y, ww, blockH - 2)
+    }
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${flash * 0.12})`
+      ctx.fillRect(0, 0, w, h)
+    }
+    drawHud(ctx, w, h, score, level, over, 'STACK', { levelUpUntil })
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    if (!loop.last) loop.last = t
+    const dt = Math.min(0.033, (t - loop.last) / 1000)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (_x, _y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over || type !== 'down') return
+      drop()
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
+/** —— TAP RUSH —— hit glowing targets, keep combo alive */
+export function mountTapRush(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  let w = 320
+  let h = 400
+  type Target = { x: number; y: number; r: number; life: number; maxLife: number }
+  const targets: Target[] = []
+  let score = 0
+  let combo = 0
+  let lives = 3
+  let level = 1
+  let levelUpUntil = 0
+  let spawnAcc = 0
+  let over = false
+  let started = false
+  let hitFlash = 0
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+
+  function spawnEvery(): number {
+    return Math.max(0.36, 0.9 - (level - 1) * 0.06)
+  }
+
+  function reset(): void {
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    targets.length = 0
+    score = 0
+    combo = 0
+    lives = 3
+    level = 1
+    levelUpUntil = 0
+    spawnAcc = 0
+    over = false
+    started = false
+    hitFlash = 0
+    onScore?.(0, level)
+  }
+
+  function finish(): void {
+    if (over) return
+    over = true
+    bumpBest('taprush', score)
+    bumpBestLevel('taprush', level)
+  }
+
+  function spawn(): void {
+    const m = 0.14
+    targets.push({
+      x: m + Math.random() * (1 - m * 2),
+      y: m + Math.random() * (1 - m * 2),
+      r: 0.065 + Math.random() * 0.035,
+      life: spawnEvery() * 1.4,
+      maxLife: spawnEvery() * 1.4,
+    })
+  }
+
+  function miss(): void {
+    combo = 0
+    lives -= 1
+    hitFlash = 0.35
+    if (lives <= 0) finish()
+  }
+
+  function tryHit(nx: number, ny: number): void {
+    if (over) return
+    if (!started) {
+      started = true
+      spawn()
+      return
+    }
+    let hit = -1
+    let bestD = Infinity
+    for (let i = 0; i < targets.length; i++) {
+      const t = targets[i]!
+      const d = Math.hypot(nx - t.x, ny - t.y)
+      if (d <= t.r * 1.2 && d < bestD) {
+        bestD = d
+        hit = i
+      }
+    }
+    if (hit < 0) {
+      miss()
+      return
+    }
+    targets.splice(hit, 1)
+    combo += 1
+    score += 1 + Math.floor(combo / 3)
+    hitFlash = 0.2
+    const next = levelFromUnits('taprush', score)
+    const noted = noteLevel('taprush', level, next, score, onScore)
+    level = noted.level
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+    bumpBest('taprush', score)
+  }
+
+  function step(dt: number): void {
+    hitFlash = Math.max(0, hitFlash - dt)
+    if (over || !started) return
+    spawnAcc += dt
+    if (spawnAcc >= spawnEvery() && targets.length < 4) {
+      spawnAcc = 0
+      spawn()
+    }
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i]!
+      t.life -= dt
+      if (t.life <= 0) {
+        targets.splice(i, 1)
+        miss()
+      }
+    }
+  }
+
+  function draw(): void {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    ctx.fillStyle = '#0a0f1a'
+    ctx.fillRect(0, 0, w, h)
+    for (const t of targets) {
+      const px = t.x * w
+      const py = t.y * h
+      const pr = t.r * Math.min(w, h)
+      const lifeRatio = Math.max(0, t.life / t.maxLife)
+      ctx.strokeStyle = `rgba(56,189,248,${0.3 + lifeRatio * 0.55})`
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(px, py, pr * (1.1 + (1 - lifeRatio) * 0.4), 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.fillStyle = '#38bdf8'
+      ctx.beginPath()
+      ctx.arc(px, py, pr, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#e0f2fe'
+      ctx.beginPath()
+      ctx.arc(px - pr * 0.25, py - pr * 0.25, pr * 0.28, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    if (hitFlash > 0) {
+      ctx.fillStyle = `rgba(56,189,248,${hitFlash * 0.18})`
+      ctx.fillRect(0, 0, w, h)
+    }
+    if (!started && !over) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'
+      ctx.font = '600 14px IBM Plex Sans KR, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('탭해서 시작 · 생명 3', w / 2, h * 0.52)
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'
+    ctx.font = '600 11px IBM Plex Sans KR, sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(`♥ ${Math.max(0, lives)}${combo > 1 ? ` · COMBO ${combo}` : ''}`, w - 10, h - 12)
+    drawHud(ctx, w, h, score, level, over, 'TAP RUSH', { levelUpUntil })
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    if (!loop.last) loop.last = t
+    const dt = Math.min(0.033, (t - loop.last) / 1000)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (x, y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over || type !== 'down') return
+      tryHit(x / Math.max(1, w), y / Math.max(1, h))
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
 export function mountArcade(
   id: ArcadeId,
   canvas: HTMLCanvasElement,
@@ -1057,6 +1562,9 @@ export function mountArcade(
   if (id === 'shooter') return mountShooter(canvas, onScore)
   if (id === 'flappy') return mountFlappy(canvas, onScore)
   if (id === 'dodge') return mountDodge(canvas, onScore)
+  if (id === 'zigzag') return mountZigzag(canvas, onScore)
+  if (id === 'stack') return mountStack(canvas, onScore)
+  if (id === 'taprush') return mountTapRush(canvas, onScore)
   return mountPong(canvas, onScore)
 }
 

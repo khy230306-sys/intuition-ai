@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.7.0'
+const APP_VERSION = '1.7.1'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -808,9 +808,15 @@ function renderGames(): string {
   const controls =
     state.arcadeId === 'flappy'
       ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
-        ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
-        : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'zigzag'
+        ? `<p class="game-meta">탭으로 좌↔우 방향 전환 · 길에서 떨어지면 끝 · 게임오버 시 화면 탭</p>`
+        : state.arcadeId === 'stack'
+          ? `<p class="game-meta">타이밍에 탭해서 블록 쌓기 · 완벽 정렬 +2 · 게임오버 시 화면 탭</p>`
+          : state.arcadeId === 'taprush'
+            ? `<p class="game-meta">빛나는 타겟 탭 · 콤보·생명 관리 · 게임오버 시 화면 탭</p>`
+            : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+              ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+              : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">

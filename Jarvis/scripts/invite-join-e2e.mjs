@@ -87,7 +87,7 @@ async function main() {
 
   await pageA.click('[data-action="friends-invite"]')
   await pageA.waitForSelector('[data-invite-select="code"]')
-  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.7.0'))
+  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.7.1'))
   const inviteHint = await pageA.$eval('.share-hint', (el) => el.textContent || '')
   if (!inviteHint.includes(`friends=${code}`)) {
     throw new Error(`invite QR/deep-link missing friends=CODE: ${inviteHint}`)

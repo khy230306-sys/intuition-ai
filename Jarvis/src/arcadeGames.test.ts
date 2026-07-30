@@ -31,15 +31,24 @@ describe('arcade helpers', () => {
     expect(loadArcadeBest().flappy).toBeNull()
     expect(loadArcadeBest().dodge).toBeNull()
     expect(loadArcadeBest().pong).toBeNull()
+    expect(loadArcadeBest().zigzag).toBeNull()
+    expect(loadArcadeBest().stack).toBeNull()
+    expect(loadArcadeBest().taprush).toBeNull()
   })
 
   it('levels up one step at a time from progress units', () => {
     expect(unitsPerLevel('dodge')).toBe(8)
+    expect(unitsPerLevel('zigzag')).toBe(10)
+    expect(unitsPerLevel('stack')).toBe(5)
+    expect(unitsPerLevel('taprush')).toBe(8)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
     expect(levelFromUnits('breakout', 0)).toBe(1)
     expect(levelFromUnits('breakout', 2)).toBe(3)
+    expect(levelFromUnits('zigzag', 10)).toBe(2)
+    expect(levelFromUnits('stack', 5)).toBe(2)
+    expect(levelFromUnits('taprush', 8)).toBe(2)
   })
 
   it('loads empty best levels by default', () => {

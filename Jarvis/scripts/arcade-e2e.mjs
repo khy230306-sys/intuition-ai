@@ -133,7 +133,7 @@ JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605
   )
   await page.waitForFunction(() => (document.body.textContent || '').includes('미사일 진화'))
 
-  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong']
+  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong', 'zigzag', 'stack', 'taprush']
   for (const id of ids) {
     await page.click(`[data-arcade="${id}"]`)
     await page.waitForFunction(
@@ -150,8 +150,11 @@ JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605
   }
 
   const titles = await page.$$eval('.game-tab', (els) => els.map((e) => e.textContent || ''))
-  if (titles.length !== 5) throw new Error(`expected 5 games, got ${titles.join(',')}`)
+  if (titles.length !== 8) throw new Error(`expected 8 games, got ${titles.join(',')}`)
   if (titles.includes('스네이크')) throw new Error('snake should be removed')
+  for (const need of ['지그재그', '스택', '탭러시']) {
+    if (!titles.includes(need)) throw new Error(`missing game tab: ${need}`)
+  }
   if (errors.length) throw new Error(errors.join(' | '))
   console.log('ARCADE_E2E_OK', titles.join(','))
   await browser.close()

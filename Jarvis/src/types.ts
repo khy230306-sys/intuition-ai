@@ -140,6 +140,6 @@ export interface BrainReply {
   speakLang?: string
   listenLang?: string
   view?: View
-  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
+  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'zigzag' | 'stack' | 'taprush'
   action?: () => Promise<ActionResult | void> | ActionResult | void
 }

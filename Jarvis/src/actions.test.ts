@@ -5,6 +5,8 @@ function stubDom(execResult = true) {
   const exec = vi.fn().mockReturnValue(execResult)
   const ta = {
     value: '',
+    contentEditable: 'false',
+    readOnly: false,
     style: { cssText: '' },
     setAttribute: vi.fn(),
     focus: vi.fn(),
@@ -18,6 +20,15 @@ function stubDom(execResult = true) {
     },
     createElement: vi.fn(() => ta),
     execCommand: exec,
+    createRange: () => ({ selectNodeContents: vi.fn() }),
+    querySelector: vi.fn(() => null),
+  })
+  vi.stubGlobal('window', {
+    ...globalThis,
+    getSelection: () => ({
+      removeAllRanges: vi.fn(),
+      addRange: vi.fn(),
+    }),
   })
   return { exec, ta }
 }

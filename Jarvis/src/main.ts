@@ -1,5 +1,5 @@
 import './style.css'
-import { copyTextNow, quickActions, shareText } from './actions'
+import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
 import {
   buildSpaceInviteUrl,
   parseInviteCode,
@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.7'
+const APP_VERSION = '1.6.8'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -881,6 +881,7 @@ function renderShareModal(): string {
             <button type="button" class="primary-btn" data-action="share-invite-native">공유하기</button>
             <button type="button" class="ghost-btn" data-action="copy-invite-code">코드 복사</button>
             <button type="button" class="ghost-btn" data-action="copy-invite-text">초대 문구 복사</button>
+            <button type="button" class="ghost-btn" data-action="copy-invite-link">링크 복사</button>
           `
           : `
             <button type="button" class="primary-btn" data-action="share-backup-native">백업 공유</button>
@@ -890,8 +891,8 @@ function renderShareModal(): string {
     state.shareModal === 'invite'
       ? `
         <div class="invite-code-block">
-          <span class="invite-code-label">초대 코드</span>
-          <strong class="invite-code-value" data-invite-code="${escapeAttr(state.shareInviteCode)}">${escapeHtml(state.shareInviteCode || '—')}</strong>
+          <span class="invite-code-label">초대 코드 · v${APP_VERSION}</span>
+          <input class="invite-code-input" data-invite-select="code" readonly value="${escapeAttr(state.shareInviteCode)}" aria-label="초대 코드" />
           <p class="hint">친구가 하단 <strong>${state.shareInviteKind === 'family' ? '가족' : '친구'}</strong> 탭 → 코드로 참여에 입력하면 됩니다.</p>
         </div>`
       : ''
@@ -899,14 +900,15 @@ function renderShareModal(): string {
     state.shareStatusOk === true ? ' ok' : state.shareStatusOk === false ? ' err' : ''
   const inviteFallback =
     state.shareModal === 'invite'
-      ? `<textarea class="invite-copy-box" readonly rows="4" aria-label="초대 문구">${escapeHtml(state.shareInviteText)}</textarea>
-         <p class="hint">복사가 안 되면 위 문구를 길게 눌러 복사하세요.</p>`
+      ? `<label class="hint">초대 문구 (길게 눌러 복사 가능)</label>
+         <textarea class="invite-copy-box" data-invite-select="text" readonly rows="5" aria-label="초대 문구">${escapeHtml(state.shareInviteText)}</textarea>
+         <p class="hint">복사 버튼이 막힌 환경(일부 인앱 브라우저)에서는 <strong>공유하기</strong>를 쓰세요.</p>`
       : ''
   return `
     <div class="share-modal" role="dialog" aria-modal="true" aria-label="${title}" data-action="close-share-backdrop">
       <div class="share-sheet" data-share-sheet="1">
         <div class="share-sheet-head">
-          <strong>${title}</strong>
+          <strong>${title} <span class="ver">v${APP_VERSION}</span></strong>
           <button type="button" class="ghost-btn tiny" data-action="close-share">닫기</button>
         </div>
         ${inviteBlock}
@@ -915,7 +917,7 @@ function renderShareModal(): string {
         <div class="row-btns">
           ${actions}
         </div>
-        <p class="share-status${statusClass}" data-share-status="1">${escapeHtml(state.shareStatus)}</p>
+        <p class="share-status${statusClass}" data-share-status="1">${escapeHtml(state.shareStatus || '복사·공유 버튼을 눌러 보세요')}</p>
         ${inviteFallback}
       </div>
     </div>
@@ -1938,6 +1940,35 @@ function bind(): void {
     void openInviteModal('friends')
   })
 
+  const runInviteCopy = (kind: 'code' | 'text' | 'link') => {
+    const code = state.shareInviteCode
+    const text = state.shareInviteText
+    const space = state.shareInviteKind
+    if (!code || !text || !space) {
+      setShareStatus('초대 정보가 없습니다. 초대 공유를 다시 열어 주세요.', false)
+      return
+    }
+    const link = buildSpaceInviteUrl(space, code, appShareUrl())
+    const payload = kind === 'code' ? code : kind === 'link' ? link : text
+    const label = kind === 'code' ? `코드 ${code}` : kind === 'link' ? '초대 링크' : '초대 문구'
+    const r = copyTextNow(payload)
+    if (r.ok) {
+      setShareStatus(`${label} 복사됨`, true)
+      return
+    }
+    // WebView / blocked clipboard → select visible text, then try native share
+    selectVisibleInviteText(kind === 'text' ? text : `${label}\n${payload}`)
+    const title = space === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대'
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      void navigator
+        .share({ title, text: payload, url: kind === 'text' ? link : undefined })
+        .then(() => setShareStatus(`${label} · 공유 시트 열림`, true))
+        .catch(() => setShareStatus(`${label} 선택됨 · 길게 눌러 복사하세요`, false))
+      return
+    }
+    setShareStatus(`${label} 선택됨 · 길게 눌러 복사하세요`, false)
+  }
+
   document.querySelector('[data-action="share-invite-native"]')?.addEventListener('click', (ev) => {
     ev.preventDefault()
     ev.stopPropagation()
@@ -1953,29 +1984,35 @@ function bind(): void {
     void shareText(text, { title, url }).then((r) => setShareStatus(r.message, r.ok))
   })
 
-  document.querySelector('[data-action="copy-invite-code"]')?.addEventListener('click', (ev) => {
-    ev.preventDefault()
-    ev.stopPropagation()
-    const code = state.shareInviteCode
-    if (!code) {
-      setShareStatus('코드가 없습니다.', false)
-      return
+  // pointerup helps some iOS WebViews that drop click; debounce avoids double fire
+  const bindInviteCopy = (action: string, kind: 'code' | 'text' | 'link') => {
+    const el = document.querySelector(`[data-action="${action}"]`)
+    if (!el) return
+    let last = 0
+    const handler = (ev: Event) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const now = Date.now()
+      if (now - last < 450) return
+      last = now
+      runInviteCopy(kind)
     }
-    // Sync copy inside click — required for iOS Safari
-    const r = copyTextNow(code)
-    setShareStatus(r.ok ? `코드 ${code} 복사됨` : r.message, r.ok)
-  })
+    el.addEventListener('pointerup', handler)
+    el.addEventListener('click', handler)
+  }
+  bindInviteCopy('copy-invite-code', 'code')
+  bindInviteCopy('copy-invite-text', 'text')
+  bindInviteCopy('copy-invite-link', 'link')
 
-  document.querySelector('[data-action="copy-invite-text"]')?.addEventListener('click', (ev) => {
-    ev.preventDefault()
-    ev.stopPropagation()
-    const text = state.shareInviteText
-    if (!text) {
-      setShareStatus('초대 문구가 없습니다.', false)
-      return
-    }
-    const r = copyTextNow(text)
-    setShareStatus(r.ok ? '초대 문구를 복사했습니다.' : r.message, r.ok)
+  // Tap code field to select for manual copy
+  document.querySelector<HTMLInputElement>('[data-invite-select="code"]')?.addEventListener('focus', (ev) => {
+    const input = ev.target as HTMLInputElement
+    input.select()
+    setShareStatus('코드 선택됨 · 길게 눌러 복사할 수 있습니다', true)
+  })
+  document.querySelector<HTMLTextAreaElement>('[data-invite-select="text"]')?.addEventListener('focus', (ev) => {
+    const ta = ev.target as HTMLTextAreaElement
+    ta.select()
   })
 
   document.querySelector('[data-action="friends-leave"]')?.addEventListener('click', () => {

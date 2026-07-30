@@ -17,24 +17,35 @@ function openUrl(url: string, label: string): ActionResult {
 }
 
 /**
- * Synchronous copy for click handlers.
- * iOS Safari drops the user-gesture if we await clipboard.writeText first.
+ * Synchronous copy for click/touch handlers.
+ * iOS Safari / in-app WebViews often block async clipboard; keep this sync.
  */
 export function copyTextNow(text: string): ActionResult {
   const value = String(text ?? '')
   if (!value.trim()) return { ok: false, message: '복사할 내용이 없습니다.' }
 
+  // 1) iOS-friendly offscreen textarea (must be selectable, not display:none)
   try {
     const ta = document.createElement('textarea')
     ta.value = value
-    ta.setAttribute('readonly', '')
+    ta.contentEditable = 'true'
+    ta.readOnly = false
     ta.setAttribute('aria-hidden', 'true')
+    // Keep in viewport — iOS ignores copies from opacity:0 / offscreen far away
     ta.style.cssText =
-      'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;margin:0;border:none;outline:none;opacity:0;z-index:-1;'
+      'position:fixed;top:10px;left:10px;width:2em;height:2em;padding:0;margin:0;border:0;outline:none;opacity:0.01;z-index:99999;font-size:16px;'
     document.body.appendChild(ta)
     ta.focus()
     ta.select()
     ta.setSelectionRange(0, value.length)
+    const sel = window.getSelection?.()
+    if (sel) {
+      sel.removeAllRanges()
+      const range = document.createRange()
+      range.selectNodeContents(ta)
+      sel.addRange(range)
+      ta.setSelectionRange(0, value.length)
+    }
     const ok = document.execCommand('copy')
     document.body.removeChild(ta)
     if (ok) return { ok: true, message: '클립보드에 복사했습니다.' }
@@ -42,7 +53,25 @@ export function copyTextNow(text: string): ActionResult {
     /* fall through */
   }
 
-  // Best-effort async API without awaiting (may still work in some browsers)
+  // 2) Visible invite fields already on screen (WebView-safe selection)
+  try {
+    const box =
+      (document.querySelector('.invite-copy-box') as HTMLTextAreaElement | null) ||
+      (document.querySelector('[data-invite-select]') as HTMLInputElement | HTMLTextAreaElement | null)
+    if (box) {
+      box.focus()
+      box.value = value
+      box.select?.()
+      box.setSelectionRange?.(0, value.length)
+      if (document.execCommand('copy')) {
+        return { ok: true, message: '클립보드에 복사했습니다.' }
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  // 3) Best-effort Clipboard API (no await — keep gesture)
   try {
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(value)
@@ -52,7 +81,22 @@ export function copyTextNow(text: string): ActionResult {
     /* ignore */
   }
 
-  return { ok: false, message: '자동 복사 실패 · 아래 문구를 길게 눌러 복사하세요.' }
+  return { ok: false, message: '자동 복사 불가 · 아래 문구를 길게 눌러 복사하거나 공유하기를 쓰세요.' }
+}
+
+/** After failed auto-copy: leave text selected in the visible box for long-press. */
+export function selectVisibleInviteText(text: string): boolean {
+  const box = document.querySelector('.invite-copy-box') as HTMLTextAreaElement | null
+  if (!box) return false
+  try {
+    box.focus()
+    box.value = text
+    box.select()
+    box.setSelectionRange(0, text.length)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Async wrapper — prefers sync path so iOS click gestures stay valid. */

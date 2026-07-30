@@ -84,10 +84,12 @@ async function main() {
   await page.waitForSelector('[data-action="friends-invite"]')
   await page.click('[data-action="friends-invite"]')
   await page.waitForSelector('[data-action="copy-invite-code"]')
+  await page.waitForSelector('[data-action="copy-invite-link"]')
   await page.waitForSelector('[data-share-status]')
   await page.waitForSelector('.invite-copy-box')
+  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.8'))
 
-  const code = await page.$eval('.invite-code-value', (el) => el.textContent || '')
+  const code = await page.$eval('[data-invite-select="code"]', (el) => el.value || '')
   if (code.length < 4) throw new Error('invite code missing')
 
   // Flash must sit above modal
@@ -124,6 +126,12 @@ async function main() {
   const status2 = await page.$eval('[data-share-status]', (el) => el.textContent || '')
   if (!status2.includes('초대 문구')) throw new Error(`text copy status missing: ${status2}`)
 
+  await page.click('[data-action="copy-invite-link"]')
+  await page.waitForFunction(() =>
+    (document.querySelector('[data-share-status]')?.textContent || '').includes('링크'),
+  )
+  const status3 = await page.$eval('[data-share-status]', (el) => el.textContent || '')
+
   const box = await page.$eval('.invite-copy-box', (el) => el.value || '')
   if (!box.includes(code) || !box.includes('friends=')) {
     throw new Error(`invite copy box incomplete: ${box.slice(0, 80)}`)
@@ -135,7 +143,7 @@ async function main() {
   }
 
   if (errors.length) throw new Error(errors.join(' | '))
-  console.log('INVITE_COPY_E2E_OK', { code, status1, status2, z })
+  console.log('INVITE_COPY_E2E_OK', { code, status1, status2, status3, z })
   await browser.close()
   server.close()
 }

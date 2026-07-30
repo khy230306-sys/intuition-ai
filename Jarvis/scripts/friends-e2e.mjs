@@ -80,11 +80,13 @@ async function main() {
 
   await page.click('[data-action="friends-invite"]')
   await page.waitForSelector('.share-modal')
-  await page.waitForSelector('.invite-code-value')
-  const shown = await page.$eval('.invite-code-value', (el) => el.textContent || '')
+  await page.waitForSelector('[data-invite-select="code"]')
+  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.8'))
+  const shown = await page.$eval('[data-invite-select="code"]', (el) => el.value || '')
   if (shown !== code) throw new Error(`invite modal code mismatch: ${shown} vs ${code}`)
   await page.waitForSelector('[data-action="copy-invite-code"]')
   await page.waitForSelector('[data-action="share-invite-native"]')
+  await page.waitForSelector('[data-share-status]')
   await page.click('[data-action="close-share"]')
   await page.waitForFunction(() => !document.querySelector('.share-modal'))
 

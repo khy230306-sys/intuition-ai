@@ -1131,6 +1131,22 @@ body {
   -webkit-user-select: all;
 }
 
+.invite-code-input {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 1.8rem;
+  letter-spacing: 0.18em;
+  font-family: var(--font-display);
+  color: var(--cyan-bright);
+  font-weight: 700;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
 .invite-scan-row {
   margin-top: 10px;
 }

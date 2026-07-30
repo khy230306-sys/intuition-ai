@@ -86,7 +86,8 @@ async function main() {
   await pageA.waitForFunction(() => (document.querySelector('.friends-chat')?.textContent || '').includes('Alice hello'))
 
   await pageA.click('[data-action="friends-invite"]')
-  await pageA.waitForSelector('.invite-code-value')
+  await pageA.waitForSelector('[data-invite-select="code"]')
+  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.6.8'))
   const inviteHint = await pageA.$eval('.share-hint', (el) => el.textContent || '')
   if (!inviteHint.includes(`friends=${code}`)) {
     throw new Error(`invite QR/deep-link missing friends=CODE: ${inviteHint}`)
@@ -140,7 +141,7 @@ async function main() {
   await pageC.waitForSelector('#family-chat-form')
   const famCode = await pageC.$eval('.family-head strong', (el) => el.textContent || '')
   await pageC.click('[data-action="family-invite"]')
-  await pageC.waitForSelector('.invite-code-value')
+  await pageC.waitForSelector('[data-invite-select="code"]')
   const famHint = await pageC.$eval('.share-hint', (el) => el.textContent || '')
   if (!famHint.includes(`family=${famCode}`)) throw new Error(`family deep-link missing: ${famHint}`)
 

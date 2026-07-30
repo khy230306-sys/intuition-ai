@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.9'
+const APP_VERSION = '1.6.10'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -735,7 +735,7 @@ function renderArcadeRank(): string {
   const importBlock = state.arcadeImportOpen
     ? `
       <form id="arcade-import-form" class="arcade-import">
-        <textarea name="code" rows="3" placeholder="친구가 보낸 JARVIS-ARCADE 코드를 붙여넣기" required></textarea>
+        <textarea name="code" rows="4" placeholder="카톡으로 받은 기록 문구 전체, 또는 JARVIS-ARCADE|… 코드" required></textarea>
         <div class="row-btns">
           <button type="submit" class="primary-btn">순위 반영</button>
           <button type="button" class="ghost-btn" data-action="close-arcade-import">취소</button>
@@ -757,7 +757,7 @@ function renderArcadeRank(): string {
         <button type="button" class="ghost-btn" data-action="open-arcade-import">친구 기록 받기</button>
       </div>
       ${importBlock}
-      <p class="hint arcade-rank-hint">QR·공유·코드 붙여넣기로 친구 기록을 모아 순위를 만듭니다. 서버 없이 이 기기에만 저장됩니다.</p>
+      <p class="hint arcade-rank-hint">카톡 공유 문구 전체를 붙여넣어도 됩니다. QR·코드로 친구 기록을 모아 순위를 만듭니다. 이 기기에만 저장됩니다.</p>
     </div>
   `
 }

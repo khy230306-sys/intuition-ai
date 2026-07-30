@@ -192,8 +192,31 @@ export function encodeScoreCard(card: ScoreCard): string {
   return [CARD_PREFIX, 'v1', card.game, card.score, card.level, safeName, safeId, card.at].join('|')
 }
 
+/** Pull the pipe payload out of a full Kakao / share message. */
+export function extractScoreCardPayload(raw: string): string {
+  const text = String(raw || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+  if (!text) return ''
+
+  // Prefer an explicit line containing the card
+  for (const line of text.split(/\r?\n/)) {
+    const idx = line.indexOf(`${CARD_PREFIX}|`)
+    if (idx >= 0) {
+      // Stop at whitespace after the card (Kakao sometimes appends junk)
+      return line.slice(idx).trim().split(/\s+/)[0]
+    }
+  }
+
+  // Fallback: search anywhere in the blob
+  const m = text.match(
+    /JARVIS-ARCADE\|v1\|[A-Za-z0-9_-]+\|\d+\|\d+\|[^|\n]{0,32}\|[A-Za-z0-9._-]{2,64}\|\d{10,}/,
+  )
+  return m ? m[0] : text
+}
+
 export function parseScoreCard(raw: string): { ok: true; card: ScoreCard } | { ok: false; message: string } {
-  const text = raw.trim()
+  const text = extractScoreCardPayload(raw)
   if (!text) return { ok: false, message: '기록 코드를 붙여넣어 주세요.' }
 
   // JSON form
@@ -227,7 +250,7 @@ export function parseScoreCard(raw: string): { ok: true; card: ScoreCard } | { o
 
   const parts = text.split('|')
   if (parts[0] !== CARD_PREFIX || parts[1] !== 'v1' || parts.length < 8) {
-    return { ok: false, message: 'JARVIS 아케이드 기록 코드가 아닙니다.' }
+    return { ok: false, message: 'JARVIS 아케이드 기록 코드가 아닙니다. 공유 문구 전체를 붙여넣어도 됩니다.' }
   }
   const game = parts[2]
   const score = Number(parts[3])

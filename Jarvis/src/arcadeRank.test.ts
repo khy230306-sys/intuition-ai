@@ -117,6 +117,28 @@ describe('arcade rank share', () => {
     expect(ranks[0].name).toBe('Kim2')
   })
 
+  it('parses full Kakao share message (not only bare pipe code)', () => {
+    const kakao = `JARVIS 아케이드 기록 · 플래피
+나 · Lv.6 · SCORE 25
+
+친구 기기 게임 탭 → 친구 기록 받기 에 붙여넣기
+JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605583`
+    const parsed = parseScoreCard(kakao)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.card.game).toBe('flappy')
+    expect(parsed.card.score).toBe(25)
+    expect(parsed.card.level).toBe(6)
+    expect(parsed.card.playerId).toBe('ef4cd28c-e755-43fd-8568-0dcf771d4ef7')
+
+    const result = importScoreCard(kakao)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.entry.score).toBe(25)
+    const ranks = rankingForGame('flappy')
+    expect(ranks.some((r) => r.playerId === 'ef4cd28c-e755-43fd-8568-0dcf771d4ef7' && r.score === 25)).toBe(true)
+  })
+
   it('returns null card when no personal best', () => {
     expect(buildMyScoreCard('pong')).toBeNull()
   })

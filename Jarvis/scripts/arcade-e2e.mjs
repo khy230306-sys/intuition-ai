@@ -101,6 +101,31 @@ async function main() {
     return rows.some((r) => (r.textContent || '').includes('친구테스트'))
   })
 
+  // Real Kakao-style share body (full message, not bare pipe) — previously failed
+  await page.click('[data-action="open-arcade-import"]')
+  await page.waitForSelector('#arcade-import-form')
+  const kakaoBody = `JARVIS 아케이드 기록 · 플래피
+나 · Lv.6 · SCORE 25
+
+친구 기기 게임 탭 → 친구 기록 받기 에 붙여넣기
+JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605583`
+  await page.$eval(
+    '#arcade-import-form textarea',
+    (el, code) => {
+      el.value = code
+    },
+    kakaoBody,
+  )
+  await page.click('#arcade-import-form button[type="submit"]')
+  await page.waitForFunction(() => {
+    const active = document.querySelector('.game-tab.active')?.getAttribute('data-arcade')
+    const rows = [...document.querySelectorAll('.arcade-rank-row')]
+    return (
+      active === 'flappy' &&
+      rows.some((r) => (r.textContent || '').includes('Lv.6') && (r.textContent || '').includes('25'))
+    )
+  })
+
   const ids = ['snake', 'breakout', 'shooter', 'flappy', 'dodge', 'pong']
   for (const id of ids) {
     await page.click(`[data-arcade="${id}"]`)

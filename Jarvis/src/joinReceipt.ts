@@ -39,10 +39,10 @@ export function buildJoinReceipt(input: {
   ].join('|')
   const label = receipt.kind === 'family' ? '가족' : '친구'
   const message = [
-    `JARVIS ${label} 참여 확인`,
+    `JARVIS ${label} 참여 확인 (오프라인용)`,
     `${receipt.memberName} · 코드 ${receipt.code}`,
     '',
-    '초대자가 앱에서 «참여 확인 받기»에 붙여넣으면 멤버로 등록됩니다.',
+    '보통은 초대 링크만으로 충분합니다. 초대자가 앱을 못 열 때만 아래를 «오프라인 멤버 등록»에 붙여넣으세요.',
     payload,
   ].join('\n')
   return { receipt, payload, message }

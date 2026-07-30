@@ -267,15 +267,14 @@ export function upsertMember(room: FamilyRoom, member: FamilyMember): FamilyRoom
 export function familyInviteText(room: FamilyRoom, appUrl: string): string {
   const link = buildSpaceInviteUrl('family', room.code, appUrl)
   return [
-    `JARVIS 가족 공간 초대`,
-    `이름: ${room.name}`,
+    `JARVIS 가족 초대`,
+    `공간: ${room.name}`,
     `코드: ${room.code}`,
     '',
-    '1) 링크를 열거나 가족 탭에 코드를 붙여넣기 → 참여',
+    '링크를 열고 «승인하고 입장»만 누르면 끝입니다.',
     link,
     '',
-    '2) 참여 후 «참여 확인 공유»를 초대자에게 다시 보내세요',
-    '3) 둘 다 가족 탭을 연 채로 «동기화»를 누르면 대화가 연결됩니다',
+    '초대자도 JARVIS를 잠시 열어 두면 멤버·대화가 자동으로 연결됩니다.',
   ].join('\n')
 }
 

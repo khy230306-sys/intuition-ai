@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.8'
+const APP_VERSION = '1.7.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -325,7 +325,7 @@ async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   state.shareQrSvg = ''
   state.shareStatus = ''
   state.shareStatusOk = null
-  state.shareHint = `카메라로 QR을 스캔하면 바로 참여 링크로 열립니다.\n${link}`
+  state.shareHint = `친구가 링크를 열고 «승인하고 입장»만 누르면 끝입니다.\n초대자도 JARVIS를 열어 두면 멤버가 자동 표시됩니다.\n${link}`
   render()
   try {
     // Deep-link URL only — phone camera can open it
@@ -407,16 +407,19 @@ function applyPendingInvite(): boolean {
         state.view = 'friends'
         state.prefillJoinCode = pending.code
         savePendingInvite(pending)
-        showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
+        showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
         return true
       }
+      const firstJoin = !current
       if (!current) {
         joinFriendsRoomLocal(pending.code, '친구 공간', member)
       }
       state.view = 'friends'
       state.friendsTab = 'chat'
       state.prefillJoinCode = ''
-      showFlash(`친구 코드 ${pending.code}로 참여했습니다.`)
+      if (firstJoin) postJoinPresence('friends')
+      showFlash(`친구 초대 승인 · 코드 ${pending.code} 입장 완료`)
+      void ensureFriendsSyncOnce(true)
       return true
     }
     const current = loadFamilyRoom()
@@ -424,16 +427,19 @@ function applyPendingInvite(): boolean {
       state.view = 'family'
       state.prefillJoinCode = pending.code
       savePendingInvite(pending)
-      showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
+      showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
       return true
     }
+    const firstJoin = !current
     if (!current) {
       joinFamilyRoomLocal(pending.code, '가족 공간', member)
     }
     state.view = 'family'
     state.familyTab = 'chat'
     state.prefillJoinCode = ''
-    showFlash(`가족 코드 ${pending.code}로 참여했습니다.`)
+    if (firstJoin) postJoinPresence('family')
+    showFlash(`가족 초대 승인 · 코드 ${pending.code} 입장 완료`)
+    void ensureFamilySyncOnce(true)
     return true
   } catch (err) {
     showFlash(err instanceof Error ? err.message : '초대 참여에 실패했습니다.')
@@ -458,6 +464,22 @@ function inviteSwitchBanner(kind: SpaceKind, currentCode: string): string {
     </div>`
 }
 
+/** Tell peers we joined — registers us on inviter via sync hello + visible chat line. */
+function postJoinPresence(kind: SpaceKind): void {
+  const name = state.settings.displayName || '나'
+  if (kind === 'friends') {
+    const msg = postFriendsChat(`${name}님이 초대에 참여했습니다.`)
+    void ensureFriendsSyncOnce(true).then(() => {
+      if (msg) void broadcastFriendsPacket({ type: 'chat', message: msg })
+    })
+  } else {
+    const msg = postFamilyChat(`${name}님이 초대에 참여했습니다.`)
+    void ensureFamilySyncOnce(true).then(() => {
+      if (msg) void broadcastFamilyPacket({ type: 'chat', message: msg })
+    })
+  }
+}
+
 function switchToInvite(kind: SpaceKind): void {
   const code = state.prefillJoinCode.trim()
   if (!code) {
@@ -472,16 +494,18 @@ function switchToInvite(kind: SpaceKind): void {
       joinFriendsRoomLocal(code, '친구 공간', member)
       state.friendsTab = 'chat'
       state.view = 'friends'
+      postJoinPresence('friends')
     } else {
       void disconnectFamilySync()
       leaveFamilyRoom()
       joinFamilyRoomLocal(code, '가족 공간', member)
       state.familyTab = 'chat'
       state.view = 'family'
+      postJoinPresence('family')
     }
     state.prefillJoinCode = ''
     savePendingInvite(null)
-    showFlash(`코드 ${parseInviteCode(code) || code}로 전환했습니다.`)
+    showFlash(`초대 승인 · 코드 ${parseInviteCode(code) || code} 입장 완료`)
     render()
   } catch (err) {
     showFlash(err instanceof Error ? err.message : '전환에 실패했습니다.')
@@ -588,11 +612,14 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
         void disconnectFriendsSync()
         leaveFriendsRoom()
       }
+      const wasSame = Boolean(current && current.code === code)
       joinFriendsRoomLocal(code, '친구 공간', memberName)
       state.friendsTab = 'chat'
       state.view = 'friends'
       state.prefillJoinCode = ''
-      showFlash(`코드 ${code}로 친구 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
+      if (!wasSame) postJoinPresence('friends')
+      else void ensureFriendsSyncOnce(true)
+      showFlash(`친구 초대 승인 · 코드 ${code} 입장 완료`)
     } else {
       const current = loadFamilyRoom()
       if (current && current.code !== code) {
@@ -603,11 +630,14 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
         void disconnectFamilySync()
         leaveFamilyRoom()
       }
+      const wasSame = Boolean(current && current.code === code)
       joinFamilyRoomLocal(code, '가족 공간', memberName)
       state.familyTab = 'chat'
       state.view = 'family'
       state.prefillJoinCode = ''
-      showFlash(`코드 ${code}로 가족 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
+      if (!wasSame) postJoinPresence('family')
+      else void ensureFamilySyncOnce(true)
+      showFlash(`가족 초대 승인 · 코드 ${code} 입장 완료`)
     }
     render()
   } catch (err) {
@@ -798,10 +828,11 @@ function renderLocationGate(): string {
     : ''
   const invite = state.pendingInvite
   const inviteBlock = invite
-    ? `<p class="loc-invite">초대 코드 <strong>${escapeHtml(invite.code)}</strong> (${invite.kind === 'friends' ? '친구' : '가족'})가 대기 중입니다.</p>
+    ? `<p class="loc-invite"><strong>${invite.kind === 'friends' ? '친구' : '가족'} 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
+        <p class="loc-body">한 번만 승인하면 JARVIS ${invite.kind === 'friends' ? '친구' : '가족'} 공간으로 바로 입장합니다.</p>
         <button type="button" class="primary-btn loc-invite-go" data-action="accept-invite-start" ${
           state.locationBusy ? 'disabled' : ''
-        }>초대 참여하고 시작</button>`
+        }>승인하고 입장</button>`
     : ''
   return `
     <section class="location-gate">
@@ -1081,7 +1112,7 @@ function renderShareModal(): string {
         <div class="invite-code-block">
           <span class="invite-code-label">초대 코드 · v${APP_VERSION}</span>
           <input class="invite-code-input" data-invite-select="code" readonly value="${escapeAttr(state.shareInviteCode)}" aria-label="초대 코드" />
-          <p class="hint">친구가 하단 <strong>${state.shareInviteKind === 'family' ? '가족' : '친구'}</strong> 탭 → 코드로 참여에 입력하면 됩니다.</p>
+          <p class="hint">친구가 링크를 열어 <strong>승인하고 입장</strong>하면 끝입니다.</p>
         </div>`
       : ''
   const statusClass =
@@ -1537,19 +1568,21 @@ function renderFamily(): string {
       ${inviteSwitchBanner('family', room.code)}
       <div class="row-btns">
         <button type="button" class="primary-btn" data-action="family-invite">초대 공유</button>
-        <button type="button" class="ghost-btn" data-action="family-join-share">참여 확인 공유</button>
         <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="family-leave">나가기</button>
       </div>
       <details class="space-switch">
-        <summary>참여 확인 받기 · 멤버 등록</summary>
+        <summary>오프라인일 때만 · 멤버 수동 등록</summary>
+        <div class="row-btns">
+          <button type="button" class="ghost-btn" data-action="family-join-share">내 참여 확인 보내기</button>
+        </div>
         <form id="family-join-receipt" class="settings-form">
           <label>가족이 보낸 참여 확인 문구
             <textarea name="receipt" rows="3" placeholder="JARVIS 가족 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
-        <p class="hint">초대만으로는 멤버가 안 늘어납니다. 상대가 참여한 뒤 «참여 확인 공유»를 보내면 여기에 붙여넣으세요.</p>
+        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다. 상대·내가 동시에 앱을 못 열 때만 사용하세요.</p>
       </details>
       <details class="space-switch">
         <summary>다른 코드로 전환</summary>
@@ -1562,7 +1595,7 @@ function renderFamily(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">대화 동기화: 같은 코드 + 둘 다 가족 탭 유지 + «동기화». 멤버 등록은 «참여 확인»으로도 됩니다.</p>
+      <p class="hint">초대: 링크 공유 → 상대가 «승인하고 입장». 둘 다 JARVIS를 열어 두면 멤버·대화가 자동 연결됩니다.</p>
     </section>
   `
 }
@@ -1702,19 +1735,21 @@ function renderFriends(): string {
       ${inviteSwitchBanner('friends', room.code)}
       <div class="row-btns">
         <button type="button" class="primary-btn" data-action="friends-invite">초대 공유</button>
-        <button type="button" class="ghost-btn" data-action="friends-join-share">참여 확인 공유</button>
         <button type="button" class="ghost-btn" data-action="friends-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="friends-leave">나가기</button>
       </div>
       <details class="space-switch">
-        <summary>참여 확인 받기 · 멤버 등록</summary>
+        <summary>오프라인일 때만 · 멤버 수동 등록</summary>
+        <div class="row-btns">
+          <button type="button" class="ghost-btn" data-action="friends-join-share">내 참여 확인 보내기</button>
+        </div>
         <form id="friends-join-receipt" class="settings-form">
           <label>친구가 보낸 참여 확인 문구
             <textarea name="receipt" rows="3" placeholder="JARVIS 친구 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
-        <p class="hint">초대만으로는 멤버가 안 늘어납니다. 상대가 참여한 뒤 «참여 확인 공유»를 보내면 여기에 붙여넣으세요.</p>
+        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다. 상대·내가 동시에 앱을 못 열 때만 사용하세요.</p>
       </details>
       <details class="space-switch">
         <summary>다른 코드로 전환</summary>
@@ -1727,7 +1762,7 @@ function renderFriends(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">대화 동기화: 같은 코드 + 둘 다 친구 탭 유지 + «동기화». 게임 순위는 게임 탭에서 공유하세요.</p>
+      <p class="hint">초대: 링크 공유 → 친구가 «승인하고 입장». 둘 다 JARVIS를 열어 두면 멤버·대화가 자동 연결됩니다.</p>
     </section>
   `
 }
@@ -1975,7 +2010,7 @@ function bindLocationGate(): void {
     state.locationError = ''
     state.locationBusy = false
     const invited = applyPendingInvite()
-    showFlash(invited ? '초대 참여로 시작합니다.' : '초대를 처리하지 못했습니다. 가족/친구 탭에서 코드를 붙여넣으세요.')
+    showFlash(invited ? '초대 승인 · JARVIS 입장 완료' : '초대를 처리하지 못했습니다. 친구/가족 탭에서 코드를 붙여넣으세요.')
     render()
     void bootSpaceSyncAndPush()
   })
@@ -2164,11 +2199,11 @@ function bind(): void {
     })
     void shareText(built.message, { title: 'JARVIS 가족 참여 확인' }).then((r) => {
       if (r.ok) {
-        showFlash('참여 확인을 공유했습니다. 초대자에게 전달하세요.')
+        showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
       }
       void Promise.resolve(copyTextNow(built.message)).then((c) => {
-        showFlash(c.ok ? '참여 확인을 복사했습니다. 초대자에게 보내세요.' : '공유에 실패했습니다.')
+        showFlash(c.ok ? '참여 확인을 복사했습니다. (오프라인 등록용)' : '공유에 실패했습니다.')
       })
     })
   })
@@ -2349,11 +2384,11 @@ function bind(): void {
     })
     void shareText(built.message, { title: 'JARVIS 친구 참여 확인' }).then((r) => {
       if (r.ok) {
-        showFlash('참여 확인을 공유했습니다. 초대자에게 전달하세요.')
+        showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
       }
       void Promise.resolve(copyTextNow(built.message)).then((c) => {
-        showFlash(c.ok ? '참여 확인을 복사했습니다. 초대자에게 보내세요.' : '공유에 실패했습니다.')
+        showFlash(c.ok ? '참여 확인을 복사했습니다. (오프라인 등록용)' : '공유에 실패했습니다.')
       })
     })
   })

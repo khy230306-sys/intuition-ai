@@ -5,6 +5,7 @@ import type {
   FriendsNotice,
   FriendsRoom,
 } from './friendsTypes'
+import { buildSpaceInviteUrl, parseInviteCode, preferSpaceName } from './inviteJoin'
 
 const KEY = 'jarvis_friends_room_v1'
 const MEMBER_KEY = 'jarvis_friends_member_id_v1'
@@ -32,7 +33,7 @@ export function generateFriendsCode(): string {
 }
 
 export function normalizeFriendsCode(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)
+  return parseInviteCode(raw) || ''
 }
 
 export function loadFriendsRoom(): FriendsRoom | null {
@@ -82,11 +83,15 @@ export function createFriendsRoom(name: string, memberName: string): FriendsRoom
 }
 
 export function joinFriendsRoomLocal(code: string, name: string, memberName: string): FriendsRoom {
+  const normalized = normalizeFriendsCode(code)
+  if (!normalized) {
+    throw new Error('유효한 친구 초대 코드가 아닙니다.')
+  }
   const memberId = getOrCreateMemberId()
   const now = Date.now()
   const member: FriendsMember = { id: memberId, name: memberName.trim() || '나', joinedAt: now }
   const existing = loadFriendsRoom()
-  if (existing && existing.code === normalizeFriendsCode(code)) {
+  if (existing && existing.code === normalized) {
     existing.memberName = member.name
     existing.memberId = memberId
     if (!existing.members.some((m) => m.id === memberId)) existing.members.push(member)
@@ -97,7 +102,7 @@ export function joinFriendsRoomLocal(code: string, name: string, memberName: str
     return existing
   }
   const room: FriendsRoom = {
-    code: normalizeFriendsCode(code),
+    code: normalized,
     name: name.trim() || '친구 공간',
     createdAt: now,
     memberId,
@@ -214,7 +219,7 @@ export function mergeFriendsSnapshot(
 
   return {
     ...local,
-    name: remote.updatedAt >= local.updatedAt ? remote.name || local.name : local.name,
+    name: preferSpaceName(local.name, remote.name, local.updatedAt, remote.updatedAt),
     code: local.code || remote.code,
     members: [...membersMap.values()],
     messages: byId(local.messages, remote.messages)
@@ -239,15 +244,16 @@ export function upsertMember(room: FriendsRoom, member: FriendsMember): FriendsR
 }
 
 export function friendsInviteText(room: FriendsRoom, appUrl: string): string {
+  const link = buildSpaceInviteUrl('friends', room.code, appUrl)
   return [
     `JARVIS 친구 공간 초대`,
     `이름: ${room.name}`,
     `코드: ${room.code}`,
     '',
-    '1) JARVIS 앱 열기',
-    '2) 하단 친구 탭',
-    `3) 코드 ${room.code} 입력 후 참여`,
-    appUrl,
+    '링크를 열거나 코드를 입력하세요:',
+    link,
+    '',
+    '앱에서: 하단 친구 탭 → 코드/링크 붙여넣기 → 참여',
   ].join('\n')
 }
 

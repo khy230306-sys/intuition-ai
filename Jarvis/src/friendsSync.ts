@@ -148,7 +148,7 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
     }
 
     peerCount = Object.keys(roomHandle.getPeers()).length
-    emit(`연결 중 · 코드 ${room.code}`)
+    emit(peerCount ? `연결됨 · 동료 ${peerCount}명` : `연결됨 · 친구도 앱을 열면 동기화`)
     // Announce ourselves
     await send({
       type: 'hello',
@@ -158,7 +158,12 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
     })
     const snap = snapshotPacket()
     if (snap) await send(snap)
-    return { ok: true, message: `친구 동기화 연결 · 코드 ${room.code}` }
+    return {
+      ok: true,
+      message: peerCount
+        ? `친구 동기화 연결 · 코드 ${room.code} · 동료 ${peerCount}명`
+        : `친구 동기화 연결 · 코드 ${room.code} · 친구도 앱을 열면 동기화`,
+    }
   } catch (err) {
     roomHandle = null
     syncAction = null

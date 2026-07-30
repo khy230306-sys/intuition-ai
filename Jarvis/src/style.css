@@ -1130,6 +1130,17 @@ body {
   -webkit-user-select: all;
 }
 
+.invite-scan-row {
+  margin-top: 10px;
+}
+
+.file-scan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
 .nav.nav-7 {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;

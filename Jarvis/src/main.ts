@@ -103,9 +103,10 @@ import {
 } from './familyStore'
 import {
   broadcastFamilyPacket,
-  connectFamilySync,
   disconnectFamilySync,
+  ensureFamilySync,
   getFamilyPeerCount,
+  reconnectFamilySync,
   setFamilySyncListener,
 } from './familySyncLazy'
 import {
@@ -123,14 +124,15 @@ import {
 } from './friendsStore'
 import {
   broadcastFriendsPacket,
-  connectFriendsSync,
   disconnectFriendsSync,
+  ensureFriendsSync,
   getFriendsPeerCount,
+  reconnectFriendsSync,
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.6'
+const APP_VERSION = '1.7.7'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -410,7 +412,6 @@ function applyPendingInvite(): boolean {
       }
       if (!current) {
         joinFriendsRoomLocal(pending.code, '친구 공간', member)
-        friendsSyncBooted = false
       }
       state.view = 'friends'
       state.friendsTab = 'chat'
@@ -428,7 +429,6 @@ function applyPendingInvite(): boolean {
     }
     if (!current) {
       joinFamilyRoomLocal(pending.code, '가족 공간', member)
-      familySyncBooted = false
     }
     state.view = 'family'
     state.familyTab = 'chat'
@@ -468,14 +468,12 @@ function switchToInvite(kind: SpaceKind): void {
   try {
     if (kind === 'friends') {
       void disconnectFriendsSync()
-      friendsSyncBooted = false
       leaveFriendsRoom()
       joinFriendsRoomLocal(code, '친구 공간', member)
       state.friendsTab = 'chat'
       state.view = 'friends'
     } else {
       void disconnectFamilySync()
-      familySyncBooted = false
       leaveFamilyRoom()
       joinFamilyRoomLocal(code, '가족 공간', member)
       state.familyTab = 'chat'
@@ -592,7 +590,6 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
       }
       joinFriendsRoomLocal(code, '친구 공간', memberName)
       state.friendsTab = 'chat'
-      friendsSyncBooted = false
       state.view = 'friends'
       state.prefillJoinCode = ''
       showFlash(`코드 ${code}로 친구 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
@@ -608,7 +605,6 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
       }
       joinFamilyRoomLocal(code, '가족 공간', memberName)
       state.familyTab = 'chat'
-      familySyncBooted = false
       state.view = 'family'
       state.prefillJoinCode = ''
       showFlash(`코드 ${code}로 가족 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
@@ -1535,7 +1531,7 @@ function renderFamily(): string {
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)}</p>
           <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 가족 탭을 연 상태여야 합니다</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('family', room.code)}
@@ -1700,7 +1696,7 @@ function renderFriends(): string {
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)}</p>
           <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 친구 탭을 연 상태여야 합니다</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('friends', room.code)}
@@ -1873,30 +1869,40 @@ function render(): void {
   }
 }
 
-let familySyncBooted = false
-async function ensureFamilySyncOnce(): Promise<void> {
-  if (familySyncBooted) return
-  const r = await connectFamilySync()
-  familySyncBooted = r.ok
-  state.familySyncStatus = r.message
-  const el = document.querySelector('.family-head .hint')
-  const room = loadFamilyRoom()
-  if (el && room) {
-    el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명`
-  }
+let familySyncInFlight: Promise<void> | null = null
+async function ensureFamilySyncOnce(force = false): Promise<void> {
+  if (!loadFamilyRoom()) return
+  if (familySyncInFlight) return familySyncInFlight
+  familySyncInFlight = (async () => {
+    const r = force ? await reconnectFamilySync() : await ensureFamilySync()
+    state.familySyncStatus = r.message
+    const el = document.querySelector('.family-head .hint')
+    const room = loadFamilyRoom()
+    if (el && room) {
+      el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명`
+    }
+  })().finally(() => {
+    familySyncInFlight = null
+  })
+  return familySyncInFlight
 }
 
-let friendsSyncBooted = false
-async function ensureFriendsSyncOnce(): Promise<void> {
-  if (friendsSyncBooted) return
-  const r = await connectFriendsSync()
-  friendsSyncBooted = r.ok
-  state.friendsSyncStatus = r.message
-  const el = document.querySelector('.friends-head .hint')
-  const room = loadFriendsRoom()
-  if (el && room) {
-    el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 동료 ${getFriendsPeerCount()}명`
-  }
+let friendsSyncInFlight: Promise<void> | null = null
+async function ensureFriendsSyncOnce(force = false): Promise<void> {
+  if (!loadFriendsRoom()) return
+  if (friendsSyncInFlight) return friendsSyncInFlight
+  friendsSyncInFlight = (async () => {
+    const r = force ? await reconnectFriendsSync() : await ensureFriendsSync()
+    state.friendsSyncStatus = r.message
+    const el = document.querySelector('.friends-head .hint')
+    const room = loadFriendsRoom()
+    if (el && room) {
+      el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 동료 ${getFriendsPeerCount()}명`
+    }
+  })().finally(() => {
+    friendsSyncInFlight = null
+  })
+  return friendsSyncInFlight
 }
 
 /** Keep MQTT/WebRTC alive for chat alerts even when not on family/friends tab. */
@@ -1912,6 +1918,25 @@ async function bootSpaceSyncAndPush(): Promise<void> {
   }
   if (loadFamilyRoom()) await ensureFamilySyncOnce()
   if (loadFriendsRoom()) await ensureFriendsSyncOnce()
+}
+
+/** After app leave/return or network restore — force rejoin so peers show again. */
+let resumeSyncTimer = 0
+function scheduleResumeSpaceSync(force = true): void {
+  window.clearTimeout(resumeSyncTimer)
+  resumeSyncTimer = window.setTimeout(() => {
+    if (!state.locationReady) return
+    void (async () => {
+      if (loadFamilyRoom()) await ensureFamilySyncOnce(force)
+      if (loadFriendsRoom()) await ensureFriendsSyncOnce(force)
+      if (
+        (state.view === 'family' || state.view === 'friends') &&
+        !state.shareModal
+      ) {
+        render()
+      }
+    })()
+  }, 600)
 }
 
 function bindLocationGate(): void {
@@ -2029,7 +2054,6 @@ function bind(): void {
     persistMemberName(member)
     createFamilyRoom(String(fd.get('name') || ''), member)
     state.familyTab = 'chat'
-    familySyncBooted = false
     showFlash('가족 공간을 만들었습니다. «초대 공유»로 가족을 초대하세요.')
     render()
   })
@@ -2143,15 +2167,13 @@ function bind(): void {
 
   document.querySelector('[data-action="family-leave"]')?.addEventListener('click', () => {
     void disconnectFamilySync()
-    familySyncBooted = false
     leaveFamilyRoom()
     showFlash('가족 공간에서 나갔습니다.')
     render()
   })
 
   document.querySelector('[data-action="family-reconnect"]')?.addEventListener('click', () => {
-    familySyncBooted = false
-    void disconnectFamilySync().then(() => ensureFamilySyncOnce()).then(() => {
+    void ensureFamilySyncOnce(true).then(() => {
       showFlash(state.familySyncStatus)
       render()
     })
@@ -2180,7 +2202,6 @@ function bind(): void {
     persistMemberName(member)
     createFriendsRoom(String(fd.get('name') || ''), member)
     state.friendsTab = 'chat'
-    friendsSyncBooted = false
     showFlash('친구 공간을 만들었습니다. «초대 공유»로 친구를 초대하세요.')
     render()
   })
@@ -2429,15 +2450,13 @@ function bind(): void {
 
   document.querySelector('[data-action="friends-leave"]')?.addEventListener('click', () => {
     void disconnectFriendsSync()
-    friendsSyncBooted = false
     leaveFriendsRoom()
     showFlash('친구 공간에서 나갔습니다.')
     render()
   })
 
   document.querySelector('[data-action="friends-reconnect"]')?.addEventListener('click', () => {
-    friendsSyncBooted = false
-    void disconnectFriendsSync().then(() => ensureFriendsSyncOnce()).then(() => {
+    void ensureFriendsSyncOnce(true).then(() => {
       showFlash(state.friendsSyncStatus)
       render()
     })
@@ -2715,8 +2734,6 @@ function bind(): void {
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
         if (sub) {
-          familySyncBooted = false
-          friendsSyncBooted = false
           void bootSpaceSyncAndPush()
         }
       })
@@ -2750,8 +2767,6 @@ function bind(): void {
         notifyFriendsChat: state.settings.notifyFriendsChat !== false,
       }
       saveSettings(state.settings)
-      familySyncBooted = false
-      friendsSyncBooted = false
       await bootSpaceSyncAndPush()
       showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다.')
       render()
@@ -2975,11 +2990,24 @@ function boot(): void {
   void ensureNotificationPermission()
   window.addEventListener('online', () => {
     state.online = true
-    if (state.locationReady) render()
+    if (state.locationReady) {
+      scheduleResumeSpaceSync(true)
+      render()
+    }
   })
   window.addEventListener('offline', () => {
     state.online = false
     if (state.locationReady) render()
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') scheduleResumeSpaceSync(true)
+  })
+  window.addEventListener('pageshow', (ev) => {
+    const persisted = 'persisted' in ev && Boolean((ev as PageTransitionEvent).persisted)
+    if (persisted || document.visibilityState === 'visible') scheduleResumeSpaceSync(true)
+  })
+  window.addEventListener('focus', () => {
+    scheduleResumeSpaceSync(false)
   })
 
   // Always require a fresh location grant on launch (standalone / Safari)

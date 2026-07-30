@@ -19,6 +19,16 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
   return m.connectFriendsSync()
 }
 
+export async function ensureFriendsSync(opts?: { force?: boolean }): Promise<{ ok: boolean; message: string }> {
+  const m = await loadSync()
+  return m.ensureFriendsSync(opts)
+}
+
+export async function reconnectFriendsSync(): Promise<{ ok: boolean; message: string }> {
+  const m = await loadSync()
+  return m.reconnectFriendsSync()
+}
+
 export async function disconnectFriendsSync(): Promise<void> {
   if (!cached && !modPromise) return
   const m = await loadSync()

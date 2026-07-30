@@ -7,7 +7,7 @@ import {
   upsertMember,
 } from './friendsStore'
 import { preferSpaceName } from './inviteJoin'
-import { spaceRoomConfig, summarizeRelaySockets } from './spaceSyncConfig'
+import { isRelayLinkDead, spaceRoomConfig, summarizeRelaySockets, type RelayHealth } from './spaceSyncConfig'
 
 const APP_ID = 'jarvis-friends-space-v1'
 
@@ -19,6 +19,8 @@ let peerCount = 0
 let relayLabel = '중계 대기'
 let announceTimer = 0
 let healthTimer = 0
+let unhealthyTicks = 0
+let reconnecting = false
 let onChange: ((info: { peers: number; status: string }) => void) | null = null
 
 export function getFriendsPeerCount(): number {
@@ -46,13 +48,16 @@ function refreshPeers(): number {
   return peerCount
 }
 
-function refreshRelayHealth(): void {
+function readRelayHealth(): RelayHealth {
   try {
-    const health = summarizeRelaySockets(getRelaySockets?.() as Record<string, unknown>)
-    relayLabel = health.label
+    return summarizeRelaySockets(getRelaySockets?.() as Record<string, unknown>)
   } catch {
-    relayLabel = '중계 상태 확인 불가'
+    return { ok: 0, total: 0, label: '중계 상태 확인 불가' }
   }
+}
+
+function refreshRelayHealth(): void {
+  relayLabel = readRelayHealth().label
 }
 
 function applyPacket(packet: FriendsSyncPacket): void {
@@ -164,19 +169,29 @@ function statusLine(): string {
   const n = refreshPeers()
   refreshRelayHealth()
   if (n > 0) return `온라인 ${n}명 · ${relayLabel}`
-  return `온라인 대기 · ${relayLabel} · 상대도 친구 탭을 열어 두세요`
+  return `온라인 대기 · ${relayLabel} · 상대도 JARVIS를 열어 두면 자동 연결`
 }
 
 function startWatchdogs(): void {
   window.clearInterval(announceTimer)
   window.clearInterval(healthTimer)
+  unhealthyTicks = 0
   announceTimer = window.setInterval(() => {
-    if (!roomHandle) return
+    if (!roomHandle || reconnecting) return
     void announceSelf().then(() => emit(statusLine()))
   }, 12_000)
   healthTimer = window.setInterval(() => {
-    if (!roomHandle) return
+    if (!roomHandle || reconnecting) return
+    const health = readRelayHealth()
+    relayLabel = health.label
+    refreshPeers()
+    if (isRelayLinkDead(health)) unhealthyTicks += 1
+    else unhealthyTicks = 0
     emit(statusLine())
+    if (unhealthyTicks >= 2) {
+      unhealthyTicks = 0
+      void ensureFriendsSync({ force: true }).then((r) => emit(r.message))
+    }
   }, 4_000)
 }
 
@@ -203,13 +218,36 @@ export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise
   if (packet.type === 'chat') void fanoutChatPush(packet.message)
 }
 
-export async function connectFriendsSync(): Promise<{ ok: boolean; message: string }> {
+export function isFriendsSyncConnected(): boolean {
+  return Boolean(roomHandle)
+}
+
+export function isFriendsSyncHealthy(): boolean {
+  if (!roomHandle) return false
+  return !isRelayLinkDead(readRelayHealth())
+}
+
+export async function disconnectFriendsSync(): Promise<void> {
+  window.clearInterval(announceTimer)
+  window.clearInterval(healthTimer)
+  announceTimer = 0
+  healthTimer = 0
+  unhealthyTicks = 0
+  try {
+    await roomHandle?.leave()
+  } catch {
+    /* ignore */
+  }
+  roomHandle = null
+  syncAction = null
+  peerCount = 0
+  relayLabel = '연결 해제'
+  emit('연결 해제')
+}
+
+async function joinFresh(): Promise<{ ok: boolean; message: string }> {
   const room = loadFriendsRoom()
   if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
-  if (roomHandle) {
-    emit(statusLine())
-    return { ok: true, message: `이미 연결됨 · ${statusLine()}` }
-  }
 
   try {
     roomHandle = joinRoom(spaceRoomConfig(APP_ID, room.code), `fr-${room.code}`)
@@ -245,23 +283,34 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
   }
 }
 
-export async function disconnectFriendsSync(): Promise<void> {
-  window.clearInterval(announceTimer)
-  window.clearInterval(healthTimer)
-  announceTimer = 0
-  healthTimer = 0
-  try {
-    await roomHandle?.leave()
-  } catch {
-    /* ignore */
+export async function ensureFriendsSync(opts?: { force?: boolean }): Promise<{ ok: boolean; message: string }> {
+  const room = loadFriendsRoom()
+  if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
+
+  if (reconnecting) {
+    emit(statusLine())
+    return { ok: true, message: `재연결 중 · ${statusLine()}` }
   }
-  roomHandle = null
-  syncAction = null
-  peerCount = 0
-  relayLabel = '연결 해제'
-  emit('연결 해제')
+
+  const force = opts?.force === true
+  if (roomHandle && !force && isFriendsSyncHealthy()) {
+    emit(statusLine())
+    return { ok: true, message: `이미 연결됨 · ${statusLine()}` }
+  }
+
+  reconnecting = true
+  try {
+    if (roomHandle) await disconnectFriendsSync()
+    return await joinFresh()
+  } finally {
+    reconnecting = false
+  }
 }
 
-export function isFriendsSyncConnected(): boolean {
-  return Boolean(roomHandle)
+export async function connectFriendsSync(): Promise<{ ok: boolean; message: string }> {
+  return ensureFriendsSync()
+}
+
+export async function reconnectFriendsSync(): Promise<{ ok: boolean; message: string }> {
+  return ensureFriendsSync({ force: true })
 }

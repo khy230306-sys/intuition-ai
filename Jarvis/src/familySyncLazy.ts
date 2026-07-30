@@ -19,6 +19,16 @@ export async function connectFamilySync(): Promise<{ ok: boolean; message: strin
   return m.connectFamilySync()
 }
 
+export async function ensureFamilySync(opts?: { force?: boolean }): Promise<{ ok: boolean; message: string }> {
+  const m = await loadSync()
+  return m.ensureFamilySync(opts)
+}
+
+export async function reconnectFamilySync(): Promise<{ ok: boolean; message: string }> {
+  const m = await loadSync()
+  return m.reconnectFamilySync()
+}
+
 export async function disconnectFamilySync(): Promise<void> {
   if (!cached && !modPromise) return
   const m = await loadSync()

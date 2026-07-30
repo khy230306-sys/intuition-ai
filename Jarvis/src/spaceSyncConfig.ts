@@ -56,3 +56,8 @@ export function summarizeRelaySockets(sockets: Record<string, unknown> | null | 
   if (ok === 0) return { ok, total, label: `중계 실패 0/${total} · 네트워크·방화벽 확인` }
   return { ok, total, label: `중계 ${ok}/${total}` }
 }
+
+/** Sockets exist but none are OPEN — typical after iOS background suspend. */
+export function isRelayLinkDead(health: RelayHealth): boolean {
+  return health.total > 0 && health.ok === 0
+}

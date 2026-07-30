@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.8'
+const APP_VERSION = '1.6.9'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -326,9 +326,10 @@ function applyPendingInvite(): boolean {
     if (pending.kind === 'friends') {
       const current = loadFriendsRoom()
       if (current && current.code !== pending.code) {
+        // Keep current room visible + show one-tap switch banner (do not silently no-op)
         state.view = 'friends'
         state.prefillJoinCode = pending.code
-        showFlash(`다른 친구 공간에 있습니다. 나간 뒤 코드 ${pending.code}로 참여하세요.`)
+        showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
         return true
       }
       if (!current) {
@@ -337,6 +338,7 @@ function applyPendingInvite(): boolean {
       }
       state.view = 'friends'
       state.friendsTab = 'chat'
+      state.prefillJoinCode = ''
       showFlash(`친구 코드 ${pending.code}로 참여했습니다.`)
       return true
     }
@@ -344,7 +346,7 @@ function applyPendingInvite(): boolean {
     if (current && current.code !== pending.code) {
       state.view = 'family'
       state.prefillJoinCode = pending.code
-      showFlash(`다른 가족 공간에 있습니다. 나간 뒤 코드 ${pending.code}로 참여하세요.`)
+      showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
       return true
     }
     if (!current) {
@@ -353,6 +355,7 @@ function applyPendingInvite(): boolean {
     }
     state.view = 'family'
     state.familyTab = 'chat'
+    state.prefillJoinCode = ''
     showFlash(`가족 코드 ${pending.code}로 참여했습니다.`)
     return true
   } catch (err) {
@@ -360,6 +363,53 @@ function applyPendingInvite(): boolean {
     state.view = pending.kind
     state.prefillJoinCode = pending.code
     return true
+  }
+}
+
+function inviteSwitchBanner(kind: SpaceKind, currentCode: string): string {
+  const code = state.prefillJoinCode.trim().toUpperCase()
+  if (!code || code === currentCode) return ''
+  const label = kind === 'friends' ? '친구' : '가족'
+  return `
+    <div class="invite-switch" role="status">
+      <p><strong>새 ${label} 초대</strong> · 코드 <span class="invite-switch-code">${escapeHtml(code)}</span></p>
+      <p class="hint">지금 공간(${escapeHtml(currentCode)})과 다릅니다. 전환하면 현재 공간에서 나갑니다.</p>
+      <div class="row-btns">
+        <button type="button" class="primary-btn" data-action="switch-${kind}-invite">전환 참여</button>
+        <button type="button" class="ghost-btn" data-action="dismiss-${kind}-invite">무시</button>
+      </div>
+    </div>`
+}
+
+function switchToInvite(kind: SpaceKind): void {
+  const code = state.prefillJoinCode.trim()
+  if (!code) {
+    showFlash('전환할 초대 코드가 없습니다.')
+    return
+  }
+  const member = state.settings.displayName || '나'
+  try {
+    if (kind === 'friends') {
+      void disconnectFriendsSync()
+      friendsSyncBooted = false
+      leaveFriendsRoom()
+      joinFriendsRoomLocal(code, '친구 공간', member)
+      state.friendsTab = 'chat'
+      state.view = 'friends'
+    } else {
+      void disconnectFamilySync()
+      familySyncBooted = false
+      leaveFamilyRoom()
+      joinFamilyRoomLocal(code, '가족 공간', member)
+      state.familyTab = 'chat'
+      state.view = 'family'
+    }
+    state.prefillJoinCode = ''
+    showFlash(`코드 ${parseInviteCode(code) || code}로 전환했습니다.`)
+    render()
+  } catch (err) {
+    showFlash(err instanceof Error ? err.message : '전환에 실패했습니다.')
+    render()
   }
 }
 
@@ -1344,6 +1394,7 @@ function renderFamily(): string {
           <p class="hint">멤버: ${members}</p>
         </div>
       </div>
+      ${inviteSwitchBanner('family', room.code)}
       <div class="row-btns">
         <button type="button" class="ghost-btn" data-action="family-invite">초대 공유</button>
         <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
@@ -1486,6 +1537,7 @@ function renderFriends(): string {
           <p class="hint">멤버: ${members}</p>
         </div>
       </div>
+      ${inviteSwitchBanner('friends', room.code)}
       <div class="row-btns">
         <button type="button" class="ghost-btn" data-action="friends-invite">초대 공유</button>
         <button type="button" class="ghost-btn" data-action="friends-reconnect">동기화</button>
@@ -1940,6 +1992,23 @@ function bind(): void {
     void openInviteModal('friends')
   })
 
+  document.querySelector('[data-action="switch-friends-invite"]')?.addEventListener('click', () => {
+    switchToInvite('friends')
+  })
+  document.querySelector('[data-action="dismiss-friends-invite"]')?.addEventListener('click', () => {
+    state.prefillJoinCode = ''
+    showFlash('초대를 무시했습니다.')
+    render()
+  })
+  document.querySelector('[data-action="switch-family-invite"]')?.addEventListener('click', () => {
+    switchToInvite('family')
+  })
+  document.querySelector('[data-action="dismiss-family-invite"]')?.addEventListener('click', () => {
+    state.prefillJoinCode = ''
+    showFlash('초대를 무시했습니다.')
+    render()
+  })
+
   const runInviteCopy = (kind: 'code' | 'text' | 'link') => {
     const code = state.shareInviteCode
     const text = state.shareInviteText
@@ -1951,7 +2020,9 @@ function bind(): void {
     const link = buildSpaceInviteUrl(space, code, appShareUrl())
     const payload = kind === 'code' ? code : kind === 'link' ? link : text
     const label = kind === 'code' ? `코드 ${code}` : kind === 'link' ? '초대 링크' : '초대 문구'
-    const r = copyTextNow(payload)
+    const fromSelector =
+      kind === 'code' ? '[data-invite-select="code"]' : kind === 'text' ? '[data-invite-select="text"]' : undefined
+    const r = copyTextNow(payload, fromSelector ? { fromSelector } : {})
     if (r.ok) {
       setShareStatus(`${label} 복사됨`, true)
       return

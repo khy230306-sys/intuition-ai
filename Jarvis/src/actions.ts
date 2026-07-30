@@ -16,15 +16,57 @@ function openUrl(url: string, label: string): ActionResult {
   }
 }
 
+export type CopyTextNowOpts = {
+  /** Prefer this already-visible input/textarea (iOS WebView-safe). */
+  fromSelector?: string
+}
+
+function tryCopyFromField(
+  el: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+): boolean {
+  const prev = el.value
+  try {
+    el.focus()
+    // Only overwrite when the field is meant to hold this exact payload
+    if (el.value !== value) el.value = value
+    el.select?.()
+    el.setSelectionRange?.(0, value.length)
+    const ok = document.execCommand('copy')
+    // Restore invite text box if we temporarily overwrote it
+    if (el.classList.contains('invite-copy-box') && prev !== value) {
+      el.value = prev
+    }
+    return !!ok
+  } catch {
+    if (el.classList.contains('invite-copy-box') && prev !== value) {
+      try {
+        el.value = prev
+      } catch {
+        /* ignore */
+      }
+    }
+    return false
+  }
+}
+
 /**
  * Synchronous copy for click/touch handlers.
  * iOS Safari / in-app WebViews often block async clipboard; keep this sync.
  */
-export function copyTextNow(text: string): ActionResult {
+export function copyTextNow(text: string, opts: CopyTextNowOpts = {}): ActionResult {
   const value = String(text ?? '')
   if (!value.trim()) return { ok: false, message: '복사할 내용이 없습니다.' }
 
-  // 1) iOS-friendly offscreen textarea (must be selectable, not display:none)
+  // 1) Visible invite field first (most reliable on iPhone / in-app browsers)
+  if (opts.fromSelector) {
+    const preferred = document.querySelector(opts.fromSelector) as HTMLInputElement | HTMLTextAreaElement | null
+    if (preferred && tryCopyFromField(preferred, value)) {
+      return { ok: true, message: '클립보드에 복사했습니다.' }
+    }
+  }
+
+  // 2) iOS-friendly offscreen textarea (must be selectable, not display:none)
   try {
     const ta = document.createElement('textarea')
     ta.value = value
@@ -53,17 +95,15 @@ export function copyTextNow(text: string): ActionResult {
     /* fall through */
   }
 
-  // 2) Visible invite fields already on screen (WebView-safe selection)
+  // 3) Any visible invite field (do not leave code/link stuck in the text box)
   try {
-    const box =
-      (document.querySelector('.invite-copy-box') as HTMLTextAreaElement | null) ||
-      (document.querySelector('[data-invite-select]') as HTMLInputElement | HTMLTextAreaElement | null)
-    if (box) {
-      box.focus()
-      box.value = value
-      box.select?.()
-      box.setSelectionRange?.(0, value.length)
-      if (document.execCommand('copy')) {
+    const boxes = [
+      document.querySelector('[data-invite-select="code"]') as HTMLInputElement | null,
+      document.querySelector('[data-invite-select="text"]') as HTMLTextAreaElement | null,
+      document.querySelector('.invite-copy-box') as HTMLTextAreaElement | null,
+    ].filter(Boolean) as Array<HTMLInputElement | HTMLTextAreaElement>
+    for (const box of boxes) {
+      if (tryCopyFromField(box, value)) {
         return { ok: true, message: '클립보드에 복사했습니다.' }
       }
     }
@@ -71,10 +111,19 @@ export function copyTextNow(text: string): ActionResult {
     /* fall through */
   }
 
-  // 3) Best-effort Clipboard API (no await — keep gesture)
+  // 4) Clipboard API — only claim success if writeText is callable in this gesture.
+  // Do NOT fire-and-forget: that previously showed «복사됨» when nothing was copied.
   try {
     if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(value)
+      const p = navigator.clipboard.writeText(value)
+      // Sync gesture path: if it returns a thenable we cannot await here without
+      // losing the user gesture on some WebViews — mark as needs-share fallback.
+      if (p && typeof (p as Promise<void>).then === 'function') {
+        void (p as Promise<void>).catch(() => {
+          /* async failure — UI already treated as fail below */
+        })
+        return { ok: false, message: '자동 복사 확인 불가 · 공유하기 또는 길게 눌러 복사하세요.' }
+      }
       return { ok: true, message: '클립보드에 복사했습니다.' }
     }
   } catch {

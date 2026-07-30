@@ -87,7 +87,7 @@ async function main() {
 
   await pageA.click('[data-action="friends-invite"]')
   await pageA.waitForSelector('[data-invite-select="code"]')
-  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.6.8'))
+  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.6.9'))
   const inviteHint = await pageA.$eval('.share-hint', (el) => el.textContent || '')
   if (!inviteHint.includes(`friends=${code}`)) {
     throw new Error(`invite QR/deep-link missing friends=CODE: ${inviteHint}`)
@@ -105,6 +105,24 @@ async function main() {
   await pageB.waitForSelector('#friends-chat-form', { timeout: 8000 })
   const joined = await pageB.$eval('.friends-head strong', (el) => el.textContent || '')
   if (joined !== code) throw new Error(`deep-link join code mismatch ${joined} vs ${code}`)
+
+  // —— Device B already in a room: conflict invite must offer switch ——
+  await pageB.click('[data-action="friends-leave"]')
+  await pageB.waitForSelector('#friends-create', { timeout: 8000 })
+  await pageB.click('#friends-create button[type="submit"]')
+  await pageB.waitForSelector('#friends-chat-form')
+  const other = await pageB.$eval('.friends-head strong', (el) => el.textContent || '')
+  if (other === code) throw new Error('expected a different room after recreate')
+  await pageB.goto(`http://127.0.0.1:4191/?friends=${code}`, { waitUntil: 'networkidle0' })
+  await pageB.waitForSelector('[data-action="switch-friends-invite"]', { timeout: 8000 })
+  const stillOther = await pageB.$eval('.friends-head strong', (el) => el.textContent || '')
+  if (stillOther !== other) throw new Error('conflict should keep current room until switch')
+  await pageB.click('[data-action="switch-friends-invite"]')
+  await pageB.waitForFunction(
+    (expected) => (document.querySelector('.friends-head strong')?.textContent || '') === expected,
+    { timeout: 8000 },
+    code,
+  )
 
   // Leave and re-join via pasted invite text (old broken path)
   await pageB.waitForSelector('[data-action="friends-leave"]')

@@ -81,7 +81,7 @@ async function main() {
   await page.click('[data-action="friends-invite"]')
   await page.waitForSelector('.share-modal')
   await page.waitForSelector('[data-invite-select="code"]')
-  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.8'))
+  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.9'))
   const shown = await page.$eval('[data-invite-select="code"]', (el) => el.value || '')
   if (shown !== code) throw new Error(`invite modal code mismatch: ${shown} vs ${code}`)
   await page.waitForSelector('[data-action="copy-invite-code"]')

@@ -77,13 +77,49 @@ describe('share/copy helpers', () => {
     })
   })
 
-  it('copies after share abort so invite is not lost', async () => {
-    const err = new DOMException('blocked', 'AbortError')
-    const share = vi.fn().mockRejectedValue(err)
-    stubDom(true)
-    vi.stubGlobal('navigator', { share })
-    const r = await shareText('CODE123')
+  it('does not claim success for fire-and-forget clipboard.writeText alone', () => {
+    const { exec } = stubDom(false)
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const r = copyTextNow('WDBHL4')
+    expect(exec).toHaveBeenCalled()
+    expect(r.ok).toBe(false)
+    expect(r.message).toMatch(/공유하기|길게 눌러/)
+  })
+
+  it('prefers a visible invite field selector when provided', () => {
+    const field = {
+      value: 'WDBHL4',
+      classList: { contains: () => false },
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+    }
+    const exec = vi.fn().mockReturnValue(true)
+    vi.stubGlobal('document', {
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      createElement: vi.fn(() => ({
+        value: '',
+        contentEditable: 'false',
+        readOnly: false,
+        style: { cssText: '' },
+        setAttribute: vi.fn(),
+        focus: vi.fn(),
+        select: vi.fn(),
+        setSelectionRange: vi.fn(),
+      })),
+      execCommand: exec,
+      createRange: () => ({ selectNodeContents: vi.fn() }),
+      querySelector: vi.fn((sel: string) => (sel === '[data-invite-select="code"]' ? field : null)),
+    })
+    vi.stubGlobal('window', {
+      ...globalThis,
+      getSelection: () => ({ removeAllRanges: vi.fn(), addRange: vi.fn() }),
+    })
+    vi.stubGlobal('navigator', {})
+    const r = copyTextNow('WDBHL4', { fromSelector: '[data-invite-select="code"]' })
     expect(r.ok).toBe(true)
-    expect(r.message).toMatch(/복사/)
+    expect(field.focus).toHaveBeenCalled()
+    expect(exec).toHaveBeenCalledWith('copy')
   })
 })

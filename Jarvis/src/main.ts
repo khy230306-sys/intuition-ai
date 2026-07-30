@@ -1,5 +1,5 @@
 import './style.css'
-import { quickActions, shareText } from './actions'
+import { copyText, quickActions, shareText } from './actions'
 import { think } from './brain'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
 import { formatDescriptive } from './stats'
@@ -119,7 +119,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.4'
+const APP_VERSION = '1.6.5'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -159,10 +159,13 @@ const state = {
   arcadeScore: 0,
   arcadeLevel: 1,
   weather: null as WeatherSnap | null,
-  shareModal: null as null | 'app' | 'backup' | 'arcade',
+  shareModal: null as null | 'app' | 'backup' | 'arcade' | 'invite',
   shareQrSvg: '',
   shareHint: '',
   shareArcadePayload: '',
+  shareInviteKind: null as null | 'family' | 'friends',
+  shareInviteCode: '',
+  shareInviteText: '',
   arcadeImportOpen: false,
   familyTab: 'chat' as 'chat' | 'notices' | 'events',
   familySyncStatus: '대기',
@@ -214,6 +217,9 @@ async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> 
   state.shareModal = kind
   state.shareQrSvg = ''
   state.shareArcadePayload = ''
+  state.shareInviteKind = null
+  state.shareInviteCode = ''
+  state.shareInviteText = ''
   state.shareHint = kind === 'app' ? appShareUrl() : 'QR 생성 중…'
   render()
   try {
@@ -240,6 +246,35 @@ async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> 
           ? `전체 백업 QR (${built.bytes}B) — 카메라로 스캔해 저장하세요.`
           : built.reason
     }
+  } catch (err) {
+    state.shareHint = err instanceof Error ? err.message : 'QR 생성 실패'
+  }
+  render()
+}
+
+async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
+  const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
+  if (!room) {
+    showFlash(kind === 'family' ? '먼저 가족 공간을 만들어 주세요.' : '먼저 친구 공간을 만들어 주세요.')
+    return
+  }
+  const text =
+    kind === 'family' ? familyInviteText(room, appShareUrl()) : friendsInviteText(room, appShareUrl())
+  state.shareModal = 'invite'
+  state.shareInviteKind = kind
+  state.shareInviteCode = room.code
+  state.shareInviteText = text
+  state.shareQrSvg = ''
+  state.shareHint = `${kind === 'family' ? '가족' : '친구'} 코드 ${room.code}`
+  render()
+  try {
+    // Compact QR: code + app URL is enough to join
+    const qrPayload = [
+      kind === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대',
+      `코드 ${room.code}`,
+      appShareUrl(),
+    ].join('\n')
+    state.shareQrSvg = await qrSvg(qrPayload)
   } catch (err) {
     state.shareHint = err instanceof Error ? err.message : 'QR 생성 실패'
   }
@@ -656,7 +691,15 @@ function renderHomeWidget(): string {
 function renderShareModal(): string {
   if (!state.shareModal) return ''
   const title =
-    state.shareModal === 'app' ? '앱 공유 QR' : state.shareModal === 'arcade' ? '게임 기록 공유' : '백업 QR / 공유'
+    state.shareModal === 'app'
+      ? '앱 공유 QR'
+      : state.shareModal === 'arcade'
+        ? '게임 기록 공유'
+        : state.shareModal === 'invite'
+          ? state.shareInviteKind === 'family'
+            ? '가족 초대'
+            : '친구 초대'
+          : '백업 QR / 공유'
   const actions =
     state.shareModal === 'app'
       ? `
@@ -668,10 +711,25 @@ function renderShareModal(): string {
             <button type="button" class="primary-btn" data-action="share-arcade-native">공유하기</button>
             <button type="button" class="ghost-btn" data-action="copy-arcade-score">코드 복사</button>
           `
-        : `
+        : state.shareModal === 'invite'
+          ? `
+            <button type="button" class="primary-btn" data-action="share-invite-native">공유하기</button>
+            <button type="button" class="ghost-btn" data-action="copy-invite-code">코드 복사</button>
+            <button type="button" class="ghost-btn" data-action="copy-invite-text">초대 문구 복사</button>
+          `
+          : `
             <button type="button" class="primary-btn" data-action="share-backup-native">백업 공유</button>
             <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
           `
+  const inviteBlock =
+    state.shareModal === 'invite'
+      ? `
+        <div class="invite-code-block">
+          <span class="invite-code-label">초대 코드</span>
+          <strong class="invite-code-value" data-invite-code="${escapeAttr(state.shareInviteCode)}">${escapeHtml(state.shareInviteCode || '—')}</strong>
+          <p class="hint">친구가 하단 <strong>${state.shareInviteKind === 'family' ? '가족' : '친구'}</strong> 탭 → 코드로 참여에 입력하면 됩니다.</p>
+        </div>`
+      : ''
   return `
     <div class="share-modal" role="dialog" aria-modal="true" aria-label="${title}" data-action="close-share-backdrop">
       <div class="share-sheet" data-share-sheet="1">
@@ -679,6 +737,7 @@ function renderShareModal(): string {
           <strong>${title}</strong>
           <button type="button" class="ghost-btn tiny" data-action="close-share">닫기</button>
         </div>
+        ${inviteBlock}
         <div class="share-qr">${state.shareQrSvg || '<p class="hint">QR 생성 중…</p>'}</div>
         <p class="hint share-hint">${escapeHtml(state.shareHint || appShareUrl())}</p>
         <div class="row-btns">
@@ -1553,9 +1612,7 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="family-invite"]')?.addEventListener('click', () => {
-    const room = loadFamilyRoom()
-    if (!room) return
-    void shareText(familyInviteText(room, appShareUrl())).then((r) => showFlash(r.message))
+    void openInviteModal('family')
   })
 
   document.querySelector('[data-action="family-leave"]')?.addEventListener('click', () => {
@@ -1670,9 +1727,35 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="friends-invite"]')?.addEventListener('click', () => {
-    const room = loadFriendsRoom()
-    if (!room) return
-    void shareText(friendsInviteText(room, appShareUrl())).then((r) => showFlash(r.message))
+    void openInviteModal('friends')
+  })
+
+  document.querySelector('[data-action="share-invite-native"]')?.addEventListener('click', () => {
+    const text = state.shareInviteText
+    if (!text) {
+      showFlash('초대 문구가 없습니다.')
+      return
+    }
+    const title = state.shareInviteKind === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대'
+    void shareText(text, { title, url: appShareUrl() }).then((r) => showFlash(r.message))
+  })
+
+  document.querySelector('[data-action="copy-invite-code"]')?.addEventListener('click', () => {
+    const code = state.shareInviteCode
+    if (!code) {
+      showFlash('코드가 없습니다.')
+      return
+    }
+    void copyText(code).then((r) => showFlash(r.ok ? `코드 ${code} 복사됨` : r.message))
+  })
+
+  document.querySelector('[data-action="copy-invite-text"]')?.addEventListener('click', () => {
+    const text = state.shareInviteText
+    if (!text) {
+      showFlash('초대 문구가 없습니다.')
+      return
+    }
+    void copyText(text).then((r) => showFlash(r.ok ? '초대 문구를 복사했습니다.' : r.message))
   })
 
   document.querySelector('[data-action="friends-leave"]')?.addEventListener('click', () => {
@@ -2041,6 +2124,9 @@ function bind(): void {
     state.shareModal = null
     state.shareQrSvg = ''
     state.shareArcadePayload = ''
+    state.shareInviteKind = null
+    state.shareInviteCode = ''
+    state.shareInviteText = ''
     render()
   })
 
@@ -2049,6 +2135,9 @@ function bind(): void {
       state.shareModal = null
       state.shareQrSvg = ''
       state.shareArcadePayload = ''
+      state.shareInviteKind = null
+      state.shareInviteCode = ''
+      state.shareInviteText = ''
       render()
     }
   })

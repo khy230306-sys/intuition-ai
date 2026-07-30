@@ -5,9 +5,9 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://hazy-synth-ez868wl.shipstatic.com
+**앱 URL:** https://kinetic-bit-3w78qo7.shipstatic.com
 
-> 게이트/번역 바에 **v1.6.4**이 보여야 최신입니다.  
+> 게이트/번역 바에 **v1.6.5**이 보여야 최신입니다.  
 > 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)
 
 1. iPhone **Safari**로 위 주소를 엽니다.

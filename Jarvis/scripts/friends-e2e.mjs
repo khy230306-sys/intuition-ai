@@ -78,6 +78,16 @@ async function main() {
   const code = await page.$eval('.friends-head strong', (el) => el.textContent || '')
   if (code.length < 4) throw new Error(`friends code missing: ${code}`)
 
+  await page.click('[data-action="friends-invite"]')
+  await page.waitForSelector('.share-modal')
+  await page.waitForSelector('.invite-code-value')
+  const shown = await page.$eval('.invite-code-value', (el) => el.textContent || '')
+  if (shown !== code) throw new Error(`invite modal code mismatch: ${shown} vs ${code}`)
+  await page.waitForSelector('[data-action="copy-invite-code"]')
+  await page.waitForSelector('[data-action="share-invite-native"]')
+  await page.click('[data-action="close-share"]')
+  await page.waitForFunction(() => !document.querySelector('.share-modal'))
+
   await page.type('#friends-chat-form input[name="text"]', '친구 안녕')
   await page.click('#friends-chat-form button[type="submit"]')
   await page.waitForFunction(() => (document.querySelector('.friends-chat')?.textContent || '').includes('친구 안녕'))

@@ -16,25 +16,80 @@ function openUrl(url: string, label: string): ActionResult {
   }
 }
 
+/** iOS Safari often blocks clipboard API; textarea fallback keeps invite copy working. */
 export async function copyText(text: string): Promise<ActionResult> {
+  const value = String(text ?? '')
+  if (!value.trim()) return { ok: false, message: '복사할 내용이 없습니다.' }
+
   try {
-    await navigator.clipboard.writeText(text)
-    return { ok: true, message: '클립보드에 복사했습니다.' }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return { ok: true, message: '클립보드에 복사했습니다.' }
+    }
   } catch {
-    return { ok: false, message: '클립보드 복사에 실패했습니다.' }
+    /* fall through to execCommand */
   }
+
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = value
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '0'
+    ta.style.left = '0'
+    ta.style.width = '2px'
+    ta.style.height = '2px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    ta.setSelectionRange(0, value.length)
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if (ok) return { ok: true, message: '클립보드에 복사했습니다.' }
+  } catch {
+    /* ignore */
+  }
+
+  return { ok: false, message: '클립보드 복사에 실패했습니다. 코드를 길게 눌러 복사해 주세요.' }
 }
 
-export async function shareText(text: string): Promise<ActionResult> {
-  if (navigator.share) {
+export type ShareTextOpts = {
+  title?: string
+  url?: string
+}
+
+/**
+ * Prefer native share; on failure fall back to copy so invite codes are never lost.
+ * iOS is more reliable with title (+ optional url).
+ */
+export async function shareText(text: string, opts: ShareTextOpts = {}): Promise<ActionResult> {
+  const body = String(text ?? '').trim()
+  if (!body) return { ok: false, message: '공유할 내용이 없습니다.' }
+
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
-      await navigator.share({ text })
+      const data: ShareData = { text: body }
+      if (opts.title) data.title = opts.title
+      if (opts.url) data.url = opts.url
+      await navigator.share(data)
       return { ok: true, message: '공유 시트를 열었습니다.' }
-    } catch {
-      return { ok: false, message: '공유가 취소되었습니다.' }
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : ''
+      if (name === 'AbortError') {
+        const copied = await copyText(body)
+        if (copied.ok) return { ok: true, message: '공유 취소 · 초대 문구를 복사해 두었습니다.' }
+        return { ok: false, message: '공유가 취소되었습니다.' }
+      }
+      /* NotAllowedError / TypeError → copy below */
     }
   }
-  return copyText(text)
+
+  const copied = await copyText(body)
+  if (copied.ok) {
+    return { ok: true, message: '공유 대신 초대 문구를 복사했습니다. 친구에게 붙여넣기 하세요.' }
+  }
+  return copied
 }
 
 export function openMaps(query: string): ActionResult {

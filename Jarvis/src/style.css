@@ -1102,6 +1102,34 @@ body {
   margin: 10px 0 12px;
 }
 
+.invite-code-block {
+  text-align: center;
+  margin: 0 0 12px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  background: rgba(0, 210, 190, 0.08);
+}
+
+.invite-code-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+  font-family: var(--font-display);
+  margin-bottom: 4px;
+}
+
+.invite-code-value {
+  display: block;
+  font-size: 1.8rem;
+  letter-spacing: 0.18em;
+  font-family: var(--font-display);
+  color: var(--cyan-bright);
+  user-select: all;
+  -webkit-user-select: all;
+}
+
 .nav.nav-7 {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;

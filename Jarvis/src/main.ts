@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.7'
+const APP_VERSION = '1.7.8'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -1876,11 +1876,7 @@ async function ensureFamilySyncOnce(force = false): Promise<void> {
   familySyncInFlight = (async () => {
     const r = force ? await reconnectFamilySync() : await ensureFamilySync()
     state.familySyncStatus = r.message
-    const el = document.querySelector('.family-head .hint')
-    const room = loadFamilyRoom()
-    if (el && room) {
-      el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명`
-    }
+    patchSpaceHead('family', { status: r.message, peers: getFamilyPeerCount() })
   })().finally(() => {
     familySyncInFlight = null
   })
@@ -1894,15 +1890,30 @@ async function ensureFriendsSyncOnce(force = false): Promise<void> {
   friendsSyncInFlight = (async () => {
     const r = force ? await reconnectFriendsSync() : await ensureFriendsSync()
     state.friendsSyncStatus = r.message
-    const el = document.querySelector('.friends-head .hint')
-    const room = loadFriendsRoom()
-    if (el && room) {
-      el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 동료 ${getFriendsPeerCount()}명`
-    }
+    patchSpaceHead('friends', { status: r.message, peers: getFriendsPeerCount() })
   })().finally(() => {
     friendsSyncInFlight = null
   })
   return friendsSyncInFlight
+}
+
+/** Patch sync status text without wiping the whole view (avoids rise-animation flicker). */
+function patchSpaceHead(
+  kind: 'family' | 'friends',
+  info: { status: string; peers: number },
+): void {
+  const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
+  if (!room) return
+  const head = document.querySelector(kind === 'family' ? '.family-head' : '.friends-head')
+  if (!head) return
+  const hints = head.querySelectorAll('.hint')
+  if (hints[0]) {
+    hints[0].innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)}`
+  }
+  // Third hint line is "지금 온라인(동료)"
+  if (hints[2]) {
+    hints[2].innerHTML = `지금 온라인(동료) <strong>${info.peers}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다`
+  }
 }
 
 /** Keep MQTT/WebRTC alive for chat alerts even when not on family/friends tab. */
@@ -1920,23 +1931,28 @@ async function bootSpaceSyncAndPush(): Promise<void> {
   if (loadFriendsRoom()) await ensureFriendsSyncOnce()
 }
 
-/** After app leave/return or network restore — force rejoin so peers show again. */
+/**
+ * After app leave/return or network restore.
+ * Prefer soft ensure; force only when coming back from background (visibility).
+ * Never full-render unless chat data may have arrived — patch status instead.
+ */
 let resumeSyncTimer = 0
-function scheduleResumeSpaceSync(force = true): void {
+let lastResumeAt = 0
+function scheduleResumeSpaceSync(mode: 'soft' | 'force' = 'soft'): void {
   window.clearTimeout(resumeSyncTimer)
   resumeSyncTimer = window.setTimeout(() => {
     if (!state.locationReady) return
+    const now = Date.now()
+    // Avoid reconnect storms from iOS focus/visibility thrash
+    if (mode === 'force' && now - lastResumeAt < 8_000) mode = 'soft'
+    if (mode === 'soft' && now - lastResumeAt < 2_000) return
+    lastResumeAt = now
+    const force = mode === 'force'
     void (async () => {
       if (loadFamilyRoom()) await ensureFamilySyncOnce(force)
       if (loadFriendsRoom()) await ensureFriendsSyncOnce(force)
-      if (
-        (state.view === 'family' || state.view === 'friends') &&
-        !state.shareModal
-      ) {
-        render()
-      }
     })()
-  }, 600)
+  }, 800)
 }
 
 function bindLocationGate(): void {
@@ -2943,40 +2959,40 @@ function boot(): void {
   setFamilySyncListener((info) => {
     state.familySyncStatus = info.status
     if (state.view !== 'family' || !state.locationReady) return
-    // Don't wipe invite/share modal mid-copy on iOS
     if (state.shareModal) return
-    const active = document.activeElement as HTMLElement | null
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      const el = document.querySelector('.family-head .hint')
-      const room = loadFamilyRoom()
-      if (el && room) {
-        el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)} · 동료 ${info.peers}명`
-      }
+    // Health ticks / peer count: patch text only — full render re-triggers rise animation (flicker).
+    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      patchSpaceHead('family', info)
       return
     }
-    // Debounced soft refresh for incoming packets
+    // Incoming chat/notice/event data — soft remount
+    const active = document.activeElement as HTMLElement | null
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      patchSpaceHead('family', info)
+      return
+    }
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
     ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
       if (state.view === 'family' && !state.shareModal) render()
-    }, 400)
+    }, 500)
   })
   setFriendsSyncListener((info) => {
     state.friendsSyncStatus = info.status
     if (state.view !== 'friends' || !state.locationReady) return
     if (state.shareModal) return
+    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      patchSpaceHead('friends', info)
+      return
+    }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      const el = document.querySelector('.friends-head .hint')
-      const room = loadFriendsRoom()
-      if (el && room) {
-        el.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)} · 동료 ${info.peers}명`
-      }
+      patchSpaceHead('friends', info)
       return
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
     ;(window as unknown as { __frdRefresh?: number }).__frdRefresh = window.setTimeout(() => {
       if (state.view === 'friends' && !state.shareModal) render()
-    }, 400)
+    }, 500)
   })
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {
@@ -2991,24 +3007,24 @@ function boot(): void {
   window.addEventListener('online', () => {
     state.online = true
     if (state.locationReady) {
-      scheduleResumeSpaceSync(true)
-      render()
+      scheduleResumeSpaceSync('force')
+      const pill = document.querySelector('.status-pill')
+      if (pill) pill.textContent = '대기'
     }
   })
   window.addEventListener('offline', () => {
     state.online = false
-    if (state.locationReady) render()
+    const pill = document.querySelector('.status-pill')
+    if (pill) pill.textContent = '오프라인'
   })
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') scheduleResumeSpaceSync(true)
+    if (document.visibilityState === 'visible') scheduleResumeSpaceSync('force')
   })
   window.addEventListener('pageshow', (ev) => {
     const persisted = 'persisted' in ev && Boolean((ev as PageTransitionEvent).persisted)
-    if (persisted || document.visibilityState === 'visible') scheduleResumeSpaceSync(true)
+    if (persisted) scheduleResumeSpaceSync('force')
   })
-  window.addEventListener('focus', () => {
-    scheduleResumeSpaceSync(false)
-  })
+  // Do NOT hook window "focus" — iOS fires it on taps and caused reconnect/render flicker.
 
   // Always require a fresh location grant on launch (standalone / Safari)
   void (async () => {

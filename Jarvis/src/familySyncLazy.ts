@@ -46,7 +46,7 @@ export function getFamilyPeerCount(): number {
 }
 
 export function setFamilySyncListener(
-  fn: ((info: { peers: number; status: string }) => void) | null,
+  fn: ((info: { peers: number; status: string; reason: 'health' | 'peer' | 'data' | 'conn' }) => void) | null,
 ): void {
   void loadSync().then((m) => m.setFamilySyncListener(fn))
 }

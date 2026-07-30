@@ -21,7 +21,9 @@ let announceTimer = 0
 let healthTimer = 0
 let unhealthyTicks = 0
 let reconnecting = false
-let onChange: ((info: { peers: number; status: string }) => void) | null = null
+let lastEmitted = ''
+let onChange: ((info: { peers: number; status: string; reason: 'health' | 'peer' | 'data' | 'conn' }) => void) | null =
+  null
 
 export function getFamilyPeerCount(): number {
   return peerCount
@@ -35,12 +37,16 @@ export function getFamilyRelayLabel(): string {
   return relayLabel
 }
 
-export function setFamilySyncListener(fn: ((info: { peers: number; status: string }) => void) | null): void {
+export function setFamilySyncListener(
+  fn: ((info: { peers: number; status: string; reason: 'health' | 'peer' | 'data' | 'conn' }) => void) | null,
+): void {
   onChange = fn
 }
 
-function emit(status: string): void {
-  onChange?.({ peers: peerCount, status })
+function emit(status: string, reason: 'health' | 'peer' | 'data' | 'conn' = 'conn'): void {
+  refreshPeers()
+  lastEmitted = status
+  onChange?.({ peers: peerCount, status, reason })
 }
 
 function refreshPeers(): number {
@@ -172,14 +178,21 @@ function statusLine(): string {
   return `온라인 대기 · ${relayLabel} · 상대도 JARVIS를 열어 두면 자동 연결`
 }
 
+function emitStatus(reason: 'health' | 'peer' | 'data' | 'conn' = 'health'): void {
+  const status = statusLine()
+  if (reason === 'health' && status === lastEmitted) return
+  lastEmitted = status
+  onChange?.({ peers: peerCount, status, reason })
+}
+
 function startWatchdogs(): void {
   window.clearInterval(announceTimer)
   window.clearInterval(healthTimer)
   unhealthyTicks = 0
   announceTimer = window.setInterval(() => {
     if (!roomHandle || reconnecting) return
-    void announceSelf().then(() => emit(statusLine()))
-  }, 12_000)
+    void announceSelf().then(() => emitStatus('health'))
+  }, 20_000)
   healthTimer = window.setInterval(() => {
     if (!roomHandle || reconnecting) return
     const health = readRelayHealth()
@@ -187,11 +200,14 @@ function startWatchdogs(): void {
     refreshPeers()
     if (isRelayLinkDead(health)) unhealthyTicks += 1
     else unhealthyTicks = 0
-    emit(statusLine())
-    // ~8s of dead MQTT after iOS suspend → hard rejoin
-    if (unhealthyTicks >= 2) {
+    emitStatus('health')
+    // ~12s of dead MQTT after iOS suspend → hard rejoin
+    if (unhealthyTicks >= 3) {
       unhealthyTicks = 0
-      void ensureFamilySync({ force: true }).then((r) => emit(r.message))
+      void ensureFamilySync({ force: true }).then((r) => {
+        lastEmitted = ''
+        onChange?.({ peers: peerCount, status: r.message, reason: 'conn' })
+      })
     }
   }, 4_000)
 }
@@ -243,7 +259,8 @@ export async function disconnectFamilySync(): Promise<void> {
   syncAction = null
   peerCount = 0
   relayLabel = '연결 해제'
-  emit('연결 해제')
+  lastEmitted = ''
+  emit('연결 해제', 'conn')
 }
 
 async function joinFresh(): Promise<{ ok: boolean; message: string }> {
@@ -255,31 +272,31 @@ async function joinFresh(): Promise<{ ok: boolean; message: string }> {
     syncAction = roomHandle.makeAction<FamilySyncPacket>('fam-sync', {
       onMessage: (data) => {
         applyPacket(data)
-        emit(`동기화 · ${statusLine()}`)
+        emit(`동기화 · ${statusLine()}`, 'data')
       },
     })
 
     roomHandle.onPeerJoin = (peerId) => {
       refreshPeers()
       void announceSelf()
-      emit(`동료 접속 ${peerId.slice(0, 4)}… · ${statusLine()}`)
+      emit(`동료 접속 ${peerId.slice(0, 4)}… · ${statusLine()}`, 'peer')
     }
 
     roomHandle.onPeerLeave = () => {
-      emit(`동료 나감 · ${statusLine()}`)
+      emit(`동료 나감 · ${statusLine()}`, 'peer')
     }
 
     startWatchdogs()
     await announceSelf()
     await new Promise((r) => setTimeout(r, 600))
     const msg = `가족 동기화 연결 · 코드 ${room.code} · ${statusLine()}`
-    emit(msg)
+    emit(msg, 'conn')
     return { ok: true, message: msg }
   } catch (err) {
     roomHandle = null
     syncAction = null
     const msg = err instanceof Error ? err.message : '동기화 연결 실패'
-    emit(msg)
+    emit(msg, 'conn')
     return { ok: false, message: msg }
   }
 }
@@ -290,14 +307,13 @@ export async function ensureFamilySync(opts?: { force?: boolean }): Promise<{ ok
   if (!room) return { ok: false, message: '먼저 가족 공간을 만들거나 코드로 참여하세요.' }
 
   if (reconnecting) {
-    emit(statusLine())
     return { ok: true, message: `재연결 중 · ${statusLine()}` }
   }
 
   const force = opts?.force === true
   if (roomHandle && !force && isFamilySyncHealthy()) {
-    emit(statusLine())
-    return { ok: true, message: `이미 연결됨 · ${statusLine()}` }
+    const status = statusLine()
+    return { ok: true, message: `이미 연결됨 · ${status}` }
   }
 
   reconnecting = true

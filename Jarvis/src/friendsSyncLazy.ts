@@ -46,7 +46,7 @@ export function getFriendsPeerCount(): number {
 }
 
 export function setFriendsSyncListener(
-  fn: ((info: { peers: number; status: string }) => void) | null,
+  fn: ((info: { peers: number; status: string; reason: 'health' | 'peer' | 'data' | 'conn' }) => void) | null,
 ): void {
   void loadSync().then((m) => m.setFriendsSyncListener(fn))
 }

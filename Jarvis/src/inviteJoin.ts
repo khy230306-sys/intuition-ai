@@ -117,6 +117,26 @@ export function parseInviteFromLocation(href: string): { kind: SpaceKind; code: 
   return null
 }
 
+/** Detect invite kind from pasted text / QR payload (URL params). Bare codes return null. */
+export function detectInviteKind(raw: string): SpaceKind | null {
+  const text = String(raw || '').trim()
+  if (!text) return null
+  const fromLoc = parseInviteFromLocation(text.startsWith('http') ? text : `https://jarvis.local/?${text.includes('=') ? text : ''}`)
+  if (fromLoc) return fromLoc.kind
+  try {
+    if (/friends=|\?fr=/i.test(text) || /#friends=/i.test(text)) return 'friends'
+    if (/family=|\?fam=/i.test(text) || /#family=/i.test(text)) return 'family'
+    const u = new URL(text, 'https://jarvis.local/')
+    if (u.searchParams.get('friends') || u.searchParams.get('fr')) return 'friends'
+    if (u.searchParams.get('family') || u.searchParams.get('fam')) return 'family'
+  } catch {
+    /* ignore */
+  }
+  if (/친구\s*(공간|초대|코드)/.test(text) && !/가족/.test(text)) return 'friends'
+  if (/가족\s*(공간|초대|코드)/.test(text) && !/친구/.test(text)) return 'family'
+  return null
+}
+
 export function buildSpaceInviteUrl(kind: SpaceKind, code: string, baseUrl: string): string {
   const url = new URL(baseUrl, 'https://jarvis.local/')
   // Drop prior invite params

@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.7.3",
+  "version": "1.7.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@trystero-p2p/mqtt": "^0.25.3",
+    "jsqr": "^1.4.0",
     "qrcode": "^1.5.4"
   }
 }

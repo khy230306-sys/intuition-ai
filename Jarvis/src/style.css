@@ -1261,18 +1261,93 @@ body {
 }
 
 .nav.nav-8 {
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 1px;
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 2px;
+  grid-template-columns: none;
+}
+
+.nav.nav-8::-webkit-scrollbar {
+  display: none;
 }
 
 .nav.nav-8 button {
-  padding: 8px 1px 6px;
-  font-size: 0.56rem;
+  flex: 1 0 auto;
+  min-width: 3.2rem;
+  padding: 8px 4px 6px;
+  font-size: 0.58rem;
 }
 
 .nav.nav-8 .nav-ico {
   font-size: 0.52rem;
   letter-spacing: 0.01em;
+}
+
+.qr-scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.qr-scan-card {
+  width: min(420px, 100%);
+  background: #0f1720;
+  border: 1px solid rgba(90, 255, 232, 0.25);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+}
+
+.qr-scan-title {
+  margin: 0 0 10px;
+  color: #5affe8;
+  font-weight: 700;
+}
+
+.qr-scan-video {
+  width: 100%;
+  max-height: 55vh;
+  border-radius: 12px;
+  background: #000;
+  object-fit: cover;
+}
+
+.space-switch {
+  margin: 8px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.space-switch summary {
+  cursor: pointer;
+  color: #9adfd6;
+  font-size: 0.85rem;
+}
+
+.family-setup textarea,
+.space-switch textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+}
+
+.loc-invite {
+  margin: 0 0 10px;
+  color: #fbbf24;
+  font-size: 0.9rem;
+}
+
+.loc-invite-go {
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 .family-panel .family-head {

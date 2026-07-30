@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSpaceInviteUrl,
+  detectInviteKind,
   parseInviteCode,
   parseInviteFromLocation,
   preferSpaceName,
@@ -32,6 +33,13 @@ describe('invite join helpers', () => {
       kind: 'family',
       code: 'VQT3NY',
     })
+  })
+
+  it('detects invite kind from paste/QR payloads', () => {
+    expect(detectInviteKind('https://app.example/?friends=K7M2PQ')).toBe('friends')
+    expect(detectInviteKind('https://app.example/?family=XY2Z34')).toBe('family')
+    expect(detectInviteKind('friends=AABB12')).toBe('friends')
+    expect(detectInviteKind('K7M2PQ')).toBeNull()
   })
 
   it('builds invite URLs and strips params', () => {

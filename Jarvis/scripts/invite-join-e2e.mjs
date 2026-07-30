@@ -87,7 +87,7 @@ async function main() {
 
   await pageA.click('[data-action="friends-invite"]')
   await pageA.waitForSelector('[data-invite-select="code"]')
-  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.7.3'))
+  await pageA.waitForFunction(() => (document.body.textContent || '').includes('v1.7.4'))
   const inviteHint = await pageA.$eval('.share-hint', (el) => el.textContent || '')
   if (!inviteHint.includes(`friends=${code}`)) {
     throw new Error(`invite QR/deep-link missing friends=CODE: ${inviteHint}`)
@@ -124,15 +124,15 @@ async function main() {
     code,
   )
 
-  // Leave and re-join via pasted invite text (old broken path)
+  // Leave and re-join via pasted invite text (textarea)
   await pageB.waitForSelector('[data-action="friends-leave"]')
   await pageB.click('[data-action="friends-leave"]')
   await pageB.waitForSelector('#friends-join', { timeout: 8000 })
-  await pageB.waitForSelector('#friends-join input[name="code"]')
+  await pageB.waitForSelector('#friends-join textarea[name="code"]')
   await pageB.waitForSelector('#friends-join input[name="member"]')
   const paste = `JARVIS 친구 공간 초대\n이름: 테스트방\n코드: ${code}\n\nhttps://example.com/?friends=${code}`
   await pageB.$eval(
-    '#friends-join input[name="code"]',
+    '#friends-join textarea[name="code"]',
     (el, value) => {
       el.value = value
       el.dispatchEvent(new Event('input', { bubbles: true }))
@@ -148,6 +148,28 @@ async function main() {
   const joined2 = await pageB.$eval('.friends-head strong', (el) => el.textContent || '')
   if (joined2 !== code) throw new Error(`paste join wrong code ${joined2}`)
 
+  // In-room switch form
+  await pageB.waitForSelector('#friends-switch')
+  await pageB.$eval('#friends-switch', (el) => {
+    const d = el.closest('details')
+    if (d) d.open = true
+  })
+  await pageB.$eval(
+    '#friends-switch textarea[name="code"]',
+    (el, value) => {
+      el.value = value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    other,
+  )
+  pageB.once('dialog', (d) => d.accept())
+  await pageB.click('#friends-switch button[type="submit"]')
+  await pageB.waitForFunction(
+    (expected) => (document.querySelector('.friends-head strong')?.textContent || '') === expected,
+    { timeout: 8000 },
+    other,
+  )
+
   // Family deep-link smoke
   const ctxC = await browser.createBrowserContext()
   const pageC = await ctxC.newPage()
@@ -162,15 +184,43 @@ async function main() {
   await pageC.waitForSelector('[data-invite-select="code"]')
   const famHint = await pageC.$eval('.share-hint', (el) => el.textContent || '')
   if (!famHint.includes(`family=${famCode}`)) throw new Error(`family deep-link missing: ${famHint}`)
+  await pageC.click('[data-action="close-share"]')
 
   const ctxD = await browser.createBrowserContext()
   const pageD = await ctxD.newPage()
   await seedGeo(pageD)
   await pageD.goto(`http://127.0.0.1:4191/?family=${famCode}`, { waitUntil: 'networkidle0' })
   await pageD.waitForSelector('#family-chat-form', { timeout: 8000 })
+  const famJoined = await pageD.$eval('.family-head strong', (el) => el.textContent || '')
+  if (famJoined !== famCode) throw new Error(`family deep-link join failed ${famJoined}`)
+
+  // Invite-aware location gate CTA
+  const ctxE = await browser.createBrowserContext()
+  const pageE = await ctxE.newPage()
+  pageE.on('pageerror', (e) => errors.push('E:' + String(e)))
+  await pageE.evaluateOnNewDocument(() => {
+    localStorage.clear()
+  })
+  await pageE.goto(`http://127.0.0.1:4191/?friends=${code}`, { waitUntil: 'networkidle0' })
+  await pageE.waitForSelector('[data-action="accept-invite-start"]', { timeout: 8000 })
+  await pageE.click('[data-action="accept-invite-start"]')
+  await pageE.waitForSelector('#friends-chat-form', { timeout: 8000 })
+  const gateJoined = await pageE.$eval('.friends-head strong', (el) => el.textContent || '')
+  if (gateJoined !== code) throw new Error(`invite-start gate join failed ${gateJoined}`)
+
+  // Tab navigation smoke: chat / invest / life / family / friends
+  await seedGeo(pageA)
+  for (const view of ['chat', 'invest', 'life', 'family', 'friends']) {
+    await pageA.click(`[data-view="${view}"]`)
+    await pageA.waitForFunction(
+      (v) => document.querySelector(`[data-view="${v}"]`)?.classList.contains('active'),
+      {},
+      view,
+    )
+  }
 
   if (errors.length) throw new Error(errors.join(' | '))
-  console.log('INVITE_JOIN_E2E_OK', { friends: code, family: famCode })
+  console.log('INVITE_JOIN_E2E_OK', { friends: code, family: famCode, switched: other })
   await browser.close()
   server.close()
 }

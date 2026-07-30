@@ -6,6 +6,7 @@ import {
   saveFriendsRoom,
   upsertMember,
 } from './friendsStore'
+import { preferSpaceName } from './inviteJoin'
 
 const APP_ID = 'jarvis-friends-space-v1'
 
@@ -38,7 +39,9 @@ function applyPacket(packet: FriendsSyncPacket): void {
 
   if (packet.type === 'hello') {
     upsertMember(local, packet.member)
-    if (packet.roomName && !local.name) local.name = packet.roomName
+    if (packet.roomName) {
+      local.name = preferSpaceName(local.name, packet.roomName, local.updatedAt, packet.updatedAt || Date.now())
+    }
     saveFriendsRoom(local)
     return
   }

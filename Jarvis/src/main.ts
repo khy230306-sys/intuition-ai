@@ -3,11 +3,13 @@ import './style.css'
 import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
 import {
   buildSpaceInviteUrl,
+  detectInviteKind,
   parseInviteCode,
   parseInviteFromLocation,
   stripInviteParamsFromUrl,
   type SpaceKind,
 } from './inviteJoin'
+import { canUseCameraScan, decodeQrFromFile, decodeQrFromVideo } from './qrDecode'
 import { think } from './brain'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
 import { formatDescriptive } from './stats'
@@ -125,8 +127,9 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.7.3'
+const APP_VERSION = '1.7.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
+const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
 async function hardRefreshApp(): Promise<void> {
   if (sessionStorage.getItem('jarvis.refreshing') === '1') return
@@ -328,11 +331,39 @@ async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   render()
 }
 
+function savePendingInvite(inv: { kind: SpaceKind; code: string } | null): void {
+  try {
+    if (!inv) sessionStorage.removeItem(PENDING_INVITE_KEY)
+    else sessionStorage.setItem(PENDING_INVITE_KEY, JSON.stringify(inv))
+  } catch {
+    /* ignore */
+  }
+}
+
+function restorePendingInvite(): void {
+  if (state.pendingInvite) return
+  try {
+    const raw = sessionStorage.getItem(PENDING_INVITE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { kind?: string; code?: string }
+    if ((parsed.kind === 'family' || parsed.kind === 'friends') && parsed.code) {
+      state.pendingInvite = { kind: parsed.kind, code: parsed.code }
+      state.prefillJoinCode = parsed.code
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function captureInviteFromUrl(): void {
   const found = parseInviteFromLocation(window.location.href)
-  if (!found) return
+  if (!found) {
+    restorePendingInvite()
+    return
+  }
   state.pendingInvite = found
   state.prefillJoinCode = found.code
+  savePendingInvite(found)
   try {
     const cleaned = stripInviteParamsFromUrl(window.location.href)
     window.history.replaceState({}, '', cleaned)
@@ -345,6 +376,7 @@ function applyPendingInvite(): boolean {
   const pending = state.pendingInvite
   if (!pending || !state.locationReady) return false
   state.pendingInvite = null
+  savePendingInvite(null)
   const member = state.settings.displayName || '나'
   try {
     if (pending.kind === 'friends') {
@@ -353,6 +385,7 @@ function applyPendingInvite(): boolean {
         // Keep current room visible + show one-tap switch banner (do not silently no-op)
         state.view = 'friends'
         state.prefillJoinCode = pending.code
+        savePendingInvite(pending)
         showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
         return true
       }
@@ -370,6 +403,7 @@ function applyPendingInvite(): boolean {
     if (current && current.code !== pending.code) {
       state.view = 'family'
       state.prefillJoinCode = pending.code
+      savePendingInvite(pending)
       showFlash(`초대 ${pending.code} 수신 · 아래에서 «전환 참여»를 누르세요`)
       return true
     }
@@ -429,6 +463,7 @@ function switchToInvite(kind: SpaceKind): void {
       state.view = 'family'
     }
     state.prefillJoinCode = ''
+    savePendingInvite(null)
     showFlash(`코드 ${parseInviteCode(code) || code}로 전환했습니다.`)
     render()
   } catch (err) {
@@ -438,66 +473,93 @@ function switchToInvite(kind: SpaceKind): void {
 }
 
 async function detectQrFromFile(file: File): Promise<string | null> {
-  const BD = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (bmp: ImageBitmap) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector
-  if (!BD) return null
-  try {
-    const detector = new BD({ formats: ['qr_code'] })
-    const bmp = await createImageBitmap(file)
-    const codes = await detector.detect(bmp)
-    bmp.close?.()
-    return codes[0]?.rawValue || null
-  } catch {
-    return null
-  }
+  return decodeQrFromFile(file)
+}
+
+function closeQrScannerOverlay(): void {
+  document.getElementById('qr-scan-overlay')?.remove()
 }
 
 async function scanInviteWithCamera(kind: SpaceKind): Promise<void> {
-  const BD = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (src: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>> } }).BarcodeDetector
-  if (!BD || !navigator.mediaDevices?.getUserMedia) {
-    showFlash('이 기기는 카메라 QR 스캔을 지원하지 않습니다. 코드/링크를 붙여넣거나 사진으로 스캔하세요.')
+  if (!canUseCameraScan()) {
+    showFlash('카메라를 쓸 수 없습니다. 사진 QR 또는 코드/링크 붙여넣기를 사용해 주세요.')
     return
   }
+  closeQrScannerOverlay()
   let stream: MediaStream | null = null
+  let stopped = false
+  const overlay = document.createElement('div')
+  overlay.id = 'qr-scan-overlay'
+  overlay.className = 'qr-scan-overlay'
+  overlay.innerHTML = `
+    <div class="qr-scan-card">
+      <p class="qr-scan-title">초대 QR 스캔</p>
+      <video playsinline muted autoplay class="qr-scan-video"></video>
+      <p class="hint">QR을 네모 안에 맞춰 주세요</p>
+      <button type="button" class="ghost-btn" data-qr-cancel="1">취소</button>
+    </div>`
+  document.body.appendChild(overlay)
+  const video = overlay.querySelector('video') as HTMLVideoElement
+  const stopAll = () => {
+    if (stopped) return
+    stopped = true
+    stream?.getTracks().forEach((t) => t.stop())
+    closeQrScannerOverlay()
+  }
+  overlay.querySelector('[data-qr-cancel]')?.addEventListener('click', () => {
+    stopAll()
+    showFlash('QR 스캔을 취소했습니다.')
+  })
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' } },
       audio: false,
     })
-    const video = document.createElement('video')
-    video.setAttribute('playsinline', 'true')
-    video.muted = true
     video.srcObject = stream
     await video.play()
-    const detector = new BD({ formats: ['qr_code'] })
     const started = Date.now()
-    showFlash('QR을 카메라에 비춰 주세요…')
-    while (Date.now() - started < 12_000) {
-      const codes = await detector.detect(video)
-      const raw = codes[0]?.rawValue
+    while (!stopped && Date.now() - started < 20_000) {
+      const raw = await decodeQrFromVideo(video)
       if (raw) {
         const code = parseInviteCode(raw)
         if (code) {
-          stream.getTracks().forEach((t) => t.stop())
-          completeJoinFromRaw(kind, code, state.settings.displayName || '나')
+          stopAll()
+          completeJoinFromRaw(kind, raw, state.settings.displayName || '나')
           return
         }
       }
-      await new Promise((r) => setTimeout(r, 250))
+      await new Promise((r) => setTimeout(r, 220))
     }
-    showFlash('QR을 읽지 못했습니다. 코드를 직접 입력해 주세요.')
+    if (!stopped) {
+      stopAll()
+      showFlash('QR을 읽지 못했습니다. 사진 QR 또는 코드 붙여넣기를 사용해 주세요.')
+    }
   } catch {
-    showFlash('카메라 권한이 필요합니다. 코드/링크 붙여넣기를 사용해 주세요.')
-  } finally {
-    stream?.getTracks().forEach((t) => t.stop())
+    stopAll()
+    showFlash('카메라 권한이 필요합니다. 사진 QR·코드 붙여넣기를 사용해 주세요.')
   }
 }
 
+function persistMemberName(memberName: string): void {
+  const name = memberName.trim().slice(0, 20)
+  if (!name) return
+  if (state.settings.displayName === name) return
+  state.settings = { ...state.settings, displayName: name }
+  saveSettings(state.settings)
+}
+
 function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): void {
+  const detected = detectInviteKind(raw)
+  if (detected && detected !== kind) {
+    showFlash(`${detected === 'friends' ? '친구' : '가족'} 초대로 전환합니다…`)
+    kind = detected
+  }
   const code = parseInviteCode(raw)
   if (!code) {
     showFlash('유효한 초대 코드/링크가 아닙니다.')
     return
   }
+  persistMemberName(memberName)
   try {
     if (kind === 'friends') {
       const current = loadFriendsRoom()
@@ -715,8 +777,16 @@ function renderInstall(): string {
 }
 
 function renderLocationGate(): string {
+  restorePendingInvite()
   const err = state.locationError
     ? `<p class="loc-error">${escapeHtml(state.locationError)}</p>`
+    : ''
+  const invite = state.pendingInvite
+  const inviteBlock = invite
+    ? `<p class="loc-invite">초대 코드 <strong>${escapeHtml(invite.code)}</strong> (${invite.kind === 'friends' ? '친구' : '가족'})가 대기 중입니다.</p>
+        <button type="button" class="primary-btn loc-invite-go" data-action="accept-invite-start" ${
+          state.locationBusy ? 'disabled' : ''
+        }>초대 참여하고 시작</button>`
     : ''
   return `
     <section class="location-gate">
@@ -730,6 +800,7 @@ function renderLocationGate(): string {
           <span class="muted">위치는 이 아이폰의 JARVIS 안에서만 쓰입니다.</span>
         </p>
         ${err}
+        ${inviteBlock}
         <button type="button" class="primary-btn loc-allow" data-action="allow-location" ${
           state.locationBusy ? 'disabled' : ''
         }>
@@ -738,7 +809,7 @@ function renderLocationGate(): string {
         <button type="button" class="ghost-btn loc-skip" data-action="skip-location" ${
           state.locationBusy ? 'disabled' : ''
         }>
-          오프라인으로 계속 (게임·대화·설정)
+          오프라인으로 계속 (대화·투자·생활·가족·친구·게임)
         </button>
         <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/JARVIS → 허용</p>
         <p class="translate-hint">v${APP_VERSION}</p>
@@ -1336,8 +1407,8 @@ function renderFamily(): string {
           </form>
           <h3>코드·링크로 참여</h3>
           <form id="family-join" class="settings-form">
-            <label>가족 코드 또는 초대 링크
-              <input name="code" value="${escapeAttr(state.view === 'family' ? state.prefillJoinCode : '')}" placeholder="K7M2PQ 또는 초대 링크 붙여넣기" maxlength="240" autocapitalize="characters" autocomplete="off" spellcheck="false" required />
+            <label>가족 코드 또는 초대 링크·문구
+              <textarea name="code" rows="3" placeholder="K7M2PQ 또는 초대 링크/카톡 문구 전체 붙여넣기" autocapitalize="characters" autocomplete="off" spellcheck="false" required>${escapeHtml(state.view === 'family' ? state.prefillJoinCode : '')}</textarea>
             </label>
             <label>내 이름
               <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
@@ -1350,7 +1421,7 @@ function renderFamily(): string {
               <input type="file" accept="image/*" capture="environment" data-scan-family-file="1" hidden />
             </label>
           </div>
-          <p class="hint">초대 QR은 카메라 앱으로 스캔해도 됩니다. 링크가 열리면 자동 참여합니다.</p>
+          <p class="hint">iPhone: 사진 QR이 가장 확실합니다. 시스템 카메라로 QR을 스캔하면 링크로 자동 참여합니다.</p>
         </div>
       </section>
     `
@@ -1379,7 +1450,7 @@ function renderFamily(): string {
       })
       .join('')
     body = `
-      <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.</div>'}</div>
+      <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
       <form id="family-chat-form" class="composer family-composer">
         <input name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required />
         <button class="primary-btn" type="submit">전송</button>
@@ -1452,6 +1523,15 @@ function renderFamily(): string {
         <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="family-leave">나가기</button>
       </div>
+      <details class="space-switch">
+        <summary>다른 코드로 전환</summary>
+        <form id="family-switch" class="settings-form">
+          <label>코드·링크·초대 문구
+            <textarea name="code" rows="2" placeholder="새 가족 코드 또는 링크" required></textarea>
+          </label>
+          <button class="primary-btn" type="submit">전환 참여</button>
+        </form>
+      </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
       <p class="hint">같은 Wi‑Fi/데이터가 아니어도 됩니다. 각자 앱을 연 상태에서 코드가 같으면 P2P로 동기화됩니다. 오프라인이면 이 기기에만 저장됩니다.</p>
@@ -1479,8 +1559,8 @@ function renderFriends(): string {
           </form>
           <h3>코드·링크로 참여</h3>
           <form id="friends-join" class="settings-form">
-            <label>친구 코드 또는 초대 링크
-              <input name="code" value="${escapeAttr(state.view === 'friends' ? state.prefillJoinCode : '')}" placeholder="K7M2PQ 또는 초대 링크 붙여넣기" maxlength="240" autocapitalize="characters" autocomplete="off" spellcheck="false" required />
+            <label>친구 코드 또는 초대 링크·문구
+              <textarea name="code" rows="3" placeholder="K7M2PQ 또는 초대 링크/카톡 문구 전체 붙여넣기" autocapitalize="characters" autocomplete="off" spellcheck="false" required>${escapeHtml(state.view === 'friends' ? state.prefillJoinCode : '')}</textarea>
             </label>
             <label>내 이름
               <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
@@ -1493,7 +1573,7 @@ function renderFriends(): string {
               <input type="file" accept="image/*" capture="environment" data-scan-friends-file="1" hidden />
             </label>
           </div>
-          <p class="hint">초대 QR은 카메라 앱으로 스캔해도 됩니다. 링크가 열리면 자동 참여합니다.</p>
+          <p class="hint">iPhone: 사진 QR이 가장 확실합니다. 시스템 카메라로 QR을 스캔하면 링크로 자동 참여합니다.</p>
         </div>
       </section>
     `
@@ -1522,7 +1602,7 @@ function renderFriends(): string {
       })
       .join('')
     body = `
-      <div class="fam-chat friends-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.</div>'}</div>
+      <div class="fam-chat friends-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
       <form id="friends-chat-form" class="composer family-composer">
         <input name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" required />
         <button class="primary-btn" type="submit">전송</button>
@@ -1595,6 +1675,15 @@ function renderFriends(): string {
         <button type="button" class="ghost-btn" data-action="friends-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="friends-leave">나가기</button>
       </div>
+      <details class="space-switch">
+        <summary>다른 코드로 전환</summary>
+        <form id="friends-switch" class="settings-form">
+          <label>코드·링크·초대 문구
+            <textarea name="code" rows="2" placeholder="새 친구 코드 또는 링크" required></textarea>
+          </label>
+          <button class="primary-btn" type="submit">전환 참여</button>
+        </form>
+      </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
       <p class="hint">게임 기록 순위는 하단 <strong>게임</strong> 탭에서 공유·가져오기 하세요. 친구 공간은 대화·공지·일정 동기화용입니다.</p>
@@ -1718,8 +1807,8 @@ function render(): void {
 let familySyncBooted = false
 async function ensureFamilySyncOnce(): Promise<void> {
   if (familySyncBooted) return
-  familySyncBooted = true
   const r = await connectFamilySync()
+  familySyncBooted = r.ok
   state.familySyncStatus = r.message
   const el = document.querySelector('.family-head .hint')
   const room = loadFamilyRoom()
@@ -1731,8 +1820,8 @@ async function ensureFamilySyncOnce(): Promise<void> {
 let friendsSyncBooted = false
 async function ensureFriendsSyncOnce(): Promise<void> {
   if (friendsSyncBooted) return
-  friendsSyncBooted = true
   const r = await connectFriendsSync()
+  friendsSyncBooted = r.ok
   state.friendsSyncStatus = r.message
   const el = document.querySelector('.friends-head .hint')
   const room = loadFriendsRoom()
@@ -1752,6 +1841,15 @@ function bindLocationGate(): void {
     state.locationBusy = false
     applyPendingInvite()
     showFlash('오프라인 모드로 시작합니다. 날씨·위치 기능은 제한됩니다.')
+    render()
+  })
+  document.querySelector('[data-action="accept-invite-start"]')?.addEventListener('click', () => {
+    state.locationSkipped = true
+    state.locationReady = true
+    state.locationError = ''
+    state.locationBusy = false
+    const invited = applyPendingInvite()
+    showFlash(invited ? '초대 참여로 시작합니다.' : '초대를 처리하지 못했습니다. 가족/친구 탭에서 코드를 붙여넣으세요.')
     render()
   })
 }
@@ -1836,12 +1934,16 @@ function bind(): void {
         `이미 가족 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
       )
       if (!ok) return
+      void disconnectFamilySync()
+      leaveFamilyRoom()
     }
     const fd = new FormData(e.target as HTMLFormElement)
-    createFamilyRoom(String(fd.get('name') || ''), String(fd.get('member') || ''))
+    const member = String(fd.get('member') || '')
+    persistMemberName(member)
+    createFamilyRoom(String(fd.get('name') || ''), member)
     state.familyTab = 'chat'
     familySyncBooted = false
-    showFlash('가족 공간을 만들었습니다.')
+    showFlash('가족 공간을 만들었습니다. «초대 공유»로 가족을 초대하세요.')
     render()
   })
 
@@ -1849,6 +1951,12 @@ function bind(): void {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
     completeJoinFromRaw('family', String(fd.get('code') || ''), String(fd.get('member') || ''))
+  })
+
+  document.getElementById('family-switch')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    completeJoinFromRaw('family', String(fd.get('code') || ''), state.settings.displayName || '나')
   })
 
   document.getElementById('family-chat-form')?.addEventListener('submit', (e) => {
@@ -1949,12 +2057,16 @@ function bind(): void {
         `이미 친구 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
       )
       if (!ok) return
+      void disconnectFriendsSync()
+      leaveFriendsRoom()
     }
     const fd = new FormData(e.target as HTMLFormElement)
-    createFriendsRoom(String(fd.get('name') || ''), String(fd.get('member') || ''))
+    const member = String(fd.get('member') || '')
+    persistMemberName(member)
+    createFriendsRoom(String(fd.get('name') || ''), member)
     state.friendsTab = 'chat'
     friendsSyncBooted = false
-    showFlash('친구 공간을 만들었습니다.')
+    showFlash('친구 공간을 만들었습니다. «초대 공유»로 친구를 초대하세요.')
     render()
   })
 
@@ -1962,6 +2074,12 @@ function bind(): void {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
     completeJoinFromRaw('friends', String(fd.get('code') || ''), String(fd.get('member') || ''))
+  })
+
+  document.getElementById('friends-switch')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    completeJoinFromRaw('friends', String(fd.get('code') || ''), state.settings.displayName || '나')
   })
 
   document.querySelector('[data-action="scan-friends-qr"]')?.addEventListener('click', () => {
@@ -2073,6 +2191,8 @@ function bind(): void {
   })
   document.querySelector('[data-action="dismiss-friends-invite"]')?.addEventListener('click', () => {
     state.prefillJoinCode = ''
+    state.pendingInvite = null
+    savePendingInvite(null)
     showFlash('초대를 무시했습니다.')
     render()
   })
@@ -2081,6 +2201,8 @@ function bind(): void {
   })
   document.querySelector('[data-action="dismiss-family-invite"]')?.addEventListener('click', () => {
     state.prefillJoinCode = ''
+    state.pendingInvite = null
+    savePendingInvite(null)
     showFlash('초대를 무시했습니다.')
     render()
   })

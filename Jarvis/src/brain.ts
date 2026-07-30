@@ -803,9 +803,17 @@ export async function think(
 
   if (/가족\s*(만들|생성)/.test(text)) {
     const settings = loadSettings()
+    const existing = loadFamilyRoom()
+    if (existing) {
+      return {
+        text: `이미 가족 공간「${existing.name}」코드 ${existing.code}이 있습니다. 새로 만들려면 가족 탭에서 «나가기» 후 다시 만드세요.`,
+        speak: true,
+        view: 'family',
+      }
+    }
     const room = createFamilyRoom('우리 가족', settings.displayName)
     return {
-      text: `가족 공간 생성: ${room.name}\n초대 코드: ${room.code}\n가족에게 코드를 알려 주세요.`,
+      text: `가족 공간 생성: ${room.name}\n초대 코드: ${room.code}\n가족 탭 → 초대 공유로 알려 주세요.`,
       speak: true,
       view: 'family',
     }
@@ -859,9 +867,17 @@ export async function think(
 
   if (/친구\s*(만들|생성)|친구\s*공간\s*(만들|생성)/.test(text)) {
     const settings = loadSettings()
+    const existing = loadFriendsRoom()
+    if (existing) {
+      return {
+        text: `이미 친구 공간「${existing.name}」코드 ${existing.code}이 있습니다. 새로 만들려면 친구 탭에서 «나가기» 후 다시 만드세요.`,
+        speak: true,
+        view: 'friends',
+      }
+    }
     const room = createFriendsRoom('우리 친구', settings.displayName)
     return {
-      text: `친구 공간 생성: ${room.name}\n초대 코드: ${room.code}\n친구에게 코드를 알려 주세요.`,
+      text: `친구 공간 생성: ${room.name}\n초대 코드: ${room.code}\n친구 탭 → 초대 공유로 알려 주세요.`,
       speak: true,
       view: 'friends',
     }

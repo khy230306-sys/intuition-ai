@@ -74,9 +74,9 @@ describe('jarvis brain investing + life', () => {
     expect(time.text).toMatch(/시|분|오전|오후|지금/)
     const garbage = await think('대화식자제헤달')
     expect(garbage.text).toMatch(/음성을 정확히|또박또박|날씨/)
-    const wipe = await think('대화삭제해줘')
+    const wipe = await think('대화 초기화')
     expect(wipe.clearChat).toBe(true)
-    expect(wipe.text).toMatch(/삭제/)
+    expect(wipe.text).toMatch(/초기화|삭제/)
   })
 
   it('manages watchlist and holdings locally', async () => {

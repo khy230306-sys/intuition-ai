@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.5'
+const APP_VERSION = '1.8.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -180,10 +180,29 @@ const SUGGESTIONS = [
   '오늘 날씨 알려줘',
   '브리핑',
   '지금 몇 시야',
-  '100달러 환율',
+  '대화 초기화',
   '삼성전자 시세',
   '도움말',
 ]
+
+/** Clear main chat history (settings button, chat toolbar, or voice). */
+function resetChatHistory(opts?: { confirm?: boolean; announce?: boolean }): boolean {
+  const needConfirm = opts?.confirm !== false
+  if (needConfirm && state.messages.length > 0) {
+    const ok = window.confirm('지난 대화를 모두 삭제하고 초기화할까요?')
+    if (!ok) return false
+  }
+  clearChat()
+  state.messages = []
+  state.draft = ''
+  state.voiceHint = ''
+  if (opts?.announce !== false) {
+    pushMsg('assistant', '대화를 초기화했습니다. 지난 기록이 삭제되었습니다.')
+  }
+  showFlash('대화 초기화 완료')
+  render()
+  return true
+}
 
 const TRANSLATE_LANGS: Array<{ code: string; label: string; cmd: string }> = [
   { code: 'vi', label: '베트남어', cmd: '지금부터 스톱할 때까지 베트남어로 번역해줘' },
@@ -756,6 +775,7 @@ async function handleUserText(raw: string): Promise<void> {
       clearChat()
       state.messages = []
       pushMsg('assistant', reply.text)
+      showFlash('대화 초기화 완료')
       if (reply.speak !== false && state.settings.speakReplies) {
         void speakAsync(reply.text, reply.speakLang || 'ko-KR')
       }
@@ -1382,9 +1402,18 @@ function renderChat(): string {
     </div>
   `
 
+  const chatTools =
+    state.messages.length > 0
+      ? `
+      <div class="chat-tools">
+        <button type="button" class="ghost-btn tiny" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+      </div>`
+      : ''
+
   return `
     <section class="panel chat-panel">
       ${renderHomeWidget()}
+      ${chatTools}
       <div class="messages">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
@@ -2070,7 +2099,7 @@ function renderSettings(): string {
       </div>
       <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
-      <button type="button" class="ghost-btn" data-action="clear-chat">대화 삭제</button>
+      <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
       <p class="hint">시세는 Yahoo Finance 공개 차트 API를 사용합니다. 음성은 iPhone Safari + HTTPS에서 가장 안정적입니다. MIC를 누른 뒤 말씀하면 잠시 침묵 후 자동 전송됩니다. 새 게임이 안 보이면 앱 캐시 새로고침을 누르세요.</p>
     </section>
@@ -3210,11 +3239,10 @@ function bind(): void {
     input.click()
   })
 
-  document.querySelector('[data-action="clear-chat"]')?.addEventListener('click', () => {
-    clearChat()
-    state.messages = []
-    showFlash('대화 기록을 삭제했습니다.')
-    render()
+  document.querySelectorAll('[data-action="clear-chat"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      resetChatHistory({ confirm: true, announce: true })
+    })
   })
   document.querySelectorAll('[data-action="hard-refresh"]').forEach((btn) => {
     btn.addEventListener('click', () => {

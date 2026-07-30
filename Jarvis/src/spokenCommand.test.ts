@@ -30,6 +30,8 @@ describe('spokenCommand', () => {
     expect(detectEverydayIntent('도움말')?.kind).toBe('help')
     expect(detectEverydayIntent('대화삭제해줘')?.kind).toBe('clearChat')
     expect(detectEverydayIntent('채팅 삭제')?.kind).toBe('clearChat')
+    expect(detectEverydayIntent('대화 초기화')?.kind).toBe('clearChat')
+    expect(detectEverydayIntent('지난 대화 삭제')?.kind).toBe('clearChat')
   })
 
   it('flags STT garbage and scores similar seeds', () => {

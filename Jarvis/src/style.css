@@ -156,6 +156,25 @@ body {
   min-height: 0;
 }
 
+.chat-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 0;
+}
+
+.chat-tools .ghost-btn.tiny {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  opacity: 0.85;
+}
+
+.ghost-btn.danger-btn {
+  border-color: rgba(255, 120, 120, 0.35);
+  color: #ffb4b4;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;

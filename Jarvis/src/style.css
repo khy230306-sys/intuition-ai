@@ -267,6 +267,12 @@ body {
   font-size: 1rem;
 }
 
+.loc-skip {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+}
+
 .loc-help {
   margin: 14px 0 0;
   font-size: 0.72rem;

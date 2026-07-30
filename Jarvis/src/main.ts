@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.11'
+const APP_VERSION = '1.7.0'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -155,8 +155,9 @@ const state = {
   settings: loadSettings(),
   quoteCache: {} as Record<string, QuoteSnapshot | null>,
   listenLang: 'ko-KR',
-  /** App stays locked until device location is allowed */
+  /** App stays locked until device location is allowed (or offline continue) */
   locationReady: false,
+  locationSkipped: false,
   locationError: '',
   locationBusy: false,
   lastFix: null as GeoFix | null,
@@ -476,6 +477,15 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
   }
   try {
     if (kind === 'friends') {
+      const current = loadFriendsRoom()
+      if (current && current.code !== code) {
+        const ok = window.confirm(
+          `지금 친구 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+        )
+        if (!ok) return
+        void disconnectFriendsSync()
+        leaveFriendsRoom()
+      }
       joinFriendsRoomLocal(code, '친구 공간', memberName)
       state.friendsTab = 'chat'
       friendsSyncBooted = false
@@ -483,6 +493,15 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
       state.prefillJoinCode = ''
       showFlash(`코드 ${code}로 친구 공간에 참여했습니다.`)
     } else {
+      const current = loadFamilyRoom()
+      if (current && current.code !== code) {
+        const ok = window.confirm(
+          `지금 가족 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+        )
+        if (!ok) return
+        void disconnectFamilySync()
+        leaveFamilyRoom()
+      }
       joinFamilyRoomLocal(code, '가족 공간', memberName)
       state.familyTab = 'chat'
       familySyncBooted = false
@@ -537,8 +556,16 @@ async function handleUserText(raw: string): Promise<void> {
   try {
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
     const thinkPromise = think(text, history.slice(0, -1))
+    // Invest / bulk quote paths need more headroom than simple local commands
+    const heavy =
+      /포트폴리오|관심\s*종목|워치|종목\s*추천|시세|차트|보유|분석/.test(text) ||
+      Boolean(state.settings.apiKey)
+    const thinkMs = heavy ? 22_000 : 12_000
     const timeoutPromise = new Promise<never>((_, reject) => {
-      window.setTimeout(() => reject(new Error('응답 시간이 초과되었습니다. 다시 시도해 주세요.')), 12_000)
+      window.setTimeout(
+        () => reject(new Error('응답 시간이 초과되었습니다. 다시 시도해 주세요.')),
+        thinkMs,
+      )
     })
     const reply = await Promise.race([thinkPromise, timeoutPromise])
     if (reply.action) {
@@ -673,10 +700,10 @@ function renderLocationGate(): string {
       <div class="loc-card">
         <div class="big-orb"></div>
         <h1>JARVIS</h1>
-        <p class="loc-lead">위치 권한이 <strong>필수</strong>입니다.</p>
+        <p class="loc-lead">위치를 허용하면 날씨·주변 기능이 정확해집니다.</p>
         <p class="loc-body">
           홈 화면에 추가한 뒤 앱을 실행하면,<br/>
-          이 기기 위치를 허용해야 JARVIS를 사용할 수 있습니다.<br/>
+          위치 허용을 권장합니다.<br/>
           <span class="muted">위치는 이 아이폰의 JARVIS 안에서만 쓰입니다.</span>
         </p>
         ${err}
@@ -684,6 +711,11 @@ function renderLocationGate(): string {
           state.locationBusy ? 'disabled' : ''
         }>
           ${state.locationBusy ? '확인 중…' : '위치 허용하고 시작'}
+        </button>
+        <button type="button" class="ghost-btn loc-skip" data-action="skip-location" ${
+          state.locationBusy ? 'disabled' : ''
+        }>
+          오프라인으로 계속 (게임·대화·설정)
         </button>
         <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/JARVIS → 허용</p>
         <p class="translate-hint">v${APP_VERSION}</p>
@@ -1681,6 +1713,15 @@ function bindLocationGate(): void {
   document.querySelector('[data-action="allow-location"]')?.addEventListener('click', () => {
     void ensureLocation(true)
   })
+  document.querySelector('[data-action="skip-location"]')?.addEventListener('click', () => {
+    state.locationSkipped = true
+    state.locationReady = true
+    state.locationError = ''
+    state.locationBusy = false
+    applyPendingInvite()
+    showFlash('오프라인 모드로 시작합니다. 날씨·위치 기능은 제한됩니다.')
+    render()
+  })
 }
 
 async function ensureLocation(interactive: boolean): Promise<boolean> {
@@ -1757,6 +1798,13 @@ function bind(): void {
 
   document.getElementById('family-create')?.addEventListener('submit', (e) => {
     e.preventDefault()
+    const existing = loadFamilyRoom()
+    if (existing) {
+      const ok = window.confirm(
+        `이미 가족 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+      )
+      if (!ok) return
+    }
     const fd = new FormData(e.target as HTMLFormElement)
     createFamilyRoom(String(fd.get('name') || ''), String(fd.get('member') || ''))
     state.familyTab = 'chat'
@@ -1863,6 +1911,13 @@ function bind(): void {
 
   document.getElementById('friends-create')?.addEventListener('submit', (e) => {
     e.preventDefault()
+    const existing = loadFriendsRoom()
+    if (existing) {
+      const ok = window.confirm(
+        `이미 친구 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+      )
+      if (!ok) return
+    }
     const fd = new FormData(e.target as HTMLFormElement)
     createFriendsRoom(String(fd.get('name') || ''), String(fd.get('member') || ''))
     state.friendsTab = 'chat'

@@ -113,6 +113,8 @@ export interface QuoteSnapshot {
   volume: number | null
   marketState?: string
   fetchedAt: number
+  /** How the quote was obtained — shown so users know if data may be stale. */
+  source?: 'live' | 'proxy' | 'snapshot'
 }
 
 export interface JarvisSettings {

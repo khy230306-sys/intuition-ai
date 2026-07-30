@@ -203,21 +203,25 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
     const lines: string[] = ['【포트폴리오】']
     let totalKrw = 0
     let totalUsd = 0
-    for (const h of holdings) {
-      try {
-        const q = await fetchQuote(h.symbol)
-        lines.push(analyzeHolding(h, q))
-        lines.push('')
-        if (q) {
-          if (h.currency === 'KRW') totalKrw += q.price * h.shares
-          else totalUsd += q.price * h.shares
-        } else if (h.currency === 'KRW') totalKrw += h.avgPrice * h.shares
-        else totalUsd += h.avgPrice * h.shares
-      } catch {
-        lines.push(analyzeHolding(h, null))
-        lines.push('')
-      }
-    }
+    const quotes = await Promise.all(
+      holdings.map(async (h) => {
+        try {
+          return await fetchQuote(h.symbol, { allowProxy: false, timeoutMs: 2200 })
+        } catch {
+          return null
+        }
+      }),
+    )
+    holdings.forEach((h, i) => {
+      const q = quotes[i]
+      lines.push(analyzeHolding(h, q))
+      lines.push('')
+      if (q) {
+        if (h.currency === 'KRW') totalKrw += q.price * h.shares
+        else totalUsd += q.price * h.shares
+      } else if (h.currency === 'KRW') totalKrw += h.avgPrice * h.shares
+      else totalUsd += h.avgPrice * h.shares
+    })
     if (totalKrw) lines.push(`KRW 합계(추정) ${formatMoney(totalKrw, 'KRW')}`)
     if (totalUsd) lines.push(`USD 합계(추정) ${formatMoney(totalUsd, 'USD')}`)
     lines.push('면책: 시세 지연·오류 가능. 투자 결정 책임은 본인에게 있습니다.')
@@ -228,17 +232,23 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
     const list = loadWatchlist()
     if (!list.length) return { text: '관심종목이 비어 있습니다. "관심종목 삼성전자 추가"' }
     const lines: string[] = ['【관심종목】']
-    for (const w of list.slice(0, 15)) {
-      try {
-        const q = await fetchQuote(w.symbol)
-        lines.push(q ? formatQuote(q) : `${w.name} (${w.symbol})`)
-        if (w.targetPrice) lines.push(`목표가 ${formatMoney(w.targetPrice, q?.currency || 'KRW')}`)
-        lines.push('')
-      } catch {
-        lines.push(`${w.name} (${w.symbol})`)
-      }
-    }
-    return { text: lines.join('\n') }
+    const slice = list.slice(0, 15)
+    const quotes = await Promise.all(
+      slice.map(async (w) => {
+        try {
+          return await fetchQuote(w.symbol, { allowProxy: false, timeoutMs: 2200 })
+        } catch {
+          return null
+        }
+      }),
+    )
+    slice.forEach((w, i) => {
+      const q = quotes[i]
+      lines.push(q ? formatQuote(q) : `${w.name} (${w.symbol})`)
+      if (w.targetPrice) lines.push(`목표가 ${formatMoney(w.targetPrice, q?.currency || 'KRW')}`)
+      lines.push('')
+    })
+    return { text: lines.join('\n').trim() + '\n면책: 참고용 시세입니다.', speak: false }
   }
 
   const addWatchMatch =

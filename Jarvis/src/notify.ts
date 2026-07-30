@@ -72,6 +72,11 @@ function fireAlarm(alarm: LocalAlarm): void {
   const items = readAlarms()
   const found = items.find((a) => a.id === alarm.id)
   if (!found || found.fired) return
+  // Never fire early — setTimeout clamp can wake before whenAt
+  if (found.whenAt > Date.now() + 500) {
+    armTimer(found)
+    return
+  }
   found.fired = true
   writeAlarms(items)
   timers.delete(alarm.id)
@@ -84,6 +89,9 @@ function fireAlarm(alarm: LocalAlarm): void {
   }
 }
 
+/** Max setTimeout delay (~24.8d). We re-arm until whenAt is reached. */
+const MAX_TIMEOUT_MS = 2_147_483_647
+
 function armTimer(alarm: LocalAlarm): void {
   if (alarm.fired) return
   const prev = timers.get(alarm.id)
@@ -93,9 +101,19 @@ function armTimer(alarm: LocalAlarm): void {
     fireAlarm(alarm)
     return
   }
-  // setTimeout max ~24.8 days; clamp for safety
-  const ms = Math.min(delay, 24 * 60 * 60_000)
-  const handle = setTimeout(() => fireAlarm(alarm), ms)
+  const ms = Math.min(delay, MAX_TIMEOUT_MS)
+  const handle = setTimeout(() => {
+    const latest = readAlarms().find((a) => a.id === alarm.id)
+    if (!latest || latest.fired) {
+      timers.delete(alarm.id)
+      return
+    }
+    if (latest.whenAt > Date.now() + 500) {
+      armTimer(latest)
+      return
+    }
+    fireAlarm(latest)
+  }, ms)
   timers.set(alarm.id, handle)
 }
 

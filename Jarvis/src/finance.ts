@@ -176,11 +176,11 @@ export async function fetchQuoteDetailed(
 
   if (preferSnapshot) {
     const snap = await fetchFromSnapshot(resolved.symbol)
-    if (snap) return { quote: snap, source: 'snapshot' }
+    if (snap) return { quote: { ...snap, source: 'snapshot' }, source: 'snapshot' }
   }
 
   const live = await fetchYahooLive(resolved.symbol, resolved.name, resolved.currency, timeoutMs)
-  if (live) return { quote: live, source: 'live' }
+  if (live) return { quote: { ...live, source: 'live' }, source: 'live' }
 
   if (allowProxy) {
     const proxied = await fetchYahooProxied(
@@ -189,12 +189,12 @@ export async function fetchQuoteDetailed(
       resolved.currency,
       Math.min(timeoutMs, 3000),
     )
-    if (proxied) return { quote: proxied, source: 'proxy' }
+    if (proxied) return { quote: { ...proxied, source: 'proxy' }, source: 'proxy' }
   }
 
   if (!preferSnapshot) {
     const snap = await fetchFromSnapshot(resolved.symbol)
-    if (snap) return { quote: snap, source: 'snapshot' }
+    if (snap) return { quote: { ...snap, source: 'snapshot' }, source: 'snapshot' }
   }
 
   return null
@@ -215,9 +215,31 @@ export function formatMoney(amount: number, currency: string): string {
   return `$${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
 }
 
+export function sanitizeChangePct(pct: number | null | undefined): number | null {
+  if (pct == null || !Number.isFinite(pct)) return null
+  // Snapshot/meta glitches sometimes yield absurd day moves — hide rather than mislead
+  if (Math.abs(pct) > 25) return null
+  return pct
+}
+
+export function formatQuoteAge(fetchedAt: number, now = Date.now()): string {
+  const sec = Math.max(0, Math.floor((now - fetchedAt) / 1000))
+  if (sec < 60) return `${sec}초 전`
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`
+  if (sec < 86_400) return `${Math.floor(sec / 3600)}시간 전`
+  return `${Math.floor(sec / 86_400)}일 전`
+}
+
+export function formatQuoteSource(source?: QuoteSource | string): string {
+  if (source === 'live') return '실시간'
+  if (source === 'proxy') return '중계'
+  if (source === 'snapshot') return '스냅샷(오프라인)'
+  return '시세'
+}
+
 export function formatQuote(q: QuoteSnapshot): string {
-  const ch =
-    q.changePct === null ? '' : ` (${q.changePct >= 0 ? '+' : ''}${q.changePct.toFixed(2)}%)`
+  const pct = sanitizeChangePct(q.changePct)
+  const ch = pct === null ? '' : ` (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`
   const lines = [
     `${q.name} (${q.symbol})`,
     `현재가 ${formatMoney(q.price, q.currency)}${ch}`,
@@ -229,6 +251,9 @@ export function formatQuote(q: QuoteSnapshot): string {
     lines.push(`52주 ${formatMoney(q.fiftyTwoLow, q.currency)} ~ ${formatMoney(q.fiftyTwoHigh, q.currency)}`)
   }
   if (q.volume != null) lines.push(`거래량 ${q.volume.toLocaleString('ko-KR')}`)
+  const src = formatQuoteSource(q.source)
+  const age = q.fetchedAt ? formatQuoteAge(q.fetchedAt) : ''
+  lines.push(`출처 ${src}${age ? ` · ${age}` : ''}`)
   return lines.join('\n')
 }
 
@@ -413,8 +438,12 @@ export function analyzeHolding(h: Holding, quote?: QuoteSnapshot | null): string
     `현재가 ${formatMoney(price, h.currency)} · 평가 ${formatMoney(value, h.currency)}`,
     `손익 ${pnl >= 0 ? '+' : ''}${formatMoney(pnl, h.currency)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`,
   ]
-  if (quote?.changePct != null) {
-    lines.push(`당일 ${quote.changePct >= 0 ? '+' : ''}${quote.changePct.toFixed(2)}%`)
+  if (sanitizeChangePct(quote?.changePct ?? null) != null) {
+    const pct = sanitizeChangePct(quote!.changePct)!
+    lines.push(`당일 ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`)
+  }
+  if (quote?.source) {
+    lines.push(`출처 ${formatQuoteSource(quote.source)} · ${formatQuoteAge(quote.fetchedAt)}`)
   }
   if (pnlPct <= -8) lines.push('가이드: -8% 이상 손실이면 손절/리밸런싱 기준을 점검하세요.')
   else if (pnlPct >= 20) lines.push('가이드: +20% 이상이면 일부 익절·목표가 재설정을 검토하세요.')

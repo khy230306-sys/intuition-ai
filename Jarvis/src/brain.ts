@@ -86,13 +86,18 @@ import {
 } from './friendsStore'
 import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
+import {
+  detectEverydayIntent,
+  looksLikeSttGarbage,
+  wantsWeatherCommand,
+} from './spokenCommand'
 import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './weather'
 
 function helpText(name: string): string {
   return [
     `${name}, JARVIS 만능 비서입니다.`,
     '',
-    '【일상】 브리핑 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
+    '【일상】 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【가족】 단체대화 · 공지 · 일정 (하단 가족 탭 / 코드 공유)',
     '【친구】 단체대화 · 공지 · 일정 (하단 친구 탭 / 코드 공유)',
     '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식 · 장시간',
@@ -100,7 +105,8 @@ function helpText(name: string): string {
     '【통계】 실시간 데이터 입력 → 평균/분산/확률/회귀 해답',
     '',
     '예시',
-    '• 브리핑 / 오늘 뭐하지',
+    '• 오늘 날씨 알려줘 / 서울 날씨 / 우산 챙길까',
+    '• 브리핑 / 오늘 뭐하지 / 지금 몇 시야',
     '• 가족 공간 / 가족 공지 / 가족 일정',
     '• 친구 공간 / 친구 공지 / 친구 일정',
     '• 앱 공유 / QR / 백업 공유',
@@ -123,7 +129,7 @@ function helpText(name: string): string {
     '• 적립식 매달 50만 10년 연7%',
     '• 삼성전자 투자체크',
     '',
-    '종목 추천·환율은 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
+    '날씨·시세·환율·브리핑·통역·통계는 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
     '로컬 알림은 앱/탭이 열려 있을 때 가장 확실합니다(iOS 백그라운드 제한).',
     '면책: 투자 조언이 아니며 손실 책임은 본인에게 있습니다.',
   ].join('\n')
@@ -692,6 +698,34 @@ async function handleLife(text: string): Promise<BrainReply | null> {
   return null
 }
 
+async function replyWeather(
+  city: string,
+  settings: JarvisSettings,
+  umbrella = false,
+): Promise<BrainReply> {
+  const askCity = city || settings.city || ''
+  const cached = loadCachedWeather()
+  if (cached && weatherPlaceMatches(cached.place, askCity)) {
+    const line = formatWeatherLine(cached)
+    const tip =
+      umbrella && cached.precipProb != null
+        ? cached.precipProb >= 30
+          ? '\n우산을 챙기는 편이 좋겠어요.'
+          : '\n우산은 필수는 아니어 보여요.'
+        : ''
+    return {
+      text: `${cached.place || askCity || '현재 위치'} 날씨예요. ${line}${tip}`,
+      speak: true,
+      action: () => openWeather(askCity || cached.place),
+    }
+  }
+  return {
+    text: askCity ? `${askCity} 날씨를 확인합니다.` : '오늘 날씨를 확인합니다.',
+    speak: true,
+    action: () => openWeather(askCity),
+  }
+}
+
 export async function think(
   input: string,
   history: { role: string; text: string }[] = [],
@@ -706,6 +740,47 @@ export async function think(
   if (/^(스톱|스탑|stop|그만|종료)$/i.test(text.trim())) {
     const locked = await handleTranslate(text)
     if (locked) return locked
+  }
+
+  // Everyday voice commands (weather/time/…) — API key not required
+  const everyday = detectEverydayIntent(text)
+  if (everyday?.kind === 'weather' || everyday?.kind === 'umbrella') {
+    return replyWeather(everyday.city, settings, everyday.kind === 'umbrella')
+  }
+  if (everyday?.kind === 'time') {
+    return { text: `지금은 ${nowText()}입니다.`, speak: true }
+  }
+  if (everyday?.kind === 'date') {
+    const d = new Date()
+    const label = d.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    })
+    return { text: `오늘은 ${label}입니다.`, speak: true }
+  }
+  if (everyday?.kind === 'briefing') {
+    return { text: morningBriefing(), speak: true }
+  }
+  if (everyday?.kind === 'help') {
+    return { text: helpText(name), speak: true }
+  }
+  if (everyday?.kind === 'location') {
+    try {
+      const report = await getLocationReport()
+      const fixMatch = report.match(/좌표:\s*([-\d.]+),\s*([-\d.]+)/)
+      return {
+        text: `【내 위치】\n${report}`,
+        speak: true,
+        action: fixMatch ? () => openMaps(`${fixMatch[1]},${fixMatch[2]}`) : undefined,
+      }
+    } catch (err) {
+      return {
+        text: err instanceof Error ? err.message : '위치를 가져오지 못했습니다.',
+        speak: true,
+      }
+    }
   }
 
   // Offline games shortcut
@@ -937,28 +1012,10 @@ export async function think(
     return { text: `"${q}" 지도를 엽니다.`, speak: true, action: () => openMaps(q) }
   }
 
-  const weatherMatch = text.match(/^(?:날씨)\s*(.*)$/i) || text.match(/^(.+?)\s*날씨$/i)
-  if (weatherMatch || /날씨/.test(text)) {
-    const rawCity = weatherMatch?.[1]?.trim() || settings.city || ''
-    // Strip filler from STT like "오늘 … 알려줘"
-    const city = rawCity
-      .replace(/^(오늘|내일|모레)\s*/u, '')
-      .replace(/\s*(알려줘|알려|어때|확인해?|확인|좀|주세요)\s*$/u, '')
-      .trim()
-    const cached = loadCachedWeather()
-    if (cached && weatherPlaceMatches(cached.place, city)) {
-      const line = formatWeatherLine(cached)
-      return {
-        text: `${cached.place || city || '현재 위치'} 날씨예요. ${line}`,
-        speak: true,
-        action: () => openWeather(city || cached.place),
-      }
-    }
-    return {
-      text: city ? `${city} 날씨를 확인합니다.` : '날씨를 엽니다.',
-      speak: true,
-      action: () => openWeather(city),
-    }
+  if (wantsWeatherCommand(text)) {
+    const intent = detectEverydayIntent(text)
+    const city = intent && (intent.kind === 'weather' || intent.kind === 'umbrella') ? intent.city : ''
+    return replyWeather(city, settings, intent?.kind === 'umbrella')
   }
 
   const searchMatch = text.match(/^(?:검색|찾아|구글)\s*(.+)$/i)
@@ -1059,13 +1116,25 @@ export async function think(
     }
   }
 
+  if (looksLikeSttGarbage(text)) {
+    return {
+      text: [
+        '음성을 정확히 듣지 못했어요. MIC를 다시 누르고 또박또박 말씀해 주세요.',
+        '예: «오늘 날씨 알려줘» · «지금 몇 시야» · «브리핑» · «삼성전자 시세»',
+        '통역 중이라면 빨간 «스톱»을 누른 뒤 다시 말해 주세요.',
+      ].join('\n'),
+      speak: true,
+    }
+  }
+
   return {
     text: [
       '명령을 이해하지 못했습니다.',
-      '예: 브리핑 · 삼성전자 시세 · 데이터 1.2 -0.5 3 · 통계 · 도움말',
+      '예: 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 삼성전자 시세 · 통계 · 도움말',
       settings.apiKey.trim() ? '' : '설정에 API 키를 넣으면 자유 대화·심화 분석이 가능합니다.',
     ]
       .filter(Boolean)
       .join('\n'),
+    speak: true,
   }
 }

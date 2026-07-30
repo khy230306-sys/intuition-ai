@@ -65,6 +65,17 @@ describe('jarvis brain investing + life', () => {
     expect(help.text).toContain('투자')
   })
 
+  it('handles everyday weather / time without API key', async () => {
+    const { think } = await import('./brain')
+    const weather = await think('오늘 날씨 알려줘')
+    expect(weather.text).toMatch(/날씨/)
+    expect(weather.speak).toBe(true)
+    const time = await think('지금 몇 시야')
+    expect(time.text).toMatch(/시|분|오전|오후|지금/)
+    const garbage = await think('대화식자제헤달')
+    expect(garbage.text).toMatch(/음성을 정확히|또박또박|날씨/)
+  })
+
   it('manages watchlist and holdings locally', async () => {
     const { think } = await import('./brain')
     const w = await think('관심종목 삼성전자 추가')

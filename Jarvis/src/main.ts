@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.3'
+const APP_VERSION = '1.8.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -162,11 +162,11 @@ async function hardRefreshApp(): Promise<void> {
 }
 
 const SUGGESTIONS = [
-  '앱 공유',
+  '오늘 날씨 알려줘',
+  '브리핑',
+  '지금 몇 시야',
   '100달러 환율',
-  '장시간',
-  '커피 4500',
-  '알림 1분 뒤 테스트',
+  '삼성전자 시세',
   '도움말',
 ]
 
@@ -1507,6 +1507,7 @@ function renderLife(): string {
       <h2 class="section-title">LIFE</h2>
       <p class="hint">오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}</p>
       <div class="chips left">
+        <button type="button" data-suggest="오늘 날씨 알려줘">오늘 날씨</button>
         <button type="button" data-suggest="브리핑">브리핑</button>
         <button type="button" data-suggest="환율">환율</button>
         <button type="button" data-suggest="커피 4500">커피 4500</button>
@@ -2829,11 +2830,12 @@ function bind(): void {
     const session = ++voiceSessionGen
     state.dictationTarget = 'jarvis'
     state.draft = ''
-    const listenLang = currentListenLang() || state.listenLang || 'ko-KR'
+    // Outside interpret lock, always listen in Korean so weather/life commands STT cleanly
+    const listenLang = currentListenLang() || 'ko-KR'
     state.listenLang = listenLang
     state.voiceHint = loadInterpretMode().active
       ? `통역 듣는 중 (${listenLang}) · 말씀 끝나면 잠시 기다려 주세요`
-      : '듣고 있습니다… 천천히 말씀하세요 (끝나면 잠깐 대기)'
+      : '듣고 있습니다… «오늘 날씨 알려줘»처럼 또박또박 (끝나면 잠깐 대기)'
     // Ensure chat shell exists without heavy remount when already on chat
     if (state.view !== 'chat' || !document.getElementById('voice-caption')) {
       state.view = 'chat'

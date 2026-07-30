@@ -139,7 +139,7 @@ export async function showChatNotification(input: {
         data,
         icon: './icons/icon-192.png',
         badge: './icons/icon-192.png',
-      })
+      } as NotificationOptions)
       try {
         navigator.vibrate?.([80, 40, 80])
       } catch {
@@ -196,7 +196,11 @@ export async function pushChatToSubscriptions(
           keys: sub.keys,
         }
         const init = await buildPushPayload(message, webSub, vapid)
-        const res = await fetch(sub.endpoint, init)
+        const res = await fetch(sub.endpoint, {
+          method: init.method,
+          headers: init.headers,
+          body: init.body as BodyInit,
+        })
         if (res.status === 201 || res.status === 200) sent += 1
       } catch {
         /* expired endpoint etc. */

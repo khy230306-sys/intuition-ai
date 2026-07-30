@@ -1,4 +1,4 @@
-import { joinRoom, selfId, type MessageAction } from '@trystero-p2p/mqtt'
+import { getRelaySockets, joinRoom, selfId, type MessageAction } from '@trystero-p2p/mqtt'
 import type { FriendsSyncPacket } from './friendsTypes'
 import {
   loadFriendsRoom,
@@ -7,6 +7,7 @@ import {
   upsertMember,
 } from './friendsStore'
 import { preferSpaceName } from './inviteJoin'
+import { spaceRoomConfig, summarizeRelaySockets } from './spaceSyncConfig'
 
 const APP_ID = 'jarvis-friends-space-v1'
 
@@ -15,6 +16,9 @@ type RoomHandle = ReturnType<typeof joinRoom>
 let roomHandle: RoomHandle | null = null
 let syncAction: MessageAction<FriendsSyncPacket> | null = null
 let peerCount = 0
+let relayLabel = '중계 대기'
+let announceTimer = 0
+let healthTimer = 0
 let onChange: ((info: { peers: number; status: string }) => void) | null = null
 
 export function getFriendsPeerCount(): number {
@@ -25,12 +29,30 @@ export function getFriendsSelfPeerId(): string {
   return selfId
 }
 
+export function getFriendsRelayLabel(): string {
+  return relayLabel
+}
+
 export function setFriendsSyncListener(fn: ((info: { peers: number; status: string }) => void) | null): void {
   onChange = fn
 }
 
 function emit(status: string): void {
   onChange?.({ peers: peerCount, status })
+}
+
+function refreshPeers(): number {
+  peerCount = Object.keys(roomHandle?.getPeers() || {}).length
+  return peerCount
+}
+
+function refreshRelayHealth(): void {
+  try {
+    const health = summarizeRelaySockets(getRelaySockets?.() as Record<string, unknown>)
+    relayLabel = health.label
+  } catch {
+    relayLabel = '중계 상태 확인 불가'
+  }
 }
 
 function applyPacket(packet: FriendsSyncPacket): void {
@@ -105,6 +127,39 @@ async function send(packet: FriendsSyncPacket): Promise<void> {
   }
 }
 
+async function announceSelf(): Promise<void> {
+  const current = loadFriendsRoom()
+  if (!current || !syncAction) return
+  await send({
+    type: 'hello',
+    member: { id: current.memberId, name: current.memberName, joinedAt: Date.now() },
+    roomName: current.name,
+    updatedAt: current.updatedAt,
+  })
+  const snap = snapshotPacket()
+  if (snap) await send(snap)
+}
+
+function statusLine(): string {
+  const n = refreshPeers()
+  refreshRelayHealth()
+  if (n > 0) return `온라인 ${n}명 · ${relayLabel}`
+  return `온라인 대기 · ${relayLabel} · 상대도 친구 탭을 열어 두세요`
+}
+
+function startWatchdogs(): void {
+  window.clearInterval(announceTimer)
+  window.clearInterval(healthTimer)
+  announceTimer = window.setInterval(() => {
+    if (!roomHandle) return
+    void announceSelf().then(() => emit(statusLine()))
+  }, 12_000)
+  healthTimer = window.setInterval(() => {
+    if (!roomHandle) return
+    emit(statusLine())
+  }, 4_000)
+}
+
 export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise<void> {
   await send(packet)
 }
@@ -113,60 +168,35 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
   const room = loadFriendsRoom()
   if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
   if (roomHandle) {
-    emit(`연결됨 · 동료 ${peerCount}`)
-    return { ok: true, message: `이미 연결됨 (동료 ${peerCount}명)` }
+    emit(statusLine())
+    return { ok: true, message: `이미 연결됨 · ${statusLine()}` }
   }
 
   try {
-    roomHandle = joinRoom({ appId: APP_ID }, `fr-${room.code}`)
+    roomHandle = joinRoom(spaceRoomConfig(APP_ID, room.code), `fr-${room.code}`)
     syncAction = roomHandle.makeAction<FriendsSyncPacket>('fr-sync', {
       onMessage: (data) => {
         applyPacket(data)
-        emit(`동기화 · 동료 ${peerCount}`)
+        emit(`동기화 · ${statusLine()}`)
       },
     })
 
     roomHandle.onPeerJoin = (peerId) => {
-      peerCount = Object.keys(roomHandle?.getPeers() || {}).length
-      const current = loadFriendsRoom()
-      if (!current) return
-      void send({
-        type: 'hello',
-        member: {
-          id: current.memberId,
-          name: current.memberName,
-          joinedAt: Date.now(),
-        },
-        roomName: current.name,
-        updatedAt: current.updatedAt,
-      })
-      const snap = snapshotPacket()
-      if (snap) void send(snap)
-      emit(`동료 접속 ${peerId.slice(0, 4)}… · ${peerCount}명`)
+      refreshPeers()
+      void announceSelf()
+      emit(`동료 접속 ${peerId.slice(0, 4)}… · ${statusLine()}`)
     }
 
     roomHandle.onPeerLeave = () => {
-      peerCount = Object.keys(roomHandle?.getPeers() || {}).length
-      emit(`동료 나감 · ${peerCount}명`)
+      emit(`동료 나감 · ${statusLine()}`)
     }
 
-    peerCount = Object.keys(roomHandle.getPeers()).length
-    emit(peerCount ? `연결됨 · 동료 ${peerCount}명` : `연결됨 · 친구도 앱을 열면 동기화`)
-    // Announce ourselves
-    await send({
-      type: 'hello',
-      member: { id: room.memberId, name: room.memberName, joinedAt: Date.now() },
-      roomName: room.name,
-      updatedAt: room.updatedAt,
-    })
-    const snap = snapshotPacket()
-    if (snap) await send(snap)
-    return {
-      ok: true,
-      message: peerCount
-        ? `친구 동기화 연결 · 코드 ${room.code} · 동료 ${peerCount}명`
-        : `친구 동기화 연결 · 코드 ${room.code} · 친구도 앱을 열면 동기화`,
-    }
+    startWatchdogs()
+    await announceSelf()
+    await new Promise((r) => setTimeout(r, 600))
+    const msg = `친구 동기화 연결 · 코드 ${room.code} · ${statusLine()}`
+    emit(msg)
+    return { ok: true, message: msg }
   } catch (err) {
     roomHandle = null
     syncAction = null
@@ -177,6 +207,10 @@ export async function connectFriendsSync(): Promise<{ ok: boolean; message: stri
 }
 
 export async function disconnectFriendsSync(): Promise<void> {
+  window.clearInterval(announceTimer)
+  window.clearInterval(healthTimer)
+  announceTimer = 0
+  healthTimer = 0
   try {
     await roomHandle?.leave()
   } catch {
@@ -185,6 +219,7 @@ export async function disconnectFriendsSync(): Promise<void> {
   roomHandle = null
   syncAction = null
   peerCount = 0
+  relayLabel = '연결 해제'
   emit('연결 해제')
 }
 

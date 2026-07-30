@@ -5,12 +5,19 @@ import type { ActionResult } from './types'
 /** Soft limit for reliable phone-camera QR scans */
 export const QR_SAFE_CHARS = 800
 
+/** Always share the fixed production URL so invites never point at stale snapshot hosts. */
+export const FIXED_APP_URL = 'https://jarvis-app.shipstatic.com'
+
 export function appShareUrl(): string {
-  if (typeof window === 'undefined') return 'https://jarvis.local'
+  if (typeof window === 'undefined') return FIXED_APP_URL
   try {
-    return new URL('.', window.location.href).href.replace(/\/$/, '') || window.location.href
+    const host = window.location.hostname
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return new URL('.', window.location.href).href.replace(/\/$/, '') || window.location.origin
+    }
+    return FIXED_APP_URL
   } catch {
-    return window.location.href
+    return FIXED_APP_URL
   }
 }
 

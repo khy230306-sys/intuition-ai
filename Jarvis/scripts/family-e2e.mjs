@@ -95,6 +95,32 @@ async function main() {
   await page.click('#family-event-form button[type="submit"]')
   await page.waitForFunction(() => (document.body.textContent || '').includes('병원'))
 
+  // Join receipt registers a remote member without live P2P
+  await page.click('[data-family-tab="chat"]')
+  await page.waitForSelector('#family-join-receipt')
+  await page.$eval('#family-join-receipt', (el) => {
+    const d = el.closest('details')
+    if (d) d.open = true
+  })
+  const receipt = [
+    'JARVIS 가족 참여 확인',
+    `아빠 · 코드 ${code}`,
+    '',
+    `JARVIS-JOIN|v1|family|${code}|guest-dad|아빠|${Date.now()}`,
+  ].join('\n')
+  await page.$eval(
+    '#family-join-receipt textarea[name="receipt"]',
+    (el, value) => {
+      el.value = value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+    receipt,
+  )
+  await page.click('#family-join-receipt button[type="submit"]')
+  await page.waitForFunction(() => (document.body.textContent || '').includes('등록 멤버 2명'))
+  await page.waitForFunction(() => (document.body.textContent || '').includes('아빠'))
+  await page.waitForSelector('[data-action="family-join-share"]')
+
   if (errors.length) throw new Error(errors.join(' | '))
   console.log('FAMILY_E2E_OK', code)
   await browser.close()

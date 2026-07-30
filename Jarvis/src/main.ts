@@ -91,6 +91,7 @@ import { fetchWeather, type WeatherSnap } from './weather'
 import {
   addFamilyEvent,
   addFamilyNotice,
+  applyFamilyJoinReceipt,
   createFamilyRoom,
   deleteFamilyEvent,
   deleteFamilyNotice,
@@ -110,6 +111,7 @@ import {
 import {
   addFriendsEvent,
   addFriendsNotice,
+  applyFriendsJoinReceipt,
   createFriendsRoom,
   deleteFriendsEvent,
   deleteFriendsNotice,
@@ -126,8 +128,9 @@ import {
   getFriendsPeerCount,
   setFriendsSyncListener,
 } from './friendsSyncLazy'
+import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.4'
+const APP_VERSION = '1.7.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -576,7 +579,7 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
       friendsSyncBooted = false
       state.view = 'friends'
       state.prefillJoinCode = ''
-      showFlash(`코드 ${code}로 친구 공간에 참여했습니다.`)
+      showFlash(`코드 ${code}로 친구 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
     } else {
       const current = loadFamilyRoom()
       if (current && current.code !== code) {
@@ -592,7 +595,7 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
       familySyncBooted = false
       state.view = 'family'
       state.prefillJoinCode = ''
-      showFlash(`코드 ${code}로 가족 공간에 참여했습니다.`)
+      showFlash(`코드 ${code}로 가족 공간에 참여했습니다. «참여 확인 공유»를 초대자에게 보내세요.`)
     }
     render()
   } catch (err) {
@@ -1507,22 +1510,35 @@ function renderFamily(): string {
   }
 
   const members = room.members.map((m) => escapeHtml(m.name)).join(' · ') || room.memberName
+  const online = getFamilyPeerCount()
 
   return `
     <section class="panel view-scroll family-panel">
       <div class="family-head">
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 동료 ${getFamilyPeerCount()}명</p>
-          <p class="hint">멤버: ${members}</p>
+          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)}</p>
+          <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 가족 탭을 연 상태여야 합니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('family', room.code)}
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="family-invite">초대 공유</button>
+        <button type="button" class="primary-btn" data-action="family-invite">초대 공유</button>
+        <button type="button" class="ghost-btn" data-action="family-join-share">참여 확인 공유</button>
         <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="family-leave">나가기</button>
       </div>
+      <details class="space-switch">
+        <summary>참여 확인 받기 · 멤버 등록</summary>
+        <form id="family-join-receipt" class="settings-form">
+          <label>가족이 보낸 참여 확인 문구
+            <textarea name="receipt" rows="3" placeholder="JARVIS 가족 참여 확인 … 붙여넣기" required></textarea>
+          </label>
+          <button class="primary-btn" type="submit">멤버로 등록</button>
+        </form>
+        <p class="hint">초대만으로는 멤버가 안 늘어납니다. 상대가 참여한 뒤 «참여 확인 공유»를 보내면 여기에 붙여넣으세요.</p>
+      </details>
       <details class="space-switch">
         <summary>다른 코드로 전환</summary>
         <form id="family-switch" class="settings-form">
@@ -1534,7 +1550,7 @@ function renderFamily(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">같은 Wi‑Fi/데이터가 아니어도 됩니다. 각자 앱을 연 상태에서 코드가 같으면 P2P로 동기화됩니다. 오프라인이면 이 기기에만 저장됩니다.</p>
+      <p class="hint">대화 동기화: 같은 코드 + 둘 다 가족 탭 유지 + «동기화». 멤버 등록은 «참여 확인»으로도 됩니다.</p>
     </section>
   `
 }
@@ -1659,22 +1675,35 @@ function renderFriends(): string {
   }
 
   const members = room.members.map((m) => escapeHtml(m.name)).join(' · ') || room.memberName
+  const online = getFriendsPeerCount()
 
   return `
     <section class="panel view-scroll family-panel friends-panel">
       <div class="family-head friends-head">
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 동료 ${getFriendsPeerCount()}명</p>
-          <p class="hint">멤버: ${members}</p>
+          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)}</p>
+          <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 친구 탭을 연 상태여야 합니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('friends', room.code)}
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="friends-invite">초대 공유</button>
+        <button type="button" class="primary-btn" data-action="friends-invite">초대 공유</button>
+        <button type="button" class="ghost-btn" data-action="friends-join-share">참여 확인 공유</button>
         <button type="button" class="ghost-btn" data-action="friends-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="friends-leave">나가기</button>
       </div>
+      <details class="space-switch">
+        <summary>참여 확인 받기 · 멤버 등록</summary>
+        <form id="friends-join-receipt" class="settings-form">
+          <label>친구가 보낸 참여 확인 문구
+            <textarea name="receipt" rows="3" placeholder="JARVIS 친구 참여 확인 … 붙여넣기" required></textarea>
+          </label>
+          <button class="primary-btn" type="submit">멤버로 등록</button>
+        </form>
+        <p class="hint">초대만으로는 멤버가 안 늘어납니다. 상대가 참여한 뒤 «참여 확인 공유»를 보내면 여기에 붙여넣으세요.</p>
+      </details>
       <details class="space-switch">
         <summary>다른 코드로 전환</summary>
         <form id="friends-switch" class="settings-form">
@@ -1686,7 +1715,7 @@ function renderFriends(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">게임 기록 순위는 하단 <strong>게임</strong> 탭에서 공유·가져오기 하세요. 친구 공간은 대화·공지·일정 동기화용입니다.</p>
+      <p class="hint">대화 동기화: 같은 코드 + 둘 다 친구 탭 유지 + «동기화». 게임 순위는 게임 탭에서 공유하세요.</p>
     </section>
   `
 }
@@ -2026,6 +2055,34 @@ function bind(): void {
     void openInviteModal('family')
   })
 
+  document.querySelector('[data-action="family-join-share"]')?.addEventListener('click', () => {
+    const room = loadFamilyRoom()
+    if (!room) return
+    const built = buildJoinReceipt({
+      kind: 'family',
+      code: room.code,
+      memberId: room.memberId,
+      memberName: room.memberName,
+    })
+    void shareText(built.message, { title: 'JARVIS 가족 참여 확인' }).then((r) => {
+      if (r.ok) {
+        showFlash('참여 확인을 공유했습니다. 초대자에게 전달하세요.')
+        return
+      }
+      void Promise.resolve(copyTextNow(built.message)).then((c) => {
+        showFlash(c.ok ? '참여 확인을 복사했습니다. 초대자에게 보내세요.' : '공유에 실패했습니다.')
+      })
+    })
+  })
+
+  document.getElementById('family-join-receipt')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const result = applyFamilyJoinReceipt(String(fd.get('receipt') || ''))
+    showFlash(result.message)
+    if (result.ok) render()
+  })
+
   document.querySelector('[data-action="family-leave"]')?.addEventListener('click', () => {
     void disconnectFamilySync()
     familySyncBooted = false
@@ -2184,6 +2241,34 @@ function bind(): void {
 
   document.querySelector('[data-action="friends-invite"]')?.addEventListener('click', () => {
     void openInviteModal('friends')
+  })
+
+  document.querySelector('[data-action="friends-join-share"]')?.addEventListener('click', () => {
+    const room = loadFriendsRoom()
+    if (!room) return
+    const built = buildJoinReceipt({
+      kind: 'friends',
+      code: room.code,
+      memberId: room.memberId,
+      memberName: room.memberName,
+    })
+    void shareText(built.message, { title: 'JARVIS 친구 참여 확인' }).then((r) => {
+      if (r.ok) {
+        showFlash('참여 확인을 공유했습니다. 초대자에게 전달하세요.')
+        return
+      }
+      void Promise.resolve(copyTextNow(built.message)).then((c) => {
+        showFlash(c.ok ? '참여 확인을 복사했습니다. 초대자에게 보내세요.' : '공유에 실패했습니다.')
+      })
+    })
+  })
+
+  document.getElementById('friends-join-receipt')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const result = applyFriendsJoinReceipt(String(fd.get('receipt') || ''))
+    showFlash(result.message)
+    if (result.ok) render()
   })
 
   document.querySelector('[data-action="switch-friends-invite"]')?.addEventListener('click', () => {

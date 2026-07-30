@@ -6,6 +6,7 @@ import type {
   FamilyRoom,
 } from './familyTypes'
 import { buildSpaceInviteUrl, parseInviteCode, preferSpaceName } from './inviteJoin'
+import { parseJoinReceipt } from './joinReceipt'
 
 const KEY = 'jarvis_family_room_v1'
 const MEMBER_KEY = 'jarvis_family_member_id_v1'
@@ -250,11 +251,30 @@ export function familyInviteText(room: FamilyRoom, appUrl: string): string {
     `이름: ${room.name}`,
     `코드: ${room.code}`,
     '',
-    '링크를 열거나 코드를 입력하세요:',
+    '1) 링크를 열거나 가족 탭에 코드를 붙여넣기 → 참여',
     link,
     '',
-    '앱에서: 하단 가족 탭 → 코드/링크 붙여넣기 → 참여',
+    '2) 참여 후 «참여 확인 공유»를 초대자에게 다시 보내세요',
+    '3) 둘 다 가족 탭을 연 채로 «동기화»를 누르면 대화가 연결됩니다',
   ].join('\n')
+}
+
+export function applyFamilyJoinReceipt(raw: string): { ok: true; message: string } | { ok: false; message: string } {
+  const parsed = parseJoinReceipt(raw)
+  if (!parsed.ok) return parsed
+  const { receipt } = parsed
+  if (receipt.kind !== 'family') return { ok: false, message: '가족 참여 확인이 아닙니다.' }
+  const room = loadFamilyRoom()
+  if (!room) return { ok: false, message: '먼저 가족 공간을 만들어 주세요.' }
+  if (room.code !== receipt.code) {
+    return { ok: false, message: `코드가 다릅니다. 이 공간은 ${room.code}, 확인은 ${receipt.code}입니다.` }
+  }
+  if (receipt.memberId === room.memberId) {
+    return { ok: false, message: '본인 참여 확인은 추가할 수 없습니다.' }
+  }
+  upsertMember(room, { id: receipt.memberId, name: receipt.memberName, joinedAt: receipt.at })
+  saveFamilyRoom(room)
+  return { ok: true, message: `${receipt.memberName}님을 가족 멤버로 등록했습니다.` }
 }
 
 export function upcomingFamilyEvents(limit = 5): FamilyEvent[] {

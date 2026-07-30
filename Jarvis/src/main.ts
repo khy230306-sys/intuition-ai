@@ -45,7 +45,7 @@ import {
   toggleShopping,
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
-import { VoiceListener, canListen, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
+import { VoiceListener, canListen, ensureMicPermission, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
 import {
   canUseGeolocation,
@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.0'
+const APP_VERSION = '1.8.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -180,6 +180,8 @@ const state = {
   draft: '',
   busy: false,
   listening: false,
+  /** Where MIC dictation should land: main Jarvis chat vs space rooms. */
+  dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends',
   voiceHint: '',
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   showInstall: false,
@@ -735,12 +737,26 @@ async function handleUserText(raw: string): Promise<void> {
 
 /** Update mic/caption/draft without destroying the recognition session via full remount. */
 function patchVoiceUi(): void {
-  const mic = document.querySelector<HTMLButtonElement>('[data-action="mic"]')
+  const target = state.dictationTarget
+  const micSel =
+    target === 'family'
+      ? '[data-action="space-mic"][data-space="family"]'
+      : target === 'friends'
+        ? '[data-action="space-mic"][data-space="friends"]'
+        : '[data-action="mic"]'
+  const mic = document.querySelector<HTMLButtonElement>(micSel)
   if (mic) {
     mic.classList.toggle('listening', state.listening)
     mic.textContent = state.listening ? 'STOP' : 'MIC'
     mic.setAttribute('aria-pressed', state.listening ? 'true' : 'false')
   }
+  // Keep other mic buttons idle-looking while dictating elsewhere
+  document.querySelectorAll<HTMLButtonElement>('[data-action="mic"], [data-action="space-mic"]').forEach((btn) => {
+    if (btn === mic) return
+    btn.classList.remove('listening')
+    btn.textContent = 'MIC'
+    btn.setAttribute('aria-pressed', 'false')
+  })
   const status = document.querySelector('.status-pill')
   if (status) {
     status.textContent = state.listening
@@ -751,7 +767,9 @@ function patchVoiceUi(): void {
           ? '대기'
           : '오프라인'
   }
-  const caption = document.getElementById('voice-caption')
+  const captionId =
+    target === 'family' ? 'family-voice-caption' : target === 'friends' ? 'friends-voice-caption' : 'voice-caption'
+  const caption = document.getElementById(captionId)
   if (caption) {
     caption.hidden = !state.listening && !state.voiceHint
     caption.textContent = state.listening
@@ -759,11 +777,117 @@ function patchVoiceUi(): void {
       : state.voiceHint
     caption.classList.toggle('live', state.listening)
   }
-  const input = document.getElementById('draft') as HTMLInputElement | null
+  const inputId = target === 'family' ? 'family-draft' : target === 'friends' ? 'friends-draft' : 'draft'
+  const input = document.getElementById(inputId) as HTMLInputElement | null
   if (input && state.listening) {
     input.value = state.draft
     input.placeholder = '음성 인식 중…'
   }
+}
+
+function sendSpaceChat(space: 'family' | 'friends', text: string): void {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  if (space === 'family') {
+    const msg = postFamilyChat(trimmed)
+    if (!msg) return
+    render()
+    const box = document.querySelector('.fam-chat')
+    if (box) box.scrollTop = box.scrollHeight
+    void (async () => {
+      await ensureFamilySyncOnce()
+      await broadcastFamilyPacket({ type: 'chat', message: msg })
+    })()
+    return
+  }
+  const msg = postFriendsChat(trimmed)
+  if (!msg) return
+  render()
+  const box = document.querySelector('.friends-chat')
+  if (box) box.scrollTop = box.scrollHeight
+  void (async () => {
+    await ensureFriendsSyncOnce()
+    await broadcastFriendsPacket({ type: 'chat', message: msg })
+  })()
+}
+
+function startSpaceDictation(space: 'family' | 'friends'): void {
+  if (state.busy) {
+    stopSpeaking()
+    showFlash('잠시 후 다시 MIC를 눌러 주세요')
+    return
+  }
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    showFlash('음성 인식은 HTTPS(홈 화면 앱)에서만 됩니다.')
+    return
+  }
+  if (!canListen()) {
+    showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
+    return
+  }
+  if (state.listening && state.dictationTarget === space) {
+    const partial = voice.transcript.trim()
+    voice.stop()
+    state.listening = false
+    state.voiceHint = ''
+    patchVoiceUi()
+    if (partial) sendSpaceChat(space, partial)
+    else render()
+    return
+  }
+  if (state.listening) {
+    voice.stop()
+    state.listening = false
+  }
+  stopSpeaking()
+  state.dictationTarget = space
+  state.draft = ''
+  state.voiceHint = '듣고 있습니다… 천천히 말씀하세요 (끝나면 자동 전송)'
+  state.listening = true
+  patchVoiceUi()
+  void (async () => {
+    const micOk = await ensureMicPermission()
+    if (!micOk) {
+      state.listening = false
+      state.voiceHint = ''
+      showFlash('마이크 권한이 필요합니다. 설정 → JARVIS/Safari → 마이크 허용')
+      patchVoiceUi()
+      return
+    }
+    const ok = voice.start(
+      {
+        onInterim: (text) => {
+          state.draft = text
+          state.voiceHint = text || state.voiceHint
+          patchVoiceUi()
+        },
+        onFinal: (text) => {
+          state.listening = false
+          state.voiceHint = '인식 완료'
+          state.draft = text
+          patchVoiceUi()
+          sendSpaceChat(space, text)
+        },
+        onState: (s) => {
+          state.listening = s === 'listening' || s === 'processing'
+          if (s === 'idle') state.listening = false
+          patchVoiceUi()
+        },
+        onError: (err) => {
+          state.listening = false
+          state.voiceHint = ''
+          showFlash(err)
+          patchVoiceUi()
+        },
+      },
+      'ko-KR',
+    )
+    if (!ok) {
+      state.listening = false
+      state.voiceHint = ''
+      patchVoiceUi()
+    }
+  })()
 }
 
 function scrollChat(): void {
@@ -1497,8 +1621,18 @@ function renderFamily(): string {
       .join('')
     body = `
       <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+      <div id="family-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'family' ? 'live' : ''}" ${
+        state.listening && state.dictationTarget === 'family' || state.voiceHint && state.dictationTarget === 'family' ? '' : 'hidden'
+      }>${escapeHtml(
+        state.dictationTarget === 'family'
+          ? state.listening
+            ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
+            : state.voiceHint
+          : '',
+      )}</div>
       <form id="family-chat-form" class="composer family-composer">
-        <input name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required />
+        <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'family' ? 'listening' : ''}" data-action="space-mic" data-space="family" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'family' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'family' ? 'STOP' : 'MIC'}</button>
+        <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required autocomplete="off" />
         <button class="primary-btn" type="submit">전송</button>
       </form>
     `
@@ -1664,8 +1798,18 @@ function renderFriends(): string {
       .join('')
     body = `
       <div class="fam-chat friends-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+      <div id="friends-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'friends' ? 'live' : ''}" ${
+        state.listening && state.dictationTarget === 'friends' || state.voiceHint && state.dictationTarget === 'friends' ? '' : 'hidden'
+      }>${escapeHtml(
+        state.dictationTarget === 'friends'
+          ? state.listening
+            ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
+            : state.voiceHint
+          : '',
+      )}</div>
       <form id="friends-chat-form" class="composer family-composer">
-        <input name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" required />
+        <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'friends' ? 'listening' : ''}" data-action="space-mic" data-space="friends" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'friends' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'friends' ? 'STOP' : 'MIC'}</button>
+        <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" required autocomplete="off" />
         <button class="primary-btn" type="submit">전송</button>
       </form>
     `
@@ -2124,16 +2268,7 @@ function bind(): void {
   document.getElementById('family-chat-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
-    const msg = postFamilyChat(String(fd.get('text') || ''))
-    if (msg) {
-      render()
-      const box = document.querySelector('.fam-chat')
-      if (box) box.scrollTop = box.scrollHeight
-      void (async () => {
-        await ensureFamilySyncOnce()
-        await broadcastFamilyPacket({ type: 'chat', message: msg })
-      })()
-    }
+    sendSpaceChat('family', String(fd.get('text') || ''))
   })
 
   document.getElementById('family-notice-form')?.addEventListener('submit', (e) => {
@@ -2312,16 +2447,7 @@ function bind(): void {
   document.getElementById('friends-chat-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
-    const msg = postFriendsChat(String(fd.get('text') || ''))
-    if (msg) {
-      render()
-      const box = document.querySelector('.friends-chat')
-      if (box) box.scrollTop = box.scrollHeight
-      void (async () => {
-        await ensureFriendsSyncOnce()
-        await broadcastFriendsPacket({ type: 'chat', message: msg })
-      })()
-    }
+    sendSpaceChat('friends', String(fd.get('text') || ''))
   })
 
   document.getElementById('friends-notice-form')?.addEventListener('submit', (e) => {
@@ -2603,11 +2729,15 @@ function bind(): void {
       showFlash('답변 준비 중… 곧 MIC를 쓸 수 있습니다')
       return
     }
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      showFlash('음성 인식은 HTTPS(홈 화면 앱)에서만 됩니다.')
+      return
+    }
     if (!canListen()) {
       showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
       return
     }
-    if (state.listening) {
+    if (state.listening && state.dictationTarget === 'jarvis') {
       const partial = voice.transcript.trim()
       voice.stop()
       state.listening = false
@@ -2617,7 +2747,12 @@ function bind(): void {
       else render()
       return
     }
+    if (state.listening) {
+      voice.stop()
+      state.listening = false
+    }
     stopSpeaking()
+    state.dictationTarget = 'jarvis'
     state.draft = ''
     const listenLang = currentListenLang() || state.listenLang || 'ko-KR'
     state.listenLang = listenLang
@@ -2633,39 +2768,56 @@ function bind(): void {
       state.listening = true
       patchVoiceUi()
     }
-    const ok = voice.start(
-      {
-        onInterim: (text) => {
-          state.draft = text
-          state.voiceHint = text || state.voiceHint
-          patchVoiceUi()
+    void (async () => {
+      const micOk = await ensureMicPermission()
+      if (!micOk) {
+        state.listening = false
+        state.voiceHint = ''
+        showFlash('마이크 권한이 필요합니다. 설정 → JARVIS/Safari → 마이크 허용')
+        patchVoiceUi()
+        return
+      }
+      const ok = voice.start(
+        {
+          onInterim: (text) => {
+            state.draft = text
+            state.voiceHint = text || state.voiceHint
+            patchVoiceUi()
+          },
+          onFinal: (text) => {
+            state.listening = false
+            state.voiceHint = '인식 완료'
+            state.draft = text
+            patchVoiceUi()
+            void handleUserText(text)
+          },
+          onState: (s) => {
+            state.listening = s === 'listening' || s === 'processing'
+            if (s === 'idle' && !state.busy) state.listening = false
+            patchVoiceUi()
+          },
+          onError: (err) => {
+            state.listening = false
+            state.voiceHint = ''
+            showFlash(err)
+            patchVoiceUi()
+          },
         },
-        onFinal: (text) => {
-          state.listening = false
-          state.voiceHint = '인식 완료'
-          state.draft = text
-          patchVoiceUi()
-          void handleUserText(text)
-        },
-        onState: (s) => {
-          state.listening = s === 'listening' || s === 'processing'
-          if (s === 'idle' && !state.busy) state.listening = false
-          patchVoiceUi()
-        },
-        onError: (err) => {
-          state.listening = false
-          state.voiceHint = ''
-          showFlash(err)
-          patchVoiceUi()
-        },
-      },
-      listenLang,
-    )
-    if (!ok) {
-      state.listening = false
-      state.voiceHint = ''
-      patchVoiceUi()
-    }
+        listenLang,
+      )
+      if (!ok) {
+        state.listening = false
+        state.voiceHint = ''
+        patchVoiceUi()
+      }
+    })()
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-action="space-mic"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const space = btn.dataset.space === 'family' ? 'family' : 'friends'
+      startSpaceDictation(space)
+    })
   })
 
   document.querySelector('[data-action="voice-test"]')?.addEventListener('click', () => {
@@ -3007,6 +3159,10 @@ function boot(): void {
       return
     }
     // Incoming chat/notice/event data — soft remount
+    if (state.listening) {
+      patchSpaceHead('family', info)
+      return
+    }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       patchSpaceHead('family', info)
@@ -3014,7 +3170,7 @@ function boot(): void {
     }
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
     ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
-      if (state.view === 'family' && !state.shareModal) render()
+      if (state.view === 'family' && !state.shareModal && !state.listening) render()
     }, 500)
   })
   setFriendsSyncListener((info) => {
@@ -3025,6 +3181,10 @@ function boot(): void {
       patchSpaceHead('friends', info)
       return
     }
+    if (state.listening) {
+      patchSpaceHead('friends', info)
+      return
+    }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       patchSpaceHead('friends', info)
@@ -3032,7 +3192,7 @@ function boot(): void {
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
     ;(window as unknown as { __frdRefresh?: number }).__frdRefresh = window.setTimeout(() => {
-      if (state.view === 'friends' && !state.shareModal) render()
+      if (state.view === 'friends' && !state.shareModal && !state.listening) render()
     }, 500)
   })
   startAlarmScheduler()
@@ -3042,7 +3202,8 @@ function boot(): void {
       void speakAsync(`알림. ${alarm.body}`.slice(0, 160), 'ko-KR')
     }
     showFlash(`알림: ${alarm.body}`)
-    if (state.locationReady) render()
+    if (state.locationReady && !state.listening) render()
+    else if (state.listening) patchVoiceUi()
   })
   void ensureNotificationPermission()
   window.addEventListener('online', () => {

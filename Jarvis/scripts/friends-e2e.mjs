@@ -62,6 +62,38 @@ async function main() {
         timestamp: Date.now(),
       })
     }
+    navigator.mediaDevices = navigator.mediaDevices || {}
+    navigator.mediaDevices.getUserMedia = async () => ({
+      getTracks: () => [{ stop() {} }],
+    })
+    class FakeRec {
+      constructor() {
+        this.lang = ''
+        this.continuous = false
+        this.interimResults = false
+        this.maxAlternatives = 1
+        this.onstart = null
+        this.onresult = null
+        this.onerror = null
+        this.onend = null
+        this.onspeechstart = null
+        this.onspeechend = null
+        FakeRec.instances.push(this)
+        window.__fakeRecs = FakeRec.instances
+      }
+      start() {
+        setTimeout(() => this.onstart && this.onstart(), 0)
+      }
+      stop() {
+        setTimeout(() => this.onend && this.onend(), 0)
+      }
+      abort() {
+        setTimeout(() => this.onend && this.onend(), 0)
+      }
+    }
+    FakeRec.instances = []
+    window.webkitSpeechRecognition = FakeRec
+    window.SpeechRecognition = FakeRec
   })
 
   await page.goto('http://127.0.0.1:4183/', { waitUntil: 'networkidle0' })
@@ -81,7 +113,7 @@ async function main() {
   await page.click('[data-action="friends-invite"]')
   await page.waitForSelector('.share-modal')
   await page.waitForSelector('[data-invite-select="code"]')
-  await page.waitForFunction(() => /v1\.7\.\d+/.test(document.body.textContent || ''))
+  await page.waitForFunction(() => /v1\.\d+\.\d+/.test(document.body.textContent || ''))
   const shown = await page.$eval('[data-invite-select="code"]', (el) => el.value || '')
   if (shown !== code) throw new Error(`invite modal code mismatch: ${shown} vs ${code}`)
   await page.waitForSelector('[data-action="copy-invite-code"]')
@@ -93,6 +125,22 @@ async function main() {
   await page.type('#friends-chat-form input[name="text"]', '친구 안녕')
   await page.click('#friends-chat-form button[type="submit"]')
   await page.waitForFunction(() => (document.querySelector('.friends-chat')?.textContent || '').includes('친구 안녕'))
+
+  await page.waitForSelector('[data-action="space-mic"][data-space="friends"]')
+  await page.click('[data-action="space-mic"][data-space="friends"]')
+  await page.waitForFunction(() => window.__fakeRecs && window.__fakeRecs.length > 0, { timeout: 8000 })
+  await page.evaluate(() => {
+    const rec = window.__fakeRecs[window.__fakeRecs.length - 1]
+    if (rec.onspeechstart) rec.onspeechstart()
+    rec.onresult({
+      resultIndex: 0,
+      results: { length: 1, 0: { isFinal: true, length: 1, 0: { transcript: '음성으로 안녕' } } },
+    })
+  })
+  await page.waitForFunction(
+    () => (document.querySelector('.friends-chat')?.textContent || '').includes('음성으로 안녕'),
+    { timeout: 8000 },
+  )
 
   await page.click('[data-friends-tab="notices"]')
   await page.waitForSelector('#friends-notice-form')

@@ -56,7 +56,23 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
 }
 
 export function canListen(): boolean {
-  return Boolean(getRecognitionCtor())
+  if (!getRecognitionCtor()) return false
+  // Test override bypasses secure-context (jsdom/node has no HTTPS).
+  if (recognitionCtorOverride) return true
+  if (typeof window !== 'undefined' && !window.isSecureContext) return false
+  return true
+}
+
+/** Unlock mic permission on iOS so SpeechRecognition can start reliably. */
+export async function ensureMicPermission(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return canListen()
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    for (const t of stream.getTracks()) t.stop()
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function canSpeak(): boolean {

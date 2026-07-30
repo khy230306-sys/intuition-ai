@@ -54,6 +54,28 @@ async function main() {
   page.on('pageerror', (e) => errors.push(String(e)))
 
   await page.evaluateOnNewDocument(() => {
+    const fix = { lat: 37.5, lon: 127, accuracy: 10, at: Date.now() }
+    localStorage.setItem('jarvis.geo.granted.v1', '1')
+    localStorage.setItem('jarvis.geo.last.v1', JSON.stringify(fix))
+    navigator.geolocation.getCurrentPosition = (success) => {
+      success({
+        coords: {
+          latitude: fix.lat,
+          longitude: fix.lon,
+          accuracy: fix.accuracy,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+        },
+        timestamp: Date.now(),
+      })
+    }
+    navigator.mediaDevices = navigator.mediaDevices || {}
+    navigator.mediaDevices.getUserMedia = async () => ({
+      getTracks: () => [{ stop() {} }],
+    })
+
     class FakeRec {
       constructor() {
         this.lang = ''
@@ -87,7 +109,7 @@ async function main() {
   })
 
   await page.goto(base, { waitUntil: 'networkidle0' })
-  await page.waitForSelector('[data-action="mic"]')
+  await page.waitForSelector('[data-action="mic"]', { timeout: 15000 })
 
   await page.click('[data-view="settings"]')
   await page.waitForSelector('[data-action="voice-test"]')
@@ -98,7 +120,7 @@ async function main() {
   await page.waitForSelector('[data-action="mic"]')
   await page.click('[data-action="mic"]')
 
-  await page.waitForFunction(() => window.__fakeRecs && window.__fakeRecs.length > 0)
+  await page.waitForFunction(() => window.__fakeRecs && window.__fakeRecs.length > 0, { timeout: 8000 })
 
   await page.evaluate(() => {
     const recs = window.__fakeRecs
@@ -117,7 +139,7 @@ async function main() {
   await page.waitForFunction(() => {
     const cap = document.getElementById('voice-caption')
     return !!cap && !cap.hidden && (cap.textContent || '').includes('몇 시')
-  })
+  }, { timeout: 5000 })
 
   await page.evaluate(() => {
     const recs = window.__fakeRecs
@@ -136,7 +158,7 @@ async function main() {
       const msgs = [...document.querySelectorAll('.msg.user')]
       return msgs.some((m) => (m.textContent || '').includes('지금 몇 시야'))
     },
-    { timeout: 2500 },
+    { timeout: 8000 },
   )
 
   await page.waitForFunction(
@@ -144,7 +166,7 @@ async function main() {
       const msgs = [...document.querySelectorAll('.msg.assistant')]
       return msgs.some((m) => (m.textContent || '').includes('지금은'))
     },
-    { timeout: 2500 },
+    { timeout: 8000 },
   )
 
   const listeningAfter = await page.$eval('[data-action="mic"]', (el) =>

@@ -87,6 +87,13 @@ function continentList(): string {
 }
 
 export function wantsGeo(text: string): boolean {
+  // Device GPS intents are handled in brain — do not treat as world-geo
+  if (
+    /^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) ||
+    /내\s*위치|지금\s*어디야|현재\s*위치|위치\s*알려\s*줘?/.test(text)
+  ) {
+    return false
+  }
   if (
     /지리|대륙|수도|인구|면적|시차|좌표|어디에\s*있|위치|국가\s*정보|세계\s*정보|나라\s*알려|나라\s*정보/.test(
       text,

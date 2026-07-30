@@ -86,7 +86,7 @@ import {
 } from './friendsStore'
 import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
-import { formatWeatherLine, loadCachedWeather } from './weather'
+import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './weather'
 
 function helpText(name: string): string {
   return [
@@ -899,11 +899,11 @@ export async function think(
   const translated = await handleTranslate(text)
   if (translated) return translated
 
-  const geo = await handleGeo(text)
-  if (geo) return geo
-
-  // My device location
-  if (/^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) || /내\s*위치|지금\s*어디야/.test(text)) {
+  // Device GPS — before handleGeo so "현재 위치/위치 알려" is not wiki-hijacked
+  if (
+    /^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) ||
+    /내\s*위치|지금\s*어디야|현재\s*위치|위치\s*알려\s*줘?/.test(text)
+  ) {
     try {
       const report = await getLocationReport()
       const fixMatch = report.match(/좌표:\s*([-\d.]+),\s*([-\d.]+)/)
@@ -919,6 +919,9 @@ export async function think(
       }
     }
   }
+
+  const geo = await handleGeo(text)
+  if (geo) return geo
 
   const life = await handleLife(text)
   if (life) return life
@@ -943,11 +946,10 @@ export async function think(
       .replace(/\s*(알려줘|알려|어때|확인해?|확인|좀|주세요)\s*$/u, '')
       .trim()
     const cached = loadCachedWeather()
-    if (cached) {
-      const place = city || cached.place || '현재 위치'
+    if (cached && weatherPlaceMatches(cached.place, city)) {
       const line = formatWeatherLine(cached)
       return {
-        text: `${place} 날씨예요. ${line}`,
+        text: `${cached.place || city || '현재 위치'} 날씨예요. ${line}`,
         speak: true,
         action: () => openWeather(city || cached.place),
       }

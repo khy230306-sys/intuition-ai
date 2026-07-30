@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildHomeSummary } from './homeSummary'
 import { appShareMessage, buildBackupQrPayload, QR_SAFE_CHARS } from './shareKit'
-import { weatherLabel } from './weather'
+import { weatherCoordsMatch, weatherLabel, weatherPlaceMatches } from './weather'
 
 const store = new Map<string, string>()
 
@@ -56,5 +56,26 @@ describe('share kit', () => {
       expect(built.bytes).toBeGreaterThan(QR_SAFE_CHARS)
       expect(built.reason).toMatch(/QR/)
     }
+  })
+})
+
+describe('weather cache matching', () => {
+  it('matches coords within epsilon and place names', () => {
+    const snap = {
+      tempC: 10,
+      code: 0,
+      label: '맑음',
+      precipProb: null,
+      place: '서울',
+      at: Date.now(),
+      source: 'test',
+      lat: 37.5,
+      lon: 127.0,
+    }
+    expect(weatherCoordsMatch(snap, 37.51, 127.01)).toBe(true)
+    expect(weatherCoordsMatch(snap, 35.1, 129.0)).toBe(false)
+    expect(weatherPlaceMatches('서울', '')).toBe(true)
+    expect(weatherPlaceMatches('서울', '서울')).toBe(true)
+    expect(weatherPlaceMatches('서울', '부산')).toBe(false)
   })
 })

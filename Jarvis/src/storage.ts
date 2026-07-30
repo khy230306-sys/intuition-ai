@@ -71,7 +71,12 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson(key: string, value: unknown): void {
-  localStorage.setItem(key, JSON.stringify(value))
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch (err) {
+    // QuotaExceeded or private-mode write failures must not crash UI mid-action
+    console.warn('[jarvis] localStorage write failed', key, err)
+  }
 }
 
 function dayKey(d = new Date()): string {

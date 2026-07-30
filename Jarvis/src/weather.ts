@@ -8,10 +8,14 @@ export type WeatherSnap = {
   place: string
   at: number
   source: string
+  lat?: number
+  lon?: number
 }
 
 const CACHE_KEY = 'jarvis_weather_cache_v1'
 const CACHE_MS = 20 * 60_000
+/** ~5km — reuse cache only when coordinates match. */
+const COORD_EPS = 0.05
 
 const WMO: Record<number, string> = {
   0: '맑음',
@@ -55,6 +59,25 @@ function writeCache(snap: WeatherSnap): void {
   localStorage.setItem(CACHE_KEY, JSON.stringify(snap))
 }
 
+export function weatherCoordsMatch(
+  snap: WeatherSnap,
+  lat: number,
+  lon: number,
+  eps = COORD_EPS,
+): boolean {
+  if (snap.lat == null || snap.lon == null) return false
+  return Math.abs(snap.lat - lat) <= eps && Math.abs(snap.lon - lon) <= eps
+}
+
+/** True when cached place is usable for the asked city (empty city = current location). */
+export function weatherPlaceMatches(cachedPlace: string, city: string): boolean {
+  const place = cachedPlace.replace(/\s+/g, '')
+  const want = city.replace(/\s+/g, '')
+  if (!want) return true
+  if (!place) return false
+  return place.includes(want) || want.includes(place)
+}
+
 export function loadCachedWeather(): WeatherSnap | null {
   const c = readCache()
   if (!c) return null
@@ -69,7 +92,13 @@ export async function fetchWeather(
   timeoutMs = 4000,
 ): Promise<WeatherSnap | null> {
   const cached = readCache()
-  if (cached && Date.now() - cached.at < CACHE_MS) return cached
+  if (
+    cached &&
+    Date.now() - cached.at < CACHE_MS &&
+    weatherCoordsMatch(cached, lat, lon)
+  ) {
+    return cached
+  }
 
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -79,7 +108,7 @@ export async function fetchWeather(
       `&longitude=${encodeURIComponent(String(lon))}` +
       `&current=temperature_2m,weather_code,precipitation_probability&timezone=auto`
     const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
-    if (!res.ok) return cached
+    if (!res.ok) return cached && weatherCoordsMatch(cached, lat, lon) ? cached : null
     const data = (await res.json()) as {
       current?: {
         temperature_2m?: number
@@ -88,7 +117,9 @@ export async function fetchWeather(
       }
     }
     const cur = data.current
-    if (cur?.temperature_2m == null || cur.weather_code == null) return cached
+    if (cur?.temperature_2m == null || cur.weather_code == null) {
+      return cached && weatherCoordsMatch(cached, lat, lon) ? cached : null
+    }
     const snap: WeatherSnap = {
       tempC: cur.temperature_2m,
       code: cur.weather_code,
@@ -97,11 +128,13 @@ export async function fetchWeather(
       place,
       at: Date.now(),
       source: 'open-meteo',
+      lat,
+      lon,
     }
     writeCache(snap)
     return snap
   } catch {
-    return cached
+    return cached && weatherCoordsMatch(cached, lat, lon) ? cached : null
   } finally {
     clearTimeout(timer)
   }

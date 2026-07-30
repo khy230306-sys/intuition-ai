@@ -108,16 +108,20 @@ function applyPacket(packet: FamilySyncPacket): void {
 
   if (packet.type === 'notice') {
     const idx = local.notices.findIndex((n) => n.id === packet.notice.id)
-    if (idx >= 0) local.notices[idx] = packet.notice
-    else local.notices.unshift(packet.notice)
+    if (idx >= 0) {
+      if ((packet.notice.updatedAt || 0) < (local.notices[idx]!.updatedAt || 0)) return
+      local.notices[idx] = packet.notice
+    } else local.notices.unshift(packet.notice)
     saveFamilyRoom(local)
     return
   }
 
   if (packet.type === 'event') {
     const idx = local.events.findIndex((e) => e.id === packet.event.id)
-    if (idx >= 0) local.events[idx] = packet.event
-    else local.events.unshift(packet.event)
+    if (idx >= 0) {
+      if ((packet.event.updatedAt || 0) < (local.events[idx]!.updatedAt || 0)) return
+      local.events[idx] = packet.event
+    } else local.events.unshift(packet.event)
     saveFamilyRoom(local)
     return
   }
@@ -278,22 +282,25 @@ export async function disconnectFamilySync(): Promise<void> {
   announceTimer = 0
   healthTimer = 0
   unhealthyTicks = 0
-  try {
-    packetRelay?.close()
-  } catch {
-    /* ignore */
-  }
+  // Null handles first so a concurrent joinFresh cannot be wiped after await leave()
+  const relay = packetRelay
+  const handle = roomHandle
   packetRelay = null
-  try {
-    await roomHandle?.leave()
-  } catch {
-    /* ignore */
-  }
   roomHandle = null
   syncAction = null
   peerCount = 0
   relayLabel = '연결 해제'
   lastEmitted = ''
+  try {
+    relay?.close()
+  } catch {
+    /* ignore */
+  }
+  try {
+    await handle?.leave()
+  } catch {
+    /* ignore */
+  }
   emit('연결 해제', 'conn')
 }
 
@@ -342,36 +349,52 @@ async function joinFresh(): Promise<{ ok: boolean; message: string }> {
       /* ignore */
     }
     packetRelay = null
+    const orphan = roomHandle
     roomHandle = null
     syncAction = null
+    try {
+      await orphan?.leave()
+    } catch {
+      /* ignore */
+    }
     const msg = err instanceof Error ? err.message : '동기화 연결 실패'
     emit(msg, 'conn')
     return { ok: false, message: msg }
   }
 }
 
+let ensureWait: Promise<{ ok: boolean; message: string }> | null = null
+let pendingForce = false
+
 /** Connect, or heal a zombie handle after backgrounding. */
 export async function ensureFamilySync(opts?: { force?: boolean }): Promise<{ ok: boolean; message: string }> {
   const room = loadFamilyRoom()
   if (!room) return { ok: false, message: '먼저 가족 공간을 만들거나 코드로 참여하세요.' }
 
-  if (reconnecting) {
-    return { ok: true, message: `재연결 중 · ${statusLine()}` }
-  }
+  if (opts?.force) pendingForce = true
+  if (ensureWait) return ensureWait
 
-  const force = opts?.force === true
-  if (roomHandle && !force && isFamilySyncHealthy()) {
+  if (roomHandle && !pendingForce && isFamilySyncHealthy()) {
     const status = statusLine()
     return { ok: true, message: `이미 연결됨 · ${status}` }
   }
 
   reconnecting = true
-  try {
-    if (roomHandle) await disconnectFamilySync()
-    return await joinFresh()
-  } finally {
-    reconnecting = false
-  }
+  ensureWait = (async () => {
+    try {
+      let last = { ok: false, message: '연결 대기' }
+      do {
+        pendingForce = false
+        if (roomHandle) await disconnectFamilySync()
+        last = await joinFresh()
+      } while (pendingForce)
+      return last
+    } finally {
+      reconnecting = false
+      ensureWait = null
+    }
+  })()
+  return ensureWait
 }
 
 export async function connectFamilySync(): Promise<{ ok: boolean; message: string }> {

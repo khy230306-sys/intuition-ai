@@ -132,9 +132,13 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.2'
+const APP_VERSION = '1.8.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
+/** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
+let voiceSessionGen = 0
+/** Bumps when a newer chat request supersedes an in-flight think(). */
+let thinkGen = 0
 
 async function hardRefreshApp(): Promise<void> {
   if (sessionStorage.getItem('jarvis.refreshing') === '1') return
@@ -395,9 +399,11 @@ function captureViewFromUrl(): void {
   }
 }
 
-function applyPendingInvite(): boolean {
+type InviteApplyResult = 'joined' | 'needs-switch' | 'failed' | 'none'
+
+function applyPendingInvite(): InviteApplyResult {
   const pending = state.pendingInvite
-  if (!pending || !state.locationReady) return false
+  if (!pending || !state.locationReady) return 'none'
   state.pendingInvite = null
   savePendingInvite(null)
   const member = state.settings.displayName || '나'
@@ -408,9 +414,10 @@ function applyPendingInvite(): boolean {
         // Keep current room visible + show one-tap switch banner (do not silently no-op)
         state.view = 'friends'
         state.prefillJoinCode = pending.code
+        state.pendingInvite = pending
         savePendingInvite(pending)
         showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
-        return true
+        return 'needs-switch'
       }
       const firstJoin = !current
       if (!current) {
@@ -422,15 +429,16 @@ function applyPendingInvite(): boolean {
       if (firstJoin) postJoinPresence('friends')
       showFlash(`친구 초대 승인 · 코드 ${pending.code} 입장 완료`)
       void ensureFriendsSyncOnce(true)
-      return true
+      return 'joined'
     }
     const current = loadFamilyRoom()
     if (current && current.code !== pending.code) {
       state.view = 'family'
       state.prefillJoinCode = pending.code
+      state.pendingInvite = pending
       savePendingInvite(pending)
       showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
-      return true
+      return 'needs-switch'
     }
     const firstJoin = !current
     if (!current) {
@@ -442,12 +450,14 @@ function applyPendingInvite(): boolean {
     if (firstJoin) postJoinPresence('family')
     showFlash(`가족 초대 승인 · 코드 ${pending.code} 입장 완료`)
     void ensureFamilySyncOnce(true)
-    return true
+    return 'joined'
   } catch (err) {
+    state.pendingInvite = pending
+    savePendingInvite(pending)
     showFlash(err instanceof Error ? err.message : '초대 참여에 실패했습니다.')
     state.view = pending.kind
     state.prefillJoinCode = pending.code
-    return true
+    return 'failed'
   }
 }
 
@@ -482,7 +492,7 @@ function postJoinPresence(kind: SpaceKind): void {
   }
 }
 
-function switchToInvite(kind: SpaceKind): void {
+async function switchToInvite(kind: SpaceKind): Promise<void> {
   const code = state.prefillJoinCode.trim()
   if (!code) {
     showFlash('전환할 초대 코드가 없습니다.')
@@ -491,14 +501,14 @@ function switchToInvite(kind: SpaceKind): void {
   const member = state.settings.displayName || '나'
   try {
     if (kind === 'friends') {
-      void disconnectFriendsSync()
+      await disconnectFriendsSync()
       leaveFriendsRoom()
       joinFriendsRoomLocal(code, '친구 공간', member)
       state.friendsTab = 'chat'
       state.view = 'friends'
       postJoinPresence('friends')
     } else {
-      void disconnectFamilySync()
+      await disconnectFamilySync()
       leaveFamilyRoom()
       joinFamilyRoomLocal(code, '가족 공간', member)
       state.familyTab = 'chat'
@@ -591,7 +601,7 @@ function persistMemberName(memberName: string): void {
   saveSettings(state.settings)
 }
 
-function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): void {
+async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): Promise<void> {
   const detected = detectInviteKind(raw)
   if (detected && detected !== kind) {
     showFlash(`${detected === 'friends' ? '친구' : '가족'} 초대로 전환합니다…`)
@@ -611,7 +621,7 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
           `지금 친구 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
-        void disconnectFriendsSync()
+        await disconnectFriendsSync()
         leaveFriendsRoom()
       }
       const wasSame = Boolean(current && current.code === code)
@@ -629,7 +639,7 @@ function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): 
           `지금 가족 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
-        void disconnectFamilySync()
+        await disconnectFamilySync()
         leaveFamilyRoom()
       }
       const wasSame = Boolean(current && current.code === code)
@@ -673,9 +683,32 @@ function pushMsg(role: ChatMessage['role'], text: string): ChatMessage {
   return msg
 }
 
+/** Prefer translated body / skip lock instructions for TTS. */
+function speakableReplyText(text: string): string {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const body = lines.find(
+    (l) =>
+      !/^【/.test(l) &&
+      !/^—/.test(l) &&
+      !/끝:\s*「?스톱/.test(l) &&
+      !/계속 말하세요/.test(l) &&
+      !/이어서 말하면/.test(l) &&
+      !/번역 모드/.test(l),
+  )
+  if (body) return body
+  if (text.includes('번역:')) {
+    return text.split('번역:').pop()?.split('\n')[0]?.trim() || text
+  }
+  return text
+}
+
 async function handleUserText(raw: string): Promise<void> {
   const text = raw.trim()
   if (!text || state.busy) return
+  const gen = ++thinkGen
   state.busy = true
   state.listening = false
   state.voiceHint = ''
@@ -685,21 +718,25 @@ async function handleUserText(raw: string): Promise<void> {
   render()
   scrollChat()
 
+  let timedOut = false
+  const heavy =
+    /포트폴리오|관심\s*종목|워치|종목\s*추천|시세|차트|보유|분석/.test(text) ||
+    Boolean(state.settings.apiKey)
+  const thinkMs = heavy ? 22_000 : 12_000
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true
+    if (gen !== thinkGen) return
+    pushMsg('assistant', '응답 시간이 초과되었습니다. 다시 시도해 주세요.')
+    state.busy = false
+    render()
+    scrollChat()
+  }, thinkMs)
+
   try {
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
-    const thinkPromise = think(text, history.slice(0, -1))
-    // Invest / bulk quote paths need more headroom than simple local commands
-    const heavy =
-      /포트폴리오|관심\s*종목|워치|종목\s*추천|시세|차트|보유|분석/.test(text) ||
-      Boolean(state.settings.apiKey)
-    const thinkMs = heavy ? 22_000 : 12_000
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      window.setTimeout(
-        () => reject(new Error('응답 시간이 초과되었습니다. 다시 시도해 주세요.')),
-        thinkMs,
-      )
-    })
-    const reply = await Promise.race([thinkPromise, timeoutPromise])
+    const reply = await think(text, history.slice(0, -1))
+    if (gen !== thinkGen || timedOut) return
+    window.clearTimeout(timeoutId)
     if (reply.action) {
       const result = await Promise.race([
         Promise.resolve(reply.action()),
@@ -707,6 +744,7 @@ async function handleUserText(raw: string): Promise<void> {
           window.setTimeout(() => reject(new Error('실행 시간이 초과되었습니다.')), 8_000)
         }),
       ])
+      if (gen !== thinkGen) return
       if (result && 'message' in result && result.message && result.message !== reply.text) {
         pushMsg('assistant', `${reply.text}\n(${result.message})`)
       } else {
@@ -720,18 +758,21 @@ async function handleUserText(raw: string): Promise<void> {
     if (reply.listenLang) state.listenLang = reply.listenLang
     if (reply.speak !== false && state.settings.speakReplies) {
       const lang = reply.speakLang || 'ko-KR'
-      const speakText = reply.text.includes('번역:')
-        ? reply.text.split('번역:').pop()?.split('\n')[0]?.trim() || reply.text
-        : reply.text
+      const speakText = speakableReplyText(reply.text)
       void speakAsync(speakText.replace(/\n+/g, '. ').slice(0, 220), lang)
     }
   } catch (err) {
+    if (gen !== thinkGen || timedOut) return
+    window.clearTimeout(timeoutId)
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
     pushMsg('assistant', msg)
   } finally {
-    state.busy = false
-    render()
-    scrollChat()
+    if (gen === thinkGen && !timedOut) {
+      window.clearTimeout(timeoutId)
+      state.busy = false
+      render()
+      scrollChat()
+    }
   }
 }
 
@@ -826,6 +867,7 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
     return
   }
   if (state.listening && state.dictationTarget === space) {
+    voiceSessionGen += 1
     const partial = voice.transcript.trim()
     voice.stop()
     state.listening = false
@@ -836,10 +878,12 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
     return
   }
   if (state.listening) {
+    voiceSessionGen += 1
     voice.stop()
     state.listening = false
   }
   stopSpeaking()
+  const session = ++voiceSessionGen
   state.dictationTarget = space
   state.draft = ''
   state.voiceHint = '듣고 있습니다… 천천히 말씀하세요 (끝나면 자동 전송)'
@@ -847,6 +891,7 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
   patchVoiceUi()
   void (async () => {
     const micOk = await ensureMicPermission()
+    if (session !== voiceSessionGen || state.dictationTarget !== space || !state.listening) return
     if (!micOk) {
       state.listening = false
       state.voiceHint = ''
@@ -2049,13 +2094,19 @@ function render(): void {
 }
 
 let familySyncInFlight: Promise<void> | null = null
+let familySyncForceQueued = false
 async function ensureFamilySyncOnce(force = false): Promise<void> {
   if (!loadFamilyRoom()) return
+  if (force) familySyncForceQueued = true
   if (familySyncInFlight) return familySyncInFlight
   familySyncInFlight = (async () => {
-    const r = force ? await reconnectFamilySync() : await ensureFamilySync()
-    state.familySyncStatus = r.message
-    patchSpaceHead('family', { status: r.message, peers: getFamilyPeerCount() })
+    do {
+      const useForce = familySyncForceQueued
+      familySyncForceQueued = false
+      const r = useForce ? await reconnectFamilySync() : await ensureFamilySync()
+      state.familySyncStatus = r.message
+      patchSpaceHead('family', { status: r.message, peers: getFamilyPeerCount() })
+    } while (familySyncForceQueued)
   })().finally(() => {
     familySyncInFlight = null
   })
@@ -2063,13 +2114,19 @@ async function ensureFamilySyncOnce(force = false): Promise<void> {
 }
 
 let friendsSyncInFlight: Promise<void> | null = null
+let friendsSyncForceQueued = false
 async function ensureFriendsSyncOnce(force = false): Promise<void> {
   if (!loadFriendsRoom()) return
+  if (force) friendsSyncForceQueued = true
   if (friendsSyncInFlight) return friendsSyncInFlight
   friendsSyncInFlight = (async () => {
-    const r = force ? await reconnectFriendsSync() : await ensureFriendsSync()
-    state.friendsSyncStatus = r.message
-    patchSpaceHead('friends', { status: r.message, peers: getFriendsPeerCount() })
+    do {
+      const useForce = friendsSyncForceQueued
+      friendsSyncForceQueued = false
+      const r = useForce ? await reconnectFriendsSync() : await ensureFriendsSync()
+      state.friendsSyncStatus = r.message
+      patchSpaceHead('friends', { status: r.message, peers: getFriendsPeerCount() })
+    } while (friendsSyncForceQueued)
   })().finally(() => {
     friendsSyncInFlight = null
   })
@@ -2154,7 +2211,14 @@ function bindLocationGate(): void {
     state.locationError = ''
     state.locationBusy = false
     const invited = applyPendingInvite()
-    showFlash(invited ? '초대 승인 · JARVIS 입장 완료' : '초대를 처리하지 못했습니다. 친구/가족 탭에서 코드를 붙여넣으세요.')
+    if (invited === 'joined') showFlash('초대 승인 · JARVIS 입장 완료')
+    else if (invited === 'needs-switch') {
+      /* applyPendingInvite already flashed switch banner */
+    } else if (invited === 'failed') {
+      /* error flash already set */
+    } else {
+      showFlash('초대를 처리하지 못했습니다. 친구/가족 탭에서 코드를 붙여넣으세요.')
+    }
     render()
     void bootSpaceSyncAndPush()
   })
@@ -2180,7 +2244,7 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
     state.locationReady = true
     state.locationError = ''
     const invited = applyPendingInvite()
-    if (interactive && !invited) showFlash('위치 허용 완료')
+    if (interactive && invited === 'none') showFlash('위치 허용 완료')
     render()
     void refreshWeather()
     void bootSpaceSyncAndPush()
@@ -2235,22 +2299,24 @@ function bind(): void {
 
   document.getElementById('family-create')?.addEventListener('submit', (e) => {
     e.preventDefault()
-    const existing = loadFamilyRoom()
-    if (existing) {
-      const ok = window.confirm(
-        `이미 가족 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
-      )
-      if (!ok) return
-      void disconnectFamilySync()
-      leaveFamilyRoom()
-    }
-    const fd = new FormData(e.target as HTMLFormElement)
-    const member = String(fd.get('member') || '')
-    persistMemberName(member)
-    createFamilyRoom(String(fd.get('name') || ''), member)
-    state.familyTab = 'chat'
-    showFlash('가족 공간을 만들었습니다. «초대 공유»로 가족을 초대하세요.')
-    render()
+    void (async () => {
+      const existing = loadFamilyRoom()
+      if (existing) {
+        const ok = window.confirm(
+          `이미 가족 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+        )
+        if (!ok) return
+        await disconnectFamilySync()
+        leaveFamilyRoom()
+      }
+      const fd = new FormData(e.target as HTMLFormElement)
+      const member = String(fd.get('member') || '')
+      persistMemberName(member)
+      createFamilyRoom(String(fd.get('name') || ''), member)
+      state.familyTab = 'chat'
+      showFlash('가족 공간을 만들었습니다. «초대 공유»로 가족을 초대하세요.')
+      render()
+    })()
   })
 
   document.getElementById('family-join')?.addEventListener('submit', (e) => {
@@ -2355,10 +2421,12 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="family-leave"]')?.addEventListener('click', () => {
-    void disconnectFamilySync()
-    leaveFamilyRoom()
-    showFlash('가족 공간에서 나갔습니다.')
-    render()
+    void (async () => {
+      await disconnectFamilySync()
+      leaveFamilyRoom()
+      showFlash('가족 공간에서 나갔습니다.')
+      render()
+    })()
   })
 
   document.querySelector('[data-action="family-reconnect"]')?.addEventListener('click', () => {
@@ -2377,22 +2445,24 @@ function bind(): void {
 
   document.getElementById('friends-create')?.addEventListener('submit', (e) => {
     e.preventDefault()
-    const existing = loadFriendsRoom()
-    if (existing) {
-      const ok = window.confirm(
-        `이미 친구 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
-      )
-      if (!ok) return
-      void disconnectFriendsSync()
-      leaveFriendsRoom()
-    }
-    const fd = new FormData(e.target as HTMLFormElement)
-    const member = String(fd.get('member') || '')
-    persistMemberName(member)
-    createFriendsRoom(String(fd.get('name') || ''), member)
-    state.friendsTab = 'chat'
-    showFlash('친구 공간을 만들었습니다. «초대 공유»로 친구를 초대하세요.')
-    render()
+    void (async () => {
+      const existing = loadFriendsRoom()
+      if (existing) {
+        const ok = window.confirm(
+          `이미 친구 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+        )
+        if (!ok) return
+        await disconnectFriendsSync()
+        leaveFriendsRoom()
+      }
+      const fd = new FormData(e.target as HTMLFormElement)
+      const member = String(fd.get('member') || '')
+      persistMemberName(member)
+      createFriendsRoom(String(fd.get('name') || ''), member)
+      state.friendsTab = 'chat'
+      showFlash('친구 공간을 만들었습니다. «초대 공유»로 친구를 초대하세요.')
+      render()
+    })()
   })
 
   document.getElementById('friends-join')?.addEventListener('submit', (e) => {
@@ -2534,7 +2604,7 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="switch-friends-invite"]')?.addEventListener('click', () => {
-    switchToInvite('friends')
+    void switchToInvite('friends')
   })
   document.querySelector('[data-action="dismiss-friends-invite"]')?.addEventListener('click', () => {
     state.prefillJoinCode = ''
@@ -2544,7 +2614,7 @@ function bind(): void {
     render()
   })
   document.querySelector('[data-action="switch-family-invite"]')?.addEventListener('click', () => {
-    switchToInvite('family')
+    void switchToInvite('family')
   })
   document.querySelector('[data-action="dismiss-family-invite"]')?.addEventListener('click', () => {
     state.prefillJoinCode = ''
@@ -2632,10 +2702,12 @@ function bind(): void {
   })
 
   document.querySelector('[data-action="friends-leave"]')?.addEventListener('click', () => {
-    void disconnectFriendsSync()
-    leaveFriendsRoom()
-    showFlash('친구 공간에서 나갔습니다.')
-    render()
+    void (async () => {
+      await disconnectFriendsSync()
+      leaveFriendsRoom()
+      showFlash('친구 공간에서 나갔습니다.')
+      render()
+    })()
   })
 
   document.querySelector('[data-action="friends-reconnect"]')?.addEventListener('click', () => {
@@ -2738,6 +2810,7 @@ function bind(): void {
       return
     }
     if (state.listening && state.dictationTarget === 'jarvis') {
+      voiceSessionGen += 1
       const partial = voice.transcript.trim()
       voice.stop()
       state.listening = false
@@ -2748,10 +2821,12 @@ function bind(): void {
       return
     }
     if (state.listening) {
+      voiceSessionGen += 1
       voice.stop()
       state.listening = false
     }
     stopSpeaking()
+    const session = ++voiceSessionGen
     state.dictationTarget = 'jarvis'
     state.draft = ''
     const listenLang = currentListenLang() || state.listenLang || 'ko-KR'
@@ -2770,6 +2845,7 @@ function bind(): void {
     }
     void (async () => {
       const micOk = await ensureMicPermission()
+      if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis' || !state.listening) return
       if (!micOk) {
         state.listening = false
         state.voiceHint = ''

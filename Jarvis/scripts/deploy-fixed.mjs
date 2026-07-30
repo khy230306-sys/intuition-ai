@@ -8,6 +8,9 @@
  * then this script repoints jarvis-app → that snapshot. The public URL
  * does not change.
  *
+ * Free plan holds ~10 deployments. Before upload we prune unlinked snapshots
+ * so "Deployment limit reached" does not block releases.
+ *
  *   npm run deploy:web
  */
 import { spawnSync } from 'node:child_process'
@@ -22,6 +25,9 @@ const dist = join(root, 'dist')
 
 /** Locked public hostname — do not change without an explicit user request. */
 const FIXED_DOMAIN = 'jarvis-app.shipstatic.com'
+
+/** Keep this many recent unlinked snapshots as rollback cushion (plus the live one). */
+const KEEP_EXTRA_SNAPSHOTS = 2
 
 function loadApiKey() {
   if (process.env.SHIP_API_KEY) return process.env.SHIP_API_KEY.trim()
@@ -90,6 +96,58 @@ function parseJson(raw) {
   }
 }
 
+function normalizeDeployId(raw) {
+  return String(raw || '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\.shipstatic\.com\/?$/, '')
+}
+
+function linkedDeploymentId() {
+  try {
+    const domains = parseJson(runShip(['domains', 'list']))
+    const hit = (domains?.domains || []).find((d) => d.domain === domainHost || d.url?.includes(domainHost))
+    return normalizeDeployId(hit?.deployment)
+  } catch {
+    return ''
+  }
+}
+
+/** Free tier ~10 snapshots — remove old unlinked ones before a new upload. */
+function pruneOldDeployments() {
+  const listed = parseJson(runShip(['deployments', 'list']))
+  const deps = [...(listed?.deployments || [])].sort((a, b) => (b.created || 0) - (a.created || 0))
+  if (deps.length < 8) {
+    console.log(`Snapshots: ${deps.length} (no prune needed)`)
+    return
+  }
+  const live = linkedDeploymentId()
+  const protectedIds = new Set([live].filter(Boolean))
+  let keptExtra = 0
+  const remove = []
+  for (const d of deps) {
+    const id = normalizeDeployId(d.deployment)
+    if (!id) continue
+    if (protectedIds.has(id)) continue
+    if (keptExtra < KEEP_EXTRA_SNAPSHOTS) {
+      protectedIds.add(id)
+      keptExtra += 1
+      continue
+    }
+    remove.push(d.deployment)
+  }
+  console.log(
+    `Pruning ${remove.length} old snapshot(s); keeping live=${live || '(none)'} + ${keptExtra} recent`,
+  )
+  for (const dep of remove) {
+    try {
+      const out = parseJson(runShip(['deployments', 'remove', dep]))
+      console.log(`  removed ${dep}${out?.success ? '' : ''}`)
+    } catch (err) {
+      console.warn(`  skip remove ${dep}: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+}
+
 async function main() {
   if (!apiKey) {
     console.error(`
@@ -105,14 +163,38 @@ SHIP_API_KEY 가 없습니다.
   }
 
   console.log(`Fixed public URL: https://${domainHost}`)
+  console.log('Checking ShipStatic free-plan snapshot room…')
+  pruneOldDeployments()
+
   console.log('Uploading snapshot (internal id will change; public URL will not)…')
-  const uploaded = parseJson(runShip(['deployments', 'upload', dist]))
+  let uploaded
+  try {
+    uploaded = parseJson(runShip(['deployments', 'upload', dist]))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/Deployment limit reached/i.test(msg)) {
+      console.warn('Upload hit limit — force-pruning all unlinked snapshots and retrying once…')
+      const listed = parseJson(runShip(['deployments', 'list']))
+      const live = linkedDeploymentId()
+      for (const d of listed?.deployments || []) {
+        const id = normalizeDeployId(d.deployment)
+        if (!id || id === live) continue
+        try {
+          runShip(['deployments', 'remove', d.deployment])
+          console.log(`  force-removed ${d.deployment}`)
+        } catch {
+          /* ignore */
+        }
+      }
+      uploaded = parseJson(runShip(['deployments', 'upload', dist]))
+    } else {
+      throw err
+    }
+  }
   if (!uploaded?.deployment && !uploaded?.url) {
     throw new Error(`unexpected upload response: ${JSON.stringify(uploaded)}`)
   }
-  const deployId = String(uploaded.deployment || uploaded.url)
-    .replace(/^https?:\/\//, '')
-    .replace(/\.shipstatic\.com\/?$/, '')
+  const deployId = normalizeDeployId(uploaded.deployment || uploaded.url)
   console.log(`Snapshot id (internal): ${deployId}`)
 
   console.log(`Repointing ${domainHost} → ${deployId} …`)

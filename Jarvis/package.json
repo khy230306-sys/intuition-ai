@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.6.6",
+  "version": "1.6.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "test:share": "npm run build && node scripts/share-home-e2e.mjs",
     "test:family": "npm run build && node scripts/family-e2e.mjs",
     "test:friends": "npm run build && node scripts/friends-e2e.mjs",
-    "test:invite": "npm run build && node scripts/invite-join-e2e.mjs"
+    "test:invite": "npm run build && node scripts/invite-join-e2e.mjs",
+    "test:invite-copy": "npm run build && node scripts/invite-copy-e2e.mjs"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",

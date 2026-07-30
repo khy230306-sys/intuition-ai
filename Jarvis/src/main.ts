@@ -1,5 +1,5 @@
 import './style.css'
-import { copyText, quickActions, shareText } from './actions'
+import { copyTextNow, quickActions, shareText } from './actions'
 import {
   buildSpaceInviteUrl,
   parseInviteCode,
@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.6'
+const APP_VERSION = '1.6.7'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -171,6 +171,8 @@ const state = {
   shareInviteKind: null as null | 'family' | 'friends',
   shareInviteCode: '',
   shareInviteText: '',
+  shareStatus: '',
+  shareStatusOk: null as boolean | null,
   arcadeImportOpen: false,
   familyTab: 'chat' as 'chat' | 'notices' | 'events',
   familySyncStatus: '대기',
@@ -218,7 +220,20 @@ function showFlash(msg: string): void {
   if (!el) return
   el.textContent = msg
   el.classList.add('show')
-  window.setTimeout(() => el.classList.remove('show'), 1800)
+  window.setTimeout(() => el.classList.remove('show'), 2200)
+}
+
+/** In-modal status — visible above share sheet; avoids relying only on flash. */
+function setShareStatus(msg: string, ok: boolean | null = true): void {
+  state.shareStatus = msg
+  state.shareStatusOk = ok
+  const el = document.querySelector('[data-share-status]')
+  if (el) {
+    el.textContent = msg
+    el.classList.toggle('ok', ok === true)
+    el.classList.toggle('err', ok === false)
+  }
+  showFlash(msg)
 }
 
 async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> {
@@ -228,6 +243,8 @@ async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> 
   state.shareInviteKind = null
   state.shareInviteCode = ''
   state.shareInviteText = ''
+  state.shareStatus = ''
+  state.shareStatusOk = null
   state.shareHint = kind === 'app' ? appShareUrl() : 'QR 생성 중…'
   render()
   try {
@@ -274,6 +291,8 @@ async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   state.shareInviteCode = room.code
   state.shareInviteText = text
   state.shareQrSvg = ''
+  state.shareStatus = ''
+  state.shareStatusOk = null
   state.shareHint = `카메라로 QR을 스캔하면 바로 참여 링크로 열립니다.\n${link}`
   render()
   try {
@@ -876,6 +895,13 @@ function renderShareModal(): string {
           <p class="hint">친구가 하단 <strong>${state.shareInviteKind === 'family' ? '가족' : '친구'}</strong> 탭 → 코드로 참여에 입력하면 됩니다.</p>
         </div>`
       : ''
+  const statusClass =
+    state.shareStatusOk === true ? ' ok' : state.shareStatusOk === false ? ' err' : ''
+  const inviteFallback =
+    state.shareModal === 'invite'
+      ? `<textarea class="invite-copy-box" readonly rows="4" aria-label="초대 문구">${escapeHtml(state.shareInviteText)}</textarea>
+         <p class="hint">복사가 안 되면 위 문구를 길게 눌러 복사하세요.</p>`
+      : ''
   return `
     <div class="share-modal" role="dialog" aria-modal="true" aria-label="${title}" data-action="close-share-backdrop">
       <div class="share-sheet" data-share-sheet="1">
@@ -889,6 +915,8 @@ function renderShareModal(): string {
         <div class="row-btns">
           ${actions}
         </div>
+        <p class="share-status${statusClass}" data-share-status="1">${escapeHtml(state.shareStatus)}</p>
+        ${inviteFallback}
       </div>
     </div>
   `
@@ -1910,35 +1938,44 @@ function bind(): void {
     void openInviteModal('friends')
   })
 
-  document.querySelector('[data-action="share-invite-native"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="share-invite-native"]')?.addEventListener('click', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
     const text = state.shareInviteText
     const code = state.shareInviteCode
     const kind = state.shareInviteKind
     if (!text || !code || !kind) {
-      showFlash('초대 문구가 없습니다.')
+      setShareStatus('초대 문구가 없습니다.', false)
       return
     }
     const title = kind === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대'
     const url = buildSpaceInviteUrl(kind, code, appShareUrl())
-    void shareText(text, { title, url }).then((r) => showFlash(r.message))
+    void shareText(text, { title, url }).then((r) => setShareStatus(r.message, r.ok))
   })
 
-  document.querySelector('[data-action="copy-invite-code"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="copy-invite-code"]')?.addEventListener('click', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
     const code = state.shareInviteCode
     if (!code) {
-      showFlash('코드가 없습니다.')
+      setShareStatus('코드가 없습니다.', false)
       return
     }
-    void copyText(code).then((r) => showFlash(r.ok ? `코드 ${code} 복사됨` : r.message))
+    // Sync copy inside click — required for iOS Safari
+    const r = copyTextNow(code)
+    setShareStatus(r.ok ? `코드 ${code} 복사됨` : r.message, r.ok)
   })
 
-  document.querySelector('[data-action="copy-invite-text"]')?.addEventListener('click', () => {
+  document.querySelector('[data-action="copy-invite-text"]')?.addEventListener('click', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
     const text = state.shareInviteText
     if (!text) {
-      showFlash('초대 문구가 없습니다.')
+      setShareStatus('초대 문구가 없습니다.', false)
       return
     }
-    void copyText(text).then((r) => showFlash(r.ok ? '초대 문구를 복사했습니다.' : r.message))
+    const r = copyTextNow(text)
+    setShareStatus(r.ok ? '초대 문구를 복사했습니다.' : r.message, r.ok)
   })
 
   document.querySelector('[data-action="friends-leave"]')?.addEventListener('click', () => {
@@ -2310,6 +2347,8 @@ function bind(): void {
     state.shareInviteKind = null
     state.shareInviteCode = ''
     state.shareInviteText = ''
+    state.shareStatus = ''
+    state.shareStatusOk = null
     render()
   })
 
@@ -2321,6 +2360,8 @@ function bind(): void {
       state.shareInviteKind = null
       state.shareInviteCode = ''
       state.shareInviteText = ''
+      state.shareStatus = ''
+      state.shareStatusOk = null
       render()
     }
   })
@@ -2366,6 +2407,8 @@ function boot(): void {
   setFamilySyncListener((info) => {
     state.familySyncStatus = info.status
     if (state.view !== 'family' || !state.locationReady) return
+    // Don't wipe invite/share modal mid-copy on iOS
+    if (state.shareModal) return
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       const el = document.querySelector('.family-head .hint')
@@ -2378,12 +2421,13 @@ function boot(): void {
     // Debounced soft refresh for incoming packets
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
     ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
-      if (state.view === 'family') render()
+      if (state.view === 'family' && !state.shareModal) render()
     }, 400)
   })
   setFriendsSyncListener((info) => {
     state.friendsSyncStatus = info.status
     if (state.view !== 'friends' || !state.locationReady) return
+    if (state.shareModal) return
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       const el = document.querySelector('.friends-head .hint')
@@ -2395,7 +2439,7 @@ function boot(): void {
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
     ;(window as unknown as { __frdRefresh?: number }).__frdRefresh = window.setTimeout(() => {
-      if (state.view === 'friends') render()
+      if (state.view === 'friends' && !state.shareModal) render()
     }, 400)
   })
   startAlarmScheduler()

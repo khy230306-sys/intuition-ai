@@ -16,30 +16,21 @@ function openUrl(url: string, label: string): ActionResult {
   }
 }
 
-/** iOS Safari often blocks clipboard API; textarea fallback keeps invite copy working. */
-export async function copyText(text: string): Promise<ActionResult> {
+/**
+ * Synchronous copy for click handlers.
+ * iOS Safari drops the user-gesture if we await clipboard.writeText first.
+ */
+export function copyTextNow(text: string): ActionResult {
   const value = String(text ?? '')
   if (!value.trim()) return { ok: false, message: '복사할 내용이 없습니다.' }
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value)
-      return { ok: true, message: '클립보드에 복사했습니다.' }
-    }
-  } catch {
-    /* fall through to execCommand */
-  }
 
   try {
     const ta = document.createElement('textarea')
     ta.value = value
     ta.setAttribute('readonly', '')
-    ta.style.position = 'fixed'
-    ta.style.top = '0'
-    ta.style.left = '0'
-    ta.style.width = '2px'
-    ta.style.height = '2px'
-    ta.style.opacity = '0'
+    ta.setAttribute('aria-hidden', 'true')
+    ta.style.cssText =
+      'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;margin:0;border:none;outline:none;opacity:0;z-index:-1;'
     document.body.appendChild(ta)
     ta.focus()
     ta.select()
@@ -48,10 +39,37 @@ export async function copyText(text: string): Promise<ActionResult> {
     document.body.removeChild(ta)
     if (ok) return { ok: true, message: '클립보드에 복사했습니다.' }
   } catch {
+    /* fall through */
+  }
+
+  // Best-effort async API without awaiting (may still work in some browsers)
+  try {
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(value)
+      return { ok: true, message: '클립보드에 복사했습니다.' }
+    }
+  } catch {
     /* ignore */
   }
 
-  return { ok: false, message: '클립보드 복사에 실패했습니다. 코드를 길게 눌러 복사해 주세요.' }
+  return { ok: false, message: '자동 복사 실패 · 아래 문구를 길게 눌러 복사하세요.' }
+}
+
+/** Async wrapper — prefers sync path so iOS click gestures stay valid. */
+export async function copyText(text: string): Promise<ActionResult> {
+  const sync = copyTextNow(text)
+  if (sync.ok) return sync
+  const value = String(text ?? '')
+  if (!value.trim()) return sync
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return { ok: true, message: '클립보드에 복사했습니다.' }
+    }
+  } catch {
+    /* ignore */
+  }
+  return sync
 }
 
 export type ShareTextOpts = {

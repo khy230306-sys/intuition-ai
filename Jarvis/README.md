@@ -5,9 +5,9 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://lucid-float-6nc4f7a.shipstatic.com
+**앱 URL:** https://neutral-plane-syk1q03.shipstatic.com
 
-> 게이트/번역 바에 **v1.6.6**이 보여야 최신입니다.  
+> 게이트/번역 바에 **v1.6.7**이 보여야 최신입니다.  
 > 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)
 
 1. iPhone **Safari**로 위 주소를 엽니다.

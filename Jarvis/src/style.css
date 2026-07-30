@@ -598,7 +598,8 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: 0.25s ease;
-  z-index: 50;
+  /* Above share-modal (80) so copy/share feedback is visible on invite sheet */
+  z-index: 120;
   max-width: min(90vw, 360px);
   text-align: center;
 }
@@ -1139,6 +1140,40 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.share-status {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.share-status.ok {
+  color: var(--cyan-bright);
+  font-weight: 600;
+}
+
+.share-status.err {
+  color: #fca5a5;
+}
+
+.invite-copy-box {
+  width: 100%;
+  margin: 8px 0 0;
+  min-height: 72px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  padding: 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  user-select: all;
+  -webkit-user-select: all;
 }
 
 .nav.nav-7 {

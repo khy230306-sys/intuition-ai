@@ -5,17 +5,15 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 
 ## 바로 사용 (iPhone)
 
-**앱 URL:** https://auric-cloaker-i0s9aul.shipstatic.com
+**앱 URL (고정):** https://jarvis-app.shipstatic.com
 
 > 게이트/번역 바에 **v1.6.9**이 보여야 최신입니다.  
-> 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)
-> `lucid-float-…` / `refined-robot-…` 등 예전 shipstatic URL은 **구버전**이라 초대 복사가 안 됩니다.
+> 앱 실행 시 **위치 허용이 필수**입니다. (홈 화면 추가 순간에는 iOS가 위치 창을 띄울 수 없어, 첫 실행 때 막습니다.)  
+> 이후 업데이트는 **같은 주소**로 올라갑니다. `lucid-float-…` / `auric-cloaker-…` 등 예전 URL은 쓰지 마세요.
 
 1. iPhone **Safari**로 위 주소를 엽니다.
 2. 공유 버튼 → **홈 화면에 추가**
 3. 홈 화면의 **JARVIS** 아이콘으로 실행
-
-> ShipStatic 무료 배포는 만료될 수 있습니다. 만료 전 claim 하거나 `npm run deploy:web`으로 다시 배포하세요.
 
 ## 가족 공간
 

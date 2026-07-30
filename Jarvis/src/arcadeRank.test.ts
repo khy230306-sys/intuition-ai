@@ -28,14 +28,14 @@ describe('arcade rank share', () => {
   it('encodes and parses score cards', () => {
     const payload = encodeScoreCard({
       v: 1,
-      game: 'snake',
+      game: 'breakout',
       score: 42,
       level: 3,
       name: '민수',
       playerId: 'abc-123',
       at: 1_700_000_000_000,
     })
-    expect(payload.startsWith('JARVIS-ARCADE|v1|snake|')).toBe(true)
+    expect(payload.startsWith('JARVIS-ARCADE|v1|breakout|')).toBe(true)
     const parsed = parseScoreCard(payload)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
@@ -48,11 +48,11 @@ describe('arcade rank share', () => {
     setArcadePlayerName('나')
     store.set(
       'jarvis.arcade.best.v1',
-      JSON.stringify({ snake: 30, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 30, shooter: null, flappy: null, dodge: null, pong: null }),
     )
     store.set(
       'jarvis.arcade.bestLevel.v1',
-      JSON.stringify({ snake: 2, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 2, shooter: null, flappy: null, dodge: null, pong: null }),
     )
     const me = getArcadePlayerId()
     expect(getArcadePlayerName()).toBe('나')
@@ -60,7 +60,7 @@ describe('arcade rank share', () => {
     importScoreCard(
       encodeScoreCard({
         v: 1,
-        game: 'snake',
+        game: 'breakout',
         score: 90,
         level: 5,
         name: '친구A',
@@ -71,7 +71,7 @@ describe('arcade rank share', () => {
     importScoreCard(
       encodeScoreCard({
         v: 1,
-        game: 'snake',
+        game: 'breakout',
         score: 50,
         level: 3,
         name: '친구B',
@@ -80,7 +80,7 @@ describe('arcade rank share', () => {
       }),
     )
 
-    const ranks = rankingForGame('snake')
+    const ranks = rankingForGame('breakout')
     expect(ranks[0].name).toBe('친구A')
     expect(ranks[0].score).toBe(90)
     expect(ranks.map((r) => r.playerId)).toContain(me)

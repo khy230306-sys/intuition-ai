@@ -75,14 +75,14 @@ async function main() {
   await page.evaluate(() => {
     localStorage.setItem(
       'jarvis.arcade.best.v1',
-      JSON.stringify({ snake: 12, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 12, shooter: null, flappy: null, dodge: null, pong: null }),
     )
     localStorage.setItem(
       'jarvis.arcade.bestLevel.v1',
-      JSON.stringify({ snake: 2, breakout: null, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 2, shooter: null, flappy: null, dodge: null, pong: null }),
     )
   })
-  await page.click('[data-arcade="snake"]')
+  await page.click('[data-arcade="breakout"]')
   await page.click('[data-action="share-arcade-score"]')
   await page.waitForSelector('.share-modal')
   await page.waitForSelector('[data-action="copy-arcade-score"]')
@@ -91,7 +91,7 @@ async function main() {
   await page.click('[data-action="open-arcade-import"]')
   await page.waitForSelector('#arcade-import-form')
   const friendCode =
-    'JARVIS-ARCADE|v1|snake|99|6|친구테스트|friend-e2e|1700000000000'
+    'JARVIS-ARCADE|v1|breakout|99|6|친구테스트|friend-e2e|1700000000000'
   await page.$eval('#arcade-import-form textarea', (el, code) => {
     el.value = code
   }, friendCode)
@@ -126,7 +126,14 @@ JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605
     )
   })
 
-  const ids = ['snake', 'breakout', 'shooter', 'flappy', 'dodge', 'pong']
+  // Space shooter tab shows missile-evolve hint
+  await page.click('[data-arcade="shooter"]')
+  await page.waitForFunction(
+    () => document.querySelector('.game-tab.active')?.getAttribute('data-arcade') === 'shooter',
+  )
+  await page.waitForFunction(() => (document.body.textContent || '').includes('미사일 진화'))
+
+  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong']
   for (const id of ids) {
     await page.click(`[data-arcade="${id}"]`)
     await page.waitForFunction(
@@ -143,7 +150,8 @@ JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605
   }
 
   const titles = await page.$$eval('.game-tab', (els) => els.map((e) => e.textContent || ''))
-  if (titles.length < 6) throw new Error(`expected 6 games, got ${titles.join(',')}`)
+  if (titles.length !== 5) throw new Error(`expected 5 games, got ${titles.join(',')}`)
+  if (titles.includes('스네이크')) throw new Error('snake should be removed')
   if (errors.length) throw new Error(errors.join(' | '))
   console.log('ARCADE_E2E_OK', titles.join(','))
   await browser.close()

@@ -87,7 +87,7 @@ async function main() {
   await page.waitForSelector('[data-action="copy-invite-link"]')
   await page.waitForSelector('[data-share-status]')
   await page.waitForSelector('.invite-copy-box')
-  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.10'))
+  await page.waitForFunction(() => (document.body.textContent || '').includes('v1.6.11'))
 
   const code = await page.$eval('[data-invite-select="code"]', (el) => el.value || '')
   if (code.length < 4) throw new Error('invite code missing')

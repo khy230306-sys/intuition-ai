@@ -1,11 +1,10 @@
 /** Offline arcade games — canvas, no network. Level-up progression. */
 
-export type ArcadeId = 'snake' | 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
+export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  snake: { title: '스네이크', blurb: '먹이 3개마다 레벨업 · 속도 증가' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
-  shooter: { title: '스페이스', blurb: '5기 격추마다 레벨업 · 적 강화' },
+  shooter: { title: '스페이스', blurb: '아이템으로 미사일 진화 · 5기마다 레벨업' },
   flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
   dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
@@ -15,7 +14,6 @@ const BEST_KEY = 'jarvis.arcade.best.v1'
 const LEVEL_KEY = 'jarvis.arcade.bestLevel.v1'
 
 export type ArcadeBest = {
-  snake: number | null
   breakout: number | null
   shooter: number | null
   flappy: number | null
@@ -26,7 +24,6 @@ export type ArcadeBest = {
 export type ArcadeBestLevel = ArcadeBest
 
 const EMPTY_BEST: ArcadeBest = {
-  snake: null,
   breakout: null,
   shooter: null,
   flappy: null,
@@ -38,7 +35,8 @@ export function loadArcadeBest(): ArcadeBest {
   try {
     const raw = localStorage.getItem(BEST_KEY)
     if (!raw) return { ...EMPTY_BEST }
-    return { ...EMPTY_BEST, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw) as Partial<ArcadeBest>
+    return { ...EMPTY_BEST, ...parsed }
   } catch {
     return { ...EMPTY_BEST }
   }
@@ -48,7 +46,8 @@ export function loadArcadeBestLevel(): ArcadeBestLevel {
   try {
     const raw = localStorage.getItem(LEVEL_KEY)
     if (!raw) return { ...EMPTY_BEST }
-    return { ...EMPTY_BEST, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw) as Partial<ArcadeBestLevel>
+    return { ...EMPTY_BEST, ...parsed }
   } catch {
     return { ...EMPTY_BEST }
   }
@@ -83,8 +82,6 @@ function bumpBestLevel(game: ArcadeId, level: number): void {
 /** How many progress units needed to advance one level. */
 export function unitsPerLevel(id: ArcadeId): number {
   switch (id) {
-    case 'snake':
-      return 3
     case 'breakout':
       return 1
     case 'shooter':
@@ -201,154 +198,6 @@ function noteLevel(
   }
   onScore?.(score, nextLevel)
   return { level: nextLevel, levelUpUntil: 0 }
-}
-
-/** —— SNAKE —— */
-export function mountSnake(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
-  const cols = 16
-  const rows = 22
-  let dir = { x: 1, y: 0 }
-  let nextDir = { x: 1, y: 0 }
-  let snake = [
-    { x: 4, y: 10 },
-    { x: 3, y: 10 },
-    { x: 2, y: 10 },
-  ]
-  let food = { x: 10, y: 10 }
-  let score = 0
-  let foods = 0
-  let level = 1
-  let levelUpUntil = 0
-  let over = false
-  let acc = 0
-  const loop: Loop = { running: true, raf: 0, last: 0 }
-
-  function stepInterval(): number {
-    return 1 / Math.min(18, 8 + level)
-  }
-
-  function placeFood(): void {
-    for (let i = 0; i < 200; i++) {
-      const x = Math.floor(Math.random() * cols)
-      const y = Math.floor(Math.random() * rows)
-      if (!snake.some((s) => s.x === x && s.y === y)) {
-        food = { x, y }
-        return
-      }
-    }
-  }
-
-  function reset(): void {
-    dir = { x: 1, y: 0 }
-    nextDir = { x: 1, y: 0 }
-    snake = [
-      { x: 4, y: 10 },
-      { x: 3, y: 10 },
-      { x: 2, y: 10 },
-    ]
-    score = 0
-    foods = 0
-    level = 1
-    levelUpUntil = 0
-    over = false
-    placeFood()
-    onScore?.(score, level)
-  }
-
-  function tick(): void {
-    if (over) return
-    dir = nextDir
-    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
-    if (head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows || snake.some((s) => s.x === head.x && s.y === head.y)) {
-      over = true
-      bumpBest('snake', score)
-      bumpBestLevel('snake', level)
-      onScore?.(score, level)
-      return
-    }
-    snake.unshift(head)
-    if (head.x === food.x && head.y === food.y) {
-      score += 10
-      foods += 1
-      const next = levelFromUnits('snake', foods)
-      const noted = noteLevel('snake', level, next, score, onScore)
-      level = noted.level
-      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
-      placeFood()
-    } else {
-      snake.pop()
-    }
-  }
-
-  function draw(): void {
-    const { w, h } = sizeCanvas(canvas)
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const cellW = w / cols
-    const cellH = (h - 28) / rows
-    ctx.fillStyle = '#070b12'
-    ctx.fillRect(0, 0, w, h)
-    ctx.strokeStyle = 'rgba(0,210,190,0.06)'
-    for (let x = 0; x <= cols; x++) {
-      ctx.beginPath()
-      ctx.moveTo(x * cellW, 28)
-      ctx.lineTo(x * cellW, h)
-      ctx.stroke()
-    }
-    ctx.fillStyle = '#fbbf24'
-    ctx.fillRect(food.x * cellW + 2, 28 + food.y * cellH + 2, cellW - 4, cellH - 4)
-    snake.forEach((s, i) => {
-      ctx.fillStyle = i === 0 ? '#5affe8' : '#00d2be'
-      ctx.fillRect(s.x * cellW + 1, 28 + s.y * cellH + 1, cellW - 2, cellH - 2)
-    })
-    drawHud(ctx, w, h, score, level, over, 'SNAKE', { levelUpUntil })
-  }
-
-  function frame(t: number): void {
-    if (!loop.running) return
-    if (!loop.last) loop.last = t
-    const dt = Math.min(0.05, (t - loop.last) / 1000)
-    loop.last = t
-    if (!over) {
-      acc += dt
-      const step = stepInterval()
-      while (acc >= step) {
-        acc -= step
-        tick()
-      }
-    }
-    draw()
-    loop.raf = requestAnimationFrame(frame)
-  }
-
-  reset()
-  loop.raf = requestAnimationFrame(frame)
-
-  return {
-    stop: () => {
-      loop.running = false
-      cancelAnimationFrame(loop.raf)
-    },
-    setDir: (dx, dy) => {
-      if (over) return
-      if (dx === -dir.x && dy === -dir.y) return
-      if (dx === 0 && dy === 0) return
-      nextDir = { x: dx, y: dy }
-    },
-    pointer: (_x, _y, type) => {
-      if (type === 'down' && over) {
-        reset()
-        acc = 0
-      }
-    },
-    restart: () => {
-      reset()
-      acc = 0
-    },
-    getScore: () => score,
-    getLevel: () => level,
-    isOver: () => over,
-  }
 }
 
 /** —— BREAKOUT —— */
@@ -521,21 +370,93 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
   }
 }
 
-/** —— SPACE SHOOTER —— */
+/** —— SPACE SHOOTER (missile evolution via item pickups) —— */
+export type ShooterWeaponTier = 1 | 2 | 3 | 4 | 5
+
+export function nextWeaponTier(tier: number): ShooterWeaponTier {
+  return Math.min(5, Math.max(1, Math.floor(tier) + 1)) as ShooterWeaponTier
+}
+
+export function shooterFirePattern(
+  tier: ShooterWeaponTier,
+  shipX: number,
+  shipY: number,
+): Array<{ x: number; y: number; vx: number; vy: number; dmg: number; pierce: number; color: string; w: number; h: number }> {
+  const up = -1
+  if (tier === 1) {
+    return [{ x: shipX, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 }]
+  }
+  if (tier === 2) {
+    return [
+      { x: shipX - 8, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
+      { x: shipX + 8, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
+    ]
+  }
+  if (tier === 3) {
+    return [
+      { x: shipX, y: shipY - 2, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#5affe8', w: 5, h: 12 },
+      { x: shipX - 12, y: shipY, vx: -0.15, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
+      { x: shipX + 12, y: shipY, vx: 0.15, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
+    ]
+  }
+  if (tier === 4) {
+    return [
+      { x: shipX, y: shipY - 2, vx: 0, vy: up, dmg: 2, pierce: 0, color: '#a78bfa', w: 5, h: 12 },
+      { x: shipX - 10, y: shipY, vx: -0.28, vy: up, dmg: 1, pierce: 0, color: '#60a5fa', w: 4, h: 10 },
+      { x: shipX + 10, y: shipY, vx: 0.28, vy: up, dmg: 1, pierce: 0, color: '#60a5fa', w: 4, h: 10 },
+      { x: shipX - 18, y: shipY + 2, vx: -0.5, vy: up, dmg: 1, pierce: 0, color: '#f472b6', w: 3, h: 9 },
+      { x: shipX + 18, y: shipY + 2, vx: 0.5, vy: up, dmg: 1, pierce: 0, color: '#f472b6', w: 3, h: 9 },
+    ]
+  }
+  // Mk.5 — heavy pierce lasers
+  return [
+    { x: shipX, y: shipY - 4, vx: 0, vy: up, dmg: 3, pierce: 3, color: '#5affe8', w: 6, h: 18 },
+    { x: shipX - 14, y: shipY, vx: -0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
+    { x: shipX + 14, y: shipY, vx: 0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
+  ]
+}
+
 export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  type Bullet = {
+    x: number
+    y: number
+    vx: number
+    vy: number
+    dmg: number
+    pierce: number
+    color: string
+    w: number
+    h: number
+  }
+  type Enemy = { x: number; y: number; vx: number; hp: number }
+  type Item = { x: number; y: number; kind: 'missile' }
+
   let w = 320
   let h = 420
   let score = 0
   let kills = 0
   let level = 1
   let levelUpUntil = 0
+  let weapon: ShooterWeaponTier = 1
+  let weaponFlashUntil = 0
   let over = false
   let shipX = 160
-  let bullets: Array<{ x: number; y: number }> = []
-  let enemies: Array<{ x: number; y: number; vx: number; hp: number }> = []
+  let bullets: Bullet[] = []
+  let enemies: Enemy[] = []
+  let items: Item[] = []
   let spawnAcc = 0
   let fireAcc = 0
   const loop: Loop = { running: true, raf: 0, last: 0 }
+  const MAX_WEAPON = 5
+
+  function fireInterval(): number {
+    // Higher weapon = slightly faster fire; level also helps
+    return Math.max(0.12, 0.32 - level * 0.012 - (weapon - 1) * 0.018)
+  }
+
+  function bulletSpeed(): number {
+    return 340 + level * 18 + weapon * 12
+  }
 
   function reset(): void {
     const sized = sizeCanvas(canvas)
@@ -545,21 +466,40 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     kills = 0
     level = 1
     levelUpUntil = 0
+    weapon = 1
+    weaponFlashUntil = 0
     over = false
     shipX = w / 2
     bullets = []
     enemies = []
+    items = []
     spawnAcc = 0
     fireAcc = 0
     onScore?.(score, level)
   }
 
+  function dropMissileItem(x: number, y: number): void {
+    if (weapon >= MAX_WEAPON) return
+    // Guaranteed every 3rd kill, else 40% chance
+    if (kills % 3 === 0 || Math.random() < 0.4) {
+      items.push({ x, y, kind: 'missile' })
+    }
+  }
+
   function step(dt: number): void {
     if (over) return
+    const shipY = h - 50
     fireAcc += dt
-    if (fireAcc > Math.max(0.16, 0.3 - level * 0.015)) {
+    if (fireAcc > fireInterval()) {
       fireAcc = 0
-      bullets.push({ x: shipX, y: h - 50 })
+      const spd = bulletSpeed()
+      for (const b of shooterFirePattern(weapon, shipX, shipY)) {
+        bullets.push({
+          ...b,
+          vx: b.vx * spd,
+          vy: b.vy * spd,
+        })
+      }
     }
     spawnAcc += dt
     if (spawnAcc > Math.max(0.28, 1.15 - level * 0.08)) {
@@ -568,13 +508,14 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         x: 20 + Math.random() * (w - 40),
         y: 36,
         vx: (Math.random() - 0.5) * (70 + level * 10),
-        hp: 1 + (level >= 3 ? 1 : 0) + (level >= 6 ? 1 : 0),
+        hp: 1 + (level >= 3 ? 1 : 0) + (level >= 6 ? 1 : 0) + (level >= 9 ? 1 : 0),
       })
     }
     bullets.forEach((b) => {
-      b.y -= (360 + level * 20) * dt
+      b.x += b.vx * dt
+      b.y += b.vy * dt
     })
-    bullets = bullets.filter((b) => b.y > 20)
+    bullets = bullets.filter((b) => b.y > 16 && b.y < h + 20 && b.x > -20 && b.x < w + 20)
     enemies.forEach((e) => {
       e.y += (50 + level * 12) * dt
       e.x += e.vx * dt
@@ -582,13 +523,21 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     })
     for (const e of enemies) {
       for (const b of bullets) {
+        if (b.y < -50) continue
         if (Math.hypot(e.x - b.x, e.y - b.y) < 16) {
-          e.hp -= 1
-          b.y = -99
+          e.hp -= b.dmg
+          if (b.pierce > 0) {
+            b.pierce -= 1
+          } else {
+            b.y = -999
+          }
           if (e.hp <= 0) {
+            const ex = e.x
+            const ey = e.y
             e.y = 9999
-            score += 15
+            score += 15 + (weapon - 1) * 2
             kills += 1
+            dropMissileItem(ex, ey)
             const next = levelFromUnits('shooter', kills)
             const noted = noteLevel('shooter', level, next, score, onScore)
             level = noted.level
@@ -597,8 +546,28 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         }
       }
     }
-    bullets = bullets.filter((b) => b.y > 20)
+    bullets = bullets.filter((b) => b.y > 16)
     enemies = enemies.filter((e) => e.y < h + 20)
+
+    items.forEach((it) => {
+      it.y += 70 * dt
+    })
+    const kept: Item[] = []
+    for (const it of items) {
+      if (it.y > h + 10) continue
+      if (Math.hypot(it.x - shipX, it.y - (h - 36)) < 26) {
+        if (it.kind === 'missile' && weapon < MAX_WEAPON) {
+          weapon = nextWeaponTier(weapon)
+          weaponFlashUntil = performance.now() + 1400
+          score += 20
+          onScore?.(score, level)
+        }
+        continue
+      }
+      kept.push(it)
+    }
+    items = kept
+
     for (const e of enemies) {
       if (Math.hypot(e.x - shipX, e.y - (h - 36)) < 22 || e.y > h - 10) {
         over = true
@@ -622,6 +591,21 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     for (let i = 0; i < 30; i++) {
       ctx.fillRect((i * 47) % w, (i * 89 + score) % h, 2, 2)
     }
+    // missile upgrade orbs
+    for (const it of items) {
+      ctx.fillStyle = 'rgba(90,255,232,0.2)'
+      ctx.beginPath()
+      ctx.arc(it.x, it.y, 12, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#5affe8'
+      ctx.beginPath()
+      ctx.arc(it.x, it.y, 6, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#041018'
+      ctx.font = '700 9px Orbitron, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('M', it.x, it.y + 3)
+    }
     ctx.fillStyle = '#5affe8'
     ctx.beginPath()
     ctx.moveTo(shipX, h - 48)
@@ -629,15 +613,23 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     ctx.lineTo(shipX + 16, h - 22)
     ctx.closePath()
     ctx.fill()
-    ctx.fillStyle = '#fbbf24'
     for (const b of bullets) {
-      ctx.fillRect(b.x - 2, b.y - 8, 4, 10)
+      ctx.fillStyle = b.color
+      ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h)
     }
     for (const e of enemies) {
-      ctx.fillStyle = e.hp > 1 ? '#f472b6' : '#ff6b6b'
+      ctx.fillStyle = e.hp > 2 ? '#c084fc' : e.hp > 1 ? '#f472b6' : '#ff6b6b'
       ctx.fillRect(e.x - 12, e.y - 10, 24, 20)
     }
-    drawHud(ctx, w, h, score, level, over, 'SPACE', { levelUpUntil })
+    drawHud(ctx, w, h, score, level, over, `SPACE Mk.${weapon}`, { levelUpUntil })
+    if (!over && performance.now() < weaponFlashUntil) {
+      ctx.fillStyle = 'rgba(90,255,232,0.16)'
+      ctx.fillRect(0, h * 0.48, w, 40)
+      ctx.fillStyle = '#5affe8'
+      ctx.font = '700 16px Orbitron, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(`MISSILE Mk.${weapon}`, w / 2, h * 0.48 + 26)
+    }
   }
 
   function frame(t: number): void {
@@ -1061,7 +1053,6 @@ export function mountArcade(
   canvas: HTMLCanvasElement,
   onScore?: ScoreCb,
 ): ArcadeHandle {
-  if (id === 'snake') return mountSnake(canvas, onScore)
   if (id === 'breakout') return mountBreakout(canvas, onScore)
   if (id === 'shooter') return mountShooter(canvas, onScore)
   if (id === 'flappy') return mountFlappy(canvas, onScore)
@@ -1070,13 +1061,6 @@ export function mountArcade(
 }
 
 /** Pure helpers for unit tests */
-export function snakeWouldHitSelf(
-  snake: Array<{ x: number; y: number }>,
-  next: { x: number; y: number },
-): boolean {
-  return snake.some((s) => s.x === next.x && s.y === next.y)
-}
-
 export function breakoutPaddleBounce(ballX: number, paddleX: number, paddleW: number): number {
   const hit = (ballX - (paddleX + paddleW / 2)) / (paddleW / 2)
   return hit * 220

@@ -124,7 +124,7 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 
-const APP_VERSION = '1.6.10'
+const APP_VERSION = '1.6.11'
 
 const SUGGESTIONS = [
   '앱 공유',
@@ -160,7 +160,7 @@ const state = {
   locationError: '',
   locationBusy: false,
   lastFix: null as GeoFix | null,
-  arcadeId: 'snake' as ArcadeId,
+  arcadeId: 'shooter' as ArcadeId,
   arcadeScore: 0,
   arcadeLevel: 1,
   weather: null as WeatherSnap | null,
@@ -774,22 +774,11 @@ function renderGames(): string {
   const hi = best[state.arcadeId]
   const bestLv = loadArcadeBestLevel()[state.arcadeId]
   const controls =
-    state.arcadeId === 'snake'
-      ? `
-      <div class="arcade-pad">
-        <button type="button" data-dir="0,-1">▲</button>
-        <div class="arcade-pad-mid">
-          <button type="button" data-dir="-1,0">◀</button>
-          <button type="button" data-dir="1,0">▶</button>
-        </div>
-        <button type="button" data-dir="0,1">▼</button>
-      </div>
-      <p class="game-meta">방향 버튼 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'flappy'
-        ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
-        : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
-          ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
-          : `<p class="game-meta">좌우 드래그 · 자동발사 · 게임오버 시 화면 탭</p>`
+    state.arcadeId === 'flappy'
+      ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+        ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+        : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">

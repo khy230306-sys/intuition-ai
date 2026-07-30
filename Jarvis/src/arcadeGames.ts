@@ -11,7 +11,7 @@ export type ArcadeId =
   | 'lanes'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  shooter: { title: '스페이스', blurb: '아이템으로 미사일 진화 · 5기마다 레벨업' },
+  shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 아이템 · 5기마다 레벨업' },
   catch: { title: '과일받기', blurb: '바가지로 과일 받기 · 폭탄은 피하기' },
   mole: { title: '두더지', blurb: '올라온 두더지를 빠르게 탭' },
   lanes: { title: '차피하기', blurb: '3차선에서 좌우로 피해 달리기' },
@@ -395,48 +395,116 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
 
 /** —— SPACE SHOOTER (missile evolution via item pickups) —— */
 export type ShooterWeaponTier = 1 | 2 | 3 | 4 | 5
+/** Extra lateral spread from Lv20+ «와이드» items (0–3). */
+export type ShooterSpreadBoost = 0 | 1 | 2 | 3
+
+export const SHOOTER_WIDE_UNLOCK_LEVEL = 20
+export const MAX_SHOOTER_SPREAD = 3
 
 export function nextWeaponTier(tier: number): ShooterWeaponTier {
   return Math.min(5, Math.max(1, Math.floor(tier) + 1)) as ShooterWeaponTier
+}
+
+export function nextSpreadBoost(spread: number): ShooterSpreadBoost {
+  return Math.min(MAX_SHOOTER_SPREAD, Math.max(0, Math.floor(spread) + 1)) as ShooterSpreadBoost
+}
+
+export type ShooterBulletSpec = {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  dmg: number
+  pierce: number
+  color: string
+  w: number
+  h: number
+}
+
+/** Widen shot angles / offsets; add wing missiles at higher spread. */
+export function applyShooterSpread(
+  shots: ShooterBulletSpec[],
+  shipX: number,
+  shipY: number,
+  spread: number,
+): ShooterBulletSpec[] {
+  if (spread <= 0) return shots
+  const mul = 1 + spread * 0.65
+  const widened = shots.map((b) => ({
+    ...b,
+    x: shipX + (b.x - shipX) * (1 + spread * 0.4),
+    vx: b.vx * mul,
+  }))
+  // Fan wings — more width as spread grows
+  for (let i = 1; i <= spread; i++) {
+    const side = 22 + i * 10
+    const ang = 0.55 + i * 0.22
+    widened.push(
+      {
+        x: shipX - side,
+        y: shipY + 2,
+        vx: -ang,
+        vy: -1,
+        dmg: 1 + Math.floor(i / 2),
+        pierce: i >= 2 ? 1 : 0,
+        color: i >= 3 ? '#fde68a' : '#fbbf24',
+        w: 3 + i,
+        h: 9 + i,
+      },
+      {
+        x: shipX + side,
+        y: shipY + 2,
+        vx: ang,
+        vy: -1,
+        dmg: 1 + Math.floor(i / 2),
+        pierce: i >= 2 ? 1 : 0,
+        color: i >= 3 ? '#fde68a' : '#fbbf24',
+        w: 3 + i,
+        h: 9 + i,
+      },
+    )
+  }
+  return widened
 }
 
 export function shooterFirePattern(
   tier: ShooterWeaponTier,
   shipX: number,
   shipY: number,
-): Array<{ x: number; y: number; vx: number; vy: number; dmg: number; pierce: number; color: string; w: number; h: number }> {
+  spread: number = 0,
+): ShooterBulletSpec[] {
   const up = -1
+  let base: ShooterBulletSpec[]
   if (tier === 1) {
-    return [{ x: shipX, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 }]
-  }
-  if (tier === 2) {
-    return [
+    base = [{ x: shipX, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 }]
+  } else if (tier === 2) {
+    base = [
       { x: shipX - 8, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
       { x: shipX + 8, y: shipY, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
     ]
-  }
-  if (tier === 3) {
-    return [
+  } else if (tier === 3) {
+    base = [
       { x: shipX, y: shipY - 2, vx: 0, vy: up, dmg: 1, pierce: 0, color: '#5affe8', w: 5, h: 12 },
       { x: shipX - 12, y: shipY, vx: -0.15, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
       { x: shipX + 12, y: shipY, vx: 0.15, vy: up, dmg: 1, pierce: 0, color: '#fbbf24', w: 4, h: 10 },
     ]
-  }
-  if (tier === 4) {
-    return [
+  } else if (tier === 4) {
+    base = [
       { x: shipX, y: shipY - 2, vx: 0, vy: up, dmg: 2, pierce: 0, color: '#a78bfa', w: 5, h: 12 },
       { x: shipX - 10, y: shipY, vx: -0.28, vy: up, dmg: 1, pierce: 0, color: '#60a5fa', w: 4, h: 10 },
       { x: shipX + 10, y: shipY, vx: 0.28, vy: up, dmg: 1, pierce: 0, color: '#60a5fa', w: 4, h: 10 },
       { x: shipX - 18, y: shipY + 2, vx: -0.5, vy: up, dmg: 1, pierce: 0, color: '#f472b6', w: 3, h: 9 },
       { x: shipX + 18, y: shipY + 2, vx: 0.5, vy: up, dmg: 1, pierce: 0, color: '#f472b6', w: 3, h: 9 },
     ]
+  } else {
+    // Mk.5 — heavy pierce lasers
+    base = [
+      { x: shipX, y: shipY - 4, vx: 0, vy: up, dmg: 3, pierce: 3, color: '#5affe8', w: 6, h: 18 },
+      { x: shipX - 14, y: shipY, vx: -0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
+      { x: shipX + 14, y: shipY, vx: 0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
+    ]
   }
-  // Mk.5 — heavy pierce lasers
-  return [
-    { x: shipX, y: shipY - 4, vx: 0, vy: up, dmg: 3, pierce: 3, color: '#5affe8', w: 6, h: 18 },
-    { x: shipX - 14, y: shipY, vx: -0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
-    { x: shipX + 14, y: shipY, vx: 0.12, vy: up, dmg: 2, pierce: 2, color: '#00d2be', w: 5, h: 14 },
-  ]
+  return applyShooterSpread(base, shipX, shipY, spread)
 }
 
 export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
@@ -452,7 +520,7 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     h: number
   }
   type Enemy = { x: number; y: number; vx: number; hp: number }
-  type Item = { x: number; y: number; kind: 'missile' }
+  type Item = { x: number; y: number; kind: 'missile' | 'wide' }
 
   let w = 320
   let h = 420
@@ -461,7 +529,9 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   let level = 1
   let levelUpUntil = 0
   let weapon: ShooterWeaponTier = 1
+  let spreadBoost: ShooterSpreadBoost = 0
   let weaponFlashUntil = 0
+  let flashLabel = ''
   let over = false
   let shipX = 160
   let bullets: Bullet[] = []
@@ -474,11 +544,11 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
   function fireInterval(): number {
     // Higher weapon = slightly faster fire; level also helps
-    return Math.max(0.12, 0.32 - level * 0.012 - (weapon - 1) * 0.018)
+    return Math.max(0.12, 0.32 - level * 0.012 - (weapon - 1) * 0.018 - spreadBoost * 0.01)
   }
 
   function bulletSpeed(): number {
-    return 340 + level * 18 + weapon * 12
+    return 340 + level * 18 + weapon * 12 + spreadBoost * 8
   }
 
   function reset(): void {
@@ -490,7 +560,9 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     level = 1
     levelUpUntil = 0
     weapon = 1
+    spreadBoost = 0
     weaponFlashUntil = 0
+    flashLabel = ''
     over = false
     shipX = w / 2
     bullets = []
@@ -501,7 +573,15 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     onScore?.(score, level)
   }
 
-  function dropMissileItem(x: number, y: number): void {
+  function dropPickup(x: number, y: number, prevLevel: number): void {
+    // After Lv20: spawn wide-spread missile items
+    if (level >= SHOOTER_WIDE_UNLOCK_LEVEL && spreadBoost < MAX_SHOOTER_SPREAD) {
+      const justUnlocked = prevLevel < SHOOTER_WIDE_UNLOCK_LEVEL && level >= SHOOTER_WIDE_UNLOCK_LEVEL
+      if (justUnlocked || kills % 4 === 0 || Math.random() < 0.5) {
+        items.push({ x, y, kind: 'wide' })
+        return
+      }
+    }
     if (weapon >= MAX_WEAPON) return
     // Guaranteed every 3rd kill, else 40% chance
     if (kills % 3 === 0 || Math.random() < 0.4) {
@@ -516,7 +596,7 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     if (fireAcc > fireInterval()) {
       fireAcc = 0
       const spd = bulletSpeed()
-      for (const b of shooterFirePattern(weapon, shipX, shipY)) {
+      for (const b of shooterFirePattern(weapon, shipX, shipY, spreadBoost)) {
         bullets.push({
           ...b,
           vx: b.vx * spd,
@@ -558,13 +638,14 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
             const ex = e.x
             const ey = e.y
             e.y = 9999
-            score += 15 + (weapon - 1) * 2
+            score += 15 + (weapon - 1) * 2 + spreadBoost
             kills += 1
-            dropMissileItem(ex, ey)
+            const prevLevel = level
             const next = levelFromUnits('shooter', kills)
             const noted = noteLevel('shooter', level, next, score, onScore)
             level = noted.level
             if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+            dropPickup(ex, ey, prevLevel)
           }
         }
       }
@@ -579,9 +660,16 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     for (const it of items) {
       if (it.y > h + 10) continue
       if (Math.hypot(it.x - shipX, it.y - (h - 36)) < 26) {
-        if (it.kind === 'missile' && weapon < MAX_WEAPON) {
+        if (it.kind === 'wide' && spreadBoost < MAX_SHOOTER_SPREAD) {
+          spreadBoost = nextSpreadBoost(spreadBoost)
+          weaponFlashUntil = performance.now() + 1600
+          flashLabel = `WIDE ×${spreadBoost}`
+          score += 35
+          onScore?.(score, level)
+        } else if (it.kind === 'missile' && weapon < MAX_WEAPON) {
           weapon = nextWeaponTier(weapon)
           weaponFlashUntil = performance.now() + 1400
+          flashLabel = `MISSILE Mk.${weapon}`
           score += 20
           onScore?.(score, level)
         }
@@ -614,20 +702,21 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     for (let i = 0; i < 30; i++) {
       ctx.fillRect((i * 47) % w, (i * 89 + score) % h, 2, 2)
     }
-    // missile upgrade orbs
+    // upgrade orbs — M = missile tier, W = wide spread (Lv20+)
     for (const it of items) {
-      ctx.fillStyle = 'rgba(90,255,232,0.2)'
+      const wide = it.kind === 'wide'
+      ctx.fillStyle = wide ? 'rgba(251,191,36,0.22)' : 'rgba(90,255,232,0.2)'
       ctx.beginPath()
       ctx.arc(it.x, it.y, 12, 0, Math.PI * 2)
       ctx.fill()
-      ctx.fillStyle = '#5affe8'
+      ctx.fillStyle = wide ? '#fbbf24' : '#5affe8'
       ctx.beginPath()
       ctx.arc(it.x, it.y, 6, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#041018'
       ctx.font = '700 9px Orbitron, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('M', it.x, it.y + 3)
+      ctx.fillText(wide ? 'W' : 'M', it.x, it.y + 3)
     }
     ctx.fillStyle = '#5affe8'
     ctx.beginPath()
@@ -644,14 +733,17 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       ctx.fillStyle = e.hp > 2 ? '#c084fc' : e.hp > 1 ? '#f472b6' : '#ff6b6b'
       ctx.fillRect(e.x - 12, e.y - 10, 24, 20)
     }
-    drawHud(ctx, w, h, score, level, over, `SPACE Mk.${weapon}`, { levelUpUntil })
+    const hudTitle =
+      spreadBoost > 0 ? `SPACE Mk.${weapon} W${spreadBoost}` : `SPACE Mk.${weapon}`
+    drawHud(ctx, w, h, score, level, over, hudTitle, { levelUpUntil })
     if (!over && performance.now() < weaponFlashUntil) {
-      ctx.fillStyle = 'rgba(90,255,232,0.16)'
+      const wideFlash = flashLabel.startsWith('WIDE')
+      ctx.fillStyle = wideFlash ? 'rgba(251,191,36,0.18)' : 'rgba(90,255,232,0.16)'
       ctx.fillRect(0, h * 0.48, w, 40)
-      ctx.fillStyle = '#5affe8'
+      ctx.fillStyle = wideFlash ? '#fbbf24' : '#5affe8'
       ctx.font = '700 16px Orbitron, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(`MISSILE Mk.${weapon}`, w / 2, h * 0.48 + 26)
+      ctx.fillText(flashLabel || `MISSILE Mk.${weapon}`, w / 2, h * 0.48 + 26)
     }
   }
 

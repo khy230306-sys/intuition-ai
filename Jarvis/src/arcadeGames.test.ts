@@ -1,12 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
+  applyShooterSpread,
   breakoutPaddleBounce,
   flappyPipeCleared,
   levelFromUnits,
   loadArcadeBest,
   loadArcadeBestLevel,
+  nextSpreadBoost,
   nextWeaponTier,
   pongPaddleBounce,
+  SHOOTER_WIDE_UNLOCK_LEVEL,
   shooterFirePattern,
   unitsPerLevel,
 } from './arcadeGames'
@@ -65,5 +68,20 @@ describe('arcade helpers', () => {
     expect(shooterFirePattern(3, 100, 200)).toHaveLength(3)
     expect(shooterFirePattern(4, 100, 200)).toHaveLength(5)
     expect(shooterFirePattern(5, 100, 200).some((b) => b.pierce > 0)).toBe(true)
+  })
+
+  it('widens missile fan after Lv20 wide items', () => {
+    expect(SHOOTER_WIDE_UNLOCK_LEVEL).toBe(20)
+    expect(nextSpreadBoost(0)).toBe(1)
+    expect(nextSpreadBoost(3)).toBe(3)
+    const base = shooterFirePattern(5, 100, 200, 0)
+    const wide1 = shooterFirePattern(5, 100, 200, 1)
+    const wide3 = shooterFirePattern(5, 100, 200, 3)
+    expect(wide1.length).toBeGreaterThan(base.length)
+    expect(wide3.length).toBeGreaterThan(wide1.length)
+    const maxAbsVx = (shots: ReturnType<typeof shooterFirePattern>) =>
+      Math.max(...shots.map((b) => Math.abs(b.vx)))
+    expect(maxAbsVx(wide3)).toBeGreaterThan(maxAbsVx(base))
+    expect(applyShooterSpread(base, 100, 200, 0)).toHaveLength(base.length)
   })
 })

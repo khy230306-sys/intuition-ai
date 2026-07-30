@@ -36,7 +36,6 @@ export async function disconnectFriendsSync(): Promise<void> {
 }
 
 export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise<void> {
-  if (!cached && !modPromise) return
   const m = await loadSync()
   return m.broadcastFriendsPacket(packet)
 }

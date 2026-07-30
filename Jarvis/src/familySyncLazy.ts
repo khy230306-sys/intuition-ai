@@ -36,7 +36,6 @@ export async function disconnectFamilySync(): Promise<void> {
 }
 
 export async function broadcastFamilyPacket(packet: FamilySyncPacket): Promise<void> {
-  if (!cached && !modPromise) return
   const m = await loadSync()
   return m.broadcastFamilyPacket(packet)
 }

@@ -7,6 +7,7 @@ import {
   upsertMember,
 } from './friendsStore'
 import { preferSpaceName } from './inviteJoin'
+import { createSpacePacketRelay, type SpacePacketRelay } from './spacePacketRelay'
 import { isRelayLinkDead, spaceRoomConfig, summarizeRelaySockets, type RelayHealth } from './spaceSyncConfig'
 
 const APP_ID = 'jarvis-friends-space-v1'
@@ -14,6 +15,7 @@ const APP_ID = 'jarvis-friends-space-v1'
 type RoomHandle = ReturnType<typeof joinRoom>
 
 let roomHandle: RoomHandle | null = null
+let packetRelay: SpacePacketRelay | null = null
 let syncAction: MessageAction<FriendsSyncPacket> | null = null
 let peerCount = 0
 let relayLabel = '중계 대기'
@@ -140,17 +142,30 @@ function snapshotPacket(): FriendsSyncPacket | null {
 }
 
 async function send(packet: FriendsSyncPacket): Promise<void> {
-  if (!syncAction) return
-  try {
-    await syncAction.send(packet)
-  } catch {
-    /* peer may be offline */
+  const tasks: Promise<void>[] = []
+  if (syncAction) {
+    tasks.push(
+      syncAction.send(packet).then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
   }
+  if (packetRelay) {
+    tasks.push(
+      packetRelay.publish(packet).then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+  }
+  if (tasks.length) await Promise.all(tasks)
 }
 
 async function announceSelf(): Promise<void> {
   const current = loadFriendsRoom()
-  if (!current || !syncAction) return
+  if (!current) return
+  if (!syncAction && !packetRelay) return
   const { loadStoredPushSubscription } = await import('./chatNotify')
   const push = loadStoredPushSubscription()
   const member = {
@@ -168,14 +183,26 @@ async function announceSelf(): Promise<void> {
     updatedAt: current.updatedAt,
   })
   const snap = snapshotPacket()
-  if (snap) await send(snap)
+  if (snap) {
+    // Keep MQTT payloads smaller
+    if (snap.type === 'snapshot') {
+      snap.room = {
+        ...snap.room,
+        messages: snap.room.messages.slice(-80),
+        notices: snap.room.notices.slice(0, 30),
+        events: snap.room.events.slice(0, 50),
+      }
+    }
+    await send(snap)
+  }
 }
 
 function statusLine(): string {
   const n = refreshPeers()
   refreshRelayHealth()
-  if (n > 0) return `온라인 ${n}명 · ${relayLabel}`
-  return `온라인 대기 · ${relayLabel} · 상대도 JARVIS를 열어 두면 자동 연결`
+  const mqtt = packetRelay?.connected() ? '대화중계 ON' : '대화중계 대기'
+  if (n > 0) return `온라인 ${n}명 · ${mqtt} · ${relayLabel}`
+  return `${mqtt} · ${relayLabel} · 상대도 JARVIS를 열어 두면 메시지가 옵니다`
 }
 
 function emitStatus(reason: 'health' | 'peer' | 'data' | 'conn' = 'health'): void {
@@ -198,7 +225,9 @@ function startWatchdogs(): void {
     const health = readRelayHealth()
     relayLabel = health.label
     refreshPeers()
-    if (isRelayLinkDead(health)) unhealthyTicks += 1
+    const mqttOk = Boolean(packetRelay?.connected())
+    // Chat works over MQTT even when WebRTC peers=0 — only full-rejoin if both paths are dead
+    if (isRelayLinkDead(health) && !mqttOk) unhealthyTicks += 1
     else unhealthyTicks = 0
     emitStatus('health')
     if (unhealthyTicks >= 3) {
@@ -239,6 +268,7 @@ export function isFriendsSyncConnected(): boolean {
 }
 
 export function isFriendsSyncHealthy(): boolean {
+  if (packetRelay?.connected()) return true
   if (!roomHandle) return false
   return !isRelayLinkDead(readRelayHealth())
 }
@@ -249,6 +279,12 @@ export async function disconnectFriendsSync(): Promise<void> {
   announceTimer = 0
   healthTimer = 0
   unhealthyTicks = 0
+  try {
+    packetRelay?.close()
+  } catch {
+    /* ignore */
+  }
+  packetRelay = null
   try {
     await roomHandle?.leave()
   } catch {
@@ -267,6 +303,15 @@ async function joinFresh(): Promise<{ ok: boolean; message: string }> {
   if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
 
   try {
+    packetRelay = await createSpacePacketRelay({
+      kind: 'friends',
+      code: room.code,
+      onPacket: (raw) => {
+        applyPacket(raw as FriendsSyncPacket)
+        emit(`동기화 · ${statusLine()}`, 'data')
+      },
+    })
+
     roomHandle = joinRoom(spaceRoomConfig(APP_ID, room.code), `fr-${room.code}`)
     syncAction = roomHandle.makeAction<FriendsSyncPacket>('fr-sync', {
       onMessage: (data) => {
@@ -292,6 +337,12 @@ async function joinFresh(): Promise<{ ok: boolean; message: string }> {
     emit(msg, 'conn')
     return { ok: true, message: msg }
   } catch (err) {
+    try {
+      packetRelay?.close()
+    } catch {
+      /* ignore */
+    }
+    packetRelay = null
     roomHandle = null
     syncAction = null
     const msg = err instanceof Error ? err.message : '동기화 연결 실패'

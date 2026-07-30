@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.7.9",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -32,6 +32,7 @@
     "@block65/webcrypto-web-push": "^1.0.2",
     "@trystero-p2p/mqtt": "^0.25.3",
     "jsqr": "^1.4.0",
+    "mqtt": "^5.15.2",
     "qrcode": "^1.5.4"
   }
 }

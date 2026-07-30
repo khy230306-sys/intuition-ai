@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.7.9'
+const APP_VERSION = '1.8.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 
@@ -1595,7 +1595,7 @@ function renderFamily(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">초대: 링크 공유 → 상대가 «승인하고 입장». 둘 다 JARVIS를 열어 두면 멤버·대화가 자동 연결됩니다.</p>
+      <p class="hint">둘 다 JARVIS를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }
@@ -1762,7 +1762,7 @@ function renderFriends(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">초대: 링크 공유 → 친구가 «승인하고 입장». 둘 다 JARVIS를 열어 두면 멤버·대화가 자동 연결됩니다.</p>
+      <p class="hint">둘 다 JARVIS를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }
@@ -2126,10 +2126,13 @@ function bind(): void {
     const fd = new FormData(e.target as HTMLFormElement)
     const msg = postFamilyChat(String(fd.get('text') || ''))
     if (msg) {
-      void broadcastFamilyPacket({ type: 'chat', message: msg })
       render()
       const box = document.querySelector('.fam-chat')
       if (box) box.scrollTop = box.scrollHeight
+      void (async () => {
+        await ensureFamilySyncOnce()
+        await broadcastFamilyPacket({ type: 'chat', message: msg })
+      })()
     }
   })
 
@@ -2311,10 +2314,13 @@ function bind(): void {
     const fd = new FormData(e.target as HTMLFormElement)
     const msg = postFriendsChat(String(fd.get('text') || ''))
     if (msg) {
-      void broadcastFriendsPacket({ type: 'chat', message: msg })
       render()
       const box = document.querySelector('.friends-chat')
       if (box) box.scrollTop = box.scrollHeight
+      void (async () => {
+        await ensureFriendsSyncOnce()
+        await broadcastFriendsPacket({ type: 'chat', message: msg })
+      })()
     }
   })
 

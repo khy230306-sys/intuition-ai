@@ -1,10 +1,14 @@
 /**
- * Deploy JARVIS to ShipStatic and point the fixed platform domain at it.
+ * Deploy JARVIS to the FIXED ShipStatic platform domain.
  *
- * Requires SHIP_API_KEY (never commit this).
- * Fixed URL: https://jarvis-app.shipstatic.com
+ * ALWAYS use this address with users — never share random snapshot URLs:
+ *   https://jarvis-app.shipstatic.com
  *
- *   SHIP_API_KEY=... npm run deploy:web
+ * Each upload creates an immutable snapshot (random *.shipstatic.com id),
+ * then this script repoints jarvis-app → that snapshot. The public URL
+ * does not change.
+ *
+ *   npm run deploy:web
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -15,6 +19,9 @@ import { homedir } from 'node:os'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const dist = join(root, 'dist')
+
+/** Locked public hostname — do not change without an explicit user request. */
+const FIXED_DOMAIN = 'jarvis-app.shipstatic.com'
 
 function loadApiKey() {
   if (process.env.SHIP_API_KEY) return process.env.SHIP_API_KEY.trim()
@@ -29,7 +36,6 @@ function loadApiKey() {
       /* ignore */
     }
   }
-  // ship CLI config (~/.shiprc may be JSON or KEY=VALUE)
   try {
     const rc = join(homedir(), '.shiprc')
     if (existsSync(rc)) {
@@ -51,7 +57,15 @@ function loadApiKey() {
 const apiKey = loadApiKey()
 const domainHost = (() => {
   const raw = (process.env.SHIP_DOMAIN || 'jarvis-app').trim().toLowerCase()
-  return raw.includes('.') ? raw : `${raw}.shipstatic.com`
+  const host = raw.includes('.') ? raw : `${raw}.shipstatic.com`
+  if (host !== FIXED_DOMAIN && !process.env.SHIP_ALLOW_DOMAIN_OVERRIDE) {
+    console.warn(
+      `[warn] Ignoring SHIP_DOMAIN=${host}; locked fixed URL is https://${FIXED_DOMAIN}\n` +
+        `Set SHIP_ALLOW_DOMAIN_OVERRIDE=1 only if you intentionally change it.`,
+    )
+    return FIXED_DOMAIN
+  }
+  return host
 })()
 
 function runShip(args) {
@@ -79,9 +93,8 @@ function parseJson(raw) {
 async function main() {
   if (!apiKey) {
     console.error(`
-SHIP_API_KEY 가 없습니다. Cursor 채팅에 키를 붙여 넣거나
-Jarvis/.ship-api-key 파일에 한 줄로 저장하세요 (git 무시됨).
-목표 고정 주소: https://${domainHost}
+SHIP_API_KEY 가 없습니다.
+고정 앱 주소: https://${FIXED_DOMAIN}
 `)
     process.exit(1)
   }
@@ -91,7 +104,8 @@ Jarvis/.ship-api-key 파일에 한 줄로 저장하세요 (git 무시됨).
     process.exit(1)
   }
 
-  console.log('Uploading deployment…')
+  console.log(`Fixed public URL: https://${domainHost}`)
+  console.log('Uploading snapshot (internal id will change; public URL will not)…')
   const uploaded = parseJson(runShip(['deployments', 'upload', dist]))
   if (!uploaded?.deployment && !uploaded?.url) {
     throw new Error(`unexpected upload response: ${JSON.stringify(uploaded)}`)
@@ -99,15 +113,13 @@ Jarvis/.ship-api-key 파일에 한 줄로 저장하세요 (git 무시됨).
   const deployId = String(uploaded.deployment || uploaded.url)
     .replace(/^https?:\/\//, '')
     .replace(/\.shipstatic\.com\/?$/, '')
-  const snapshot = uploaded.url || `https://${deployId}.shipstatic.com`
-  console.log(`Deployment: ${deployId}`)
-  console.log(`Snapshot:   ${snapshot}`)
+  console.log(`Snapshot id (internal): ${deployId}`)
 
-  console.log(`Pointing ${domainHost} → ${deployId} …`)
+  console.log(`Repointing ${domainHost} → ${deployId} …`)
   const linked = parseJson(runShip(['domains', 'set', domainHost, deployId]))
   const fixed = linked?.url || `https://${domainHost}`
-  console.log(`\nFIXED_URL ${fixed}`)
-  console.log('Updates keep this same address.')
+  console.log(`\nAPP_URL ${fixed}`)
+  console.log('Share ONLY this URL. Do not share snapshot *.shipstatic.com links.')
 }
 
 main().catch((err) => {

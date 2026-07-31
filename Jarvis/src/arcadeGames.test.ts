@@ -10,7 +10,9 @@ import {
   nextWeaponTier,
   pongPaddleBounce,
   SHOOTER_WIDE_UNLOCK_LEVEL,
+  shooterEnemyFallSpeed,
   shooterFirePattern,
+  shooterSpawnInterval,
   unitsPerLevel,
 } from './arcadeGames'
 
@@ -83,5 +85,16 @@ describe('arcade helpers', () => {
       Math.max(...shots.map((b) => Math.abs(b.vx)))
     expect(maxAbsVx(wide3)).toBeGreaterThan(maxAbsVx(base))
     expect(applyShooterSpread(base, 100, 200, 0)).toHaveLength(base.length)
+  })
+
+  it('slows Space enemy pace from Lv21 onward', () => {
+    // Old formula at Lv21: fall = 50+21*12 = 302, spawn floor 0.28
+    expect(shooterEnemyFallSpeed(21)).toBeLessThan(260)
+    expect(shooterEnemyFallSpeed(21)).toBeLessThan(50 + 21 * 12)
+    expect(shooterSpawnInterval(21)).toBeGreaterThanOrEqual(0.55)
+    expect(shooterSpawnInterval(21)).toBeGreaterThan(0.28) // old hard floor
+    expect(shooterSpawnInterval(21)).toBeGreaterThanOrEqual(shooterSpawnInterval(20))
+    // Still scales a little past 21, but gently
+    expect(shooterEnemyFallSpeed(30)).toBeLessThan(shooterEnemyFallSpeed(21) + 40)
   })
 })

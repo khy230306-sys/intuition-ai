@@ -11,7 +11,7 @@ export type ArcadeId =
   | 'lanes'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 아이템 · 5기마다 레벨업' },
+  shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
   catch: { title: '과일받기', blurb: '바가지로 과일 받기 · 폭탄은 피하기' },
   mole: { title: '두더지', blurb: '올라온 두더지를 빠르게 탭' },
   lanes: { title: '차피하기', blurb: '3차선에서 좌우로 피해 달리기' },
@@ -401,6 +401,39 @@ export type ShooterSpreadBoost = 0 | 1 | 2 | 3
 export const SHOOTER_WIDE_UNLOCK_LEVEL = 20
 export const MAX_SHOOTER_SPREAD = 3
 
+/**
+ * Soft-cap Space difficulty so Lv21+ stays playable.
+ * Early levels keep the old ramp; late levels barely get faster.
+ */
+export function shooterDifficultyLevel(level: number): number {
+  const L = Math.max(1, Math.floor(level))
+  if (L <= 12) return L
+  if (L <= 20) return 12 + (L - 12) * 0.45 // Lv20 ≈ 15.6
+  // Lv21+: almost flat — each level adds only a tiny bit
+  return 15.6 + (L - 20) * 0.2
+}
+
+/** Enemy downward speed (px/s). Soft-capped after mid/late levels. */
+export function shooterEnemyFallSpeed(level: number): number {
+  const L = shooterDifficultyLevel(level)
+  return 50 + L * 12
+}
+
+/** Seconds between enemy spawns (higher = slower). Floors gently after Lv20. */
+export function shooterSpawnInterval(level: number): number {
+  const L = shooterDifficultyLevel(level)
+  // Old formula hit 0.28 by ~Lv11; keep a calmer floor and slow Lv21+ further
+  const base = Math.max(0.45, 1.2 - L * 0.05)
+  if (level >= 21) return Math.max(0.55, base + 0.12)
+  return base
+}
+
+/** Horizontal wander amplitude for enemies. */
+export function shooterEnemySideSpeed(level: number): number {
+  const L = Math.min(shooterDifficultyLevel(level), 16)
+  return 70 + L * 8
+}
+
 export function nextWeaponTier(tier: number): ShooterWeaponTier {
   return Math.min(5, Math.max(1, Math.floor(tier) + 1)) as ShooterWeaponTier
 }
@@ -605,13 +638,20 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       }
     }
     spawnAcc += dt
-    if (spawnAcc > Math.max(0.28, 1.15 - level * 0.08)) {
+    if (spawnAcc > shooterSpawnInterval(level)) {
       spawnAcc = 0
+      const side = shooterEnemySideSpeed(level)
       enemies.push({
         x: 20 + Math.random() * (w - 40),
         y: 36,
-        vx: (Math.random() - 0.5) * (70 + level * 10),
-        hp: 1 + (level >= 3 ? 1 : 0) + (level >= 6 ? 1 : 0) + (level >= 9 ? 1 : 0),
+        vx: (Math.random() - 0.5) * side,
+        // Soft HP: don't keep stacking forever past mid-game
+        hp:
+          1 +
+          (level >= 3 ? 1 : 0) +
+          (level >= 6 ? 1 : 0) +
+          (level >= 9 && level < 21 ? 1 : 0) +
+          (level >= 25 ? 1 : 0),
       })
     }
     bullets.forEach((b) => {
@@ -619,8 +659,9 @@ export function mountShooter(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       b.y += b.vy * dt
     })
     bullets = bullets.filter((b) => b.y > 16 && b.y < h + 20 && b.x > -20 && b.x < w + 20)
+    const fall = shooterEnemyFallSpeed(level)
     enemies.forEach((e) => {
-      e.y += (50 + level * 12) * dt
+      e.y += fall * dt
       e.x += e.vx * dt
       if (e.x < 12 || e.x > w - 12) e.vx *= -1
     })

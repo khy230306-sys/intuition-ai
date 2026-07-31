@@ -1,0 +1,18 @@
+{
+  "name": "잽 — 순발력 아케이드",
+  "short_name": "잽",
+  "description": "0.3초의 승부. 탭·스와이프로 반응하는 모바일 아케이드.",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#063a42",
+  "theme_color": "#063a42",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

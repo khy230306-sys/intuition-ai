@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.8'
+const APP_VERSION = '1.8.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1150,32 +1150,27 @@ function renderArcadeRank(): string {
 function renderGames(): string {
   const best = loadArcadeBest()
   const meta = ARCADE_META[state.arcadeId]
+  // Guard removed games (과일받기/두더지/차피하기) from older sessions
+  if (!(state.arcadeId in ARCADE_META)) state.arcadeId = 'shooter'
   const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
-    .map((id) => {
-      const neu = id === 'catch' || id === 'mole' || id === 'lanes'
-      return `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}${neu ? ' is-new' : ''}" data-arcade="${id}">${ARCADE_META[id].title}${neu ? '<span class="game-tab-new">NEW</span>' : ''}</button>`
-    })
+    .map(
+      (id) =>
+        `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}" data-arcade="${id}">${ARCADE_META[id].title}</button>`,
+    )
     .join('')
   const hi = best[state.arcadeId]
   const bestLv = loadArcadeBestLevel()[state.arcadeId]
   const controls =
     state.arcadeId === 'flappy'
       ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'catch'
-        ? `<p class="game-meta">좌우로 바가지 이동 · 빨간 과일 받기 · 폭탄/놓치면 생명 감소 · 게임오버 시 화면 탭</p>`
-        : state.arcadeId === 'mole'
-          ? `<p class="game-meta">올라온 두더지를 탭 · 3번 놓치면 끝 · 게임오버 시 화면 탭</p>`
-          : state.arcadeId === 'lanes'
-            ? `<p class="game-meta">화면 좌우 탭/스와이프로 차선 변경 · 빨간 차 피하기 · 게임오버 시 화면 탭</p>`
-            : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
-              ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
-              : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+        ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+        : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M / 금색 W(Lv20+) 아이템 · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 8종 · v${APP_VERSION}</p>
-      <p class="hint arcade-new-hint">새 게임 · 과일받기 · 두더지 · 차피하기</p>
+      <p class="hint">오프라인 아케이드 · 5종 · v${APP_VERSION}</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>
@@ -2816,8 +2811,10 @@ function bind(): void {
   // —— Arcade ——
   document.querySelectorAll<HTMLButtonElement>('[data-arcade]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      const id = btn.dataset.arcade
+      if (!id || !(id in ARCADE_META)) return
       stopArcade()
-      state.arcadeId = btn.dataset.arcade as ArcadeId
+      state.arcadeId = id as ArcadeId
       state.arcadeScore = 0
       state.arcadeLevel = 1
       render()

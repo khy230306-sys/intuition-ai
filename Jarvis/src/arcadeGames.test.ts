@@ -36,24 +36,15 @@ describe('arcade helpers', () => {
     expect(loadArcadeBest().flappy).toBeNull()
     expect(loadArcadeBest().dodge).toBeNull()
     expect(loadArcadeBest().pong).toBeNull()
-    expect(loadArcadeBest().catch).toBeNull()
-    expect(loadArcadeBest().mole).toBeNull()
-    expect(loadArcadeBest().lanes).toBeNull()
   })
 
   it('levels up one step at a time from progress units', () => {
     expect(unitsPerLevel('dodge')).toBe(8)
-    expect(unitsPerLevel('catch')).toBe(8)
-    expect(unitsPerLevel('mole')).toBe(6)
-    expect(unitsPerLevel('lanes')).toBe(12)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
     expect(levelFromUnits('breakout', 0)).toBe(1)
     expect(levelFromUnits('breakout', 2)).toBe(3)
-    expect(levelFromUnits('catch', 8)).toBe(2)
-    expect(levelFromUnits('mole', 6)).toBe(2)
-    expect(levelFromUnits('lanes', 12)).toBe(2)
   })
 
   it('loads empty best levels by default', () => {

@@ -807,14 +807,13 @@ export async function think(
   if (/^퐁$|핑퐁|pong/i.test(text) && text.length < 24) {
     return { text: '퐁 아케이드를 엽니다.', speak: true, view: 'games', arcadeId: 'pong' }
   }
-  if (/과일\s*받|캐치|catch/i.test(text) && text.length < 24) {
-    return { text: '과일받기 아케이드를 엽니다. 바가지로 과일을 받으세요. 폭탄은 피하세요.', speak: true, view: 'games', arcadeId: 'catch' }
-  }
-  if (/두더지|mole|두더지\s*잡/i.test(text) && text.length < 24) {
-    return { text: '두더지 잡기를 엽니다. 올라온 두더지를 탭하세요.', speak: true, view: 'games', arcadeId: 'mole' }
-  }
-  if (/차\s*피하|레인|lanes|차선/i.test(text) && text.length < 24) {
-    return { text: '차피하기 아케이드를 엽니다. 좌우로 차선을 바꿔 차를 피하세요.', speak: true, view: 'games', arcadeId: 'lanes' }
+  if (/과일\s*받|캐치|catch|두더지|mole|차\s*피하|레인|lanes|차선/i.test(text) && text.length < 28) {
+    return {
+      text: '그 게임은 삭제되었습니다. 스페이스 · 플래피 · 닷지 · 퐁 · 벽돌깨기를 이용해 주세요.',
+      speak: true,
+      view: 'games',
+      arcadeId: 'shooter',
+    }
   }
   if (/게임\s*순위|아케이드\s*순위|점수\s*순위|친구\s*순위|랭킹/.test(text)) {
     return {

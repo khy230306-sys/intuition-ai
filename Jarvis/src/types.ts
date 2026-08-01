@@ -146,7 +146,7 @@ export interface BrainReply {
   speakLang?: string
   listenLang?: string
   view?: View
-  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'catch' | 'mole' | 'lanes'
+  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong'
   /** Wipe main chat history after this reply is applied. */
   clearChat?: boolean
   action?: () => Promise<ActionResult | void> | ActionResult | void

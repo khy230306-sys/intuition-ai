@@ -1,0 +1,18 @@
+{
+  "name": "격파 — 슈팅",
+  "short_name": "격파",
+  "description": "세로 스크롤 슈팅. 적을 쓸어버리고 레벨을 올려라.",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c1220",
+  "theme_color": "#0c1220",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

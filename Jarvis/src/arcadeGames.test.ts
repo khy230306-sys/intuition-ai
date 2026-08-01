@@ -18,13 +18,10 @@ import {
   slideScramble,
   slideSolvedBoard,
   slideTimeLimitSec,
-  GYEOKPA_LASER_DROP_RATE,
-  GYEOKPA_LASER_SEC,
   GYEOKPA_MAX_ALLIES,
-  GYEOKPA_MAX_LASER,
+  GYEOKPA_WEAPONS,
   gyeokpaAllySlotOffsets,
-  gyeokpaLaserOffsets,
-  gyeokpaNextBaseWeapon,
+  gyeokpaNextWeapon,
   gyeokpaWeaponLabel,
   unitsPerLevel,
 } from './arcadeGames'
@@ -72,19 +69,15 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().gyeokpa).toBeNull()
   })
 
-  it('configures 격파 laser 10s, max 3 item allies, rare laser drops', () => {
-    expect(GYEOKPA_LASER_SEC).toBe(10)
-    expect(GYEOKPA_MAX_ALLIES).toBe(3)
-    expect(GYEOKPA_MAX_LASER).toBe(3)
-    expect(GYEOKPA_LASER_DROP_RATE).toBeLessThan(0.1)
-    expect(gyeokpaAllySlotOffsets()).toHaveLength(3)
-    expect(gyeokpaLaserOffsets(1)).toEqual([0])
-    expect(gyeokpaLaserOffsets(2)).toEqual([-14, 14])
-    expect(gyeokpaLaserOffsets(3)).toEqual([-22, 0, 22])
-    expect(gyeokpaNextBaseWeapon('pulse')).toBe('twin')
-    expect(gyeokpaNextBaseWeapon('twin')).toBe('spread')
-    expect(gyeokpaNextBaseWeapon('spread')).toBe('spread')
-    expect(gyeokpaWeaponLabel('twin')).toBe('트윈')
+  it('configures first-version 격파 weapon cycle (no wingmen)', () => {
+    expect(GYEOKPA_MAX_ALLIES).toBe(0)
+    expect(gyeokpaAllySlotOffsets()).toHaveLength(0)
+    expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread', 'laser'])
+    expect(gyeokpaNextWeapon('pulse')).toBe('twin')
+    expect(gyeokpaNextWeapon('twin')).toBe('spread')
+    expect(gyeokpaNextWeapon('spread')).toBe('laser')
+    expect(gyeokpaNextWeapon('laser')).toBe('pulse')
+    expect(gyeokpaWeaponLabel('laser')).toBe('레이저')
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {
@@ -125,13 +118,11 @@ describe('arcade helpers', () => {
   })
 
   it('slows Space enemy pace from Lv21 onward', () => {
-    // Old formula at Lv21: fall = 50+21*12 = 302, spawn floor 0.28
     expect(shooterEnemyFallSpeed(21)).toBeLessThan(260)
     expect(shooterEnemyFallSpeed(21)).toBeLessThan(50 + 21 * 12)
     expect(shooterSpawnInterval(21)).toBeGreaterThanOrEqual(0.55)
-    expect(shooterSpawnInterval(21)).toBeGreaterThan(0.28) // old hard floor
+    expect(shooterSpawnInterval(21)).toBeGreaterThan(0.28)
     expect(shooterSpawnInterval(21)).toBeGreaterThanOrEqual(shooterSpawnInterval(20))
-    // Still scales a little past 21, but gently
     expect(shooterEnemyFallSpeed(30)).toBeLessThan(shooterEnemyFallSpeed(21) + 40)
   })
 })

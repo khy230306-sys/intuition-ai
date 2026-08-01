@@ -813,7 +813,7 @@ export async function think(
   }
   if (/격파|슈팅|세로\s*슈팅|gyeokpa/i.test(text) && text.length < 28) {
     return {
-      text: '격파 세로 슈팅을 엽니다. 미사일 아이템으로 펄스→트윈→스프레드로 강화되고, 처음엔 메인기만 있다가 아군 아이템으로 최대 3기까지 늘어납니다. 레이저는 10초입니다.',
+      text: '격파 세로 슈팅을 엽니다. 웨이브와 보스가 나오고, 무기 아이템으로 펄스→트윈→스프레드→레이저로 강화됩니다. 라이프·실드·폭탄도 있습니다.',
       speak: true,
       view: 'games',
       arcadeId: 'gyeokpa',

@@ -11,7 +11,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
   gyeokpa: {
     title: '격파',
-    blurb: '세로 슈팅 · 미사일 강화(펄스→트윈→스프레드) · 아군 아이템 최대 3기 · 레이저 10초',
+    blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드→레이저) · 라이프·실드·폭탄',
   },
 }
 
@@ -1505,42 +1505,43 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-/** —— 격파 (vertical shmup) —— */
-export const GYEOKPA_LASER_SEC = 10
-/** Allies persist until hit by enemy missiles (no timed expiry). */
-export const GYEOKPA_MAX_ALLIES = 3
-export const GYEOKPA_MAX_LASER = 3
-/** Fraction of enemy kills that drop a rare laser item. */
-export const GYEOKPA_LASER_DROP_RATE = 0.045
+//** —— 격파 (first version: waves/boss/power-ups, no wingmen) —— */
+export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
 
-export type GyeokpaBaseWeapon = 'pulse' | 'twin' | 'spread'
+export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
 
-/** Progressive missile upgrade — never steps down once at spread. */
-export function gyeokpaNextBaseWeapon(w: GyeokpaBaseWeapon): GyeokpaBaseWeapon {
-  if (w === 'pulse') return 'twin'
-  if (w === 'twin') return 'spread'
-  return 'spread'
-}
-
-export function gyeokpaWeaponLabel(w: GyeokpaBaseWeapon): string {
+export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
   if (w === 'pulse') return '펄스'
   if (w === 'twin') return '트윈'
-  return '스프레드'
+  if (w === 'spread') return '스프레드'
+  return '레이저'
 }
 
-export function gyeokpaLaserOffsets(count: number): number[] {
-  const n = Math.max(1, Math.min(GYEOKPA_MAX_LASER, Math.floor(count)))
-  if (n >= 3) return [-22, 0, 22]
-  if (n === 2) return [-14, 14]
+/** First-version upgrade cycle (wraps after laser). */
+export function gyeokpaNextWeapon(w: GyeokpaWeapon): GyeokpaWeapon {
+  const i = GYEOKPA_WEAPONS.indexOf(w)
+  return GYEOKPA_WEAPONS[(i + 1) % GYEOKPA_WEAPONS.length]!
+}
+
+/** @deprecated kept for older tests/imports — first version has no timed laser. */
+export const GYEOKPA_LASER_SEC = 0
+/** @deprecated first version has no wingmen. */
+export const GYEOKPA_MAX_ALLIES = 0
+export const GYEOKPA_MAX_LASER = 1
+export const GYEOKPA_LASER_DROP_RATE = 0
+
+/** @deprecated */
+export type GyeokpaBaseWeapon = 'pulse' | 'twin' | 'spread'
+/** @deprecated alias — use gyeokpaNextWeapon */
+export function gyeokpaNextBaseWeapon(w: GyeokpaBaseWeapon): GyeokpaBaseWeapon {
+  const n = gyeokpaNextWeapon(w)
+  return n === 'laser' ? 'pulse' : n
+}
+export function gyeokpaLaserOffsets(_count: number): number[] {
   return [0]
 }
-
 export function gyeokpaAllySlotOffsets(): ReadonlyArray<{ x: number; y: number }> {
-  return [
-    { x: -30, y: 16 },
-    { x: 30, y: 16 },
-    { x: 0, y: 34 },
-  ]
+  return []
 }
 
 export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
@@ -1553,8 +1554,6 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     dmg: number
     friendly: boolean
     laser?: boolean
-    laserBottom?: number
-    laserOffset?: number
     life?: number
   }
   type Enemy = {
@@ -1564,12 +1563,15 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     vy: number
     r: number
     hp: number
-    kind: 'scout' | 'tank' | 'zig'
+    maxHp: number
+    kind: 'scout' | 'tank' | 'zig' | 'boss'
+    score: number
+    shootCd: number
+    phase: number
   }
-  type Power = { x: number; y: number; kind: 'weapon' | 'laser' | 'ally' | 'shield' }
-  type Ally = { slot: number; x: number; y: number; fireCd: number }
-
-  const allySlots = gyeokpaAllySlotOffsets()
+  type Power = { x: number; y: number; kind: 'weapon' | 'life' | 'shield' | 'bomb'; life: number }
+  type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number }
+  type Star = { x: number; y: number; z: number; s: number }
 
   let w = 320
   let h = 420
@@ -1578,6 +1580,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   let level = 1
   let levelUpUntil = 0
   let over = false
+  let cleared = false
   let lives = 3
   let inv = 0
   let shield = 0
@@ -1585,28 +1588,144 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   let shipY = 360
   let targetX = 160
   let targetY = 360
-  let baseWeapon: GyeokpaBaseWeapon = 'pulse'
-  let weapon: GyeokpaBaseWeapon | 'laser' = 'pulse'
-  /** Extra damage when already at max missile tier. */
-  let weaponPower = 0
-  let laserCount = 1
-  let laserTimer = 0
+  let weapon: GyeokpaWeapon = 'pulse'
   let fireCd = 0
-  let spawnAcc = 0
+  let wave = 1
+  let stage = 1
+  let betweenWaves = 0
+  let spawnLeft = 0
+  let spawnCd = 0
+  let bossActive = false
+  let combo = 0
+  let comboT = 0
   let flashLabel = ''
   let flashUntil = 0
+  let shake = 0
+  let screenFlash = 0
   let bullets: Bullet[] = []
   let enemies: Enemy[] = []
   let powers: Power[] = []
-  let allies: Ally[] = []
+  let particles: Particle[] = []
+  let stars: Star[] = []
   const loop: Loop = { running: true, raf: 0, last: 0 }
 
+  function toast(msg: string): void {
+    flashLabel = msg
+    flashUntil = performance.now() + 1100
+  }
+
   function hudTitle(): string {
-    if (weapon === 'laser') {
-      return `격파 Lx${laserCount} ${Math.ceil(Math.max(0, laserTimer))}s`
+    const boss = enemies.find((e) => e.kind === 'boss')
+    if (boss) return `격파 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
+    return `격파 W${wave} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
+  }
+
+  function syncLevel(): void {
+    const next = Math.max(1, wave)
+    const noted = noteLevel('gyeokpa', level, next, score, onScore)
+    level = noted.level
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+  }
+
+  function queueWave(): void {
+    const base = 6 + wave * 2 + stage
+    spawnLeft = base
+    spawnCd = 0.35
+    betweenWaves = 0
+    if (wave % 5 === 0) {
+      spawnLeft = 0
+      spawnBoss()
+    } else {
+      toast(`웨이브 ${wave}`)
     }
-    const pow = weaponPower > 0 ? `+${weaponPower}` : ''
-    return `격파 ${gyeokpaWeaponLabel(baseWeapon)}${pow} · 아군 ${allies.length}`
+  }
+
+  function spawnBoss(): void {
+    bossActive = true
+    const hp = 80 + stage * 40 + wave * 12
+    enemies.push({
+      x: w / 2,
+      y: -60,
+      vx: 40 + stage * 6,
+      vy: 40,
+      r: 36,
+      hp,
+      maxHp: hp,
+      kind: 'boss',
+      score: 1200 + stage * 200,
+      shootCd: 0.8,
+      phase: 0,
+    })
+    toast('보스 출현!')
+  }
+
+  function spawnEnemy(): void {
+    const roll = Math.random()
+    let kind: Enemy['kind'] = 'scout'
+    if (roll > 0.78) kind = 'tank'
+    else if (roll > 0.52) kind = 'zig'
+    const x = 28 + Math.random() * (w - 56)
+    const speed = 50 + wave * 8 + stage * 10
+    if (kind === 'scout') {
+      enemies.push({
+        x,
+        y: -20,
+        vx: (Math.random() - 0.5) * 40,
+        vy: speed,
+        r: 12,
+        hp: 1 + Math.floor(stage / 2),
+        maxHp: 1 + Math.floor(stage / 2),
+        kind,
+        score: 100,
+        shootCd: 1.2 + Math.random(),
+        phase: Math.random() * Math.PI * 2,
+      })
+    } else if (kind === 'zig') {
+      enemies.push({
+        x,
+        y: -24,
+        vx: 90 + stage * 10,
+        vy: speed * 0.75,
+        r: 13,
+        hp: 2,
+        maxHp: 2,
+        kind,
+        score: 140,
+        shootCd: 1.4,
+        phase: 0,
+      })
+    } else {
+      enemies.push({
+        x,
+        y: -28,
+        vx: 20,
+        vy: speed * 0.55,
+        r: 18,
+        hp: 4 + stage,
+        maxHp: 4 + stage,
+        kind,
+        score: 220,
+        shootCd: 1.8,
+        phase: 0,
+      })
+    }
+  }
+
+  function burst(x: number, y: number, n: number, color: string): void {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2
+      const sp = 40 + Math.random() * 160
+      particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life: 0.35 + Math.random() * 0.35,
+        max: 0.7,
+        color,
+        size: 1.5 + Math.random() * 2.5,
+      })
+    }
   }
 
   function reset(): void {
@@ -1618,42 +1737,50 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     level = 1
     levelUpUntil = 0
     over = false
+    cleared = false
     lives = 3
-    inv = 1
+    inv = 1.2
     shield = 0
     shipX = w / 2
-    shipY = h * 0.78
+    shipY = h * 0.82
     targetX = shipX
     targetY = shipY
-    baseWeapon = 'pulse'
     weapon = 'pulse'
-    weaponPower = 0
-    laserCount = 1
-    laserTimer = 0
     fireCd = 0
-    spawnAcc = 0
+    wave = 1
+    stage = 1
+    betweenWaves = 1.2
+    spawnLeft = 0
+    spawnCd = 0
+    bossActive = false
+    combo = 0
+    comboT = 0
     flashLabel = ''
     flashUntil = 0
+    shake = 0
+    screenFlash = 0
     bullets = []
     enemies = []
     powers = []
-    // Start solo — allies appear one-by-one from items (max 3).
-    allies = []
+    particles = []
+    stars = Array.from({ length: 48 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      z: 0.3 + Math.random() * 1.4,
+      s: 0.6 + Math.random() * 1.8,
+    }))
+    queueWave()
     onScore?.(0, level)
   }
 
-  function pickupWeapon(): void {
-    if (baseWeapon === 'spread') {
-      weaponPower = Math.min(3, weaponPower + 1)
-      if (weapon !== 'laser') weapon = baseWeapon
-      flashLabel = weaponPower > 0 ? `미사일 MAX +${weaponPower}` : '미사일 MAX'
-      flashUntil = performance.now() + 1000
-      return
-    }
-    baseWeapon = gyeokpaNextBaseWeapon(baseWeapon)
-    if (weapon !== 'laser') weapon = baseWeapon
-    flashLabel = `미사일 강화 · ${gyeokpaWeaponLabel(baseWeapon)}`
-    flashUntil = performance.now() + 1100
+  function finish(win: boolean): void {
+    if (over) return
+    over = true
+    cleared = win
+    bumpBest('gyeokpa', score)
+    bumpBestLevel('gyeokpa', Math.max(level, wave))
+    onScore?.(score, level)
+    toast(win ? '스테이지 클리어!' : 'GAME OVER')
   }
 
   function hurt(): void {
@@ -1661,211 +1788,228 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     if (shield > 0) {
       shield = 0
       inv = 1
-      flashLabel = '실드 파괴'
-      flashUntil = performance.now() + 900
+      toast('실드 파괴!')
       return
     }
     lives -= 1
-    inv = 1.4
-    if (lives <= 0) {
-      over = true
-      bumpBest('gyeokpa', score)
-      bumpBestLevel('gyeokpa', level)
-      onScore?.(score, level)
-    }
+    combo = 0
+    inv = 1.6
+    shake = 10
+    screenFlash = 0.25
+    if (lives <= 0) finish(false)
   }
 
-  function pickupLaser(): void {
-    if (weapon !== 'laser') {
-      weapon = 'laser'
-      laserCount = 1
-    } else if (laserCount < GYEOKPA_MAX_LASER) {
-      laserCount += 1
-    }
-    // Rare laser item always refreshes the 10s beam window.
-    laserTimer = GYEOKPA_LASER_SEC
-    flashLabel = laserCount > 1 ? `레이저 x${laserCount} 10초` : '레이저 10초'
-    flashUntil = performance.now() + 1100
-  }
-
-  function endLaser(): void {
-    weapon = baseWeapon
-    laserCount = 1
-    laserTimer = 0
-    bullets = bullets.filter((b) => !(b.friendly && b.laser))
-    flashLabel = `복귀 · ${gyeokpaWeaponLabel(baseWeapon)}`
-    flashUntil = performance.now() + 900
-  }
-
-  function pickupAlly(): void {
-    if (allies.length >= GYEOKPA_MAX_ALLIES) {
-      flashLabel = `아군 만충 ${GYEOKPA_MAX_ALLIES}`
-      flashUntil = performance.now() + 900
-      return
-    }
-    const used = new Set(allies.map((a) => a.slot))
-    let slot = 0
-    for (let i = 0; i < GYEOKPA_MAX_ALLIES; i++) {
-      if (!used.has(i)) {
-        slot = i
-        break
+  function detonateBomb(): void {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i]!
+      if (e.kind === 'boss') {
+        e.hp -= 18
+        if (e.hp <= 0) killEnemy(e, i)
+      } else {
+        killEnemy(e, i)
       }
     }
-    const off = allySlots[slot]!
-    allies.push({
-      slot,
-      x: shipX + off.x,
-      y: shipY + off.y,
-      fireCd: 0.15,
-    })
-    flashLabel = `아군 ${allies.length}/${GYEOKPA_MAX_ALLIES}`
-    flashUntil = performance.now() + 1000
+    bullets = bullets.filter((b) => b.friendly)
+    screenFlash = 0.35
+    shake = 14
+    toast('폭탄!')
   }
 
-  function firePlayer(): void {
-    const dmg = 1 + weaponPower * 0.35
-    if (weapon === 'laser') {
-      bullets = bullets.filter((b) => !(b.friendly && b.laser))
-      const bottom = shipY - 14
-      const laserDmg = 0.5 + laserCount * 0.1 + weaponPower * 0.08
-      for (const ox of gyeokpaLaserOffsets(laserCount)) {
-        bullets.push({
-          x: shipX + ox,
-          y: bottom * 0.5,
-          vx: 0,
-          vy: 0,
-          r: 4.8,
-          dmg: laserDmg,
-          friendly: true,
-          laser: true,
-          laserBottom: bottom,
-          laserOffset: ox,
-          life: 0.08,
-        })
-      }
-      return
-    }
-    if (weapon === 'pulse') {
-      bullets.push({ x: shipX, y: shipY - 12, vx: 0, vy: -620, r: 3.5, dmg, friendly: true })
-    } else if (weapon === 'twin') {
-      bullets.push({ x: shipX - 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg, friendly: true })
-      bullets.push({ x: shipX + 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg, friendly: true })
-    } else {
-      // spread — keep the original 3-way fan, power items only raise damage
-      bullets.push({ x: shipX, y: shipY - 10, vx: 0, vy: -600, r: 3.5, dmg, friendly: true })
-      bullets.push({ x: shipX - 4, y: shipY - 8, vx: -160, vy: -560, r: 3.5, dmg, friendly: true })
-      bullets.push({ x: shipX + 4, y: shipY - 8, vx: 160, vy: -560, r: 3.5, dmg, friendly: true })
-    }
-  }
-
-  function spawnEnemy(): void {
-    const roll = Math.random()
-    const kind: Enemy['kind'] = roll > 0.78 ? 'tank' : roll > 0.5 ? 'zig' : 'scout'
-    const x = 24 + Math.random() * (w - 48)
-    const speed = 55 + level * 10
-    if (kind === 'scout') {
-      enemies.push({
-        x,
-        y: -16,
-        vx: (Math.random() - 0.5) * 40,
-        vy: speed,
-        r: 12,
-        hp: 1 + (level >= 4 ? 1 : 0),
-        kind,
-      })
-    } else if (kind === 'zig') {
-      enemies.push({ x, y: -18, vx: 80 + level * 6, vy: speed * 0.75, r: 13, hp: 2, kind })
-    } else {
-      enemies.push({ x, y: -22, vx: 18, vy: speed * 0.55, r: 17, hp: 3 + Math.floor(level / 3), kind })
-    }
-  }
-
-  function killEnemy(e: Enemy): void {
-    e.y = 9999
-    score += e.kind === 'tank' ? 40 : e.kind === 'zig' ? 28 : 18
+  function killEnemy(e: Enemy, idx: number): void {
+    enemies.splice(idx, 1)
     kills += 1
-    const next = levelFromUnits('gyeokpa', kills)
-    const noted = noteLevel('gyeokpa', level, next, score, onScore)
-    level = noted.level
-    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
-    // Rare laser refresh — keep separate so common drops stay weapon-heavy.
-    if (Math.random() < GYEOKPA_LASER_DROP_RATE) {
-      powers.push({ x: e.x, y: e.y, kind: 'laser' })
-      return
-    }
-    // Original-style drops: missile upgrades drop often while progressing.
-    if (Math.random() < 0.22 + Math.min(0.1, level * 0.01)) {
-      const kinds: Power['kind'][] = [
-        'weapon',
-        'weapon',
-        'weapon',
-        'shield',
-        'ally',
-        'ally',
-        'weapon',
-      ]
+    combo += 1
+    comboT = 1.6
+    const mult = 1 + Math.floor(combo / 5) * 0.15
+    score += Math.floor(e.score * mult)
+    burst(e.x, e.y, e.kind === 'boss' ? 28 : 12, e.kind === 'boss' ? '#ff5a4a' : '#3de0c5')
+    if (e.kind === 'boss') {
+      bossActive = false
+      toast('보스 격파!')
+      powers.push({ x: e.x, y: e.y, kind: 'weapon', life: 8 })
+      powers.push({ x: e.x + 24, y: e.y + 10, kind: 'life', life: 8 })
+    } else if (Math.random() < 0.12 + stage * 0.02) {
+      const kinds: Power['kind'][] = ['weapon', 'shield', 'bomb', 'life']
       powers.push({
         x: e.x,
         y: e.y,
         kind: kinds[Math.floor(Math.random() * kinds.length)]!,
+        life: 7,
+      })
+    }
+    syncLevel()
+    onScore?.(score, level)
+  }
+
+  function fire(): void {
+    const mk = (ox: number, oy: number, vx: number, vy: number, dmg: number, r = 3.5) => {
+      bullets.push({ x: shipX + ox, y: shipY + oy, vx, vy, r, dmg, friendly: true })
+    }
+    if (weapon === 'pulse') {
+      mk(0, -12, 0, -620, 1)
+    } else if (weapon === 'twin') {
+      mk(-8, -8, 0, -640, 1)
+      mk(8, -8, 0, -640, 1)
+    } else if (weapon === 'spread') {
+      mk(0, -10, 0, -600, 1)
+      mk(-4, -8, -160, -560, 1)
+      mk(4, -8, 160, -560, 1)
+    } else {
+      // first-version laser: fast piercing bolt (not timed fullscreen)
+      bullets.push({
+        x: shipX,
+        y: shipY - 16,
+        vx: 0,
+        vy: -900,
+        r: 4,
+        dmg: 0.55,
+        friendly: true,
+        laser: true,
+        life: 0.08,
       })
     }
   }
 
   function step(dt: number): void {
     if (over) return
+    shake = Math.max(0, shake - dt * 28)
+    screenFlash = Math.max(0, screenFlash - dt)
     inv = Math.max(0, inv - dt)
     shield = Math.max(0, shield - dt)
+    comboT = Math.max(0, comboT - dt)
+    if (comboT <= 0) combo = 0
+
     shipX += (targetX - shipX) * Math.min(1, dt * 14)
     shipY += (targetY - shipY) * Math.min(1, dt * 14)
 
-    if (weapon === 'laser') {
-      laserTimer -= dt
-      if (laserTimer <= 0) endLaser()
-    }
-
     fireCd -= dt
-    const rate =
-      weapon === 'laser'
-        ? 0.045
-        : Math.max(
-            0.08,
-            (weapon === 'spread' ? 0.15 : weapon === 'twin' ? 0.12 : 0.14) - weaponPower * 0.012,
-          )
+    const rate = weapon === 'laser' ? 0.05 : weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
     if (fireCd <= 0) {
-      firePlayer()
+      fire()
       fireCd = rate
     }
 
-    for (let i = allies.length - 1; i >= 0; i--) {
-      const a = allies[i]!
-      const off = allySlots[a.slot]!
-      a.x += (shipX + off.x - a.x) * Math.min(1, dt * 12)
-      a.y += (shipY + off.y - a.y) * Math.min(1, dt * 12)
-      a.fireCd -= dt
-      if (a.fireCd <= 0) {
-        bullets.push({ x: a.x, y: a.y - 10, vx: 0, vy: -600, r: 3, dmg: 1, friendly: true })
-        a.fireCd = 0.18
+    for (const s of stars) {
+      s.y += (40 + s.z * 90) * dt
+      if (s.y > h) {
+        s.y = -4
+        s.x = Math.random() * w
       }
     }
 
-    spawnAcc += dt
-    const interval = Math.max(0.28, 0.85 - level * 0.035)
-    if (spawnAcc > interval) {
-      spawnAcc = 0
-      spawnEnemy()
-      if (level >= 5 && Math.random() < 0.35) spawnEnemy()
+    if (!bossActive && betweenWaves > 0) {
+      betweenWaves -= dt
+      if (betweenWaves <= 0) queueWave()
+    } else if (!bossActive && spawnLeft > 0) {
+      spawnCd -= dt
+      if (spawnCd <= 0) {
+        spawnEnemy()
+        spawnLeft -= 1
+        spawnCd = Math.max(0.22, 0.55 - wave * 0.02 - stage * 0.03)
+      }
+    } else if (!bossActive && spawnLeft <= 0 && enemies.length === 0 && !cleared) {
+      if (wave >= 10 + stage * 2) {
+        finish(true)
+        return
+      }
+      wave += 1
+      betweenWaves = 1.1
+      syncLevel()
+      toast('다음 웨이브 준비')
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i]!
+      e.phase += dt
+      if (e.kind === 'zig') {
+        e.x += Math.sin(e.phase * 4) * e.vx * dt
+        e.y += e.vy * dt
+      } else if (e.kind === 'boss') {
+        if (e.y < 90) e.y += e.vy * dt
+        else {
+          e.x += e.vx * dt
+          if (e.x < 50 || e.x > w - 50) e.vx *= -1
+        }
+        e.shootCd -= dt
+        if (e.shootCd <= 0) {
+          const pattern = Math.floor(e.phase) % 3
+          if (pattern === 0) {
+            for (let a = -2; a <= 2; a++) {
+              const ang = Math.PI / 2 + a * 0.22
+              bullets.push({
+                x: e.x,
+                y: e.y + 20,
+                vx: Math.cos(ang) * 180,
+                vy: Math.sin(ang) * 220,
+                r: 4,
+                dmg: 1,
+                friendly: false,
+              })
+            }
+          } else if (pattern === 1) {
+            const dx = shipX - e.x
+            const dy = shipY - e.y
+            const len = Math.hypot(dx, dy) || 1
+            bullets.push({
+              x: e.x,
+              y: e.y + 16,
+              vx: (dx / len) * 260,
+              vy: (dy / len) * 260,
+              r: 5,
+              dmg: 1,
+              friendly: false,
+            })
+          } else {
+            for (let k = 0; k < 8; k++) {
+              const ang = (k / 8) * Math.PI * 2 + e.phase
+              bullets.push({
+                x: e.x,
+                y: e.y,
+                vx: Math.cos(ang) * 140,
+                vy: Math.sin(ang) * 140,
+                r: 3.5,
+                dmg: 1,
+                friendly: false,
+              })
+            }
+          }
+          e.shootCd = 0.85
+        }
+      } else {
+        e.x += e.vx * dt
+        e.y += e.vy * dt
+        if (e.x < 16 || e.x > w - 16) e.vx *= -1
+        e.shootCd -= dt
+        if (e.shootCd <= 0 && e.y > 40 && e.y < h * 0.65) {
+          const dx = shipX - e.x
+          const dy = shipY - e.y
+          const len = Math.hypot(dx, dy) || 1
+          bullets.push({
+            x: e.x,
+            y: e.y + 8,
+            vx: (dx / len) * (150 + wave * 8),
+            vy: (dy / len) * (150 + wave * 8),
+            r: 3.5,
+            dmg: 1,
+            friendly: false,
+          })
+          e.shootCd = 1.4 + Math.random()
+        }
+      }
+      if (e.y > h + 50) {
+        enemies.splice(i, 1)
+        continue
+      }
+      if (Math.hypot(e.x - shipX, e.y - shipY) < e.r + 12) {
+        hurt()
+        if (e.kind !== 'boss' && e.kind !== 'tank') killEnemy(e, i)
+      }
     }
 
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i]!
-      if (b.laser) {
-        b.x = shipX + (b.laserOffset ?? 0)
-        b.laserBottom = shipY - 14
-      } else {
-        b.x += b.vx * dt
-        b.y += b.vy * dt
-      }
+      b.x += b.vx * dt
+      b.y += b.vy * dt
       if (b.life != null) {
         b.life -= dt
         if (b.life <= 0) {
@@ -1873,105 +2017,57 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
           continue
         }
       }
-      if (!b.laser && (b.y < -30 || b.y > h + 30 || b.x < -30 || b.x > w + 30)) {
+      if (b.y < -40 || b.y > h + 40 || b.x < -40 || b.x > w + 40) {
         bullets.splice(i, 1)
         continue
       }
       if (b.friendly) {
-        for (const e of enemies) {
-          if (e.y > 9000) continue
-          let hit = false
-          if (b.laser) {
-            const bottom = b.laserBottom ?? shipY
-            hit = e.y + e.r >= 0 && e.y - e.r <= bottom && Math.abs(e.x - b.x) <= e.r + b.r
-          } else {
-            hit = Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r
-          }
-          if (hit) {
+        for (let ei = enemies.length - 1; ei >= 0; ei--) {
+          const e = enemies[ei]!
+          if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
             e.hp -= b.dmg
-            if (!b.laser) {
-              bullets.splice(i, 1)
-            }
-            if (e.hp <= 0) killEnemy(e)
+            if (!b.laser) bullets.splice(i, 1)
+            if (e.hp <= 0) killEnemy(e, ei)
             if (!b.laser) break
           }
         }
-      } else {
-        // Enemy missile: destroy one ally first, else hit the player.
-        let hitAlly = false
-        for (let ai = allies.length - 1; ai >= 0; ai--) {
-          const a = allies[ai]!
-          if (Math.hypot(a.x - b.x, a.y - b.y) < 12 + b.r) {
-            allies.splice(ai, 1)
-            bullets.splice(i, 1)
-            flashLabel = `아군 격추 ${allies.length}/${GYEOKPA_MAX_ALLIES}`
-            flashUntil = performance.now() + 800
-            hitAlly = true
-            break
-          }
-        }
-        if (hitAlly) continue
-        if (Math.hypot(shipX - b.x, shipY - b.y) < 14 + b.r) {
-          bullets.splice(i, 1)
-          hurt()
-        }
-      }
-    }
-
-    for (const e of enemies) {
-      if (e.y > 9000) continue
-      if (e.kind === 'zig') {
-        e.x += Math.sin(performance.now() / 180 + e.x) * e.vx * dt * 0.02
-        e.y += e.vy * dt
-      } else {
-        e.x += e.vx * dt
-        e.y += e.vy * dt
-        if (e.x < 16 || e.x > w - 16) e.vx *= -1
-      }
-      if (e.y > h + 40) {
-        e.y = 9999
-        continue
-      }
-      if (Math.hypot(e.x - shipX, e.y - shipY) < e.r + 12) {
+      } else if (Math.hypot(shipX - b.x, shipY - b.y) < 14 + b.r) {
+        bullets.splice(i, 1)
         hurt()
-        if (e.kind !== 'tank') killEnemy(e)
-      }
-      // enemy shots
-      if (Math.random() < 0.002 + level * 0.0004 && e.y > 40 && e.y < h * 0.65) {
-        const dx = shipX - e.x
-        const dy = shipY - e.y
-        const len = Math.hypot(dx, dy) || 1
-        bullets.push({
-          x: e.x,
-          y: e.y + 8,
-          vx: (dx / len) * (150 + level * 8),
-          vy: (dy / len) * (150 + level * 8),
-          r: 3.5,
-          dmg: 1,
-          friendly: false,
-        })
       }
     }
-    enemies = enemies.filter((e) => e.y < 9000)
 
     for (let i = powers.length - 1; i >= 0; i--) {
       const p = powers[i]!
       p.y += 75 * dt
-      if (p.y > h + 20) {
+      p.life -= dt
+      if (p.y > h + 20 || p.life <= 0) {
         powers.splice(i, 1)
         continue
       }
       if (Math.hypot(p.x - shipX, p.y - shipY) < 26) {
-        if (p.kind === 'weapon') pickupWeapon()
-        else if (p.kind === 'laser') pickupLaser()
-        else if (p.kind === 'ally') pickupAlly()
-        else {
+        if (p.kind === 'weapon') {
+          weapon = gyeokpaNextWeapon(weapon)
+          toast(`무기: ${gyeokpaWeaponLabel(weapon)}`)
+        } else if (p.kind === 'life') {
+          lives = Math.min(5, lives + 1)
+          toast(`라이프 ${lives}`)
+        } else if (p.kind === 'shield') {
           shield = 5
-          flashLabel = '실드'
-          flashUntil = performance.now() + 900
+          toast('실드')
+        } else {
+          detonateBomb()
         }
         powers.splice(i, 1)
       }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]!
+      p.life -= dt
+      p.x += p.vx * dt
+      p.y += p.vy * dt
+      if (p.life <= 0) particles.splice(i, 1)
     }
   }
 
@@ -1981,54 +2077,42 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     h = sized.h
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    ctx.save()
+    if (shake > 0) {
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake)
+    }
     const g = ctx.createLinearGradient(0, 0, 0, h)
     g.addColorStop(0, '#0b1a2b')
     g.addColorStop(1, '#050b12')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = 'rgba(207,231,255,0.35)'
-    for (let i = 0; i < 36; i++) {
-      ctx.fillRect((i * 53 + kills * 3) % w, (i * 97 + score) % h, 1.5, 1.5)
+
+    ctx.fillStyle = 'rgba(207,231,255,0.45)'
+    for (const s of stars) {
+      ctx.fillRect(s.x, s.y, s.s, s.s)
     }
 
     for (const p of powers) {
       ctx.fillStyle =
-        p.kind === 'laser' ? '#7cffef' : p.kind === 'ally' ? '#9ecbff' : p.kind === 'shield' ? '#f0c35a' : '#3de0c5'
-      if (p.kind === 'ally') {
-        ctx.beginPath()
-        ctx.moveTo(p.x, p.y - 9)
-        ctx.lineTo(p.x + 8, p.y + 7)
-        ctx.lineTo(p.x, p.y + 3)
-        ctx.lineTo(p.x - 8, p.y + 7)
-        ctx.closePath()
-        ctx.fill()
-      } else if (p.kind === 'laser') {
-        ctx.fillRect(p.x - 2.5, p.y - 10, 5, 20)
-      } else {
-        ctx.beginPath()
-        ctx.moveTo(p.x, p.y - 8)
-        ctx.lineTo(p.x + 8, p.y)
-        ctx.lineTo(p.x, p.y + 8)
-        ctx.lineTo(p.x - 8, p.y)
-        ctx.closePath()
-        ctx.fill()
-      }
+        p.kind === 'weapon' ? '#3de0c5' : p.kind === 'life' ? '#ff5a4a' : p.kind === 'shield' ? '#f0c35a' : '#ff8a5b'
+      ctx.beginPath()
+      ctx.moveTo(p.x, p.y - 8)
+      ctx.lineTo(p.x + 8, p.y)
+      ctx.lineTo(p.x, p.y + 8)
+      ctx.lineTo(p.x - 8, p.y)
+      ctx.closePath()
+      ctx.fill()
     }
 
     for (const b of bullets) {
-      if (b.friendly && b.laser) {
-        const bottom = b.laserBottom ?? shipY - 14
-        const top = -6
-        const hh = Math.max(0, bottom - top)
-        ctx.fillStyle = 'rgba(61,224,197,0.2)'
-        ctx.fillRect(b.x - b.r - 3, top, (b.r + 3) * 2, hh)
-        ctx.fillStyle = '#7cffef'
-        ctx.fillRect(b.x - 2, top, 4, hh)
-      } else if (b.friendly) {
-        ctx.fillStyle = '#ffd1c8'
-        ctx.beginPath()
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
-        ctx.fill()
+      if (b.friendly) {
+        ctx.fillStyle = b.laser ? '#7cffef' : '#ffd1c8'
+        if (b.laser) ctx.fillRect(b.x - 2, b.y - 10, 4, 18)
+        else {
+          ctx.beginPath()
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
+          ctx.fill()
+        }
       } else {
         ctx.fillStyle = '#ff7a6b'
         ctx.beginPath()
@@ -2038,7 +2122,17 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     }
 
     for (const e of enemies) {
-      if (e.kind === 'tank') {
+      if (e.kind === 'boss') {
+        ctx.fillStyle = '#8aa3bd'
+        ctx.fillRect(e.x - 34, e.y - 22, 68, 44)
+        ctx.fillStyle = '#ff5a4a'
+        ctx.fillRect(e.x - 10, e.y + 4, 20, 16)
+        // boss hp bar
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'
+        ctx.fillRect(e.x - 40, e.y - 34, 80, 6)
+        ctx.fillStyle = '#ff5a4a'
+        ctx.fillRect(e.x - 40, e.y - 34, 80 * Math.max(0, e.hp / e.maxHp), 6)
+      } else if (e.kind === 'tank') {
         ctx.fillStyle = '#8aa3bd'
         ctx.fillRect(e.x - 15, e.y - 11, 30, 22)
         ctx.fillStyle = '#ff5a4a'
@@ -2063,16 +2157,10 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       }
     }
 
-    for (const a of allies) {
-      ctx.globalAlpha = 0.85
-      ctx.fillStyle = '#9ecbff'
-      ctx.beginPath()
-      ctx.moveTo(a.x, a.y - 11)
-      ctx.lineTo(a.x + 8, a.y + 8)
-      ctx.lineTo(a.x, a.y + 3)
-      ctx.lineTo(a.x - 8, a.y + 8)
-      ctx.closePath()
-      ctx.fill()
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.max)
+      ctx.fillStyle = p.color
+      ctx.fillRect(p.x, p.y, p.size, p.size)
       ctx.globalAlpha = 1
     }
 
@@ -2096,21 +2184,19 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       ctx.fillRect(shipX - 2.5, shipY + 7, 5, 7)
     }
 
-    // lives dots
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       ctx.fillStyle = i < lives ? '#ff5a4a' : 'rgba(255,90,74,0.25)'
       ctx.beginPath()
       ctx.arc(12 + i * 12, h - 12, 4, 0, Math.PI * 2)
       ctx.fill()
     }
 
-    // ally count bar
-    ctx.fillStyle = 'rgba(158,203,255,0.85)'
-    ctx.font = '600 11px IBM Plex Sans KR, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(`아군 ${allies.length}/${GYEOKPA_MAX_ALLIES}`, 12, h - 28)
+    if (screenFlash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.45, screenFlash)})`
+      ctx.fillRect(0, 0, w, h)
+    }
 
-    drawHud(ctx, w, h, score, level, over, hudTitle(), { levelUpUntil })
+    drawHud(ctx, w, h, score, level, over, hudTitle(), { levelUpUntil, cleared })
     if (!over && performance.now() < flashUntil) {
       ctx.fillStyle = 'rgba(61,224,197,0.16)'
       ctx.fillRect(0, h * 0.48, w, 36)
@@ -2119,6 +2205,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       ctx.textAlign = 'center'
       ctx.fillText(flashLabel, w / 2, h * 0.48 + 24)
     }
+    ctx.restore()
   }
 
   function frame(t: number): void {
@@ -2145,8 +2232,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         return
       }
       if (over) return
-      targetX = Math.max(16, Math.min(w - 16, x))
-      targetY = Math.max(h * 0.42, Math.min(h - 28, y))
+      targetX = Math.max(18, Math.min(w - 18, x))
+      targetY = Math.max(h * 0.45, Math.min(h - 28, y))
     },
     restart: () => reset(),
     getScore: () => score,

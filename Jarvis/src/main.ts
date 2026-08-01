@@ -132,7 +132,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.8.8'
+const APP_VERSION = '1.8.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1152,7 +1152,7 @@ function renderGames(): string {
   const meta = ARCADE_META[state.arcadeId]
   const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
     .map((id) => {
-      const neu = id === 'catch' || id === 'mole' || id === 'lanes'
+      const neu = id === 'slide'
       return `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}${neu ? ' is-new' : ''}" data-arcade="${id}">${ARCADE_META[id].title}${neu ? '<span class="game-tab-new">NEW</span>' : ''}</button>`
     })
     .join('')
@@ -1167,15 +1167,17 @@ function renderGames(): string {
           ? `<p class="game-meta">올라온 두더지를 탭 · 3번 놓치면 끝 · 게임오버 시 화면 탭</p>`
           : state.arcadeId === 'lanes'
             ? `<p class="game-meta">화면 좌우 탭/스와이프로 차선 변경 · 빨간 차 피하기 · 게임오버 시 화면 탭</p>`
-            : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
-              ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
-              : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
+            : state.arcadeId === 'slide'
+              ? `<p class="game-meta">빈칸 옆 타일 탭·스와이프 · 시간 안에 숫자 맞추기 · 클리어마다 레벨업 · 시간 종료 시 화면 탭</p>`
+              : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+                ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+                : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M 아이템으로 미사일 진화(Mk.1→5) · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 8종 · v${APP_VERSION}</p>
-      <p class="hint arcade-new-hint">새 게임 · 과일받기 · 두더지 · 차피하기</p>
+      <p class="hint">오프라인 아케이드 · 9종 · v${APP_VERSION}</p>
+      <p class="hint arcade-new-hint">새 게임 · 스윽 (슬라이딩 퍼즐)</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>

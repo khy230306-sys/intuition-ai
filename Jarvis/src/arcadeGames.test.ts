@@ -14,6 +14,11 @@ import {
   shooterFirePattern,
   shooterSpawnInterval,
   unitsPerLevel,
+  slideGridSize,
+  slideIsSolved,
+  slideScramble,
+  slideSolvedBoard,
+  slideTimeLimitSec,
 } from './arcadeGames'
 
 const store = new Map<string, string>()
@@ -39,6 +44,7 @@ describe('arcade helpers', () => {
     expect(loadArcadeBest().catch).toBeNull()
     expect(loadArcadeBest().mole).toBeNull()
     expect(loadArcadeBest().lanes).toBeNull()
+    expect(loadArcadeBest().slide).toBeNull()
   })
 
   it('levels up one step at a time from progress units', () => {
@@ -46,6 +52,7 @@ describe('arcade helpers', () => {
     expect(unitsPerLevel('catch')).toBe(8)
     expect(unitsPerLevel('mole')).toBe(6)
     expect(unitsPerLevel('lanes')).toBe(12)
+    expect(unitsPerLevel('slide')).toBe(1)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
@@ -59,6 +66,18 @@ describe('arcade helpers', () => {
   it('loads empty best levels by default', () => {
     expect(loadArcadeBestLevel().shooter).toBeNull()
     expect(loadArcadeBestLevel().breakout).toBeNull()
+    expect(loadArcadeBestLevel().slide).toBeNull()
+  })
+
+  it('builds solvable sliding puzzles and grows grid with level', () => {
+    expect(slideGridSize(1)).toBe(3)
+    expect(slideGridSize(6)).toBe(4)
+    expect(slideGridSize(13)).toBe(5)
+    expect(slideIsSolved(slideSolvedBoard(3))).toBe(true)
+    const { board } = slideScramble(3, 20)
+    expect(board).toHaveLength(9)
+    expect(board.filter((n) => n === 0)).toHaveLength(1)
+    expect(slideTimeLimitSec(1, 3)).toBeGreaterThan(slideTimeLimitSec(20, 3))
   })
 
   it('evolves space missile tiers and fire patterns', () => {

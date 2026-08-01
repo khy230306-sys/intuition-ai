@@ -9,6 +9,7 @@ export type ArcadeId =
   | 'catch'
   | 'mole'
   | 'lanes'
+  | 'slide'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
@@ -19,6 +20,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
+  slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
@@ -33,6 +35,7 @@ export type ArcadeBest = {
   catch: number | null
   mole: number | null
   lanes: number | null
+  slide: number | null
 }
 
 export type ArcadeBestLevel = ArcadeBest
@@ -46,6 +49,7 @@ const EMPTY_BEST: ArcadeBest = {
   catch: null,
   mole: null,
   lanes: null,
+  slide: null,
 }
 
 export function loadArcadeBest(): ArcadeBest {
@@ -115,6 +119,8 @@ export function unitsPerLevel(id: ArcadeId): number {
       return 6
     case 'lanes':
       return 12
+    case 'slide':
+      return 1
   }
 }
 
@@ -1708,6 +1714,320 @@ export function mountLanes(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   }
 }
 
+/** —— SLIDE (스윽) —— timed sliding puzzle */
+export function slideGridSize(level: number): number {
+  if (level <= 5) return 3
+  if (level <= 12) return 4
+  return 5
+}
+
+export function slideScrambleMoves(level: number, size: number): number {
+  if (size === 3) return 10 + level * 3
+  if (size === 4) return 36 + (level - 5) * 5
+  return 70 + (level - 12) * 8
+}
+
+export function slideTimeLimitSec(level: number, size: number): number {
+  const base = size === 3 ? 55 : size === 4 ? 95 : 140
+  return Math.max(28, base - Math.floor(level * 1.6))
+}
+
+export function slideSolvedBoard(size: number): number[] {
+  const n = size * size
+  const b: number[] = []
+  for (let i = 1; i < n; i++) b.push(i)
+  b.push(0)
+  return b
+}
+
+export function slideIsSolved(board: number[]): boolean {
+  const n = board.length
+  for (let i = 0; i < n - 1; i++) {
+    if (board[i] !== i + 1) return false
+  }
+  return board[n - 1] === 0
+}
+
+function slideNeighbors(empty: number, size: number): number[] {
+  const r = Math.floor(empty / size)
+  const c = empty % size
+  const out: number[] = []
+  if (r > 0) out.push(empty - size)
+  if (r < size - 1) out.push(empty + size)
+  if (c > 0) out.push(empty - 1)
+  if (c < size - 1) out.push(empty + 1)
+  return out
+}
+
+export function slideScramble(size: number, moves: number): { board: number[]; empty: number } {
+  let board = slideSolvedBoard(size)
+  let empty = size * size - 1
+  let last = -1
+  for (let i = 0; i < moves; i++) {
+    const opts = slideNeighbors(empty, size).filter((x) => x !== last)
+    const pick = opts[Math.floor(Math.random() * opts.length)]!
+    board = [...board]
+    board[empty] = board[pick]!
+    board[pick] = 0
+    last = empty
+    empty = pick
+  }
+  if (slideIsSolved(board)) {
+    const opts = slideNeighbors(empty, size)
+    const pick = opts[0]!
+    board = [...board]
+    board[empty] = board[pick]!
+    board[pick] = 0
+    empty = pick
+  }
+  return { board, empty }
+}
+
+export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  let w = 320
+  let h = 400
+  let score = 0
+  let level = 1
+  let levelUpUntil = 0
+  let over = false
+  let clearedFlash = 0
+  let size = 3
+  let board: number[] = []
+  let empty = 0
+  let moves = 0
+  let timeLeft = 60
+  let pad = 12
+  let cell = 40
+  let originX = 0
+  let originY = 40
+  let downX = 0
+  let downY = 0
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+  const colors = ['#3d9cf0', '#5ad1c0', '#7bdff2', '#2a6f97', '#48cae4', '#ff8a5b', '#ffd166']
+
+  function layout(): void {
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    pad = 14
+    const boardSide = Math.min(w - pad * 2, h - 88)
+    cell = boardSide / size
+    originX = (w - boardSide) / 2
+    originY = 36
+  }
+
+  function deal(): void {
+    size = slideGridSize(level)
+    const sc = slideScramble(size, slideScrambleMoves(level, size))
+    board = sc.board
+    empty = sc.empty
+    moves = 0
+    timeLeft = slideTimeLimitSec(level, size)
+    layout()
+  }
+
+  function reset(): void {
+    score = 0
+    level = 1
+    levelUpUntil = 0
+    over = false
+    clearedFlash = 0
+    deal()
+    onScore?.(0, level)
+  }
+
+  function finish(): void {
+    if (over) return
+    over = true
+    bumpBest('slide', score)
+    bumpBestLevel('slide', level)
+  }
+
+  function trySlide(index: number): void {
+    if (over || clearedFlash > 0) return
+    if (!slideNeighbors(empty, size).includes(index)) return
+    board = [...board]
+    board[empty] = board[index]!
+    board[index] = 0
+    empty = index
+    moves += 1
+    if (slideIsSolved(board)) {
+      const bonus = Math.max(20, Math.floor(timeLeft * 8) + Math.max(0, 40 - moves) * 5)
+      score += bonus
+      const prev = level
+      level += 1
+      const noted = noteLevel('slide', prev, level, score, onScore)
+      levelUpUntil = noted.levelUpUntil || performance.now() + 900
+      clearedFlash = 0.7
+      bumpBest('slide', score)
+    }
+  }
+
+  function cellAt(x: number, y: number): number {
+    const c = Math.floor((x - originX) / cell)
+    const r = Math.floor((y - originY) / cell)
+    if (r < 0 || c < 0 || r >= size || c >= size) return -1
+    return r * size + c
+  }
+
+  function tileColor(tile: number): string {
+    if (tile === 0) return 'transparent'
+    const i = tile - 1
+    const r = Math.floor(i / size)
+    const c = i % size
+    const t = (r + c) / Math.max(1, size * 2 - 2)
+    const a = colors[Math.floor(t * (colors.length - 1))]!
+    return a
+  }
+
+  function step(dt: number): void {
+    if (over) return
+    if (clearedFlash > 0) {
+      clearedFlash -= dt
+      if (clearedFlash <= 0) {
+        clearedFlash = 0
+        deal()
+        onScore?.(score, level)
+      }
+      return
+    }
+    timeLeft -= dt
+    if (timeLeft <= 0) {
+      timeLeft = 0
+      finish()
+    }
+  }
+
+  function draw(): void {
+    layout()
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, w, h)
+    const g = ctx.createLinearGradient(0, 0, 0, h)
+    g.addColorStop(0, '#102536')
+    g.addColorStop(1, '#0a1824')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+
+    // timer bar
+    const limit = slideTimeLimitSec(level, size)
+    const ratio = Math.max(0, timeLeft / limit)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'
+    ctx.fillRect(originX, 8, cell * size, 8)
+    ctx.fillStyle = ratio > 0.25 ? '#5ad1c0' : '#ff8a5b'
+    ctx.fillRect(originX, 8, cell * size * ratio, 8)
+
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'
+    ctx.fillRect(originX - 4, originY - 4, cell * size + 8, cell * size + 8)
+
+    const gap = 3
+    for (let i = 0; i < board.length; i++) {
+      const tile = board[i]!
+      const r = Math.floor(i / size)
+      const c = i % size
+      const x = originX + c * cell
+      const y = originY + r * cell
+      if (tile === 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+        ctx.setLineDash([4, 4])
+        ctx.strokeRect(x + gap, y + gap, cell - gap * 2, cell - gap * 2)
+        ctx.setLineDash([])
+        continue
+      }
+      ctx.fillStyle = tileColor(tile)
+      const rr = 8
+      const tx = x + gap
+      const ty = y + gap
+      const tw = cell - gap * 2
+      const th = cell - gap * 2
+      ctx.beginPath()
+      ctx.moveTo(tx + rr, ty)
+      ctx.arcTo(tx + tw, ty, tx + tw, ty + th, rr)
+      ctx.arcTo(tx + tw, ty + th, tx, ty + th, rr)
+      ctx.arcTo(tx, ty + th, tx, ty, rr)
+      ctx.arcTo(tx, ty, tx + tw, ty, rr)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = 'rgba(255,255,255,0.92)'
+      ctx.font = `700 ${Math.max(14, Math.floor(cell * 0.34))}px IBM Plex Sans KR, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(tile), x + cell / 2, y + cell / 2 + 1)
+    }
+
+    ctx.fillStyle = '#9adfd6'
+    ctx.font = '500 12px IBM Plex Sans KR, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${size}×${size} · ${moves}수 · ${Math.ceil(timeLeft)}초`, w / 2, originY + cell * size + 22)
+
+    if (clearedFlash > 0) {
+      ctx.fillStyle = 'rgba(0, 210, 190, 0.2)'
+      ctx.fillRect(0, h * 0.36, w, 48)
+      ctx.fillStyle = '#5affe8'
+      ctx.font = '700 20px Orbitron, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('CLEAR!', w / 2, h * 0.36 + 32)
+    }
+
+    drawHud(ctx, w, h, score, level, over, '스윽', { levelUpUntil })
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    const dt = Math.min(0.05, (t - loop.last) / 1000 || 0.016)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.last = performance.now()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (x, y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over || clearedFlash > 0) return
+      if (type === 'down') {
+        downX = x
+        downY = y
+        return
+      }
+      if (type === 'up') {
+        const dx = x - downX
+        const dy = y - downY
+        if (Math.max(Math.abs(dx), Math.abs(dy)) > 28) {
+          // swipe into empty: move the tile opposite the swipe direction relative to empty
+          let target = -1
+          if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx > 0 && empty % size > 0) target = empty - 1
+            if (dx < 0 && empty % size < size - 1) target = empty + 1
+          } else {
+            if (dy > 0 && empty >= size) target = empty - size
+            if (dy < 0 && empty < size * (size - 1)) target = empty + size
+          }
+          if (target >= 0) trySlide(target)
+          return
+        }
+        const idx = cellAt(x, y)
+        if (idx >= 0) trySlide(idx)
+      }
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
 export function mountArcade(
   id: ArcadeId,
   canvas: HTMLCanvasElement,
@@ -1720,6 +2040,7 @@ export function mountArcade(
   if (id === 'catch') return mountCatch(canvas, onScore)
   if (id === 'mole') return mountMole(canvas, onScore)
   if (id === 'lanes') return mountLanes(canvas, onScore)
+  if (id === 'slide') return mountSlide(canvas, onScore)
   return mountPong(canvas, onScore)
 }
 

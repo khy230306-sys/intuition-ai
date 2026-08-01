@@ -1,12 +1,12 @@
 {
-  "name": "몽글 — 머지 키우기",
-  "short_name": "몽글",
-  "description": "같은 몽을 합쳐 키우고 도감을 채우세요.",
+  "name": "착 — 블록 퍼즐",
+  "short_name": "착",
+  "description": "블록을 맞춰 넣고 줄을 지우는 모바일 퍼즐",
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1f4d5c",
-  "theme_color": "#1f4d5c",
+  "background_color": "#1b3a4b",
+  "theme_color": "#1b3a4b",
   "icons": [
     {
       "src": "favicon.svg",

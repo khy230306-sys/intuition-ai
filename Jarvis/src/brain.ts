@@ -117,7 +117,7 @@ function helpText(name: string): string {
     '• 장시간 / 장 열렸어',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
-    '• 앱 업데이트 / 게임 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁 / 게임 순위',
+    '• 앱 업데이트 / 게임 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁 / 스윽 / 게임 순위',
     '• 내 위치 / 지금 어디야',
     '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
@@ -820,9 +820,17 @@ export async function think(
   if (/^퐁$|핑퐁|pong/i.test(text) && text.length < 24) {
     return { text: '퐁 아케이드를 엽니다.', speak: true, view: 'games', arcadeId: 'pong' }
   }
+  if (/스윽|슬라이딩|슬라이드\s*퍼즐|숫자\s*퍼즐|밀어서\s*맞/i.test(text) && text.length < 28) {
+    return {
+      text: '스윽 슬라이딩 퍼즐을 엽니다. 빈칸으로 타일을 밀어 숫자를 맞추세요.',
+      speak: true,
+      view: 'games',
+      arcadeId: 'slide',
+    }
+  }
   if (/과일\s*받|캐치|catch|두더지|mole|차\s*피하|레인|lanes|차선/i.test(text) && text.length < 28) {
     return {
-      text: '그 게임은 삭제되었습니다. 스페이스 · 플래피 · 닷지 · 퐁 · 벽돌깨기를 이용해 주세요.',
+      text: '그 게임은 삭제되었습니다. 스페이스 · 플래피 · 닷지 · 퐁 · 벽돌깨기 · 스윽을 이용해 주세요.',
       speak: true,
       view: 'games',
       arcadeId: 'shooter',
@@ -845,7 +853,7 @@ export async function think(
   }
   if (/^(게임|미니게임|오프라인\s*게임|아케이드)/i.test(text) || /게임\s*(할래|하자|열어)/.test(text)) {
     return {
-      text: '아케이드 게임 탭으로 이동합니다.\n· 벽돌깨기 · 스페이스(미사일 진화)\n· 플래피 · 닷지 · 퐁\n기록 공유로 친구 순위도 만들 수 있습니다.',
+      text: '아케이드 게임 탭으로 이동합니다.\n· 벽돌깨기 · 스페이스(미사일 진화)\n· 플래피 · 닷지 · 퐁 · 스윽(슬라이딩)\n기록 공유로 친구 순위도 만들 수 있습니다.',
       speak: true,
       view: 'games',
     }

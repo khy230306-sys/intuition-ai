@@ -133,7 +133,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.9.0'
+const APP_VERSION = '1.9.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1254,24 +1254,27 @@ function renderGames(): string {
   // Guard removed games (과일받기/두더지/차피하기) from older sessions
   if (!(state.arcadeId in ARCADE_META)) state.arcadeId = 'shooter'
   const tabs = (Object.keys(ARCADE_META) as ArcadeId[])
-    .map(
-      (id) =>
-        `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}" data-arcade="${id}">${ARCADE_META[id].title}</button>`,
-    )
+    .map((id) => {
+      const neu = id === 'slide'
+      return `<button type="button" class="game-tab ${state.arcadeId === id ? 'active' : ''}${neu ? ' is-new' : ''}" data-arcade="${id}">${ARCADE_META[id].title}${neu ? '<span class="game-tab-new">NEW</span>' : ''}</button>`
+    })
     .join('')
   const hi = best[state.arcadeId]
   const bestLv = loadArcadeBestLevel()[state.arcadeId]
   const controls =
     state.arcadeId === 'flappy'
       ? `<p class="game-meta">화면 탭으로 점프 · 게임오버 시 화면 탭</p>`
-      : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
-        ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
-        : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M / 금색 W(Lv20+) 아이템 · 게임오버 시 화면 탭</p>`
+      : state.arcadeId === 'slide'
+        ? `<p class="game-meta">타일 탭 또는 스와이프로 빈칸으로 밀기 · 시간 안에 클리어 · 게임오버 시 화면 탭</p>`
+        : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+          ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
+          : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M / 금색 W(Lv20+) 아이템 · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 5종 · v${APP_VERSION}</p>
+      <p class="hint">오프라인 아케이드 · 6종 · v${APP_VERSION}</p>
+      <p class="hint arcade-new-hint">새 게임 · 스윽 (슬라이딩 퍼즐)</p>
       ${renderUpdateCard(true)}
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">

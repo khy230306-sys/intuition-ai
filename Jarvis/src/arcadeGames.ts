@@ -9,7 +9,10 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
-  gyeokpa: { title: '격파', blurb: '세로 슈팅 · 아이템으로 아군 최대 3기 · 미사일 피격 시 1기 감소 · 레이저 10초' },
+  gyeokpa: {
+    title: '격파',
+    blurb: '세로 슈팅 · 미사일 강화(펄스→트윈→스프레드) · 아군 아이템 최대 3기 · 레이저 10초',
+  },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
@@ -1512,10 +1515,17 @@ export const GYEOKPA_LASER_DROP_RATE = 0.045
 
 export type GyeokpaBaseWeapon = 'pulse' | 'twin' | 'spread'
 
+/** Progressive missile upgrade — never steps down once at spread. */
 export function gyeokpaNextBaseWeapon(w: GyeokpaBaseWeapon): GyeokpaBaseWeapon {
   if (w === 'pulse') return 'twin'
   if (w === 'twin') return 'spread'
-  return 'pulse'
+  return 'spread'
+}
+
+export function gyeokpaWeaponLabel(w: GyeokpaBaseWeapon): string {
+  if (w === 'pulse') return '펄스'
+  if (w === 'twin') return '트윈'
+  return '스프레드'
 }
 
 export function gyeokpaLaserOffsets(count: number): number[] {
@@ -1577,6 +1587,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   let targetY = 360
   let baseWeapon: GyeokpaBaseWeapon = 'pulse'
   let weapon: GyeokpaBaseWeapon | 'laser' = 'pulse'
+  /** Extra damage when already at max missile tier. */
+  let weaponPower = 0
   let laserCount = 1
   let laserTimer = 0
   let fireCd = 0
@@ -1593,7 +1605,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     if (weapon === 'laser') {
       return `격파 Lx${laserCount} ${Math.ceil(Math.max(0, laserTimer))}s`
     }
-    return `격파 ${baseWeapon} · 아군 ${allies.length}`
+    const pow = weaponPower > 0 ? `+${weaponPower}` : ''
+    return `격파 ${gyeokpaWeaponLabel(baseWeapon)}${pow} · 아군 ${allies.length}`
   }
 
   function reset(): void {
@@ -1614,6 +1627,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     targetY = shipY
     baseWeapon = 'pulse'
     weapon = 'pulse'
+    weaponPower = 0
     laserCount = 1
     laserTimer = 0
     fireCd = 0
@@ -1626,6 +1640,20 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     // Start solo — allies appear one-by-one from items (max 3).
     allies = []
     onScore?.(0, level)
+  }
+
+  function pickupWeapon(): void {
+    if (baseWeapon === 'spread') {
+      weaponPower = Math.min(3, weaponPower + 1)
+      if (weapon !== 'laser') weapon = baseWeapon
+      flashLabel = weaponPower > 0 ? `미사일 MAX +${weaponPower}` : '미사일 MAX'
+      flashUntil = performance.now() + 1000
+      return
+    }
+    baseWeapon = gyeokpaNextBaseWeapon(baseWeapon)
+    if (weapon !== 'laser') weapon = baseWeapon
+    flashLabel = `미사일 강화 · ${gyeokpaWeaponLabel(baseWeapon)}`
+    flashUntil = performance.now() + 1100
   }
 
   function hurt(): void {
@@ -1665,7 +1693,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     laserCount = 1
     laserTimer = 0
     bullets = bullets.filter((b) => !(b.friendly && b.laser))
-    flashLabel = `복귀 ${baseWeapon}`
+    flashLabel = `복귀 · ${gyeokpaWeaponLabel(baseWeapon)}`
     flashUntil = performance.now() + 900
   }
 
@@ -1695,10 +1723,11 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   }
 
   function firePlayer(): void {
+    const dmg = 1 + weaponPower * 0.35
     if (weapon === 'laser') {
       bullets = bullets.filter((b) => !(b.friendly && b.laser))
       const bottom = shipY - 14
-      const dmg = 0.5 + laserCount * 0.1
+      const laserDmg = 0.5 + laserCount * 0.1 + weaponPower * 0.08
       for (const ox of gyeokpaLaserOffsets(laserCount)) {
         bullets.push({
           x: shipX + ox,
@@ -1706,7 +1735,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
           vx: 0,
           vy: 0,
           r: 4.8,
-          dmg,
+          dmg: laserDmg,
           friendly: true,
           laser: true,
           laserBottom: bottom,
@@ -1717,14 +1746,15 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       return
     }
     if (weapon === 'pulse') {
-      bullets.push({ x: shipX, y: shipY - 12, vx: 0, vy: -620, r: 3.5, dmg: 1, friendly: true })
+      bullets.push({ x: shipX, y: shipY - 12, vx: 0, vy: -620, r: 3.5, dmg, friendly: true })
     } else if (weapon === 'twin') {
-      bullets.push({ x: shipX - 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg: 1, friendly: true })
-      bullets.push({ x: shipX + 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg: 1, friendly: true })
+      bullets.push({ x: shipX - 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg, friendly: true })
+      bullets.push({ x: shipX + 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg, friendly: true })
     } else {
-      bullets.push({ x: shipX, y: shipY - 10, vx: 0, vy: -600, r: 3.5, dmg: 1, friendly: true })
-      bullets.push({ x: shipX - 4, y: shipY - 8, vx: -160, vy: -560, r: 3.5, dmg: 1, friendly: true })
-      bullets.push({ x: shipX + 4, y: shipY - 8, vx: 160, vy: -560, r: 3.5, dmg: 1, friendly: true })
+      // spread — keep the original 3-way fan, power items only raise damage
+      bullets.push({ x: shipX, y: shipY - 10, vx: 0, vy: -600, r: 3.5, dmg, friendly: true })
+      bullets.push({ x: shipX - 4, y: shipY - 8, vx: -160, vy: -560, r: 3.5, dmg, friendly: true })
+      bullets.push({ x: shipX + 4, y: shipY - 8, vx: 160, vy: -560, r: 3.5, dmg, friendly: true })
     }
   }
 
@@ -1758,13 +1788,22 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     const noted = noteLevel('gyeokpa', level, next, score, onScore)
     level = noted.level
     if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
-    // Rare laser refresh item — separate from common drops.
+    // Rare laser refresh — keep separate so common drops stay weapon-heavy.
     if (Math.random() < GYEOKPA_LASER_DROP_RATE) {
       powers.push({ x: e.x, y: e.y, kind: 'laser' })
       return
     }
-    if (Math.random() < 0.2) {
-      const kinds: Power['kind'][] = ['weapon', 'ally', 'shield', 'ally', 'weapon']
+    // Original-style drops: missile upgrades drop often while progressing.
+    if (Math.random() < 0.22 + Math.min(0.1, level * 0.01)) {
+      const kinds: Power['kind'][] = [
+        'weapon',
+        'weapon',
+        'weapon',
+        'shield',
+        'ally',
+        'ally',
+        'weapon',
+      ]
       powers.push({
         x: e.x,
         y: e.y,
@@ -1786,7 +1825,13 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     }
 
     fireCd -= dt
-    const rate = weapon === 'laser' ? 0.045 : weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
+    const rate =
+      weapon === 'laser'
+        ? 0.045
+        : Math.max(
+            0.08,
+            (weapon === 'spread' ? 0.15 : weapon === 'twin' ? 0.12 : 0.14) - weaponPower * 0.012,
+          )
     if (fireCd <= 0) {
       firePlayer()
       fireCd = rate
@@ -1917,12 +1962,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         continue
       }
       if (Math.hypot(p.x - shipX, p.y - shipY) < 26) {
-        if (p.kind === 'weapon') {
-          baseWeapon = gyeokpaNextBaseWeapon(baseWeapon)
-          if (weapon !== 'laser') weapon = baseWeapon
-          flashLabel = `무기 ${baseWeapon}`
-          flashUntil = performance.now() + 900
-        } else if (p.kind === 'laser') pickupLaser()
+        if (p.kind === 'weapon') pickupWeapon()
+        else if (p.kind === 'laser') pickupLaser()
         else if (p.kind === 'ally') pickupAlly()
         else {
           shield = 5

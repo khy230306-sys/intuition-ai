@@ -25,6 +25,7 @@ import {
   gyeokpaAllySlotOffsets,
   gyeokpaLaserOffsets,
   gyeokpaNextBaseWeapon,
+  gyeokpaWeaponLabel,
   unitsPerLevel,
 } from './arcadeGames'
 
@@ -82,7 +83,8 @@ describe('arcade helpers', () => {
     expect(gyeokpaLaserOffsets(3)).toEqual([-22, 0, 22])
     expect(gyeokpaNextBaseWeapon('pulse')).toBe('twin')
     expect(gyeokpaNextBaseWeapon('twin')).toBe('spread')
-    expect(gyeokpaNextBaseWeapon('spread')).toBe('pulse')
+    expect(gyeokpaNextBaseWeapon('spread')).toBe('spread')
+    expect(gyeokpaWeaponLabel('twin')).toBe('트윈')
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {

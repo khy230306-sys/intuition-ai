@@ -133,7 +133,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.9.3'
+const APP_VERSION = '1.9.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1267,7 +1267,7 @@ function renderGames(): string {
       : state.arcadeId === 'slide'
         ? `<p class="game-meta">타일 탭 또는 스와이프로 빈칸으로 밀기 · 시간 안에 클리어 · 게임오버 시 화면 탭</p>`
         : state.arcadeId === 'gyeokpa'
-          ? `<p class="game-meta">드래그 이동 · 자동사격 · 시작은 단독 · 아군 아이템으로 최대 3기 · 적 미사일 피격 시 1기 감소 · 희귀 레이저 10초 · 게임오버 시 화면 탭</p>`
+          ? `<p class="game-meta">드래그 이동 · 자동사격 · 미사일 아이템으로 강화(펄스→트윈→스프레드) · 시작 단독 · 아군 최대 3기 · 희귀 레이저 10초 · 게임오버 시 화면 탭</p>`
           : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
             ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
             : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M / 금색 W(Lv20+) 아이템 · 게임오버 시 화면 탭</p>`

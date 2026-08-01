@@ -1,4 +1,5 @@
 import { sfx } from "./audio";
+import { MAX_STAGE } from "./meta";
 
 export type Weapon = "pulse" | "twin" | "spread" | "laser";
 
@@ -9,6 +10,10 @@ export interface GameHooks {
   onClear: (result: RunResult) => void;
 }
 
+export const LASER_DURATION = 7;
+export const ALLY_DURATION = 10;
+export const MAX_ALLIES = 3;
+
 export interface HudInfo {
   score: number;
   wave: number;
@@ -16,6 +21,8 @@ export interface HudInfo {
   lives: number;
   weapon: Weapon;
   laserCount: number;
+  laserTimer: number;
+  allies: number;
   combo: number;
   bossHp?: number;
   bossMax?: number;
@@ -63,11 +70,21 @@ interface Enemy {
   flash: number;
 }
 
+type PowerKind = "weapon" | "life" | "shield" | "bomb" | "laser" | "ally";
+
 interface Power {
   x: number;
   y: number;
-  kind: "weapon" | "life" | "shield" | "bomb";
+  kind: PowerKind;
   life: number;
+}
+
+interface Ally {
+  slot: number;
+  x: number;
+  y: number;
+  life: number;
+  fireCd: number;
 }
 
 interface Particle {
@@ -95,10 +112,20 @@ const WEAPON_LABEL: Record<Weapon, string> = {
   laser: "레이저",
 };
 
-export function weaponLabel(w: Weapon, laserCount = 1): string {
-  if (w === "laser") return laserCount >= 2 ? `레이저 x${laserCount}` : "레이저";
+export function weaponLabel(w: Weapon, laserCount = 1, laserTimer = 0): string {
+  if (w === "laser") {
+    const n = laserCount >= 2 ? `x${laserCount} ` : "";
+    const t = laserTimer > 0 ? `${Math.ceil(laserTimer)}초` : "";
+    return `레이저 ${n}${t}`.trim();
+  }
   return WEAPON_LABEL[w];
 }
+
+const ALLY_SLOTS = [
+  { x: -30, y: 16 },
+  { x: 30, y: 16 },
+  { x: 0, y: 34 },
+] as const;
 
 export class Game {
   private canvas: HTMLCanvasElement;
@@ -124,8 +151,11 @@ export class Game {
   private bosses = 0;
   private noHit = true;
   private weapon: Weapon = "pulse";
+  /** Permanent weapon restored after laser ends (never laser). */
+  private prevWeapon: Weapon = "pulse";
   /** Laser beam count while weapon is laser (1–3). */
   private laserCount = 1;
+  private laserTimer = 0;
   private fireCd = 0;
   private laserSfxCd = 0;
   private stage = 1;
@@ -139,6 +169,7 @@ export class Game {
   private bullets: Bullet[] = [];
   private enemies: Enemy[] = [];
   private powers: Power[] = [];
+  private allies: Ally[] = [];
   private particles: Particle[] = [];
   private stars: Star[] = [];
   private shake = 0;
@@ -156,7 +187,7 @@ export class Game {
   }
 
   start(stage: number): void {
-    this.stage = Math.max(1, Math.min(5, stage));
+    this.stage = Math.max(1, Math.min(MAX_STAGE, stage));
     this.resetRun();
     this.running = true;
     this.last = performance.now();
@@ -188,7 +219,9 @@ export class Game {
     this.bosses = 0;
     this.noHit = true;
     this.weapon = "pulse";
+    this.prevWeapon = "pulse";
     this.laserCount = 1;
+    this.laserTimer = 0;
     this.fireCd = 0;
     this.laserSfxCd = 0;
     this.wave = 1;
@@ -200,6 +233,7 @@ export class Game {
     this.bullets = [];
     this.enemies = [];
     this.powers = [];
+    this.allies = [];
     this.particles = [];
     this.shake = 0;
     this.flash = 0;
@@ -286,6 +320,8 @@ export class Game {
       lives: this.lives,
       weapon: this.weapon,
       laserCount: this.laserCount,
+      laserTimer: this.laserTimer,
+      allies: this.allies.length,
       combo: this.combo,
       bossHp: boss?.hp,
       bossMax: boss?.maxHp,
@@ -469,10 +505,20 @@ export class Game {
       this.bosses += 1;
       this.bossActive = false;
       this.hooks.onToast("보스 격파!");
-      this.powers.push({ x: e.x, y: e.y, kind: "weapon", life: 8 });
-      this.powers.push({ x: e.x + 24, y: e.y + 10, kind: "life", life: 8 });
-    } else if (Math.random() < 0.12 + this.stage * 0.02) {
-      const kinds: Power["kind"][] = ["weapon", "shield", "bomb", "life"];
+      this.powers.push({ x: e.x, y: e.y, kind: "laser", life: 8 });
+      this.powers.push({ x: e.x + 24, y: e.y + 10, kind: "ally", life: 8 });
+      this.powers.push({ x: e.x - 24, y: e.y + 10, kind: "life", life: 8 });
+    } else if (Math.random() < 0.14 + this.stage * 0.015) {
+      const kinds: PowerKind[] = [
+        "weapon",
+        "weapon",
+        "shield",
+        "bomb",
+        "life",
+        "laser",
+        "ally",
+        "ally",
+      ];
       this.powers.push({
         x: e.x,
         y: e.y,
@@ -500,22 +546,114 @@ export class Game {
     }
   }
 
+  private baseWeapons(): Weapon[] {
+    return ["pulse", "twin", "spread"];
+  }
+
   private nextWeapon(): void {
-    // On laser, weapon pickups first stack beams up to 3, then cycle.
-    if (this.weapon === "laser" && this.laserCount < 3) {
-      this.laserCount += 1;
-      this.hooks.onToast(`레이저 강화 x${this.laserCount}`);
+    const order = this.baseWeapons();
+    if (this.weapon === "laser") {
+      const i = order.indexOf(this.prevWeapon);
+      this.prevWeapon = order[(i + 1) % order.length]!;
+      this.hooks.onToast(`복귀 무기: ${weaponLabel(this.prevWeapon)}`);
       sfx.power();
       this.emitHud();
       return;
     }
-    const order: Weapon[] = ["pulse", "twin", "spread", "laser"];
     const i = order.indexOf(this.weapon);
     this.weapon = order[(i + 1) % order.length]!;
-    this.laserCount = 1;
-    this.hooks.onToast(`무기: ${weaponLabel(this.weapon, this.laserCount)}`);
+    this.prevWeapon = this.weapon;
+    this.hooks.onToast(`무기: ${weaponLabel(this.weapon)}`);
     sfx.power();
     this.emitHud();
+  }
+
+  private pickupLaser(): void {
+    if (this.weapon !== "laser") {
+      this.prevWeapon = this.weapon;
+      this.weapon = "laser";
+      this.laserCount = 1;
+    } else if (this.laserCount < 3) {
+      this.laserCount += 1;
+    }
+    this.laserTimer = LASER_DURATION;
+    this.hooks.onToast(
+      this.laserCount > 1 ? `레이저 x${this.laserCount} · ${LASER_DURATION}초` : `레이저 · ${LASER_DURATION}초`,
+    );
+    sfx.power();
+    this.emitHud();
+  }
+
+  private endLaser(): void {
+    this.weapon = this.prevWeapon;
+    this.laserCount = 1;
+    this.laserTimer = 0;
+    this.bullets = this.bullets.filter((b) => !(b.friendly && b.laser));
+    this.hooks.onToast(`레이저 종료 · ${weaponLabel(this.weapon)}`);
+    this.emitHud();
+  }
+
+  private pickupAlly(): void {
+    if (this.allies.length >= MAX_ALLIES) {
+      // Refresh the shortest-lived ally instead of adding a 4th.
+      let weakest = this.allies[0]!;
+      for (const a of this.allies) if (a.life < weakest.life) weakest = a;
+      weakest.life = ALLY_DURATION;
+      this.hooks.onToast(`아군 시간 갱신 · ${MAX_ALLIES}기`);
+      sfx.power();
+      this.emitHud();
+      return;
+    }
+    const used = new Set(this.allies.map((a) => a.slot));
+    let slot = 0;
+    for (let i = 0; i < MAX_ALLIES; i++) {
+      if (!used.has(i)) {
+        slot = i;
+        break;
+      }
+    }
+    const off = ALLY_SLOTS[slot]!;
+    this.allies.push({
+      slot,
+      x: this.player.x + off.x,
+      y: this.player.y + off.y,
+      life: ALLY_DURATION,
+      fireCd: 0.2,
+    });
+    this.hooks.onToast(`아군 합류 ${this.allies.length}/${MAX_ALLIES} · ${ALLY_DURATION}초`);
+    sfx.power();
+    this.emitHud();
+  }
+
+  private updateAllies(dt: number): void {
+    for (let i = this.allies.length - 1; i >= 0; i--) {
+      const a = this.allies[i]!;
+      a.life -= dt;
+      if (a.life <= 0) {
+        this.allies.splice(i, 1);
+        this.hooks.onToast("아군 이탈");
+        this.emitHud();
+        continue;
+      }
+      const off = ALLY_SLOTS[a.slot]!;
+      const tx = this.player.x + off.x;
+      const ty = this.player.y + off.y;
+      a.x += (tx - a.x) * Math.min(1, dt * 12);
+      a.y += (ty - a.y) * Math.min(1, dt * 12);
+      a.fireCd -= dt;
+      if (a.fireCd <= 0) {
+        this.bullets.push({
+          x: a.x,
+          y: a.y - 10,
+          vx: 0,
+          vy: -600,
+          r: 3,
+          dmg: 1,
+          friendly: true,
+        });
+        a.fireCd = 0.18;
+      }
+    }
   }
 
   private update(dt: number): void {
@@ -529,6 +667,13 @@ export class Game {
     this.player.x += (this.targetX - this.player.x) * Math.min(1, dt * 14);
     this.player.y += (this.targetY - this.player.y) * Math.min(1, dt * 14);
 
+    if (this.weapon === "laser") {
+      const before = Math.ceil(this.laserTimer);
+      this.laserTimer -= dt;
+      if (this.laserTimer <= 0) this.endLaser();
+      else if (Math.ceil(this.laserTimer) !== before) this.emitHud();
+    }
+
     this.fireCd -= dt;
     this.laserSfxCd = Math.max(0, this.laserSfxCd - dt);
     const rate =
@@ -537,6 +682,8 @@ export class Game {
       this.fire();
       this.fireCd = rate;
     }
+
+    this.updateAllies(dt);
 
     for (const s of this.stars) {
       s.y += (40 + s.z * 90) * dt;
@@ -728,6 +875,8 @@ export class Game {
       const dy = p.y - this.player.y;
       if (dx * dx + dy * dy < (18 + this.player.r) * (18 + this.player.r)) {
         if (p.kind === "weapon") this.nextWeapon();
+        else if (p.kind === "laser") this.pickupLaser();
+        else if (p.kind === "ally") this.pickupAlly();
         else if (p.kind === "life") {
           this.lives = Math.min(5, this.lives + 1);
           this.hooks.onToast("라이프 +1");
@@ -736,7 +885,7 @@ export class Game {
           this.player.shield = 6;
           this.hooks.onToast("실드 ON");
           sfx.power();
-        } else {
+        } else if (p.kind === "bomb") {
           for (let j = this.enemies.length - 1; j >= 0; j--) {
             const e = this.enemies[j]!;
             if (e.kind === "boss") {
@@ -798,15 +947,39 @@ export class Game {
       c.save();
       c.translate(p.x, p.y);
       c.rotate(performance.now() / 400);
-      c.fillStyle =
-        p.kind === "weapon" ? "#3de0c5" : p.kind === "life" ? "#ff5a4a" : p.kind === "shield" ? "#f0c35a" : "#e8f2ff";
-      c.beginPath();
-      c.moveTo(0, -10);
-      c.lineTo(10, 0);
-      c.lineTo(0, 10);
-      c.lineTo(-10, 0);
-      c.closePath();
-      c.fill();
+      const color =
+        p.kind === "weapon"
+          ? "#3de0c5"
+          : p.kind === "life"
+            ? "#ff5a4a"
+            : p.kind === "shield"
+              ? "#f0c35a"
+              : p.kind === "laser"
+                ? "#7cffef"
+                : p.kind === "ally"
+                  ? "#9ecbff"
+                  : "#e8f2ff";
+      c.fillStyle = color;
+      if (p.kind === "ally") {
+        c.beginPath();
+        c.moveTo(0, -11);
+        c.lineTo(9, 9);
+        c.lineTo(0, 4);
+        c.lineTo(-9, 9);
+        c.closePath();
+        c.fill();
+      } else if (p.kind === "laser") {
+        c.fillRect(-3, -12, 6, 24);
+        c.fillRect(-8, -2, 16, 4);
+      } else {
+        c.beginPath();
+        c.moveTo(0, -10);
+        c.lineTo(10, 0);
+        c.lineTo(0, 10);
+        c.lineTo(-10, 0);
+        c.closePath();
+        c.fill();
+      }
       c.restore();
     }
 
@@ -892,6 +1065,24 @@ export class Game {
         c.closePath();
         c.fill();
       }
+      c.restore();
+    }
+
+    // allies
+    for (const a of this.allies) {
+      c.save();
+      c.translate(a.x, a.y);
+      c.globalAlpha = 0.55 + Math.min(0.4, a.life / ALLY_DURATION);
+      c.fillStyle = "#9ecbff";
+      c.beginPath();
+      c.moveTo(0, -12);
+      c.lineTo(9, 9);
+      c.lineTo(0, 4);
+      c.lineTo(-9, 9);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#3de0c5";
+      c.fillRect(-2, 6, 4, 6);
       c.restore();
     }
 

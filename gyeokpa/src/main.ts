@@ -2,6 +2,7 @@ import "./style.css";
 import { Game, weaponLabel, type RunResult, type Weapon } from "./game";
 import { isMuted, setMuted, sfx } from "./audio";
 import {
+  MAX_STAGE,
   MEDALS,
   dailyProgress,
   loadMeta,
@@ -16,7 +17,7 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app missing");
 
 let meta = loadMeta();
-let selectedStage = Math.min(meta.unlockedStage, 5);
+let selectedStage = Math.min(meta.unlockedStage, MAX_STAGE);
 let game: Game | null = null;
 let hintVisible = true;
 
@@ -99,7 +100,7 @@ function applyRun(result: RunResult): MedalId[] {
   });
 
   if (result.cleared) {
-    meta.unlockedStage = Math.max(meta.unlockedStage, Math.min(5, result.stage + 1));
+    meta.unlockedStage = Math.max(meta.unlockedStage, Math.min(MAX_STAGE, result.stage + 1));
   }
 
   const tryUnlock = (id: MedalId, ok: boolean) => {
@@ -139,7 +140,7 @@ function showScreen(kind: Screen, result?: RunResult, unlocked: MedalId[] = []):
     overlay.innerHTML = `
       <div class="panel">
         <h1>격파</h1>
-        <p>손가락으로 기체를 끌고, 몰려오는 적을 쓸어버리세요. 웨이브를 버티고 보스를 격파하면 다음 전선이 열립니다.</p>
+        <p>손가락으로 기체를 끌고 적을 쓸어버리세요. 레이저는 7초, 아군은 최대 3기·10초. 스테이지는 ${MAX_STAGE}개.</p>
         <div class="stats">
           <div class="stat"><b>${meta.bestScore.toLocaleString()}</b><span>최고점</span></div>
           <div class="stat"><b>${meta.bestWave}</b><span>최고 웨이브</span></div>
@@ -160,7 +161,7 @@ function showScreen(kind: Screen, result?: RunResult, unlocked: MedalId[] = []):
         <h2>스테이지</h2>
         <p>클리어할수록 더 거친 전선이 열립니다.</p>
         <div class="list">
-          ${[1, 2, 3, 4, 5]
+          ${Array.from({ length: MAX_STAGE }, (_, i) => i + 1)
             .map((n) => {
               const locked = n > meta.unlockedStage;
               return `<button class="row" data-stage="${n}" ${locked ? "disabled" : ""} type="button">
@@ -299,7 +300,9 @@ function startGame(): void {
         hudWave.textContent = `WAVE ${info.wave}`;
         hudStage.textContent = `ST ${info.stage}`;
         renderLives(info.lives);
-        weaponEl.textContent = weaponLabel(info.weapon as Weapon, info.laserCount);
+        const ally = info.allies > 0 ? ` · 아군${info.allies}` : "";
+        weaponEl.textContent =
+          weaponLabel(info.weapon as Weapon, info.laserCount, info.laserTimer) + ally;
       },
       onToast: showToast,
       onOver: (result) => {

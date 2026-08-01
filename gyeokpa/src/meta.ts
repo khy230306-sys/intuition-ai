@@ -118,7 +118,20 @@ export function dailyProgress(meta: MetaState): { kills: number; score: number; 
   return { kills, score, bosses, done };
 }
 
+export const MAX_STAGE = 10;
+
 export function stageName(n: number): string {
-  const names = ["입문 전선", "도시 상공", "심야 공역", "요새 돌파", "최종 격파"];
+  const names = [
+    "입문 전선",
+    "도시 상공",
+    "심야 공역",
+    "요새 돌파",
+    "해안 포격",
+    "성층권 돌입",
+    "궤도 경계",
+    "적진 중심",
+    "최후 방어선",
+    "최종 격파",
+  ];
   return names[Math.min(names.length - 1, Math.max(0, n - 1))] ?? `스테이지 ${n}`;
 }

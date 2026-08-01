@@ -299,7 +299,7 @@ function startGame(): void {
         hudWave.textContent = `WAVE ${info.wave}`;
         hudStage.textContent = `ST ${info.stage}`;
         renderLives(info.lives);
-        weaponEl.textContent = weaponLabel(info.weapon as Weapon);
+        weaponEl.textContent = weaponLabel(info.weapon as Weapon, info.laserCount);
       },
       onToast: showToast,
       onOver: (result) => {

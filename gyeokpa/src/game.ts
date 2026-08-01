@@ -15,6 +15,7 @@ export interface HudInfo {
   stage: number;
   lives: number;
   weapon: Weapon;
+  laserCount: number;
   combo: number;
   bossHp?: number;
   bossMax?: number;
@@ -40,6 +41,10 @@ interface Bullet {
   dmg: number;
   friendly: boolean;
   laser?: boolean;
+  /** Beam bottom Y (screen top is 0). */
+  laserBottom?: number;
+  /** Horizontal offset from player for tracking beams. */
+  laserOffset?: number;
   life?: number;
 }
 
@@ -90,7 +95,8 @@ const WEAPON_LABEL: Record<Weapon, string> = {
   laser: "레이저",
 };
 
-export function weaponLabel(w: Weapon): string {
+export function weaponLabel(w: Weapon, laserCount = 1): string {
+  if (w === "laser") return laserCount >= 2 ? `레이저 x${laserCount}` : "레이저";
   return WEAPON_LABEL[w];
 }
 
@@ -118,7 +124,10 @@ export class Game {
   private bosses = 0;
   private noHit = true;
   private weapon: Weapon = "pulse";
+  /** Laser beam count while weapon is laser (1–3). */
+  private laserCount = 1;
   private fireCd = 0;
+  private laserSfxCd = 0;
   private stage = 1;
   private wave = 1;
   private spawnLeft = 0;
@@ -179,7 +188,9 @@ export class Game {
     this.bosses = 0;
     this.noHit = true;
     this.weapon = "pulse";
+    this.laserCount = 1;
     this.fireCd = 0;
+    this.laserSfxCd = 0;
     this.wave = 1;
     this.betweenWaves = 1.2;
     this.spawnLeft = 0;
@@ -274,6 +285,7 @@ export class Game {
       stage: this.stage,
       lives: this.lives,
       weapon: this.weapon,
+      laserCount: this.laserCount,
       combo: this.combo,
       bossHp: boss?.hp,
       bossMax: boss?.maxHp,
@@ -369,6 +381,12 @@ export class Game {
     }
   }
 
+  private laserOffsets(): number[] {
+    if (this.laserCount >= 3) return [-22, 0, 22];
+    if (this.laserCount === 2) return [-14, 14];
+    return [0];
+  }
+
   private fire(): void {
     const p = this.player;
     const mk = (ox: number, oy: number, vx: number, vy: number, dmg: number, r = 3.5) => {
@@ -387,18 +405,30 @@ export class Game {
       mk(4, -8, 160, -560, 1);
       sfx.shot();
     } else {
-      this.bullets.push({
-        x: p.x,
-        y: p.y - 16,
-        vx: 0,
-        vy: -900,
-        r: 4,
-        dmg: 0.55,
-        friendly: true,
-        laser: true,
-        life: 0.08,
-      });
-      sfx.shot();
+      // Full-height piercing beams from ship nose to screen top.
+      this.bullets = this.bullets.filter((b) => !(b.friendly && b.laser));
+      const bottom = p.y - 14;
+      const dmg = 0.55 + this.laserCount * 0.1;
+      const halfW = 4.5 + this.laserCount * 0.35;
+      for (const ox of this.laserOffsets()) {
+        this.bullets.push({
+          x: p.x + ox,
+          y: bottom * 0.5,
+          vx: 0,
+          vy: 0,
+          r: halfW,
+          dmg,
+          friendly: true,
+          laser: true,
+          laserBottom: bottom,
+          laserOffset: ox,
+          life: 0.08,
+        });
+      }
+      if (this.laserSfxCd <= 0) {
+        sfx.shot();
+        this.laserSfxCd = 0.09;
+      }
     }
   }
 
@@ -471,11 +501,21 @@ export class Game {
   }
 
   private nextWeapon(): void {
+    // On laser, weapon pickups first stack beams up to 3, then cycle.
+    if (this.weapon === "laser" && this.laserCount < 3) {
+      this.laserCount += 1;
+      this.hooks.onToast(`레이저 강화 x${this.laserCount}`);
+      sfx.power();
+      this.emitHud();
+      return;
+    }
     const order: Weapon[] = ["pulse", "twin", "spread", "laser"];
     const i = order.indexOf(this.weapon);
     this.weapon = order[(i + 1) % order.length]!;
-    this.hooks.onToast(`무기: ${weaponLabel(this.weapon)}`);
+    this.laserCount = 1;
+    this.hooks.onToast(`무기: ${weaponLabel(this.weapon, this.laserCount)}`);
     sfx.power();
+    this.emitHud();
   }
 
   private update(dt: number): void {
@@ -490,8 +530,9 @@ export class Game {
     this.player.y += (this.targetY - this.player.y) * Math.min(1, dt * 14);
 
     this.fireCd -= dt;
+    this.laserSfxCd = Math.max(0, this.laserSfxCd - dt);
     const rate =
-      this.weapon === "laser" ? 0.05 : this.weapon === "spread" ? 0.16 : this.weapon === "twin" ? 0.12 : 0.14;
+      this.weapon === "laser" ? 0.045 : this.weapon === "spread" ? 0.16 : this.weapon === "twin" ? 0.12 : 0.14;
     if (this.fireCd <= 0) {
       this.fire();
       this.fireCd = rate;
@@ -622,8 +663,14 @@ export class Game {
 
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i]!;
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
+      if (!b.laser) {
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+      } else {
+        // Keep beam locked to ship while alive.
+        b.x = this.player.x + (b.laserOffset ?? 0);
+        b.laserBottom = this.player.y - 14;
+      }
       if (b.life != null) {
         b.life -= dt;
         if (b.life <= 0) {
@@ -631,22 +678,32 @@ export class Game {
           continue;
         }
       }
-      if (b.x < -20 || b.x > this.w + 20 || b.y < -40 || b.y > this.h + 40) {
+      if (!b.laser && (b.x < -20 || b.x > this.w + 20 || b.y < -40 || b.y > this.h + 40)) {
         this.bullets.splice(i, 1);
         continue;
       }
       if (b.friendly) {
         for (let j = this.enemies.length - 1; j >= 0; j--) {
           const e = this.enemies[j]!;
-          const dx = e.x - b.x;
-          const dy = e.y - b.y;
-          if (dx * dx + dy * dy < (e.r + b.r) * (e.r + b.r)) {
+          let hit = false;
+          if (b.laser) {
+            const bottom = b.laserBottom ?? this.player.y;
+            hit =
+              e.y + e.r >= 0 &&
+              e.y - e.r <= bottom &&
+              Math.abs(e.x - b.x) <= e.r + b.r;
+          } else {
+            const dx = e.x - b.x;
+            const dy = e.y - b.y;
+            hit = dx * dx + dy * dy < (e.r + b.r) * (e.r + b.r);
+          }
+          if (hit) {
             e.hp -= b.dmg;
             e.flash = 1;
             if (!b.laser) this.bullets.splice(i, 1);
             sfx.hit();
             if (e.hp <= 0) this.killEnemy(e, j);
-            break;
+            if (!b.laser) break;
           }
         }
       } else {
@@ -755,10 +812,30 @@ export class Game {
 
     for (const b of this.bullets) {
       if (b.friendly) {
-        c.fillStyle = b.laser ? "#7cffef" : "#ffd1c8";
         if (b.laser) {
-          c.fillRect(b.x - 2, b.y - 18, 4, 28);
+          const bottom = b.laserBottom ?? this.player.y - 14;
+          const top = -8;
+          const h = Math.max(0, bottom - top);
+          const pulse = 0.75 + Math.sin(performance.now() / 45) * 0.25;
+          c.save();
+          c.globalAlpha = 0.22 * pulse;
+          c.fillStyle = "#3de0c5";
+          c.fillRect(b.x - b.r - 4, top, (b.r + 4) * 2, h);
+          c.globalAlpha = 0.55 * pulse;
+          c.fillStyle = "#7cffef";
+          c.fillRect(b.x - b.r * 0.7, top, b.r * 1.4, h);
+          c.globalAlpha = 0.95;
+          c.fillStyle = "#e8fffb";
+          c.fillRect(b.x - 1.6, top, 3.2, h);
+          // tip bloom at muzzle
+          c.globalAlpha = 0.7;
+          c.fillStyle = "#ffffff";
+          c.beginPath();
+          c.arc(b.x, bottom, 3.5, 0, Math.PI * 2);
+          c.fill();
+          c.restore();
         } else {
+          c.fillStyle = "#ffd1c8";
           c.beginPath();
           c.arc(b.x, b.y, b.r, 0, Math.PI * 2);
           c.fill();

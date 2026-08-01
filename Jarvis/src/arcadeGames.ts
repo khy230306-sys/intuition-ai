@@ -9,7 +9,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
-  gyeokpa: { title: '격파', blurb: '세로 슈팅 · 아군 10기(미사일 피격 시 1기 감소) · 레이저 10초' },
+  gyeokpa: { title: '격파', blurb: '세로 슈팅 · 아이템으로 아군 최대 3기 · 미사일 피격 시 1기 감소 · 레이저 10초' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
@@ -1505,7 +1505,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 /** —— 격파 (vertical shmup) —— */
 export const GYEOKPA_LASER_SEC = 10
 /** Allies persist until hit by enemy missiles (no timed expiry). */
-export const GYEOKPA_MAX_ALLIES = 10
+export const GYEOKPA_MAX_ALLIES = 3
 export const GYEOKPA_MAX_LASER = 3
 /** Fraction of enemy kills that drop a rare laser item. */
 export const GYEOKPA_LASER_DROP_RATE = 0.045
@@ -1527,16 +1527,9 @@ export function gyeokpaLaserOffsets(count: number): number[] {
 
 export function gyeokpaAllySlotOffsets(): ReadonlyArray<{ x: number; y: number }> {
   return [
-    { x: -26, y: 14 },
-    { x: 26, y: 14 },
-    { x: -46, y: 20 },
-    { x: 46, y: 20 },
-    { x: -16, y: 30 },
-    { x: 16, y: 30 },
-    { x: -36, y: 38 },
-    { x: 36, y: 38 },
+    { x: -30, y: 16 },
+    { x: 30, y: 16 },
     { x: 0, y: 34 },
-    { x: 0, y: 48 },
   ]
 }
 
@@ -1603,20 +1596,6 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     return `격파 ${baseWeapon} · 아군 ${allies.length}`
   }
 
-  function fillAllies(count: number): void {
-    allies = []
-    const n = Math.max(0, Math.min(GYEOKPA_MAX_ALLIES, Math.floor(count)))
-    for (let i = 0; i < n; i++) {
-      const off = allySlots[i]!
-      allies.push({
-        slot: i,
-        x: shipX + off.x,
-        y: shipY + off.y,
-        fireCd: 0.1 + i * 0.02,
-      })
-    }
-  }
-
   function reset(): void {
     const sized = sizeCanvas(canvas)
     w = sized.w
@@ -1644,7 +1623,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     bullets = []
     enemies = []
     powers = []
-    fillAllies(GYEOKPA_MAX_ALLIES)
+    // Start solo — allies appear one-by-one from items (max 3).
+    allies = []
     onScore?.(0, level)
   }
 

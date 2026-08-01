@@ -71,12 +71,12 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().gyeokpa).toBeNull()
   })
 
-  it('configures 격파 laser 10s, 10 persistent allies, rare laser drops', () => {
+  it('configures 격파 laser 10s, max 3 item allies, rare laser drops', () => {
     expect(GYEOKPA_LASER_SEC).toBe(10)
-    expect(GYEOKPA_MAX_ALLIES).toBe(10)
+    expect(GYEOKPA_MAX_ALLIES).toBe(3)
     expect(GYEOKPA_MAX_LASER).toBe(3)
     expect(GYEOKPA_LASER_DROP_RATE).toBeLessThan(0.1)
-    expect(gyeokpaAllySlotOffsets()).toHaveLength(10)
+    expect(gyeokpaAllySlotOffsets()).toHaveLength(3)
     expect(gyeokpaLaserOffsets(1)).toEqual([0])
     expect(gyeokpaLaserOffsets(2)).toEqual([-14, 14])
     expect(gyeokpaLaserOffsets(3)).toEqual([-22, 0, 22])

@@ -117,7 +117,7 @@ function helpText(name: string): string {
     '• 장시간 / 장 열렸어',
     '• 주식 종목 추천 / 미국 보수 추천 / 냉정하게 추천',
     '• 프랑스 정보 / 도쿄 시차 / 에베레스트 / 대륙 목록',
-    '• 게임 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁 / 게임 순위',
+    '• 앱 업데이트 / 게임 / 벽돌깨기 / 스페이스 / 플래피 / 닷지 / 퐁 / 게임 순위',
     '• 내 위치 / 지금 어디야',
     '• 영어 통역 모드 / 일본어로 번역해 안녕하세요 / 통역 종료',
     '• 삼성전자 시세 / 애플 주가',
@@ -788,6 +788,19 @@ export async function think(
         text: err instanceof Error ? err.message : '위치를 가져오지 못했습니다.',
         speak: true,
       }
+    }
+  }
+
+  // App update (home-screen PWA)
+  if (/^(앱\s*)?업데이트$|최신\s*(판|버전)\s*(받아|업데이트)|앱\s*새로고침|캐시\s*새로고침/i.test(text) && text.length < 28) {
+    return {
+      text: '최신판 업데이트를 실행합니다. 캐시를 비운 뒤 서버에서 다시 불러옵니다.',
+      speak: true,
+      action: async () => {
+        const btn = document.querySelector<HTMLButtonElement>('[data-action="app-update"]')
+        btn?.click()
+        return { ok: true, message: '업데이트 시작' }
+      },
     }
   }
 

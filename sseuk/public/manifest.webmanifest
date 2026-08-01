@@ -1,12 +1,12 @@
 {
-  "name": "착 — 블록 퍼즐",
-  "short_name": "착",
-  "description": "블록을 맞춰 넣고 줄을 지우는 모바일 퍼즐",
+  "name": "스윽 — 슬라이딩 퍼즐",
+  "short_name": "스윽",
+  "description": "타일을 밀어 그림을 맞추는 모바일 슬라이딩 퍼즐",
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1b3a4b",
-  "theme_color": "#1b3a4b",
+  "background_color": "#243b55",
+  "theme_color": "#243b55",
   "icons": [
     {
       "src": "favicon.svg",

@@ -26,27 +26,22 @@ function tone(freq: number, dur: number, type: OscillatorType = 'sine', gain = 0
   o.stop(t0 + dur + 0.02)
 }
 
-export function sfxPlace() {
-  tone(420, 0.05, 'triangle', 0.05)
-}
-export function sfxClear(lines: number) {
-  tone(520, 0.06, 'sine', 0.06)
-  tone(720 + lines * 40, 0.1, 'sine', 0.05, 0.05)
-  if (lines >= 2) tone(880, 0.12, 'triangle', 0.045, 0.12)
-}
-export function sfxDeny() {
-  tone(150, 0.1, 'sawtooth', 0.03)
+export function sfxSlide() {
+  tone(380, 0.04, 'triangle', 0.045)
+  tone(520, 0.05, 'triangle', 0.035, 0.03)
 }
 export function sfxWin() {
   tone(523, 0.08, 'triangle', 0.05)
   tone(659, 0.1, 'triangle', 0.05, 0.08)
   tone(784, 0.16, 'triangle', 0.05, 0.16)
 }
-export function sfxLose() {
-  tone(300, 0.1, 'triangle', 0.05)
-  tone(220, 0.14, 'triangle', 0.04, 0.1)
+export function sfxUndo() {
+  tone(300, 0.05, 'sine', 0.04)
 }
-export function vibrate(p: number | number[] = 10) {
+export function sfxDeny() {
+  tone(140, 0.08, 'sawtooth', 0.03)
+}
+export function vibrate(p: number | number[] = 8) {
   try {
     navigator.vibrate?.(p)
   } catch {

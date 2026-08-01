@@ -1,6 +1,6 @@
 /** Offline arcade games — canvas, no network. Level-up progression. */
 
-export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide'
+export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
@@ -9,6 +9,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
+  gyeokpa: { title: '격파', blurb: '세로 슈팅 · 아군 10기(미사일 피격 시 1기 감소) · 레이저 10초' },
 }
 
 const BEST_KEY = 'jarvis.arcade.best.v1'
@@ -21,6 +22,7 @@ export type ArcadeBest = {
   dodge: number | null
   pong: number | null
   slide: number | null
+  gyeokpa: number | null
 }
 
 export type ArcadeBestLevel = ArcadeBest
@@ -32,6 +34,7 @@ const EMPTY_BEST: ArcadeBest = {
   dodge: null,
   pong: null,
   slide: null,
+  gyeokpa: null,
 }
 
 export function loadArcadeBest(): ArcadeBest {
@@ -97,6 +100,8 @@ export function unitsPerLevel(id: ArcadeId): number {
       return 5
     case 'slide':
       return 1
+    case 'gyeokpa':
+      return 6
   }
 }
 
@@ -1496,6 +1501,640 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   }
 }
 
+
+/** —— 격파 (vertical shmup) —— */
+export const GYEOKPA_LASER_SEC = 10
+/** Allies persist until hit by enemy missiles (no timed expiry). */
+export const GYEOKPA_MAX_ALLIES = 10
+export const GYEOKPA_MAX_LASER = 3
+/** Fraction of enemy kills that drop a rare laser item. */
+export const GYEOKPA_LASER_DROP_RATE = 0.045
+
+export type GyeokpaBaseWeapon = 'pulse' | 'twin' | 'spread'
+
+export function gyeokpaNextBaseWeapon(w: GyeokpaBaseWeapon): GyeokpaBaseWeapon {
+  if (w === 'pulse') return 'twin'
+  if (w === 'twin') return 'spread'
+  return 'pulse'
+}
+
+export function gyeokpaLaserOffsets(count: number): number[] {
+  const n = Math.max(1, Math.min(GYEOKPA_MAX_LASER, Math.floor(count)))
+  if (n >= 3) return [-22, 0, 22]
+  if (n === 2) return [-14, 14]
+  return [0]
+}
+
+export function gyeokpaAllySlotOffsets(): ReadonlyArray<{ x: number; y: number }> {
+  return [
+    { x: -26, y: 14 },
+    { x: 26, y: 14 },
+    { x: -46, y: 20 },
+    { x: 46, y: 20 },
+    { x: -16, y: 30 },
+    { x: 16, y: 30 },
+    { x: -36, y: 38 },
+    { x: 36, y: 38 },
+    { x: 0, y: 34 },
+    { x: 0, y: 48 },
+  ]
+}
+
+export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  type Bullet = {
+    x: number
+    y: number
+    vx: number
+    vy: number
+    r: number
+    dmg: number
+    friendly: boolean
+    laser?: boolean
+    laserBottom?: number
+    laserOffset?: number
+    life?: number
+  }
+  type Enemy = {
+    x: number
+    y: number
+    vx: number
+    vy: number
+    r: number
+    hp: number
+    kind: 'scout' | 'tank' | 'zig'
+  }
+  type Power = { x: number; y: number; kind: 'weapon' | 'laser' | 'ally' | 'shield' }
+  type Ally = { slot: number; x: number; y: number; fireCd: number }
+
+  const allySlots = gyeokpaAllySlotOffsets()
+
+  let w = 320
+  let h = 420
+  let score = 0
+  let kills = 0
+  let level = 1
+  let levelUpUntil = 0
+  let over = false
+  let lives = 3
+  let inv = 0
+  let shield = 0
+  let shipX = 160
+  let shipY = 360
+  let targetX = 160
+  let targetY = 360
+  let baseWeapon: GyeokpaBaseWeapon = 'pulse'
+  let weapon: GyeokpaBaseWeapon | 'laser' = 'pulse'
+  let laserCount = 1
+  let laserTimer = 0
+  let fireCd = 0
+  let spawnAcc = 0
+  let flashLabel = ''
+  let flashUntil = 0
+  let bullets: Bullet[] = []
+  let enemies: Enemy[] = []
+  let powers: Power[] = []
+  let allies: Ally[] = []
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+
+  function hudTitle(): string {
+    if (weapon === 'laser') {
+      return `격파 Lx${laserCount} ${Math.ceil(Math.max(0, laserTimer))}s`
+    }
+    return `격파 ${baseWeapon} · 아군 ${allies.length}`
+  }
+
+  function fillAllies(count: number): void {
+    allies = []
+    const n = Math.max(0, Math.min(GYEOKPA_MAX_ALLIES, Math.floor(count)))
+    for (let i = 0; i < n; i++) {
+      const off = allySlots[i]!
+      allies.push({
+        slot: i,
+        x: shipX + off.x,
+        y: shipY + off.y,
+        fireCd: 0.1 + i * 0.02,
+      })
+    }
+  }
+
+  function reset(): void {
+    const sized = sizeCanvas(canvas)
+    w = sized.w
+    h = sized.h
+    score = 0
+    kills = 0
+    level = 1
+    levelUpUntil = 0
+    over = false
+    lives = 3
+    inv = 1
+    shield = 0
+    shipX = w / 2
+    shipY = h * 0.78
+    targetX = shipX
+    targetY = shipY
+    baseWeapon = 'pulse'
+    weapon = 'pulse'
+    laserCount = 1
+    laserTimer = 0
+    fireCd = 0
+    spawnAcc = 0
+    flashLabel = ''
+    flashUntil = 0
+    bullets = []
+    enemies = []
+    powers = []
+    fillAllies(GYEOKPA_MAX_ALLIES)
+    onScore?.(0, level)
+  }
+
+  function hurt(): void {
+    if (inv > 0) return
+    if (shield > 0) {
+      shield = 0
+      inv = 1
+      flashLabel = '실드 파괴'
+      flashUntil = performance.now() + 900
+      return
+    }
+    lives -= 1
+    inv = 1.4
+    if (lives <= 0) {
+      over = true
+      bumpBest('gyeokpa', score)
+      bumpBestLevel('gyeokpa', level)
+      onScore?.(score, level)
+    }
+  }
+
+  function pickupLaser(): void {
+    if (weapon !== 'laser') {
+      weapon = 'laser'
+      laserCount = 1
+    } else if (laserCount < GYEOKPA_MAX_LASER) {
+      laserCount += 1
+    }
+    // Rare laser item always refreshes the 10s beam window.
+    laserTimer = GYEOKPA_LASER_SEC
+    flashLabel = laserCount > 1 ? `레이저 x${laserCount} 10초` : '레이저 10초'
+    flashUntil = performance.now() + 1100
+  }
+
+  function endLaser(): void {
+    weapon = baseWeapon
+    laserCount = 1
+    laserTimer = 0
+    bullets = bullets.filter((b) => !(b.friendly && b.laser))
+    flashLabel = `복귀 ${baseWeapon}`
+    flashUntil = performance.now() + 900
+  }
+
+  function pickupAlly(): void {
+    if (allies.length >= GYEOKPA_MAX_ALLIES) {
+      flashLabel = `아군 만충 ${GYEOKPA_MAX_ALLIES}`
+      flashUntil = performance.now() + 900
+      return
+    }
+    const used = new Set(allies.map((a) => a.slot))
+    let slot = 0
+    for (let i = 0; i < GYEOKPA_MAX_ALLIES; i++) {
+      if (!used.has(i)) {
+        slot = i
+        break
+      }
+    }
+    const off = allySlots[slot]!
+    allies.push({
+      slot,
+      x: shipX + off.x,
+      y: shipY + off.y,
+      fireCd: 0.15,
+    })
+    flashLabel = `아군 ${allies.length}/${GYEOKPA_MAX_ALLIES}`
+    flashUntil = performance.now() + 1000
+  }
+
+  function firePlayer(): void {
+    if (weapon === 'laser') {
+      bullets = bullets.filter((b) => !(b.friendly && b.laser))
+      const bottom = shipY - 14
+      const dmg = 0.5 + laserCount * 0.1
+      for (const ox of gyeokpaLaserOffsets(laserCount)) {
+        bullets.push({
+          x: shipX + ox,
+          y: bottom * 0.5,
+          vx: 0,
+          vy: 0,
+          r: 4.8,
+          dmg,
+          friendly: true,
+          laser: true,
+          laserBottom: bottom,
+          laserOffset: ox,
+          life: 0.08,
+        })
+      }
+      return
+    }
+    if (weapon === 'pulse') {
+      bullets.push({ x: shipX, y: shipY - 12, vx: 0, vy: -620, r: 3.5, dmg: 1, friendly: true })
+    } else if (weapon === 'twin') {
+      bullets.push({ x: shipX - 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg: 1, friendly: true })
+      bullets.push({ x: shipX + 8, y: shipY - 8, vx: 0, vy: -640, r: 3.5, dmg: 1, friendly: true })
+    } else {
+      bullets.push({ x: shipX, y: shipY - 10, vx: 0, vy: -600, r: 3.5, dmg: 1, friendly: true })
+      bullets.push({ x: shipX - 4, y: shipY - 8, vx: -160, vy: -560, r: 3.5, dmg: 1, friendly: true })
+      bullets.push({ x: shipX + 4, y: shipY - 8, vx: 160, vy: -560, r: 3.5, dmg: 1, friendly: true })
+    }
+  }
+
+  function spawnEnemy(): void {
+    const roll = Math.random()
+    const kind: Enemy['kind'] = roll > 0.78 ? 'tank' : roll > 0.5 ? 'zig' : 'scout'
+    const x = 24 + Math.random() * (w - 48)
+    const speed = 55 + level * 10
+    if (kind === 'scout') {
+      enemies.push({
+        x,
+        y: -16,
+        vx: (Math.random() - 0.5) * 40,
+        vy: speed,
+        r: 12,
+        hp: 1 + (level >= 4 ? 1 : 0),
+        kind,
+      })
+    } else if (kind === 'zig') {
+      enemies.push({ x, y: -18, vx: 80 + level * 6, vy: speed * 0.75, r: 13, hp: 2, kind })
+    } else {
+      enemies.push({ x, y: -22, vx: 18, vy: speed * 0.55, r: 17, hp: 3 + Math.floor(level / 3), kind })
+    }
+  }
+
+  function killEnemy(e: Enemy): void {
+    e.y = 9999
+    score += e.kind === 'tank' ? 40 : e.kind === 'zig' ? 28 : 18
+    kills += 1
+    const next = levelFromUnits('gyeokpa', kills)
+    const noted = noteLevel('gyeokpa', level, next, score, onScore)
+    level = noted.level
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+    // Rare laser refresh item — separate from common drops.
+    if (Math.random() < GYEOKPA_LASER_DROP_RATE) {
+      powers.push({ x: e.x, y: e.y, kind: 'laser' })
+      return
+    }
+    if (Math.random() < 0.2) {
+      const kinds: Power['kind'][] = ['weapon', 'ally', 'shield', 'ally', 'weapon']
+      powers.push({
+        x: e.x,
+        y: e.y,
+        kind: kinds[Math.floor(Math.random() * kinds.length)]!,
+      })
+    }
+  }
+
+  function step(dt: number): void {
+    if (over) return
+    inv = Math.max(0, inv - dt)
+    shield = Math.max(0, shield - dt)
+    shipX += (targetX - shipX) * Math.min(1, dt * 14)
+    shipY += (targetY - shipY) * Math.min(1, dt * 14)
+
+    if (weapon === 'laser') {
+      laserTimer -= dt
+      if (laserTimer <= 0) endLaser()
+    }
+
+    fireCd -= dt
+    const rate = weapon === 'laser' ? 0.045 : weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
+    if (fireCd <= 0) {
+      firePlayer()
+      fireCd = rate
+    }
+
+    for (let i = allies.length - 1; i >= 0; i--) {
+      const a = allies[i]!
+      const off = allySlots[a.slot]!
+      a.x += (shipX + off.x - a.x) * Math.min(1, dt * 12)
+      a.y += (shipY + off.y - a.y) * Math.min(1, dt * 12)
+      a.fireCd -= dt
+      if (a.fireCd <= 0) {
+        bullets.push({ x: a.x, y: a.y - 10, vx: 0, vy: -600, r: 3, dmg: 1, friendly: true })
+        a.fireCd = 0.18
+      }
+    }
+
+    spawnAcc += dt
+    const interval = Math.max(0.28, 0.85 - level * 0.035)
+    if (spawnAcc > interval) {
+      spawnAcc = 0
+      spawnEnemy()
+      if (level >= 5 && Math.random() < 0.35) spawnEnemy()
+    }
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i]!
+      if (b.laser) {
+        b.x = shipX + (b.laserOffset ?? 0)
+        b.laserBottom = shipY - 14
+      } else {
+        b.x += b.vx * dt
+        b.y += b.vy * dt
+      }
+      if (b.life != null) {
+        b.life -= dt
+        if (b.life <= 0) {
+          bullets.splice(i, 1)
+          continue
+        }
+      }
+      if (!b.laser && (b.y < -30 || b.y > h + 30 || b.x < -30 || b.x > w + 30)) {
+        bullets.splice(i, 1)
+        continue
+      }
+      if (b.friendly) {
+        for (const e of enemies) {
+          if (e.y > 9000) continue
+          let hit = false
+          if (b.laser) {
+            const bottom = b.laserBottom ?? shipY
+            hit = e.y + e.r >= 0 && e.y - e.r <= bottom && Math.abs(e.x - b.x) <= e.r + b.r
+          } else {
+            hit = Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r
+          }
+          if (hit) {
+            e.hp -= b.dmg
+            if (!b.laser) {
+              bullets.splice(i, 1)
+            }
+            if (e.hp <= 0) killEnemy(e)
+            if (!b.laser) break
+          }
+        }
+      } else {
+        // Enemy missile: destroy one ally first, else hit the player.
+        let hitAlly = false
+        for (let ai = allies.length - 1; ai >= 0; ai--) {
+          const a = allies[ai]!
+          if (Math.hypot(a.x - b.x, a.y - b.y) < 12 + b.r) {
+            allies.splice(ai, 1)
+            bullets.splice(i, 1)
+            flashLabel = `아군 격추 ${allies.length}/${GYEOKPA_MAX_ALLIES}`
+            flashUntil = performance.now() + 800
+            hitAlly = true
+            break
+          }
+        }
+        if (hitAlly) continue
+        if (Math.hypot(shipX - b.x, shipY - b.y) < 14 + b.r) {
+          bullets.splice(i, 1)
+          hurt()
+        }
+      }
+    }
+
+    for (const e of enemies) {
+      if (e.y > 9000) continue
+      if (e.kind === 'zig') {
+        e.x += Math.sin(performance.now() / 180 + e.x) * e.vx * dt * 0.02
+        e.y += e.vy * dt
+      } else {
+        e.x += e.vx * dt
+        e.y += e.vy * dt
+        if (e.x < 16 || e.x > w - 16) e.vx *= -1
+      }
+      if (e.y > h + 40) {
+        e.y = 9999
+        continue
+      }
+      if (Math.hypot(e.x - shipX, e.y - shipY) < e.r + 12) {
+        hurt()
+        if (e.kind !== 'tank') killEnemy(e)
+      }
+      // enemy shots
+      if (Math.random() < 0.002 + level * 0.0004 && e.y > 40 && e.y < h * 0.65) {
+        const dx = shipX - e.x
+        const dy = shipY - e.y
+        const len = Math.hypot(dx, dy) || 1
+        bullets.push({
+          x: e.x,
+          y: e.y + 8,
+          vx: (dx / len) * (150 + level * 8),
+          vy: (dy / len) * (150 + level * 8),
+          r: 3.5,
+          dmg: 1,
+          friendly: false,
+        })
+      }
+    }
+    enemies = enemies.filter((e) => e.y < 9000)
+
+    for (let i = powers.length - 1; i >= 0; i--) {
+      const p = powers[i]!
+      p.y += 75 * dt
+      if (p.y > h + 20) {
+        powers.splice(i, 1)
+        continue
+      }
+      if (Math.hypot(p.x - shipX, p.y - shipY) < 26) {
+        if (p.kind === 'weapon') {
+          baseWeapon = gyeokpaNextBaseWeapon(baseWeapon)
+          if (weapon !== 'laser') weapon = baseWeapon
+          flashLabel = `무기 ${baseWeapon}`
+          flashUntil = performance.now() + 900
+        } else if (p.kind === 'laser') pickupLaser()
+        else if (p.kind === 'ally') pickupAlly()
+        else {
+          shield = 5
+          flashLabel = '실드'
+          flashUntil = performance.now() + 900
+        }
+        powers.splice(i, 1)
+      }
+    }
+  }
+
+  function draw(): void {
+    const sized = sizeCanvas(canvas)
+    w = sized.w
+    h = sized.h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const g = ctx.createLinearGradient(0, 0, 0, h)
+    g.addColorStop(0, '#0b1a2b')
+    g.addColorStop(1, '#050b12')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+    ctx.fillStyle = 'rgba(207,231,255,0.35)'
+    for (let i = 0; i < 36; i++) {
+      ctx.fillRect((i * 53 + kills * 3) % w, (i * 97 + score) % h, 1.5, 1.5)
+    }
+
+    for (const p of powers) {
+      ctx.fillStyle =
+        p.kind === 'laser' ? '#7cffef' : p.kind === 'ally' ? '#9ecbff' : p.kind === 'shield' ? '#f0c35a' : '#3de0c5'
+      if (p.kind === 'ally') {
+        ctx.beginPath()
+        ctx.moveTo(p.x, p.y - 9)
+        ctx.lineTo(p.x + 8, p.y + 7)
+        ctx.lineTo(p.x, p.y + 3)
+        ctx.lineTo(p.x - 8, p.y + 7)
+        ctx.closePath()
+        ctx.fill()
+      } else if (p.kind === 'laser') {
+        ctx.fillRect(p.x - 2.5, p.y - 10, 5, 20)
+      } else {
+        ctx.beginPath()
+        ctx.moveTo(p.x, p.y - 8)
+        ctx.lineTo(p.x + 8, p.y)
+        ctx.lineTo(p.x, p.y + 8)
+        ctx.lineTo(p.x - 8, p.y)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+
+    for (const b of bullets) {
+      if (b.friendly && b.laser) {
+        const bottom = b.laserBottom ?? shipY - 14
+        const top = -6
+        const hh = Math.max(0, bottom - top)
+        ctx.fillStyle = 'rgba(61,224,197,0.2)'
+        ctx.fillRect(b.x - b.r - 3, top, (b.r + 3) * 2, hh)
+        ctx.fillStyle = '#7cffef'
+        ctx.fillRect(b.x - 2, top, 4, hh)
+      } else if (b.friendly) {
+        ctx.fillStyle = '#ffd1c8'
+        ctx.beginPath()
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
+        ctx.fill()
+      } else {
+        ctx.fillStyle = '#ff7a6b'
+        ctx.beginPath()
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    for (const e of enemies) {
+      if (e.kind === 'tank') {
+        ctx.fillStyle = '#8aa3bd'
+        ctx.fillRect(e.x - 15, e.y - 11, 30, 22)
+        ctx.fillStyle = '#ff5a4a'
+        ctx.fillRect(e.x - 5, e.y + 2, 10, 12)
+      } else if (e.kind === 'zig') {
+        ctx.fillStyle = '#3de0c5'
+        ctx.beginPath()
+        ctx.moveTo(e.x, e.y + 12)
+        ctx.lineTo(e.x + 12, e.y - 9)
+        ctx.lineTo(e.x, e.y - 3)
+        ctx.lineTo(e.x - 12, e.y - 9)
+        ctx.closePath()
+        ctx.fill()
+      } else {
+        ctx.fillStyle = '#f0c35a'
+        ctx.beginPath()
+        ctx.moveTo(e.x, e.y + 11)
+        ctx.lineTo(e.x + 10, e.y - 9)
+        ctx.lineTo(e.x - 10, e.y - 9)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+
+    for (const a of allies) {
+      ctx.globalAlpha = 0.85
+      ctx.fillStyle = '#9ecbff'
+      ctx.beginPath()
+      ctx.moveTo(a.x, a.y - 11)
+      ctx.lineTo(a.x + 8, a.y + 8)
+      ctx.lineTo(a.x, a.y + 3)
+      ctx.lineTo(a.x - 8, a.y + 8)
+      ctx.closePath()
+      ctx.fill()
+      ctx.globalAlpha = 1
+    }
+
+    if (!(inv > 0 && Math.floor(inv * 18) % 2 === 0)) {
+      if (shield > 0) {
+        ctx.strokeStyle = 'rgba(240,195,90,0.75)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(shipX, shipY, 20, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      ctx.fillStyle = '#e8f2ff'
+      ctx.beginPath()
+      ctx.moveTo(shipX, shipY - 15)
+      ctx.lineTo(shipX + 11, shipY + 11)
+      ctx.lineTo(shipX, shipY + 5)
+      ctx.lineTo(shipX - 11, shipY + 11)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = '#ff5a4a'
+      ctx.fillRect(shipX - 2.5, shipY + 7, 5, 7)
+    }
+
+    // lives dots
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < lives ? '#ff5a4a' : 'rgba(255,90,74,0.25)'
+      ctx.beginPath()
+      ctx.arc(12 + i * 12, h - 12, 4, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // ally count bar
+    ctx.fillStyle = 'rgba(158,203,255,0.85)'
+    ctx.font = '600 11px IBM Plex Sans KR, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(`아군 ${allies.length}/${GYEOKPA_MAX_ALLIES}`, 12, h - 28)
+
+    drawHud(ctx, w, h, score, level, over, hudTitle(), { levelUpUntil })
+    if (!over && performance.now() < flashUntil) {
+      ctx.fillStyle = 'rgba(61,224,197,0.16)'
+      ctx.fillRect(0, h * 0.48, w, 36)
+      ctx.fillStyle = '#7cffef'
+      ctx.font = '700 15px Orbitron, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(flashLabel, w / 2, h * 0.48 + 24)
+    }
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    if (!loop.last) loop.last = t
+    const dt = Math.min(0.033, (t - loop.last) / 1000)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (x, y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over) return
+      targetX = Math.max(16, Math.min(w - 16, x))
+      targetY = Math.max(h * 0.42, Math.min(h - 28, y))
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
+
 export function mountArcade(
   id: ArcadeId,
   canvas: HTMLCanvasElement,
@@ -1506,6 +2145,7 @@ export function mountArcade(
   if (id === 'flappy') return mountFlappy(canvas, onScore)
   if (id === 'dodge') return mountDodge(canvas, onScore)
   if (id === 'slide') return mountSlide(canvas, onScore)
+  if (id === 'gyeokpa') return mountGyeokpa(canvas, onScore)
   return mountPong(canvas, onScore)
 }
 

@@ -18,6 +18,13 @@ import {
   slideScramble,
   slideSolvedBoard,
   slideTimeLimitSec,
+  GYEOKPA_LASER_DROP_RATE,
+  GYEOKPA_LASER_SEC,
+  GYEOKPA_MAX_ALLIES,
+  GYEOKPA_MAX_LASER,
+  gyeokpaAllySlotOffsets,
+  gyeokpaLaserOffsets,
+  gyeokpaNextBaseWeapon,
   unitsPerLevel,
 } from './arcadeGames'
 
@@ -46,11 +53,13 @@ describe('arcade helpers', () => {
   it('levels up one step at a time from progress units', () => {
     expect(unitsPerLevel('dodge')).toBe(8)
     expect(unitsPerLevel('slide')).toBe(1)
+    expect(unitsPerLevel('gyeokpa')).toBe(6)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
     expect(levelFromUnits('breakout', 0)).toBe(1)
     expect(levelFromUnits('breakout', 2)).toBe(3)
+    expect(levelFromUnits('gyeokpa', 6)).toBe(2)
   })
 
   it('loads empty best levels by default', () => {
@@ -58,6 +67,22 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().breakout).toBeNull()
     expect(loadArcadeBest().slide).toBeNull()
     expect(loadArcadeBestLevel().slide).toBeNull()
+    expect(loadArcadeBest().gyeokpa).toBeNull()
+    expect(loadArcadeBestLevel().gyeokpa).toBeNull()
+  })
+
+  it('configures 격파 laser 10s, 10 persistent allies, rare laser drops', () => {
+    expect(GYEOKPA_LASER_SEC).toBe(10)
+    expect(GYEOKPA_MAX_ALLIES).toBe(10)
+    expect(GYEOKPA_MAX_LASER).toBe(3)
+    expect(GYEOKPA_LASER_DROP_RATE).toBeLessThan(0.1)
+    expect(gyeokpaAllySlotOffsets()).toHaveLength(10)
+    expect(gyeokpaLaserOffsets(1)).toEqual([0])
+    expect(gyeokpaLaserOffsets(2)).toEqual([-14, 14])
+    expect(gyeokpaLaserOffsets(3)).toEqual([-22, 0, 22])
+    expect(gyeokpaNextBaseWeapon('pulse')).toBe('twin')
+    expect(gyeokpaNextBaseWeapon('twin')).toBe('spread')
+    expect(gyeokpaNextBaseWeapon('spread')).toBe('pulse')
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {

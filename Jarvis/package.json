@@ -1,7 +1,7 @@
 {
   "name": "jarvis-iphone",
   "private": true,
-  "version": "1.8.9",
+  "version": "1.9.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

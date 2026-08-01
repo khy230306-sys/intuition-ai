@@ -19,6 +19,12 @@ import {
   slideScramble,
   slideSolvedBoard,
   slideTimeLimitSec,
+  GYEOKPA_ALLY_SEC,
+  GYEOKPA_LASER_SEC,
+  GYEOKPA_MAX_ALLIES,
+  GYEOKPA_MAX_LASER,
+  gyeokpaLaserOffsets,
+  gyeokpaNextBaseWeapon,
 } from './arcadeGames'
 
 const store = new Map<string, string>()
@@ -45,6 +51,7 @@ describe('arcade helpers', () => {
     expect(loadArcadeBest().mole).toBeNull()
     expect(loadArcadeBest().lanes).toBeNull()
     expect(loadArcadeBest().slide).toBeNull()
+    expect(loadArcadeBest().gyeokpa).toBeNull()
   })
 
   it('levels up one step at a time from progress units', () => {
@@ -53,6 +60,7 @@ describe('arcade helpers', () => {
     expect(unitsPerLevel('mole')).toBe(6)
     expect(unitsPerLevel('lanes')).toBe(12)
     expect(unitsPerLevel('slide')).toBe(1)
+    expect(unitsPerLevel('gyeokpa')).toBe(6)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
@@ -67,6 +75,7 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().shooter).toBeNull()
     expect(loadArcadeBestLevel().breakout).toBeNull()
     expect(loadArcadeBestLevel().slide).toBeNull()
+    expect(loadArcadeBestLevel().gyeokpa).toBeNull()
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {
@@ -89,6 +98,20 @@ describe('arcade helpers', () => {
     expect(shooterFirePattern(3, 100, 200)).toHaveLength(3)
     expect(shooterFirePattern(4, 100, 200)).toHaveLength(5)
     expect(shooterFirePattern(5, 100, 200).some((b) => b.pierce > 0)).toBe(true)
+  })
+
+  it('configures 격파 laser beams and base weapon cycle', () => {
+    expect(GYEOKPA_LASER_SEC).toBe(7)
+    expect(GYEOKPA_ALLY_SEC).toBe(10)
+    expect(GYEOKPA_MAX_ALLIES).toBe(3)
+    expect(GYEOKPA_MAX_LASER).toBe(3)
+    expect(gyeokpaLaserOffsets(1)).toEqual([0])
+    expect(gyeokpaLaserOffsets(2)).toEqual([-14, 14])
+    expect(gyeokpaLaserOffsets(3)).toEqual([-22, 0, 22])
+    expect(gyeokpaNextBaseWeapon('pulse')).toBe('twin')
+    expect(gyeokpaNextBaseWeapon('twin')).toBe('spread')
+    expect(gyeokpaNextBaseWeapon('spread')).toBe('pulse')
+    expect(levelFromUnits('gyeokpa', 6)).toBe(2)
   })
 
   it('widens missile fan after Lv20 wide items', () => {

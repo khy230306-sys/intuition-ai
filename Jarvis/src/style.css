@@ -1225,11 +1225,6 @@ body[data-jarvis-view='friends'] .orb::after {
   margin-bottom: 8px;
 }
 
-.arcade-refresh-btn {
-  width: 100%;
-  margin-top: 12px;
-}
-
 .update-card {
   margin: 0 0 14px;
   padding: 12px 12px 10px;
@@ -1261,31 +1256,6 @@ body[data-jarvis-view='friends'] .orb::after {
   margin-top: 6px;
 }
 
-.update-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.update-bar.has-update {
-  border-color: rgba(251, 191, 36, 0.45);
-  background: rgba(251, 191, 36, 0.1);
-}
-
-.update-bar-text {
-  font-size: 0.78rem;
-  color: var(--muted);
-  flex: 1;
-  min-width: 0;
-}
-
-.update-bar .update-btn.tiny,
 .primary-btn.tiny {
   flex-shrink: 0;
   padding: 7px 12px;

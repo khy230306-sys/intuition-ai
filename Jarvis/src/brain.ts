@@ -839,14 +839,13 @@ export async function think(
     }
   }
 
-  // App update (home-screen PWA)
+  // App update — UI button lives only in Settings; chat can still trigger the same flow
   if (/^(앱\s*)?업데이트$|최신\s*(판|버전)\s*(받아|업데이트)|앱\s*새로고침|캐시\s*새로고침/i.test(text) && text.length < 28) {
     return {
-      text: '최신판 업데이트를 실행합니다. 캐시를 비운 뒤 서버에서 다시 불러옵니다.',
+      text: '최신판 업데이트를 실행합니다. 캐시를 비운 뒤 서버에서 다시 불러옵니다. (버튼은 설정 탭에 있습니다)',
       speak: true,
       action: async () => {
-        const btn = document.querySelector<HTMLButtonElement>('[data-action="app-update"]')
-        btn?.click()
+        window.dispatchEvent(new Event('aizio-app-update'))
         return { ok: true, message: '업데이트 시작' }
       },
     }

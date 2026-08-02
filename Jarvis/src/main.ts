@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.4'
+const APP_VERSION = '1.13.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -352,7 +352,8 @@ async function updateAppToLatest(): Promise<void> {
   window.location.replace(`${FIXED_APP_URL}/?_v=${encodeURIComponent(targetVer)}&_t=${Date.now()}&_update=1`)
 }
 
-function renderUpdateCard(compact = false): string {
+/** Settings-only update controls (not shown on chat / games / other tabs). */
+function renderUpdateCard(): string {
   const remote = state.remoteVersion
   const newer = remote && remote !== APP_VERSION
   const status = !state.online
@@ -362,13 +363,6 @@ function renderUpdateCard(compact = false): string {
       : remote
         ? `최신 확인됨 · v${escapeHtml(remote)}`
         : `현재 v${APP_VERSION}`
-  if (compact) {
-    return `
-      <div class="update-bar ${newer ? 'has-update' : ''}">
-        <span class="update-bar-text">${status}</span>
-        <button type="button" class="primary-btn tiny update-btn" data-action="app-update">업데이트</button>
-      </div>`
-  }
   return `
     <div class="update-card ${newer ? 'has-update' : ''}">
       <div class="update-card-head">
@@ -390,27 +384,12 @@ async function refreshRemoteVersionBadge(opts?: { announce?: boolean }): Promise
     else if (remote === APP_VERSION) showFlash(`이미 최신입니다 (v${APP_VERSION})`)
     else showFlash(`새 버전 v${remote}이 있습니다. 업데이트를 눌러 주세요.`)
   }
-  // Patch visible badges without full remount when possible
   document.querySelectorAll('[data-remote-version]').forEach((el) => {
     el.textContent = remote ? `서버 v${remote}` : '서버 확인 실패'
   })
-  const card = document.querySelector('.update-card, .update-bar')
-  if (card && state.view === 'settings') {
-    // settings card needs richer refresh
+  // Update card lives only on settings
+  if (state.view === 'settings' && document.querySelector('.update-card')) {
     render()
-  } else if (card) {
-    const text = card.querySelector('.update-bar-text, .hint')
-    if (text && card.classList.contains('update-bar')) {
-      const newer = remote && remote !== APP_VERSION
-      card.classList.toggle('has-update', Boolean(newer))
-      text.textContent = !state.online
-        ? '오프라인 · 연결 후 업데이트하세요'
-        : newer
-          ? `새 버전 있음 · 서버 v${remote}`
-          : remote
-            ? `최신 확인됨 · v${remote}`
-            : `현재 v${APP_VERSION}`
-    }
   }
 }
 
@@ -2191,7 +2170,6 @@ function renderGames(): string {
       <h2 class="section-title">ARCADE</h2>
       <p class="hint">오프라인 아케이드 · 7종 · v${APP_VERSION}</p>
       <p class="hint arcade-new-hint">새 게임 · 격파 (세로 슈팅)</p>
-      ${renderUpdateCard(true)}
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>
@@ -2203,7 +2181,6 @@ function renderGames(): string {
         <canvas id="arcade-canvas" width="360" height="440"></canvas>
       </div>
       ${controls}
-      <button type="button" class="primary-btn arcade-refresh-btn" data-action="app-update">업데이트 · 최신 게임 받기</button>
     </section>
   `
 }
@@ -2489,7 +2466,6 @@ function renderChat(): string {
         .join('')
 
   const lockBar = `
-    ${renderUpdateCard(true)}
     <details class="translate-bar ${mode.active ? 'on' : ''}" ${mode.active ? 'open' : ''}>
       <summary class="translate-bar-head">
         <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
@@ -3271,7 +3247,7 @@ function renderSettings(): string {
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">SETTINGS</h2>
-      ${renderUpdateCard(false)}
+      ${renderUpdateCard()}
       <form class="settings-form" id="settings-form">
         <div class="profile-picker">
           <button type="button" class="profile-picker-avatar ${s.avatarDataUrl ? 'has-photo' : ''}" data-profile-open="1" data-profile-name="${escapeAttr(s.displayName)}" data-profile-src="${escapeAttr(s.avatarDataUrl || '')}" data-profile-mine="1" aria-label="내 프로필">
@@ -3386,9 +3362,8 @@ function renderSettings(): string {
       <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
-      <button type="button" class="primary-btn" data-action="app-update">업데이트 (최신판 받기)</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
-      <p class="hint">홈 화면에 추가한 앱이 예전 버전이면 위 <strong>업데이트</strong>를 누르세요. 시세는 Yahoo Finance 공개 API · 음성은 iPhone Safari + HTTPS가 가장 안정적입니다.</p>
+      <p class="hint">홈 화면에 추가한 앱이 예전 버전이면 위쪽 <strong>앱 업데이트</strong>를 누르세요. 시세는 Yahoo Finance 공개 API · 음성은 iPhone Safari + HTTPS가 가장 안정적입니다.</p>
     </section>
   `
 }
@@ -5158,6 +5133,9 @@ function bootAppCore(): void {
     if (state.locationReady || document.querySelector('.location-gate')) render()
   })
   refreshInstallHint()
+  window.addEventListener('aizio-app-update', () => {
+    void updateAppToLatest()
+  })
   registerShareModal(openShareModal)
   setFamilySyncListener((info) => {
     state.familySyncStatus = info.status

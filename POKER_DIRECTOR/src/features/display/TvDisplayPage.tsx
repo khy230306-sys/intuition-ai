@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAppStore } from '@/stores/appStore'
 import { useTournamentBundle } from '@/hooks/useTournament'
@@ -21,15 +21,6 @@ export function TvDisplayPage() {
   const settings = useAppStore((s) => s.settings[0])
   const setDisplayTheme = useAppStore((s) => s.setDisplayTheme)
   const [theme, setTheme] = useState<DisplayTheme>(settings?.displayTheme ?? 'black_gold')
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    const t = window.setInterval(() => setTick((v) => v + 1), 250)
-    return () => window.clearInterval(t)
-  }, [])
-
-  // tick forces periodic re-render so absolute-time remaining updates on TV
-  void tick
   const live = bundle.live
 
   if (!bundle.tournament || !live) {
@@ -43,7 +34,13 @@ export function TvDisplayPage() {
     .find((l) => l.isBreak)
 
   const accent =
-    theme === 'black_red' ? 'text-rose-400' : theme === 'navy_blue' ? 'text-sky-300' : theme === 'light' ? 'text-amber-700' : 'text-amber-300'
+    theme === 'black_red'
+      ? 'text-rose-400'
+      : theme === 'navy_blue'
+        ? 'text-sky-300'
+        : theme === 'light'
+          ? 'text-amber-700'
+          : 'text-amber-300'
 
   return (
     <div className={clsx('min-h-dvh p-4 sm:p-8', themes[theme])}>
@@ -80,6 +77,7 @@ export function TvDisplayPage() {
             <div className="text-xl opacity-70 sm:text-2xl">
               LEVEL {live.levelNumber}
               {level?.isBreak ? ' · BREAK' : ''}
+              {live.status === 'running' ? ' · LIVE' : ''}
             </div>
             <div className={clsx('pd-num mt-4 text-7xl font-bold sm:text-9xl', accent)}>
               {formatDuration(live.remainingMs)}

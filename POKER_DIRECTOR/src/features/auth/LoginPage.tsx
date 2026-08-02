@@ -79,6 +79,9 @@ export function LoginPage() {
             Supabase Auth 연동 후 이메일 로그인을 사용할 수 있습니다.
           </p>
         )}
+        <p className="mt-3 text-center text-xs text-mute">
+          로그인 후 더보기 → 사용 설명서에서 전체 안내를 볼 수 있습니다.
+        </p>
       </form>
     </div>
   )

@@ -13,9 +13,11 @@ export function StaffPage() {
   const eliminatePlayer = useAppStore((s) => s.eliminatePlayer)
   const updateChips = useAppStore((s) => s.updateChips)
   const createStaffRequest = useAppStore((s) => s.createStaffRequest)
-  const [tableId, setTableId] = useState(bundle.tables[0]?.id ?? '')
-  const myTable = bundle.tables.find((t) => t.id === tableId) ?? bundle.tables[0]
-  const seated = bundle.entries.filter((e) => e.currentTableId === myTable?.id && e.status === 'seated')
+  const [tableId, setTableId] = useState('')
+  const myTable = bundle.tables.find((t) => t.id === tableId) ?? bundle.tables[0] ?? null
+  const seated = bundle.entries.filter(
+    (e) => e.currentTableId === myTable?.id && e.status === 'seated',
+  )
 
   if (!tournamentId || !myTable) return <p className="text-mute">담당 테이블이 없습니다.</p>
 

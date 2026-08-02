@@ -7,6 +7,7 @@ import { Input, Label, Textarea, Select } from '@/components/ui/Input'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { downloadText, parseCsv, toCsv } from '@/utils/csv'
 import { formatMoney, formatNumber } from '@/utils/time'
+import { getBuyInMarks } from '@/utils/buyInTally'
 import type { EntryStatus } from '@/types'
 
 export function PlayersPage() {
@@ -22,6 +23,8 @@ export function PlayersPage() {
   const eliminatePlayer = useAppStore((s) => s.eliminatePlayer)
   const undoElimination = useAppStore((s) => s.undoElimination)
   const rebuy = useAppStore((s) => s.rebuy)
+  const addBuyInMark = useAppStore((s) => s.addBuyInMark)
+  const removeBuyInMark = useAppStore((s) => s.removeBuyInMark)
   const reentry = useAppStore((s) => s.reentry)
   const addon = useAppStore((s) => s.addon)
   const updateEntry = useAppStore((s) => s.updateEntry)
@@ -228,6 +231,15 @@ export function PlayersPage() {
             <div className="text-lg font-semibold">{getEntryName(selectedEntry.id)}</div>
             <div>상태: {selectedEntry.status}</div>
             <div>바이인: {formatMoney(selectedEntry.buyInAmount)}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>바인 체크: {getBuyInMarks(selectedEntry)}회</span>
+              <Button variant="secondary" onClick={() => removeBuyInMark(selectedEntry.id)}>
+                −
+              </Button>
+              <Button variant="gold" onClick={() => addBuyInMark(selectedEntry.id)}>
+                +
+              </Button>
+            </div>
             <div>
               리바이 {selectedEntry.rebuyCount} / 리엔트리 {selectedEntry.reentryCount} / 애드온{' '}
               {selectedEntry.addonCount}

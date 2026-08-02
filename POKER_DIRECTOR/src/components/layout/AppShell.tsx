@@ -20,8 +20,8 @@ export function AppShell() {
   const navigate = useNavigate()
 
   return (
-    <div className="pd-safe mx-auto flex min-h-dvh max-w-6xl flex-col pb-24 md:pb-8">
-      <header className="sticky top-0 z-40 mb-3 border-b border-line/60 bg-felt/90 backdrop-blur">
+    <div className="pd-safe mx-auto flex min-h-dvh max-w-6xl flex-col">
+      <header className="sticky top-0 z-40 shrink-0 border-b border-line/60 bg-felt/95 backdrop-blur">
         <div className="flex items-center justify-between gap-3 py-3">
           <div>
             <div className="pd-title text-2xl text-gold sm:text-3xl">{t('appName')}</div>
@@ -71,7 +71,7 @@ export function AppShell() {
         </nav>
       </header>
 
-      <main className="flex-1">
+      <main className="pd-page flex-1">
         <Outlet />
       </main>
 

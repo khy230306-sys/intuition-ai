@@ -6,7 +6,8 @@ const DB_NAME = 'poker-director'
 const DB_VERSION = 1
 const STORE = 'app'
 const KEY = 'snapshot'
-const LS_KEY = 'poker-director-snapshot-v1'
+export const SNAPSHOT_LS_KEY = 'poker-director-snapshot-v1'
+const LS_KEY = SNAPSHOT_LS_KEY
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 

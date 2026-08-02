@@ -213,6 +213,8 @@ export interface TournamentEntry extends BaseEntity {
   status: EntryStatus
   paymentStatus: PaymentStatus
   buyInAmount: number
+  /** Paper-ledger buy-in check count (正 strokes). Defaults to 1 + rebuy + reentry when omitted. */
+  buyInMarks?: number
   rebuyCount: number
   reentryCount: number
   addonCount: number

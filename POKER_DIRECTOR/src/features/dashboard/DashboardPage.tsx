@@ -33,15 +33,33 @@ export function DashboardPage() {
           <Button variant="gold" onClick={() => navigate('/tournaments/new')}>
             {t('createTournament')}
           </Button>
+          <Button onClick={() => navigate('/money')}>금액 설정</Button>
+          <Button onClick={() => navigate('/help')}>사용 설명서</Button>
           <Button onClick={() => navigate('/players')}>{t('quickRegister')}</Button>
           {selectedId ? (
-            <Button
-              onClick={() =>
-                window.open(`${window.location.pathname}${window.location.search}#/display/tournament/${selectedId}`, '_blank')
-              }
-            >
-              {t('openTv')}
-            </Button>
+            <>
+              <Button
+                onClick={() =>
+                  window.open(
+                    `${window.location.pathname}${window.location.search}#/display/tournament/${selectedId}`,
+                    '_blank',
+                  )
+                }
+              >
+                {t('openTv')}
+              </Button>
+              <Button
+                variant="gold"
+                onClick={() =>
+                  window.open(
+                    `${window.location.pathname}${window.location.search}#/display/buyins/${selectedId}`,
+                    '_blank',
+                  )
+                }
+              >
+                바인 체크판
+              </Button>
+            </>
           ) : null}
         </div>
       </div>

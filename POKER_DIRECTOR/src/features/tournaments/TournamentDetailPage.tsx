@@ -44,6 +44,12 @@ export function TournamentDetailPage() {
         <Link className="min-h-12 rounded-xl bg-panel-2 px-4 py-3 text-sm" to={`/tournaments/${t.id}/blinds`}>
           블라인드 편집
         </Link>
+        <Link className="min-h-12 rounded-xl bg-panel-2 px-4 py-3 text-sm" to="/money">
+          금액 설정
+        </Link>
+        <Link className="min-h-12 rounded-xl bg-panel-2 px-4 py-3 text-sm" to="/payouts">
+          상금 계산
+        </Link>
         <Button
           onClick={() =>
             window.open(
@@ -52,7 +58,18 @@ export function TournamentDetailPage() {
             )
           }
         >
-          TV
+          TV (왼쪽)
+        </Button>
+        <Button
+          variant="gold"
+          onClick={() =>
+            window.open(
+              `${window.location.pathname}${window.location.search}#/display/buyins/${t.id}`,
+              '_blank',
+            )
+          }
+        >
+          바인 체크 (오른쪽)
         </Button>
         {leaders[0] ? (
           <Button variant="gold" onClick={() => finalizeWinner(t.id, leaders[0].id)}>

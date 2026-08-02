@@ -224,6 +224,7 @@ export function createDemoSnapshot(): AppDataSnapshot {
       buyInAmount: 100000,
       rebuyCount: i % 11 === 0 ? 1 : 0,
       reentryCount: 0,
+      buyInMarks: 1 + (i % 11 === 0 ? 1 : 0) + (i % 7 === 0 ? 2 : i % 5 === 0 ? 1 : 0),
       addonCount: 0,
       currentTableId: tableIndex == null ? null : tables[tableIndex]?.id,
       currentSeat: seatNumber,

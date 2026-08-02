@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAppStore } from '@/stores/appStore'
 import { useTournamentBundle } from '@/hooks/useTournament'
 import { Button } from '@/components/ui/Button'
@@ -34,9 +35,14 @@ export function PayoutsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">상금 계산</h1>
-        <p className="text-sm text-mute">{bundle.tournament.name}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">상금 계산</h1>
+          <p className="text-sm text-mute">{bundle.tournament.name}</p>
+        </div>
+        <Link className="min-h-11 rounded-xl bg-panel-2 px-4 py-3 text-sm" to="/money">
+          게임 금액 수정
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

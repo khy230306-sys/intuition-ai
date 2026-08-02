@@ -11,13 +11,18 @@
 
 React · TypeScript · Vite · Tailwind CSS · React Router · Zustand · Supabase(선택) · PWA · IndexedDB · Vitest · ESLint
 
-## 상시 접속 주소
+## 접속 주소
 
-**https://cdn.jsdelivr.net/gh/khy230306-sys/intuition-ai@deploy/poker-director/index.html**
+현재 공유용(터널): **https://processing-occasional-sleeve-cingular.trycloudflare.com**
 
-이 주소는 GitHub `deploy/poker-director` 브랜치에 배포된 정적 사이트입니다. Cloud Agent가 종료되어도 계속 접속할 수 있습니다.
+로그인: `admin` / `1234` 또는 **데모 계정으로 바로 입장**
 
-로그인 화면에서 **데모 계정으로 바로 입장**을 누르거나 `admin` / `1234`로 로그인하세요.
+### 듀얼 모니터
+
+- 왼쪽 TV 시계: `#/display/tournament/<id>`
+- 오른쪽 바인 체크판(正): `#/display/buyins/<id>`
+
+홈·타이머·더보기에서 **바인 체크판** 버튼으로 새 창을 연 뒤, 오른쪽 모니터로 옮기고 전체화면 하세요.
 
 ## 설치
 

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/stores/appStore'
+import { useClock } from '@/hooks/useClock'
 import { buildLiveTimerView } from '@/utils/timer'
 import { calculatePrizePool } from '@/utils/payouts'
 
@@ -19,20 +20,25 @@ export function useTournamentBundle(tournamentId?: string | null) {
   const announcements = useAppStore((s) => s.announcements)
   const players = useAppStore((s) => s.players)
   const getEntryName = useAppStore((s) => s.getEntryName)
+  const activeTimer = timerStates.find((t) => t.tournamentId === id) ?? null
+  const now = useClock(activeTimer?.status === 'running', 250)
 
   return useMemo(() => {
     const tournament = tournaments.find((t) => t.id === id) ?? null
     const tEntries = entries.filter((e) => e.tournamentId === id && e.status !== 'cancelled')
     const tTables = tables.filter((t) => t.tournamentId === id)
     const structure = blindStructures.find((b) => b.id === tournament?.blindStructureId) ?? null
-    const timer = timerStates.find((t) => t.tournamentId === id) ?? null
+    const currentTimer = timerStates.find((t) => t.tournamentId === id) ?? null
     const prize = prizeStructures.find((p) => p.tournamentId === id) ?? null
     const anns = announcements.filter((a) => a.tournamentId === id && a.active)
     const seated = tEntries.filter((e) => e.status === 'seated')
     const remaining = seated.length
     const totalChips = seated.reduce((s, e) => s + e.currentChips, 0)
     const avgStack = remaining ? Math.round(totalChips / remaining) : 0
-    const live = timer && structure ? buildLiveTimerView(timer, structure.levels) : null
+    const live =
+      currentTimer && structure
+        ? buildLiveTimerView(currentTimer, structure.levels, now)
+        : null
     const rebuyRevenue = tEntries.reduce((s, e) => s + e.rebuyCount * (tournament?.rebuy.cost ?? 0), 0)
     const reentryRevenue = tEntries.reduce(
       (s, e) => s + e.reentryCount * (tournament?.reentry.cost ?? 0),
@@ -61,7 +67,7 @@ export function useTournamentBundle(tournamentId?: string | null) {
       entries: tEntries,
       tables: tTables,
       structure,
-      timer,
+      timer: currentTimer,
       prize,
       announcements: anns,
       players,
@@ -78,6 +84,7 @@ export function useTournamentBundle(tournamentId?: string | null) {
     }
   }, [
     id,
+    now,
     tournaments,
     entries,
     tables,

@@ -6,7 +6,9 @@ import { isCloudMode } from '@/services/supabase/client'
 import { downloadText } from '@/utils/csv'
 
 const links = [
+  { to: '/help', label: '사용 설명서' },
   { to: '/tournaments/new', label: '새 토너먼트' },
+  { to: '/money', label: '게임 금액 설정' },
   { to: '/payouts', label: '상금 계산' },
   { to: '/announcements', label: '공지 / 호출' },
   { to: '/reports', label: '기록 / 통계' },
@@ -55,7 +57,15 @@ export function MorePage() {
               rel="noreferrer"
               className="min-h-14 rounded-2xl border border-line bg-panel px-4 py-4 font-medium"
             >
-              TV 화면 열기
+              TV 화면 열기 (왼쪽)
+            </a>
+            <a
+              href={`#/display/buyins/${selectedTournamentId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="min-h-14 rounded-2xl border border-gold/40 bg-panel px-4 py-4 font-medium text-gold-soft"
+            >
+              바인 체크판 열기 (오른쪽)
             </a>
           </>
         ) : null}

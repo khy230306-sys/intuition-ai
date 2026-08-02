@@ -31,6 +31,17 @@ export function CreateTournamentPage() {
   const [rebuyEnabled, setRebuyEnabled] = useState(true)
   const [reentryEnabled, setReentryEnabled] = useState(true)
   const [addonEnabled, setAddonEnabled] = useState(true)
+  const [rebuyCost, setRebuyCost] = useState(100000)
+  const [rebuyChips, setRebuyChips] = useState(30000)
+  const [rebuyMax, setRebuyMax] = useState(2)
+  const [reentryCost, setReentryCost] = useState(100000)
+  const [reentryChips, setReentryChips] = useState(30000)
+  const [reentryMax, setReentryMax] = useState(1)
+  const [addonCost, setAddonCost] = useState(50000)
+  const [addonChips, setAddonChips] = useState(15000)
+  const [addonMax, setAddonMax] = useState(1)
+  const [bountyEnabled, setBountyEnabled] = useState(false)
+  const [bountyAmount, setBountyAmount] = useState(0)
 
   const payload = {
     name,
@@ -51,25 +62,30 @@ export function CreateTournamentPage() {
     blindTemplate,
     rebuy: {
       enabled: rebuyEnabled,
-      maxCount: 2,
+      maxCount: rebuyMax,
       endLevel: lateRegLevel,
-      cost: buyIn,
-      chips: startingStack,
+      cost: rebuyCost,
+      chips: rebuyChips,
     },
     reentry: {
       enabled: reentryEnabled,
-      maxCount: 1,
+      maxCount: reentryMax,
       endLevel: lateRegLevel,
-      cost: buyIn,
-      chips: startingStack,
+      cost: reentryCost,
+      chips: reentryChips,
       newSeat: true,
     },
     addon: {
       enabled: addonEnabled,
       availableLevel: lateRegLevel,
-      cost: Math.round(buyIn / 2),
-      chips: Math.round(startingStack / 2),
-      maxCount: 1,
+      cost: addonCost,
+      chips: addonChips,
+      maxCount: addonMax,
+    },
+    bounty: {
+      enabled: bountyEnabled,
+      progressive: false,
+      defaultAmount: bountyAmount,
     },
   }
 
@@ -77,7 +93,7 @@ export function CreateTournamentPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div>
         <h1 className="text-xl font-semibold">토너먼트 생성</h1>
-        <p className="text-sm text-mute">기본 정보와 진행 방식을 설정하세요.</p>
+        <p className="text-sm text-mute">기본 정보와 금액을 자유롭게 설정하세요.</p>
       </div>
 
       <Card className="space-y-3">
@@ -124,22 +140,6 @@ export function CreateTournamentPage() {
             />
           </div>
           <div>
-            <Label>바이인</Label>
-            <Input type="number" value={buyIn} onChange={(e) => setBuyIn(Number(e.target.value))} />
-          </div>
-          <div>
-            <Label>참가비</Label>
-            <Input type="number" value={fee} onChange={(e) => setFee(Number(e.target.value))} />
-          </div>
-          <div>
-            <Label>보장 상금</Label>
-            <Input
-              type="number"
-              value={guaranteedPrize}
-              onChange={(e) => setGuaranteedPrize(Number(e.target.value))}
-            />
-          </div>
-          <div>
             <Label>등록 마감 레벨</Label>
             <Input
               type="number"
@@ -158,6 +158,36 @@ export function CreateTournamentPage() {
           <div className="sm:col-span-2">
             <Label>설명</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="space-y-3">
+        <h2 className="font-semibold">게임 금액</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>바이인 (원)</Label>
+            <Input type="number" value={buyIn} onChange={(e) => setBuyIn(Number(e.target.value))} />
+          </div>
+          <div>
+            <Label>참가비 (원)</Label>
+            <Input type="number" value={fee} onChange={(e) => setFee(Number(e.target.value))} />
+          </div>
+          <div>
+            <Label>보장 상금 (원)</Label>
+            <Input
+              type="number"
+              value={guaranteedPrize}
+              onChange={(e) => setGuaranteedPrize(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label>기본 바운티 (원)</Label>
+            <Input
+              type="number"
+              value={bountyAmount}
+              onChange={(e) => setBountyAmount(Number(e.target.value))}
+            />
           </div>
         </div>
       </Card>
@@ -209,8 +239,88 @@ export function CreateTournamentPage() {
             <input type="checkbox" checked={addonEnabled} onChange={(e) => setAddonEnabled(e.target.checked)} />
             애드온 허용
           </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={bountyEnabled}
+              onChange={(e) => setBountyEnabled(e.target.checked)}
+            />
+            바운티 사용
+          </label>
         </div>
       </Card>
+
+      {rebuyEnabled ? (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">리바이 금액</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <Label>비용 (원)</Label>
+              <Input type="number" value={rebuyCost} onChange={(e) => setRebuyCost(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>지급 칩</Label>
+              <Input type="number" value={rebuyChips} onChange={(e) => setRebuyChips(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>가능 횟수</Label>
+              <Input type="number" value={rebuyMax} onChange={(e) => setRebuyMax(Number(e.target.value))} />
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {reentryEnabled ? (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">리엔트리 금액</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <Label>비용 (원)</Label>
+              <Input
+                type="number"
+                value={reentryCost}
+                onChange={(e) => setReentryCost(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label>지급 칩</Label>
+              <Input
+                type="number"
+                value={reentryChips}
+                onChange={(e) => setReentryChips(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label>가능 횟수</Label>
+              <Input
+                type="number"
+                value={reentryMax}
+                onChange={(e) => setReentryMax(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {addonEnabled ? (
+        <Card className="space-y-3">
+          <h2 className="font-semibold">애드온 금액</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <Label>비용 (원)</Label>
+              <Input type="number" value={addonCost} onChange={(e) => setAddonCost(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>지급 칩</Label>
+              <Input type="number" value={addonChips} onChange={(e) => setAddonChips(Number(e.target.value))} />
+            </div>
+            <div>
+              <Label>최대 횟수</Label>
+              <Input type="number" value={addonMax} onChange={(e) => setAddonMax(Number(e.target.value))} />
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Button

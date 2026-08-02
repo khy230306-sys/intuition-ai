@@ -30,9 +30,11 @@ import { loadSnapshot, resetToDemo, saveSnapshot } from '@/services/storage/loca
 import { isCloudMode } from '@/services/supabase/client'
 import { syncWithCloud, type SyncConflict } from '@/services/sync/syncService'
 import { createAccessCode, createId } from '@/utils/id'
+import { getBuyInMarks } from '@/utils/buyInTally'
 import { nowIso, todayDateString } from '@/utils/time'
 import {
   advanceLevelIfExpired,
+  getRemainingMs,
   goToLevel,
   pauseTimerState,
   resumeTimerState,
@@ -115,7 +117,10 @@ interface AppStore extends PersistSlice, UiState {
   rebuy: (entryId: string) => void
   reentry: (entryId: string) => void
   addon: (entryId: string) => void
+  addBuyInMark: (entryId: string) => void
+  removeBuyInMark: (entryId: string) => void
   updateChips: (entryId: string, chips: number) => void
+  applyRemoteSnapshot: (snapshot: AppDataSnapshot) => void
   timerStart: (tournamentId: string) => void
   timerPause: (tournamentId: string) => void
   timerResume: (tournamentId: string) => void
@@ -125,6 +130,7 @@ interface AppStore extends PersistSlice, UiState {
   timerGoTo: (tournamentId: string, index: number) => void
   timerSetRemaining: (tournamentId: string, ms: number) => void
   timerExtend: (tournamentId: string, minutes: number) => void
+  timerResetLevel: (tournamentId: string) => void
   timerTick: (tournamentId: string) => void
   timerToggleMute: (tournamentId: string) => void
   setPrizeStructure: (
@@ -277,11 +283,12 @@ export const useAppStore = create<AppStore>((set, get) => {
       const creds = getDemoCredentials()
       const id = username.trim()
       const pw = password.trim()
+      set({ lastError: null })
       // Ensure demo users exist even if local storage was wiped/corrupted
       if (get().users.length === 0) {
         const demo = createDemoSnapshot()
         set({
-          ...demo,
+          ...fromSnapshot(demo),
           session: get().session,
           hydrated: true,
           selectedTournamentId:
@@ -326,7 +333,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         mode: isCloudMode() ? 'cloud' : 'demo',
       }
       set({ session, lastError: null })
-      persistSoon()
+      void get().persist()
       return true
     },
 
@@ -555,6 +562,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         status: 'registered',
         paymentStatus: 'unpaid',
         buyInAmount: tournament.buyIn,
+        buyInMarks: 1,
         rebuyCount: 0,
         reentryCount: 0,
         addonCount: 0,
@@ -963,6 +971,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             ? {
                 ...e,
                 rebuyCount: e.rebuyCount + 1,
+                buyInMarks: getBuyInMarks(e) + 1,
                 currentChips: e.currentChips + tournament.rebuy.chips,
                 status: e.status === 'eliminated' ? 'seated' : e.status,
                 updatedAt: stamp(),
@@ -1003,6 +1012,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             ? {
                 ...e,
                 reentryCount: e.reentryCount + 1,
+                buyInMarks: getBuyInMarks(e) + 1,
                 currentChips: tournament.reentry.chips,
                 status: 'checked_in',
                 eliminationRank: null,
@@ -1071,41 +1081,106 @@ export const useAppStore = create<AppStore>((set, get) => {
       persistSoon()
     },
 
+    addBuyInMark: (entryId) => {
+      const entry = get().entries.find((e) => e.id === entryId)
+      if (!entry || entry.status === 'cancelled') return
+      const next = getBuyInMarks(entry) + 1
+      set({
+        entries: get().entries.map((e) =>
+          e.id === entryId ? { ...e, buyInMarks: next, updatedAt: stamp() } : e,
+        ),
+        lastError: null,
+      })
+      pushAudit('rebuy', `바인 체크 +1: ${get().getEntryName(entryId)} (${next})`)
+      persistSoon()
+    },
+
+    removeBuyInMark: (entryId) => {
+      const entry = get().entries.find((e) => e.id === entryId)
+      if (!entry || entry.status === 'cancelled') return
+      const next = Math.max(0, getBuyInMarks(entry) - 1)
+      set({
+        entries: get().entries.map((e) =>
+          e.id === entryId ? { ...e, buyInMarks: next, updatedAt: stamp() } : e,
+        ),
+        lastError: null,
+      })
+      pushAudit('rebuy', `바인 체크 -1: ${get().getEntryName(entryId)} (${next})`)
+      persistSoon()
+    },
+
+    applyRemoteSnapshot: (snapshot) => {
+      const selectedTournamentId = get().selectedTournamentId
+      const session = get().session
+      set({
+        ...fromSnapshot(snapshot),
+        session,
+        selectedTournamentId:
+          selectedTournamentId && snapshot.tournaments.some((t) => t.id === selectedTournamentId)
+            ? selectedTournamentId
+            : snapshot.tournaments.find((t) => t.status === 'running')?.id ??
+              snapshot.tournaments[0]?.id ??
+              null,
+        hydrated: true,
+      })
+    },
+
     updateChips: (entryId, chips) => {
       get().updateEntry(entryId, { currentChips: Math.max(0, chips) })
     },
 
     timerStart: (tournamentId) => {
-      if (!get().canManageTimer()) return
+      if (!get().canManageTimer()) {
+        set({ lastError: '타이머 조작 권한이 없습니다. 관리자/디렉터로 로그인하세요.' })
+        return
+      }
       const state = get()
       const timer = state.timerStates.find((t) => t.tournamentId === tournamentId)
       const tournament = state.tournaments.find((t) => t.id === tournamentId)
       const structure = state.blindStructures.find((b) => b.id === tournament?.blindStructureId)
-      if (!timer || !structure) return
+      if (!timer || !structure) {
+        set({ lastError: '타이머 또는 블라인드 구조를 찾을 수 없습니다.' })
+        return
+      }
+      // Resume if already paused with remaining time; otherwise start fresh running state.
+      const next =
+        timer.status === 'paused'
+          ? resumeTimerState(timer)
+          : startTimerState(timer, structure.levels)
       set({
         timerStates: state.timerStates.map((t) =>
-          t.tournamentId === tournamentId ? startTimerState(t, structure.levels) : t,
+          t.tournamentId === tournamentId ? next : t,
         ),
+        lastError: null,
       })
+      pushAudit('timer_level', '타이머 시작')
       persistSoon()
     },
 
     timerPause: (tournamentId) => {
-      if (!get().canManageTimer()) return
+      if (!get().canManageTimer()) {
+        set({ lastError: '타이머 조작 권한이 없습니다.' })
+        return
+      }
       set({
         timerStates: get().timerStates.map((t) =>
           t.tournamentId === tournamentId ? pauseTimerState(t) : t,
         ),
+        lastError: null,
       })
       persistSoon()
     },
 
     timerResume: (tournamentId) => {
-      if (!get().canManageTimer()) return
+      if (!get().canManageTimer()) {
+        set({ lastError: '타이머 조작 권한이 없습니다.' })
+        return
+      }
       set({
         timerStates: get().timerStates.map((t) =>
           t.tournamentId === tournamentId ? resumeTimerState(t) : t,
         ),
+        lastError: null,
       })
       persistSoon()
     },
@@ -1171,22 +1246,54 @@ export const useAppStore = create<AppStore>((set, get) => {
 
     timerSetRemaining: (tournamentId, ms) => {
       if (!get().canManageTimer()) return
+      const safe = Math.max(0, Math.min(ms, 10 * 60 * 60 * 1000))
       set({
         timerStates: get().timerStates.map((t) =>
-          t.tournamentId === tournamentId ? setRemainingMs(t, ms) : t,
+          t.tournamentId === tournamentId ? setRemainingMs(t, safe) : t,
         ),
+        lastError: null,
       })
+      pushAudit('timer_level', `남은 시간 수정: ${Math.round(safe / 1000)}초`)
       persistSoon()
     },
 
     timerExtend: (tournamentId, minutes) => {
+      if (!get().canManageTimer()) return
       const timer = get().timerStates.find((t) => t.tournamentId === tournamentId)
       if (!timer) return
-      const current =
-        timer.status === 'running'
-          ? Math.max(0, (timer.levelEndsAt ? new Date(timer.levelEndsAt).getTime() : Date.now()) - Date.now())
-          : (timer.pausedRemainingMs ?? 0)
-      get().timerSetRemaining(tournamentId, current + minutes * 60 * 1000)
+      const current = getRemainingMs(timer)
+      get().timerSetRemaining(tournamentId, Math.max(0, current + minutes * 60 * 1000))
+    },
+
+    timerResetLevel: (tournamentId) => {
+      if (!get().canManageTimer()) return
+      const state = get()
+      const timer = state.timerStates.find((t) => t.tournamentId === tournamentId)
+      const tournament = state.tournaments.find((t) => t.id === tournamentId)
+      const structure = state.blindStructures.find((b) => b.id === tournament?.blindStructureId)
+      if (!timer || !structure) return
+      const level = structure.levels[timer.currentLevelIndex]
+      if (!level) return
+      const durationMs =
+        (level.isBreak ? (level.breakMinutes ?? level.durationMinutes) : level.durationMinutes) *
+        60 *
+        1000
+      const keepRunning = timer.status === 'running'
+      const next = keepRunning
+        ? setRemainingMs(timer, durationMs)
+        : {
+            ...timer,
+            status: timer.status === 'idle' ? ('paused' as const) : timer.status,
+            levelStartedAt: null,
+            levelEndsAt: null,
+            pausedRemainingMs: durationMs,
+            updatedAt: stamp(),
+          }
+      set({
+        timerStates: state.timerStates.map((t) => (t.tournamentId === tournamentId ? next : t)),
+      })
+      pushAudit('timer_level', '현재 레벨 시간 초기화')
+      persistSoon()
     },
 
     timerTick: (tournamentId) => {

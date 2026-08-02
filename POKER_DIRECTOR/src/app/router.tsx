@@ -7,10 +7,13 @@ import { PlayersPage } from '@/features/players/PlayersPage'
 import { TablesPage } from '@/features/tables/TablesPage'
 import { MorePage } from '@/features/settings/MorePage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
+import { MoneySettingsPage } from '@/features/settings/MoneySettingsPage'
+import { HelpGuidePage } from '@/features/settings/HelpGuidePage'
 import { CreateTournamentPage } from '@/features/tournaments/CreateTournamentPage'
 import { BlindEditorPage } from '@/features/tournaments/BlindEditorPage'
 import { TournamentDetailPage } from '@/features/tournaments/TournamentDetailPage'
 import { TvDisplayPage } from '@/features/display/TvDisplayPage'
+import { BuyInBoardPage } from '@/features/display/BuyInBoardPage'
 import { PlayerViewPage } from '@/features/display/PlayerViewPage'
 import { PayoutsPage } from '@/features/payouts/PayoutsPage'
 import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
@@ -29,6 +32,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/display/tournament/:id" element={<TvDisplayPage />} />
+      <Route path="/display/buyins/:id" element={<BuyInBoardPage />} />
       <Route path="/player/:accessCode" element={<PlayerViewPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
@@ -38,6 +42,8 @@ export function AppRouter() {
           <Route path="tables" element={<TablesPage />} />
           <Route path="more" element={<MorePage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="money" element={<MoneySettingsPage />} />
+          <Route path="help" element={<HelpGuidePage />} />
           <Route path="tournaments/new" element={<CreateTournamentPage />} />
           <Route path="tournaments/:id" element={<TournamentDetailPage />} />
           <Route path="tournaments/:id/blinds" element={<BlindEditorPage />} />

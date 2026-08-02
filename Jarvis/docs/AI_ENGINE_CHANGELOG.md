@@ -1,5 +1,12 @@
 # AI Engine changelog
 
+## 1.12.2
+
+- Slow arcade level-up pacing across all 7 games (roughly 2×+ units per level)
+- Breakout: 2 stage clears / level; denser brick rows
+- Slide: 2 puzzle clears / level
+- Space2: more enemies per stage so each of 25 levels lasts longer
+
 ## 1.12.1
 
 - Arcade **격파** renamed to **스페이스2** (storage id `gyeokpa` unchanged)

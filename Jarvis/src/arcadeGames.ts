@@ -3,15 +3,15 @@
 export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
-  flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
-  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
-  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
-  breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
-  slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
+  shooter: { title: '스페이스', blurb: '격추 12기마다 레벨업 · 미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
+  flappy: { title: '플래피', blurb: '기둥 12개마다 레벨업 · 간격 축소' },
+  dodge: { title: '닷지', blurb: '18개 회피마다 레벨업 · 낙하 가속' },
+  pong: { title: '퐁', blurb: '12회 받아칠 때마다 레벨업 · 공 가속' },
+  breakout: { title: '벽돌깨기', blurb: '스테이지 2회 클리어마다 레벨업 · 벽돌·속도 증가' },
+  slide: { title: '스윽', blurb: '퍼즐 2회 클리어마다 레벨업 · 시간 안에 숫자 맞추기' },
   gyeokpa: {
     title: '스페이스2',
-    blurb: '세로 슈팅 · 25스테이지 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드→레이저) · 라이프·실드·폭탄',
+    blurb: '세로 슈팅 · 25스테이지(스테이지당 웨이브 강화) · 보스 · 무기 강화 · 라이프·실드·폭탄',
   },
 }
 
@@ -88,23 +88,26 @@ function bumpBestLevel(game: ArcadeId, level: number): void {
   }
 }
 
-/** How many progress units needed to advance one level. */
+/**
+ * How many progress units needed to advance one level.
+ * Tuned slower so each level lasts longer (more thrill, less rush).
+ */
 export function unitsPerLevel(id: ArcadeId): number {
   switch (id) {
     case 'breakout':
-      return 1
+      return 2 // stage clears
     case 'shooter':
-      return 5
+      return 12 // kills
     case 'flappy':
-      return 5
+      return 12 // pipes
     case 'dodge':
-      return 8
+      return 18 // dodges
     case 'pong':
-      return 5
+      return 12 // paddle hits
     case 'slide':
-      return 1
+      return 2 // puzzle clears
     case 'gyeokpa':
-      return 6
+      return 1 // stage/wave (lengthened separately)
   }
 }
 
@@ -217,6 +220,7 @@ function noteLevel(
 export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let score = 0
   let level = 1
+  let stagesCleared = 0
   let levelUpUntil = 0
   let over = false
   let paddleX = 0
@@ -235,7 +239,8 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
   function buildBricks(): void {
     bricks = []
     const cols = 8
-    const rows = Math.min(9, 4 + level)
+    // More rows per stage so each clear takes longer; difficulty follows clears not display level.
+    const rows = Math.min(10, 5 + Math.floor(stagesCleared * 0.7))
     const gap = 4
     const bw = (w - gap * (cols + 1)) / cols
     const bh = 14
@@ -254,7 +259,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
   }
 
   function ballSpeed(): number {
-    return 200 + level * 28
+    return 190 + stagesCleared * 18 + level * 8
   }
 
   function resetBall(): void {
@@ -273,6 +278,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
     h = sized.h
     score = 0
     level = 1
+    stagesCleared = 0
     levelUpUntil = 0
     over = false
     paddleX = w / 2 - paddleW / 2
@@ -283,10 +289,11 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
 
   function nextStage(): void {
     score += 100
-    const next = level + 1
+    stagesCleared += 1
+    const next = levelFromUnits('breakout', stagesCleared)
     const noted = noteLevel('breakout', level, next, score, onScore)
     level = noted.level
-    levelUpUntil = noted.levelUpUntil || performance.now() + 1200
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
     bumpBest('breakout', score)
     buildBricks()
     resetBall()
@@ -1268,6 +1275,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   let h = 400
   let score = 0
   let level = 1
+  let clears = 0
   let levelUpUntil = 0
   let over = false
   let clearedFlash = 0
@@ -1308,6 +1316,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   function reset(): void {
     score = 0
     level = 1
+    clears = 0
     levelUpUntil = 0
     over = false
     clearedFlash = 0
@@ -1333,10 +1342,11 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
     if (slideIsSolved(board)) {
       const bonus = Math.max(20, Math.floor(timeLeft * 8) + Math.max(0, 40 - moves) * 5)
       score += bonus
-      const prev = level
-      level += 1
-      const noted = noteLevel('slide', prev, level, score, onScore)
-      levelUpUntil = noted.levelUpUntil || performance.now() + 900
+      clears += 1
+      const next = levelFromUnits('slide', clears)
+      const noted = noteLevel('slide', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
       clearedFlash = 0.7
       bumpBest('slide', score)
     }
@@ -1653,9 +1663,10 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   }
 
   function queueWave(): void {
-    const base = 6 + Math.min(wave, GYEOKPA_MAX_LEVEL) * 2 + stage
+    // Longer waves so each of the 25 stages takes more time.
+    const base = 12 + Math.min(wave, GYEOKPA_MAX_LEVEL) * 3 + stage * 2
     spawnLeft = base
-    spawnCd = 0.35
+    spawnCd = 0.4
     betweenWaves = 0
     if (wave % 5 === 0) {
       spawnLeft = 0
@@ -1774,7 +1785,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     fireCd = 0
     wave = 1
     stage = 1
-    betweenWaves = 1.2
+    betweenWaves = 1.5
     spawnLeft = 0
     spawnCd = 0
     bossActive = false
@@ -1941,7 +1952,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         return
       }
       wave += 1
-      betweenWaves = 1.1
+      betweenWaves = 1.5
       syncLevel()
       toast(`다음 스테이지 ${wave}/${GYEOKPA_MAX_LEVEL}`)
     }

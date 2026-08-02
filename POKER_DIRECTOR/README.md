@@ -11,11 +11,24 @@
 
 React · TypeScript · Vite · Tailwind CSS · React Router · Zustand · Supabase(선택) · PWA · IndexedDB · Vitest · ESLint
 
-## 접속 주소
+## 접속 주소 (공유용)
 
-현재 공유용(터널): **https://processing-occasional-sleeve-cingular.trycloudflare.com**
+**https://poker-director.tiiny.site**
 
 로그인: `admin` / `1234` 또는 **데모 계정으로 바로 입장**
+
+> 이 주소는 HTML이 정상 렌더링됩니다. (jsDelivr는 `text/plain`이라 소스만 보이므로 사용하지 마세요.)
+
+### 영구 호스팅 (GitHub Pages)
+
+앱은 `gh-pages` 브랜치의 `/poker-director/` 와 GitHub Actions 워크플로까지 준비되어 있습니다.  
+저장소 소유자가 아래를 **한 번만** 켜면 영구 주소가 활성화됩니다.
+
+1. https://github.com/khy230306-sys/intuition-ai/settings/pages
+2. **Source** → `GitHub Actions` (또는 `Deploy from a branch` → `gh-pages` / `/ (root)`)
+3. 저장 후 접속: **https://khy230306-sys.github.io/intuition-ai/poker-director/**
+
+Tiiny 영구 배포는 `TIINYHOST_API_KEY`로 `POKER_DIRECTOR/scripts/publish-tiiny.sh`를 실행하면 됩니다.
 
 ### 듀얼 모니터
 

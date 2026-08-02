@@ -1,5 +1,13 @@
 # AI Engine changelog
 
+## 1.12.0
+
+- **AIZIO Relationship Memory** (`src/relationship/`): conversation family links → `jarvis_relationships_v1`
+- **AIZIO Smart Reminder Skill** (`src/smartReminder/`): natural-language appointments + local alarms via `notify.ts`
+- Core Brain skills: `relationship`, `smartReminder` (create/update/cancel/snooze/list/ask person)
+- Past times stored as missed (no silent roll to next day); closed-app push for personal reminders not claimed
+- Docs: `AIZIO_RELATIONSHIP_MEMORY.md`, `AIZIO_SMART_REMINDER.md`, `AIZIO_NOTIFICATION_ARCHITECTURE.md`, `AIZIO_REMINDER_PRIVACY.md`, `AIZIO_REMINDER_TESTS.md`
+
 ## 1.11.3
 
 - Fix white screen on launch: version-upgrade path no longer returns before paint; cache clear timed out; stuck `jarvis.refreshing` no longer blocks reload

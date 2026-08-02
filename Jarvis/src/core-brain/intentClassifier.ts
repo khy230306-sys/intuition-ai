@@ -1,6 +1,8 @@
 import { classifyMusicIntent } from '../music/musicIntent'
 import type { AppLocale } from '../i18n'
+import { parseRelationshipUtterance } from '../relationship'
 import { isCasualChatText } from '../spokenCommand'
+import { parseReminderUtterance } from '../smartReminder'
 import { extractEntities } from './entityExtractor'
 import type { CoreIntent, IntentClassification } from './types'
 import { lastIntent } from './brainState'
@@ -28,32 +30,32 @@ const RULES: Rule[] = [
   },
   {
     intent: 'create_note',
-    re: /기억해|메모해|메모해줘|기억해줘|메모\s*저장|노트\s*저장/i,
+    re: /^(?:기억해|기억해줘|메모해|메모해줘)\s+.+/i,
     confidence: 0.9,
   },
   {
     intent: 'search_note',
-    re: /메모\s*(보여|목록|찾아|검색)|기억\s*(목록|보여|뭐였)|뭐였지|노트\s*(보여|목록)/i,
+    re: /메모\s*(보여|목록|찾아|검색)|기억\s*목록|노트\s*(보여|목록)/i,
     confidence: 0.9,
   },
   {
     intent: 'list_todo',
-    re: /할\s*일\s*(목록|보여|리스트)|리마인더\s*(목록|보여)|남은\s*할\s*일|투두\s*목록/i,
+    re: /할\s*일\s*(목록|보여|리스트)|남은\s*할\s*일|투두\s*목록/i,
     confidence: 0.92,
   },
   {
     intent: 'create_todo',
-    re: /할\s*일\s*(추가|등록)|리마인더\s*|기억시켜|할\s*일에\s*넣/i,
+    re: /할\s*일\s*(추가|등록)|기억시켜|할\s*일에\s*넣/i,
     confidence: 0.88,
   },
   {
     intent: 'list_calendar',
-    re: /오늘\s*일정|일정\s*(알려|보여|목록)|다가오는\s*일정|캘린더\s*(보여|알려)|가족\s*일정|친구\s*일정|공휴일/i,
+    re: /오늘\s*일정|다가오는\s*일정|캘린더\s*(보여|알려)|친구\s*일정|공휴일/i,
     confidence: 0.88,
   },
   {
     intent: 'create_calendar_event',
-    re: /일정\s*(추가|등록|잡아)|약속\s*(추가|잡아)|회의\s*일정|캘린더에\s*넣/i,
+    re: /캘린더에\s*넣|회의\s*일정\s*추가/i,
     confidence: 0.86,
   },
   {
@@ -129,8 +131,52 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
     return { intent: 'unknown', confidence: 0, source: 'default', entities: {} }
   }
 
+  // Relationship memory (before notes / casual)
+  const rel = parseRelationshipUtterance(t)
+  if (rel) {
+    const intentMap = {
+      remember: 'remember_relationship',
+      update: 'update_relationship',
+      forget: 'forget_relationship',
+      list: 'list_relationships',
+      ask_name: 'list_relationships',
+    } as const
+    return {
+      intent: intentMap[rel.kind] as CoreIntent,
+      confidence: 0.93,
+      source: 'local',
+      entities: extractEntities(t, intentMap[rel.kind] as CoreIntent),
+    }
+  }
+
+  // Smart reminders / person schedules
+  const rem = parseReminderUtterance(t)
+  if (rem) {
+    const map: Record<string, CoreIntent> = {
+      create: 'create_reminder',
+      update_time: 'update_reminder',
+      add_advance: 'update_reminder',
+      cancel: 'cancel_reminder',
+      snooze: 'snooze_reminder',
+      complete: 'mark_reminder_complete',
+      list: 'list_reminders',
+      ask_person: 'ask_person_schedule',
+      ask_next: 'ask_person_schedule',
+    }
+    return {
+      intent: map[rem.kind] || 'create_reminder',
+      confidence: 0.92,
+      source: 'local',
+      entities: {
+        title: rem.title,
+        personDisplay: rem.personDisplay,
+        personRelation: rem.personRelation,
+      },
+    }
+  }
+
   // Social / casual chat → general_chat (never skill / never STT-error)
-  if (isCasualChatText(t) && !/(음악|노래|틀어|재생|멈춰|번역|통역|일정|할\s*일|설정)/i.test(t)) {
+  if (isCasualChatText(t) && !/(음악|노래|틀어|재생|멈춰|번역|통역|일정|할\s*일|설정|엄마|아빠|예약|병원)/i.test(t)) {
     return {
       intent: 'general_chat',
       confidence: 0.86,

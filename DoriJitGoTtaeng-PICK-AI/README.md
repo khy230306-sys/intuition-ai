@@ -7,13 +7,17 @@
 ## 실행 URL
 
 ### 공개 HTTPS (지금 바로 사용)
-**https://runic-grid-3r1dfyp.shipstatic.com**
+**https://zenith-dust-b1knm7x.shipstatic.com**
 
-iPhone Safari에서 위 주소를 연 뒤 홈 화면에 추가하면 됩니다.  
-(익명 배포는 약 3일 후 만료될 수 있습니다. 영구 보관: [클레임 링크](https://my.shipstatic.com/claim/7ef4eede184c5e9615f226839239fe3d97cad2a1bd99af2d7b0be938c7246dab))
+iPhone Safari에서 위 주소를 연 뒤 홈 화면에 추가하면 됩니다.
+
+- 익명 배포는 **약 3일 후 만료**됩니다. 404가 나오면 아래 재배포를 실행하세요.
+- 영구 보관(클레임): https://my.shipstatic.com/claim/ac2e37a24be819770b913e3ae01f986319908681ac622e06472898d229244758
 
 재배포:
 ```bash
+cd DoriJitGoTtaeng-PICK-AI
+npm install
 npm run build && npm run deploy:web
 ```
 
@@ -34,7 +38,7 @@ npm run dev
    또는 Source: **GitHub Actions** (워크플로 `Deploy PICK AI to GitHub Pages` 사용)
 3. 저장 후 1~2분 뒤 위 URL로 접속
 
-`gh-pages` 브랜치에는 최신 정적 빌드가 이미 푸시되어 있습니다.
+`gh-pages` 브랜치에는 최신 정적 빌드가 푸시되어 있습니다.
 
 ## iPhone 홈 화면 설치
 
@@ -69,6 +73,7 @@ npm run dev
 | `npm run dev` | 개발 서버 |
 | `npm run build` | 타입체크 + 프로덕션 빌드 |
 | `npm run preview` | 빌드 결과 미리보기 |
+| `npm run deploy:web` | ShipStatic HTTPS 재배포 |
 | `npm test` | 단위 테스트 |
 
 ## 기술

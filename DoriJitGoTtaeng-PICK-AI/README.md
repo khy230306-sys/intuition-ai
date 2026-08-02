@@ -4,21 +4,22 @@
 
 기존 FlowMate 프로젝트와 **완전히 분리**된 독립 앱입니다. 데이터는 브라우저(LocalStorage)에만 저장됩니다.
 
-## 영구 실행 URL
+## 실행 URL
 
-### GitHub Pages (권장 · 영구)
-**https://khy230306-sys.github.io/intuition-ai/**
+### 지금 바로
+**https://flashy-shard-5dq95av.shipstatic.com**
 
-이 URL은 저장소 `gh-pages` / GitHub Actions로 유지됩니다.  
-워크플로 `Deploy PICK AI to GitHub Pages`가 푸시마다 자동 배포합니다.
+### 영구 사용 (택 1, 약 1분)
+자세한 단계: [PERMANENT_HOSTING.md](./PERMANENT_HOSTING.md)
 
-### 임시 미러 (만료될 수 있음)
-필요 시 재배포:
-```bash
-cd DoriJitGoTtaeng-PICK-AI
-npm install
-npm run build && npm run deploy:web
-```
+1. **GitHub Pages (권장)**  
+   https://github.com/khy230306-sys/intuition-ai/settings/pages  
+   → Source: Deploy from a branch → `gh-pages` / `/ (root)` → Save  
+   → **https://khy230306-sys.github.io/intuition-ai/**
+
+2. **ShipStatic 클레임**  
+   https://my.shipstatic.com/claim/0d8c19e85c2519a9a113887f982cc346b4a138cb07037da579797e78dfea11ca  
+   → Google 로그인 1회 → 현재 URL 영구 유지
 
 ## 로컬 실행
 ```bash
@@ -31,43 +32,23 @@ npm run dev
 
 ## iPhone 홈 화면 설치
 
-1. **Safari**로 GitHub Pages HTTPS URL을 엽니다.
+1. **Safari**로 HTTPS 앱 URL을 엽니다.
 2. 공유 버튼(□↑)을 탭합니다.
 3. **홈 화면에 추가**를 선택합니다.
 4. 추가된 아이콘으로 실행하면 전체 화면(standalone) 앱처럼 동작합니다.
-5. Service Worker 캐시로 **오프라인에서도 저장된 데이터 조회·분석**이 가능합니다.
 
 ## 사용법
 
-1. 중앙 숫자 버튼(1~10)을 3번 누릅니다 → 자동으로 1·2·3번 슬롯에 입력되고 즉시 AI 분석.
-2. 게임 종료 후 **① ② ③** 중 승리 위치를 누르면 저장되며 AI가 재학습합니다.
-3. 하단 **통계 / 데이터**에서 승률·검색·CSV·백업·초기화를 사용합니다.
-
-## AI 엔진
-
-| 엔진 | 내용 |
-|------|------|
-| 1 | 숫자 기반 |
-| 2 | 위치 기반 |
-| 3 | 숫자+위치 조합 (동일·순서무시) |
-| 4 | 최근 흐름 (30/50/100 + 연승) |
-| 5 | 전체 누적 (전체·최근300) |
-
-최종 추천은 엔진별 가중 종합입니다.
+1. 중앙 숫자 버튼(1~10)을 3번 누릅니다 → 즉시 AI 분석.
+2. 게임 종료 후 **① ② ③** 중 승리 위치를 누르면 저장·재학습.
+3. 하단 **통계 / 데이터**에서 승률·검색·CSV·백업·초기화.
 
 ## 스크립트
 
 | 명령 | 설명 |
 |------|------|
 | `npm run dev` | 개발 서버 |
-| `npm run build` | 타입체크 + 프로덕션 빌드 |
-| `npm run preview` | 빌드 결과 미리보기 |
-| `npm run deploy:web` | 임시 HTTPS 미러 배포 |
+| `npm run build` | 프로덕션 빌드 |
+| `npm run preview` | 미리보기 |
+| `npm run deploy:web` | ShipStatic 미러 배포 |
 | `npm test` | 단위 테스트 |
-
-## 기술
-
-- Vite + TypeScript
-- vite-plugin-pwa (manifest · Service Worker · 오프라인 캐시)
-- LocalStorage + 자동 JSON 백업
-- GitHub Actions → GitHub Pages 영구 배포

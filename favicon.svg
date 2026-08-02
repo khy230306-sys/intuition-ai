@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0a3d26"/>
+  <rect x="8" y="8" width="48" height="48" rx="10" fill="none" stroke="#c9a227" stroke-width="2"/>
+  <rect x="22" y="16" width="20" height="28" rx="3" fill="#f3efe4"/>
+  <text x="32" y="38" text-anchor="middle" font-size="16" font-family="Arial Black,sans-serif" fill="#0a3d26">P</text>
+</svg>

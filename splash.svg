@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1284" height="2778" viewBox="0 0 1284 2778">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#083222"/>
+      <stop offset="55%" stop-color="#0a3d26"/>
+      <stop offset="100%" stop-color="#041910"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8c547"/>
+      <stop offset="50%" stop-color="#f3efe4"/>
+      <stop offset="100%" stop-color="#c9a227"/>
+    </linearGradient>
+  </defs>
+  <rect width="1284" height="2778" fill="url(#bg)"/>
+  <circle cx="642" cy="1100" r="220" fill="#0f5234" stroke="#c9a227" stroke-width="8"/>
+  <rect x="562" y="1000" width="160" height="220" rx="18" fill="#f3efe4"/>
+  <text x="642" y="1140" text-anchor="middle" font-family="Arial Black, sans-serif" font-size="96" fill="#0a3d26">P</text>
+  <text x="642" y="1480" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" font-weight="700" fill="url(#gold)">DoriJitGoTtaeng</text>
+  <text x="642" y="1555" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" fill="#e8c547">PICK AI</text>
+</svg>

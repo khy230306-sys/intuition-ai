@@ -96,6 +96,8 @@ import { aiEngineErrorText, runAiEngine } from './ai'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,
+  isCasualChatText,
+  localCasualReply,
   looksLikeSttGarbage,
   wantsWeatherCommand,
 } from './spokenCommand'
@@ -1191,20 +1193,29 @@ export async function think(
     }
   }
 
+  // Readable casual chat (compliment / thanks / emotion) — never STT-error path
+  const casual = localCasualReply(text)
+  if (casual) return { text: casual, speak: true }
+
+  // STT garbage only for true gibberish — not for unknown-but-readable chat
   if (looksLikeSttGarbage(text)) {
+    const lines = ['음성을 잘 듣지 못했어요. 다시 말해 주세요.']
+    if (loadInterpretMode().active) {
+      lines.push('통역 중이면 «스톱»을 누른 뒤 다시 말해 주세요.')
+    }
+    return { text: lines.join('\n'), speak: true }
+  }
+
+  if (isCasualChatText(text)) {
     return {
-      text: [
-        '음성을 정확히 듣지 못했어요. MIC를 다시 누르고 또박또박 말씀해 주세요.',
-        '예: «오늘 날씨 알려줘» · «지금 몇 시야» · «브리핑» · «삼성전자 시세»',
-        '통역 중이라면 빨간 «스톱»을 누른 뒤 다시 말해 주세요.',
-      ].join('\n'),
+      text: '말씀 감사해요. 필요한 일이 있으면 편하게 말해 주세요.',
       speak: true,
     }
   }
 
   return {
     text: [
-      '명령을 이해하지 못했습니다.',
+      '잘 이해하지 못했어요. 조금 다르게 말해 주시겠어요?',
       '예: 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 삼성전자 시세 · 통계 · 도움말',
       settings.apiKey.trim() ? '' : '설정에 API 키를 넣으면 자유 대화·심화 분석이 가능합니다.',
     ]

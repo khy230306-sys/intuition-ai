@@ -73,8 +73,28 @@ describe('family space', () => {
     expect(clearFamilyChat()).toBe(true)
     const loaded = loadFamilyRoom()!
     expect(loaded.messages).toHaveLength(0)
+    expect(loaded.chatClearedAt).toBeGreaterThan(0)
     expect(loaded.notices).toHaveLength(1)
     expect(loaded.members.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('keeps cleared chat empty when peer snapshot has old messages', () => {
+    createFamilyRoom('테스트가족', '아빠')
+    const old = postFamilyChat('옛 메시지')!
+    clearFamilyChat()
+    const local = loadFamilyRoom()!
+    const merged = mergeFamilySnapshot(local, {
+      code: local.code,
+      name: local.name,
+      createdAt: local.createdAt,
+      members: local.members,
+      messages: [old],
+      notices: [],
+      events: [],
+      updatedAt: Date.now(),
+    })
+    expect(merged.messages).toHaveLength(0)
+    expect(merged.chatClearedAt).toBeGreaterThanOrEqual(old.createdAt)
   })
 
   it('dedupes members with the same display name', () => {

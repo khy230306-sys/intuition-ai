@@ -153,13 +153,20 @@ export function postFamilyChat(
   return message
 }
 
-/** Clear local chat history only (notices/events/members kept). */
-export function clearFamilyChat(): boolean {
+/** Clear chat history (notices/events/members kept). Watermark blocks sync revive. */
+export function clearFamilyChat(clearedAt = Date.now()): boolean {
   const room = loadFamilyRoom()
   if (!room) return false
-  room.messages = []
+  room.chatClearedAt = Math.max(room.chatClearedAt || 0, clearedAt)
+  room.messages = room.messages.filter((m) => m.createdAt > room.chatClearedAt!)
   saveFamilyRoom(room)
   return true
+}
+
+/** Apply a peer/local clear watermark and drop older messages. */
+export function applyFamilyChatClearedAt(clearedAt: number): boolean {
+  if (!clearedAt || !Number.isFinite(clearedAt)) return false
+  return clearFamilyChat(clearedAt)
 }
 
 export function addFamilyNotice(title: string, body: string, pinned = false): FamilyNotice | null {
@@ -255,12 +262,15 @@ export function mergeFamilySnapshot(
     })
   }
 
+  const chatClearedAt = Math.max(local.chatClearedAt || 0, remote.chatClearedAt || 0)
   return {
     ...local,
     name: preferSpaceName(local.name, remote.name, local.updatedAt, remote.updatedAt),
     code: local.code || remote.code,
     members: dedupeMembersByName([...membersMap.values()], local.memberId),
+    chatClearedAt: chatClearedAt || undefined,
     messages: byId(local.messages, remote.messages)
+      .filter((m) => m.createdAt > chatClearedAt)
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-200),
     notices: byId(local.notices, remote.notices)

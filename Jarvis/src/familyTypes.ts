@@ -70,12 +70,15 @@ export type FamilyRoom = {
   notices: FamilyNotice[]
   events: FamilyEvent[]
   updatedAt: number
+  /** Messages at or before this timestamp stay cleared (survives sync merge). */
+  chatClearedAt?: number
 }
 
 export type FamilySyncPacket =
   | { type: 'hello'; member: FamilyMember; roomName: string; updatedAt: number }
   | { type: 'snapshot'; room: Omit<FamilyRoom, 'memberId' | 'memberName'> }
   | { type: 'chat'; message: FamilyChatMsg }
+  | { type: 'chat-clear'; clearedAt: number }
   | { type: 'notice'; notice: FamilyNotice }
   | { type: 'event'; event: FamilyEvent }
   | { type: 'notice-del'; id: string }

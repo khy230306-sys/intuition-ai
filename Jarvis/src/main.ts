@@ -167,7 +167,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.15'
+const APP_VERSION = '1.9.16'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -319,7 +319,7 @@ const SUGGESTIONS = [
 ]
 
 /** Clear main chat history (settings button, chat toolbar, or voice). */
-function resetChatHistory(opts?: { confirm?: boolean; announce?: boolean }): boolean {
+function resetChatHistory(opts?: { confirm?: boolean }): boolean {
   const needConfirm = opts?.confirm !== false
   if (needConfirm && state.messages.length > 0) {
     const ok = window.confirm('지난 대화를 모두 삭제하고 초기화할까요?')
@@ -329,11 +329,10 @@ function resetChatHistory(opts?: { confirm?: boolean; announce?: boolean }): boo
   state.messages = []
   state.draft = ''
   state.voiceHint = ''
-  if (opts?.announce !== false) {
-    pushMsg('assistant', '대화를 초기화했습니다. 지난 기록이 삭제되었습니다.')
-  }
+  state.busy = false
   showFlash('대화 초기화 완료')
   render()
+  scrollChat()
   return true
 }
 
@@ -710,6 +709,54 @@ function closeQrScannerOverlay(): void {
   document.getElementById('qr-scan-overlay')?.remove()
 }
 
+function closeMediaLightbox(): void {
+  document.getElementById('media-lightbox')?.remove()
+}
+
+/** Full-screen photo viewer for family/friends chat images. */
+function openMediaLightbox(src: string, alt = '사진'): void {
+  if (!src) return
+  closeMediaLightbox()
+  const overlay = document.createElement('div')
+  overlay.id = 'media-lightbox'
+  overlay.className = 'media-lightbox'
+  overlay.setAttribute('role', 'dialog')
+  overlay.setAttribute('aria-modal', 'true')
+  overlay.setAttribute('aria-label', '사진 보기')
+  overlay.innerHTML = `
+    <button type="button" class="media-lightbox-close" data-media-lightbox-close="1" aria-label="닫기">×</button>
+    <img class="media-lightbox-img" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" />
+  `
+  const close = () => {
+    closeMediaLightbox()
+    window.removeEventListener('keydown', onKey)
+  }
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close()
+  }
+  overlay.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement
+    if (t === overlay || t.closest('[data-media-lightbox-close]')) close()
+  })
+  window.addEventListener('keydown', onKey)
+  document.body.appendChild(overlay)
+}
+
+let mediaPreviewDelegationReady = false
+function bootMediaPreviewDelegation(): void {
+  if (mediaPreviewDelegationReady) return
+  mediaPreviewDelegationReady = true
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest?.('[data-media-preview]') as HTMLElement | null
+    if (!btn) return
+    e.preventDefault()
+    e.stopPropagation()
+    const src = btn.getAttribute('data-media-preview') || ''
+    const img = btn.querySelector('img')
+    openMediaLightbox(src, img?.alt || '사진')
+  })
+}
+
 async function scanInviteWithCamera(kind: SpaceKind): Promise<void> {
   if (!canUseCameraScan()) {
     showFlash('카메라를 쓸 수 없습니다. 사진 QR 또는 코드/링크 붙여넣기를 사용해 주세요.')
@@ -917,8 +964,8 @@ async function handleUserText(raw: string): Promise<void> {
     if (reply.clearChat) {
       clearChat()
       state.messages = []
-      pushMsg('assistant', reply.text)
-      showFlash('대화 초기화 완료')
+      state.draft = ''
+      showFlash(reply.text || '대화 초기화 완료')
       if (reply.speak !== false && state.settings.speakReplies) {
         void speakAsync(reply.text, reply.speakLang || 'ko-KR')
       }
@@ -1044,8 +1091,10 @@ function spaceChatBubbleHtml(
   const mine = m.authorId === memberId
   const mediaHtml = m.media
     ? m.media.kind === 'video'
-      ? `<video class="fam-media" controls playsinline preload="metadata" src="${escapeAttr(m.media.dataUrl)}"></video>`
-      : `<img class="fam-media" src="${escapeAttr(m.media.dataUrl)}" alt="${escapeAttr(m.media.name || t('chat.media.photo'))}" loading="lazy" />`
+      ? `<video class="fam-media fam-media-video" controls playsinline preload="metadata" src="${escapeAttr(m.media.dataUrl)}"></video>`
+      : `<button type="button" class="fam-media-btn" data-media-preview="${escapeAttr(m.media.dataUrl)}" aria-label="${escapeAttr(t('chat.media.photo'))} 크게 보기">
+          <img class="fam-media" src="${escapeAttr(m.media.dataUrl)}" alt="${escapeAttr(m.media.name || t('chat.media.photo'))}" loading="lazy" />
+        </button>`
     : ''
   const s = state.settings
   const wantTranslate =
@@ -1133,7 +1182,7 @@ async function hydrateSpaceTranslations(): Promise<void> {
   }
 }
 
-/** Append newly arrived chat rows without remounting the composer (typing / MIC). */
+/** Sync space chat DOM: prune cleared rows + append new ones (keeps composer mounted). */
 function appendLiveSpaceChats(kind: 'family' | 'friends'): void {
   const onChat =
     kind === 'family'
@@ -1143,18 +1192,31 @@ function appendLiveSpaceChats(kind: 'family' | 'friends'): void {
   const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
   const wrap = document.querySelector(kind === 'friends' ? '.friends-chat' : '.fam-chat')
   if (!room || !wrap) return
+  const keep = new Set(room.messages.slice(-80).map((m) => m.id))
+  let changed = false
+  for (const el of [...wrap.querySelectorAll<HTMLElement>('[data-msg-id]')]) {
+    const id = el.dataset.msgId || ''
+    if (keep.has(id)) continue
+    const row = el.closest('.fam-msg-row') || el
+    row.remove()
+    changed = true
+  }
   const existing = new Set(
     [...wrap.querySelectorAll<HTMLElement>('[data-msg-id]')].map((el) => el.dataset.msgId || ''),
   )
-  let added = false
   for (const m of room.messages.slice(-80)) {
     if (existing.has(m.id)) continue
     if (wrap.querySelector('.empty')) wrap.innerHTML = ''
     wrap.insertAdjacentHTML('beforeend', spaceChatBubbleHtml(m, room.memberId))
     existing.add(m.id)
-    added = true
+    changed = true
   }
-  if (added) {
+  if (room.messages.length === 0 && !wrap.querySelector('.empty')) {
+    wrap.innerHTML =
+      '<div class="empty">첫 메시지를 남겨 보세요.</div>'
+    changed = true
+  }
+  if (changed) {
     scrollSpaceChat(kind)
     void hydrateSpaceTranslations()
   }
@@ -3019,12 +3081,18 @@ function bind(): void {
     const room = loadFamilyRoom()
     if (!room) return
     const ok = window.confirm(
-      `가족 대화 ${room.messages.length}개를 이 기기에서 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+      `가족 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
     )
     if (!ok) return
-    if (clearFamilyChat()) {
+    const clearedAt = Date.now()
+    if (clearFamilyChat(clearedAt)) {
       showFlash('가족 대화를 초기화했습니다.')
       render()
+      scrollSpaceChat('family')
+      void (async () => {
+        await ensureFamilySyncOnce()
+        await broadcastFamilyPacket({ type: 'chat-clear', clearedAt })
+      })()
     }
   })
 
@@ -3314,12 +3382,18 @@ function bind(): void {
     const room = loadFriendsRoom()
     if (!room) return
     const ok = window.confirm(
-      `친구 대화 ${room.messages.length}개를 이 기기에서 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+      `친구 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
     )
     if (!ok) return
-    if (clearFriendsChat()) {
+    const clearedAt = Date.now()
+    if (clearFriendsChat(clearedAt)) {
       showFlash('친구 대화를 초기화했습니다.')
       render()
+      scrollSpaceChat('friends')
+      void (async () => {
+        await ensureFriendsSyncOnce()
+        await broadcastFriendsPacket({ type: 'chat-clear', clearedAt })
+      })()
     }
   })
 
@@ -3836,6 +3910,8 @@ function bind(): void {
     })
   })
 
+  // Media preview uses document delegation (see bootMediaPreviewDelegation).
+
   document.querySelectorAll<HTMLButtonElement>('[data-toggle-orig]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const wrap = btn.closest('.fam-msg-tr') as HTMLElement | null
@@ -4013,8 +4089,10 @@ function bind(): void {
   })
 
   document.querySelectorAll('[data-action="clear-chat"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      resetChatHistory({ confirm: true, announce: true })
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      resetChatHistory({ confirm: true })
     })
   })
   document.querySelectorAll('[data-action="hard-refresh"]').forEach((btn) => {
@@ -4036,6 +4114,7 @@ function bind(): void {
 }
 
 function boot(): void {
+  bootMediaPreviewDelegation()
   registerSW({
     immediate: true,
     onNeedRefresh() {

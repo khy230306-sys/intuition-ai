@@ -1,6 +1,7 @@
 import { getRelaySockets, joinRoom, selfId, type MessageAction } from '@trystero-p2p/mqtt'
 import type { FamilySyncPacket } from './familyTypes'
 import {
+  applyFamilyChatClearedAt,
   loadFamilyRoom,
   mergeFamilySnapshot,
   saveFamilyRoom,
@@ -88,7 +89,13 @@ function applyPacket(packet: FamilySyncPacket): void {
     return
   }
 
+  if (packet.type === 'chat-clear') {
+    applyFamilyChatClearedAt(packet.clearedAt)
+    return
+  }
+
   if (packet.type === 'chat') {
+    if ((local.chatClearedAt || 0) >= packet.message.createdAt) return
     if (!local.messages.some((m) => m.id === packet.message.id)) {
       local.messages.push(packet.message)
       saveFamilyRoom(local)

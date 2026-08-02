@@ -67,12 +67,15 @@ export type FriendsRoom = {
   notices: FriendsNotice[]
   events: FriendsEvent[]
   updatedAt: number
+  /** Messages at or before this timestamp stay cleared (survives sync merge). */
+  chatClearedAt?: number
 }
 
 export type FriendsSyncPacket =
   | { type: 'hello'; member: FriendsMember; roomName: string; updatedAt: number }
   | { type: 'snapshot'; room: Omit<FriendsRoom, 'memberId' | 'memberName'> }
   | { type: 'chat'; message: FriendsChatMsg }
+  | { type: 'chat-clear'; clearedAt: number }
   | { type: 'notice'; notice: FriendsNotice }
   | { type: 'event'; event: FriendsEvent }
   | { type: 'notice-del'; id: string }

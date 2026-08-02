@@ -71,6 +71,7 @@ describe('friends space', () => {
     postFriendsChat('지울 메시지')
     addFriendsNotice('유지 공지', '내용')
     expect(clearFriendsChat()).toBe(true)
+    expect(loadFriendsRoom()?.chatClearedAt).toBeGreaterThan(0)
     const loaded = loadFriendsRoom()!
     expect(loaded.messages).toHaveLength(0)
     expect(loaded.notices).toHaveLength(1)

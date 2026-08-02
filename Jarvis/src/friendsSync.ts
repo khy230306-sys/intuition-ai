@@ -1,6 +1,7 @@
 import { getRelaySockets, joinRoom, selfId, type MessageAction } from '@trystero-p2p/mqtt'
 import type { FriendsSyncPacket } from './friendsTypes'
 import {
+  applyFriendsChatClearedAt,
   loadFriendsRoom,
   mergeFriendsSnapshot,
   saveFriendsRoom,
@@ -88,7 +89,13 @@ function applyPacket(packet: FriendsSyncPacket): void {
     return
   }
 
+  if (packet.type === 'chat-clear') {
+    applyFriendsChatClearedAt(packet.clearedAt)
+    return
+  }
+
   if (packet.type === 'chat') {
+    if ((local.chatClearedAt || 0) >= packet.message.createdAt) return
     if (!local.messages.some((m) => m.id === packet.message.id)) {
       local.messages.push(packet.message)
       saveFriendsRoom(local)

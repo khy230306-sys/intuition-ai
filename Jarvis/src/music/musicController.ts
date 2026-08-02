@@ -5,6 +5,7 @@ import {
   applyReadyResults,
   getMusicSession,
   patchMusicSession,
+  resetMusicSession,
 } from './musicSession'
 import type { MusicControlAction, MusicSearchResult, MusicSession, MusicSkillReply } from './types'
 
@@ -120,18 +121,25 @@ export async function controlMusic(
 
   if (action === 'pause' || action === 'stop') {
     const ctrl = await provider.control(action)
-    patchMusicSession({
-      status: action === 'stop' ? 'stopped' : 'paused',
-      lastAction: action === 'stop' ? 'stop_music' : 'pause_music',
-    })
-    if (!ctrl.ok && ctrl.reason === 'external_app') {
-      return reply(
-        locale.startsWith('en')
-          ? 'AIZIO marked music as stopped here. If sound continues, pause it in the external music app.'
-          : '여기에서는 음악 세션을 멈춤으로 표시했어요. 소리가 계속되면 외부 음악 앱에서 일시정지해 주세요.',
-      )
+    if (action === 'stop') {
+      resetMusicSession()
+      const text =
+        !ctrl.ok && ctrl.reason === 'external_app'
+          ? locale.startsWith('en')
+            ? 'Music controls are closed. If sound continues, pause it in the external music app.'
+            : '음악 패널을 닫았어요. 소리가 계속되면 외부 음악 앱에서 일시정지해 주세요.'
+          : locale.startsWith('en')
+            ? 'Music stopped.'
+            : '음악을 멈췄어요.'
+      return reply(text, { showMiniPlayer: false })
     }
-    return reply(locale.startsWith('en') ? 'Music stopped.' : '음악을 멈췄어요.')
+    patchMusicSession({
+      status: 'paused',
+      lastAction: 'pause_music',
+    })
+    return reply(locale.startsWith('en') ? 'Music paused.' : '음악을 일시정지했어요.', {
+      showMiniPlayer: true,
+    })
   }
 
   if (action === 'resume') {

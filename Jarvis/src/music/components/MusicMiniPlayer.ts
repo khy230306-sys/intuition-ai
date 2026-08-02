@@ -40,15 +40,27 @@ function providerLabel(provider: string): string {
   return provider || 'Music'
 }
 
+/** Active music request — hide when idle/stopped/error or user dismissed the panel. */
+export function isMusicMiniPlayerActive(
+  session: MusicSession | null | undefined,
+  visible: boolean,
+): boolean {
+  if (!visible || !session) return false
+  const st = session.status
+  if (st === 'idle' || st === 'stopped' || st === 'error') return false
+  if (!session.query && !session.title && !session.url && st !== 'searching') return false
+  return true
+}
+
 /** Compact foldable mini player above the composer (does not cover MIC/send). */
 export function renderMusicMiniPlayer(session: MusicSession | null, visible: boolean): string {
-  if (!visible || !session || session.status === 'idle') return ''
-  const title = session.title || session.query || '—'
-  const canOpen = Boolean(session.url)
+  if (!isMusicMiniPlayerActive(session, visible)) return ''
+  const title = session!.title || session!.query || '—'
+  const canOpen = Boolean(session!.url)
   const sub =
-    session.status === 'opened_external'
-      ? `${providerLabel(session.provider)} ${statusLabel(session.status)}`
-      : `${providerLabel(session.provider)} · ${statusLabel(session.status)}`
+    session!.status === 'opened_external'
+      ? `${providerLabel(session!.provider)} ${statusLabel(session!.status)}`
+      : `${providerLabel(session!.provider)} · ${statusLabel(session!.status)}`
   return `
     <div class="music-mini" data-music-mini="1" role="region" aria-label="AIZIO Music">
       <div class="music-mini-main">

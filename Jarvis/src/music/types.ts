@@ -134,5 +134,7 @@ export type MusicSkillReply = {
   needsGesture?: boolean
   /** Open provider in external app/tab after user taps */
   playUrl?: string | null
+  /** When false, chat should hide the mini player (stop / done). Default: keep current. */
+  showMiniPlayer?: boolean
   session: MusicSession
 }

@@ -207,12 +207,13 @@ import {
   playWithUserGesture,
   renderMusicMiniPlayer,
   renderMusicPlayChip,
+  resetMusicSession,
   sessionSnapshot,
   updateMusicPreferences,
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.3'
+const APP_VERSION = '1.13.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -434,6 +435,7 @@ function resetChatHistory(opts?: { confirm?: boolean }): boolean {
   state.draft = ''
   state.voiceHint = ''
   state.busy = false
+  dismissMusicMiniPlayer()
   showFlash('대화 초기화 완료')
   render()
   scrollChat()
@@ -1150,17 +1152,38 @@ function pushMsg(
   return msg
 }
 
-function syncMusicUiFromSession(): void {
+function syncMusicUiFromSession(opts?: { forceOpen?: boolean; forceHide?: boolean }): void {
   state.musicSession = sessionSnapshot()
+  if (opts?.forceHide) {
+    state.musicPlayerOpen = false
+    return
+  }
   const st = state.musicSession.status
-  if (st === 'ready' || st === 'opened_external' || st === 'paused' || st === 'unknown' || st === 'searching') {
+  if (st === 'idle' || st === 'stopped' || st === 'error') {
+    state.musicPlayerOpen = false
+    return
+  }
+  if (
+    opts?.forceOpen ||
+    st === 'ready' ||
+    st === 'opened_external' ||
+    st === 'paused' ||
+    st === 'unknown' ||
+    st === 'searching'
+  ) {
     state.musicPlayerOpen = true
   }
 }
 
+function dismissMusicMiniPlayer(): void {
+  resetMusicSession()
+  state.musicSession = sessionSnapshot()
+  state.musicPlayerOpen = false
+}
+
 async function handleMusicAction(action: string): Promise<void> {
   if (action === 'close') {
-    state.musicPlayerOpen = false
+    dismissMusicMiniPlayer()
     render()
     return
   }
@@ -1177,7 +1200,11 @@ async function handleMusicAction(action: string): Promise<void> {
   } else {
     return
   }
-  syncMusicUiFromSession()
+  if (reply.showMiniPlayer === false || action === 'stop') {
+    dismissMusicMiniPlayer()
+  } else {
+    syncMusicUiFromSession({ forceOpen: true })
+  }
   if (reply.text) {
     pushMsg('assistant', reply.text, {
       musicNeedsGesture: reply.needsGesture,
@@ -1246,6 +1273,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       clearChat()
       state.messages = []
       state.draft = ''
+      dismissMusicMiniPlayer()
       showFlash(reply.text || '대화 초기화 완료')
       if (reply.speak !== false && state.settings.speakReplies) {
         void speakAsync(reply.text, reply.speakLang || 'ko-KR')
@@ -1279,8 +1307,13 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       })
     }
     if (reply.musicShowMiniPlayer) {
-      syncMusicUiFromSession()
-      state.musicPlayerOpen = true
+      syncMusicUiFromSession({ forceOpen: true })
+    } else {
+      // Stop / dismiss from conversation — hide panel when session is done
+      const st = sessionSnapshot().status
+      if (st === 'stopped' || st === 'idle' || st === 'error') {
+        dismissMusicMiniPlayer()
+      }
     }
     if (reply.view) state.view = reply.view
     if (reply.arcadeId) state.arcadeId = reply.arcadeId
@@ -5108,12 +5141,10 @@ function continueBootAfterRefresh(): void {
 function bootAppCore(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
+  // Restore last query for sticky intent, but never auto-open the panel on launch.
+  // Mini player appears only after the user asks for music in this session.
   state.musicSession = loadPersistedMusicSession()
-  state.musicPlayerOpen = Boolean(
-    state.musicSession.query &&
-      state.musicSession.status !== 'idle' &&
-      state.musicSession.status !== 'stopped',
-  )
+  state.musicPlayerOpen = false
   initAppLocale(state.settings.appLocale)
   if (!state.settings.appLocale) {
     state.settings = { ...state.settings, appLocale: getAppLocale() }

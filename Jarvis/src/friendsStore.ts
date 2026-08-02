@@ -131,15 +131,22 @@ export function leaveFriendsRoom(): void {
   saveFriendsRoom(null)
 }
 
-export function postFriendsChat(text: string): FriendsChatMsg | null {
+export function postFriendsChat(
+  text: string,
+  opts?: { media?: FriendsChatMsg['media']; sourceLanguage?: string },
+): FriendsChatMsg | null {
   const room = loadFriendsRoom()
-  if (!room || !text.trim()) return null
+  if (!room) return null
+  const caption = (text || '').trim()
+  if (!caption && !opts?.media) return null
   const message: FriendsChatMsg = {
     id: uid(),
     authorId: room.memberId,
     authorName: room.memberName,
-    text: text.trim().slice(0, 500),
+    text: (caption || (opts?.media?.kind === 'video' ? '[동영상]' : '[사진]')).slice(0, 500),
     createdAt: Date.now(),
+    media: opts?.media,
+    sourceLanguage: opts?.sourceLanguage,
   }
   room.messages.push(message)
   saveFriendsRoom(room)

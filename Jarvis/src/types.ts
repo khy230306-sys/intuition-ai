@@ -130,9 +130,28 @@ export interface JarvisSettings {
   notifyFriendsChat?: boolean
   /** Also banner while the matching tab is open/focused (default off). */
   notifyWhileOpen?: boolean
+  /** App UI locale: ko | en | ja | vi */
+  appLocale?: string
+  /** Target language for room message translation */
+  translationLocale?: string
+  /** Auto-translate peer messages in family/friends rooms */
+  autoTranslateMessages?: boolean
+  /** Show original under translation */
+  showOriginalText?: boolean
+  /** Detect message language when posting */
+  detectMessageLanguage?: boolean
 }
 
-export type View = 'chat' | 'invest' | 'life' | 'family' | 'friends' | 'games' | 'actions' | 'settings'
+export type View =
+  | 'chat'
+  | 'invest'
+  | 'life'
+  | 'family'
+  | 'friends'
+  | 'games'
+  | 'actions'
+  | 'settings'
+  | 'global'
 
 export interface ActionResult {
   ok: boolean

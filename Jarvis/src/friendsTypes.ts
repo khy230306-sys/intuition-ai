@@ -13,12 +13,22 @@ export type FriendsMember = {
   push?: PushSubJson | null
 }
 
+export type FriendsChatMedia = {
+  kind: 'image' | 'video'
+  mime: string
+  name?: string
+  dataUrl: string
+  bytes?: number
+}
+
 export type FriendsChatMsg = {
   id: string
   authorId: string
   authorName: string
   text: string
   createdAt: number
+  media?: FriendsChatMedia
+  sourceLanguage?: string
 }
 
 export type FriendsNotice = {

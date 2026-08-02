@@ -14,12 +14,24 @@ export type FamilyMember = {
   push?: PushSubJson | null
 }
 
+export type FamilyChatMedia = {
+  kind: 'image' | 'video'
+  mime: string
+  name?: string
+  dataUrl: string
+  bytes?: number
+}
+
 export type FamilyChatMsg = {
   id: string
   authorId: string
   authorName: string
   text: string
   createdAt: number
+  /** Optional photo/video payload (size-capped data URL). */
+  media?: FamilyChatMedia
+  /** BCP47-ish language of originalText when known. */
+  sourceLanguage?: string
 }
 
 export type FamilyNotice = {

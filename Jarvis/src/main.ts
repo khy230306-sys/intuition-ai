@@ -150,8 +150,24 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
+import { fileToChatMedia, mediaCaption, type ChatMedia } from './chatMedia'
+import {
+  getAppLocale,
+  initAppLocale,
+  localeNativeName,
+  setAppLocale,
+  supportedAppLocales,
+  t,
+  type AppLocale,
+} from './i18n'
+import {
+  detectMessageLanguage,
+  getCachedTranslation,
+  translateChatMessage,
+  translationSourceLabel,
+} from './globalChat'
 
-const APP_VERSION = '1.9.12'
+const APP_VERSION = '1.9.13'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -541,7 +557,15 @@ function captureViewFromUrl(): void {
   try {
     const u = new URL(window.location.href)
     const v = u.searchParams.get('view')
-    if (v === 'family' || v === 'friends' || v === 'chat' || v === 'settings') {
+    if (
+      v === 'family' ||
+      v === 'friends' ||
+      v === 'chat' ||
+      v === 'settings' ||
+      v === 'global' ||
+      v === 'life' ||
+      v === 'invest'
+    ) {
       state.view = v
       u.searchParams.delete('view')
       const q = u.searchParams.toString()
@@ -1006,11 +1030,95 @@ function scrollSpaceChat(space?: 'family' | 'friends'): void {
 }
 
 function spaceChatBubbleHtml(
-  m: { id: string; authorId: string; authorName: string; text: string },
+  m: {
+    id: string
+    authorId: string
+    authorName: string
+    text: string
+    media?: { kind: 'image' | 'video'; dataUrl: string; mime: string; name?: string }
+    sourceLanguage?: string
+  },
   memberId: string,
 ): string {
   const mine = m.authorId === memberId
-  return `<div class="fam-msg ${mine ? 'mine' : ''}" data-msg-id="${escapeAttr(m.id)}"><span class="meta">${escapeHtml(m.authorName)}</span>${escapeHtml(m.text)}</div>`
+  const mediaHtml = m.media
+    ? m.media.kind === 'video'
+      ? `<video class="fam-media" controls playsinline preload="metadata" src="${escapeAttr(m.media.dataUrl)}"></video>`
+      : `<img class="fam-media" src="${escapeAttr(m.media.dataUrl)}" alt="${escapeAttr(m.media.name || t('chat.media.photo'))}" loading="lazy" />`
+    : ''
+  const s = state.settings
+  const wantTranslate =
+    !mine &&
+    s.autoTranslateMessages !== false &&
+    Boolean((m.text || '').trim()) &&
+    !/^\[(사진|동영상)\]$/.test(m.text.trim())
+  return `<div class="fam-msg ${mine ? 'mine' : ''}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>
+    <span class="meta">${escapeHtml(m.authorName)}</span>
+    ${mediaHtml}
+    <div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>
+    <div class="fam-msg-tr" data-role="tr" hidden></div>
+  </div>`
+}
+
+async function hydrateSpaceTranslations(): Promise<void> {
+  const s = state.settings
+  if (s.autoTranslateMessages === false) return
+  if (state.view !== 'family' && state.view !== 'friends') return
+  const target = (s.translationLocale || s.appLocale || getAppLocale() || 'ko').split('-')[0]!
+  const nodes = [...document.querySelectorAll<HTMLElement>('.fam-msg[data-need-translate="1"]')]
+  for (const el of nodes.slice(-40)) {
+    const id = el.dataset.msgId || ''
+    let original = el.dataset.orig || ''
+    try {
+      original = decodeURIComponent(original)
+    } catch {
+      /* keep raw */
+    }
+    const body = el.querySelector<HTMLElement>('[data-role="body"]')
+    const trBox = el.querySelector<HTMLElement>('[data-role="tr"]')
+    if (!id || !original || !body || !trBox) continue
+
+    const cached = getCachedTranslation(id, target)
+    const apply = (translated: string, from: string, status: string) => {
+      if (status === 'skipped' || translated === original) {
+        trBox.hidden = true
+        return
+      }
+      const showOrig = s.showOriginalText === true
+      body.textContent = translated
+      trBox.hidden = false
+      trBox.innerHTML = `<button type="button" class="linkish" data-toggle-orig="${escapeAttr(id)}">${escapeHtml(t('chat.translation.showOriginal'))}</button>
+        <span class="hint">${escapeHtml(t('chat.translation.from', { from: translationSourceLabel(from) }))}</span>
+        ${showOrig ? `<pre class="fam-orig">${escapeHtml(original)}</pre>` : ''}`
+      trBox.dataset.translated = translated
+      trBox.dataset.original = original
+      trBox.dataset.showing = 'translated'
+    }
+
+    if (cached) {
+      apply(cached.translatedText, cached.sourceLanguage || el.dataset.srcLang || '', 'completed')
+      continue
+    }
+    trBox.hidden = false
+    trBox.textContent = t('chat.translation.pending')
+    try {
+      const result = await translateChatMessage({
+        messageId: id,
+        originalText: original,
+        sourceLanguage: el.dataset.srcLang || undefined,
+        targetLanguage: target,
+      })
+      if (result.status === 'failed' || result.status === 'offline' || result.status === 'unavailable') {
+        body.textContent = original
+        trBox.textContent = t('chat.translation.failed')
+        continue
+      }
+      apply(result.translatedText, result.detectedSourceLanguage, result.status)
+    } catch {
+      body.textContent = original
+      trBox.textContent = t('chat.translation.failed')
+    }
+  }
 }
 
 /** Append newly arrived chat rows without remounting the composer (typing / MIC). */
@@ -1034,14 +1142,29 @@ function appendLiveSpaceChats(kind: 'family' | 'friends'): void {
     existing.add(m.id)
     added = true
   }
-  if (added) scrollSpaceChat(kind)
+  if (added) {
+    scrollSpaceChat(kind)
+    void hydrateSpaceTranslations()
+  }
 }
 
-function sendSpaceChat(space: 'family' | 'friends', text: string): void {
+function spaceSourceLang(text: string): string | undefined {
+  if (state.settings.detectMessageLanguage === false) {
+    return (state.settings.translationLocale || state.settings.appLocale || getAppLocale()).split('-')[0]
+  }
+  const d = detectMessageLanguage(text, {
+    prefer: (state.settings.appLocale || getAppLocale()).split('-')[0],
+  })
+  return d.language === 'und' ? undefined : d.language
+}
+
+function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMedia): void {
   const trimmed = text.trim()
-  if (!trimmed) return
+  if (!trimmed && !media) return
+  const caption = media ? mediaCaption(media, trimmed) : trimmed
+  const sourceLanguage = spaceSourceLang(caption)
   if (space === 'family') {
-    const msg = postFamilyChat(trimmed)
+    const msg = postFamilyChat(caption, { media, sourceLanguage })
     if (!msg) return
     render()
     scrollSpaceChat('family')
@@ -1051,7 +1174,7 @@ function sendSpaceChat(space: 'family' | 'friends', text: string): void {
     })()
     return
   }
-  const msg = postFriendsChat(trimmed)
+  const msg = postFriendsChat(caption, { media, sourceLanguage })
   if (!msg) return
   render()
   scrollSpaceChat('friends')
@@ -1059,6 +1182,17 @@ function sendSpaceChat(space: 'family' | 'friends', text: string): void {
     await ensureFriendsSyncOnce()
     await broadcastFriendsPacket({ type: 'chat', message: msg })
   })()
+}
+
+async function sendSpaceMedia(space: 'family' | 'friends', file: File): Promise<void> {
+  try {
+    const media = await fileToChatMedia(file)
+    const draftId = space === 'family' ? 'family-draft' : 'friends-draft'
+    const draft = (document.getElementById(draftId) as HTMLInputElement | null)?.value || ''
+    sendSpaceChat(space, draft, media)
+  } catch (err) {
+    showFlash(err instanceof Error ? err.message : t('chat.media.tooLarge'))
+  }
 }
 
 function startSpaceDictation(space: 'family' | 'friends'): void {
@@ -1244,14 +1378,15 @@ function renderLocationGate(): string {
 
 function renderNav(): string {
   const items: Array<{ id: View; label: string; ico: string }> = [
-    { id: 'chat', label: '대화', ico: 'CHAT' },
-    { id: 'invest', label: '투자', ico: 'INV' },
-    { id: 'life', label: '생활', ico: 'LIFE' },
-    { id: 'family', label: '가족', ico: 'FAM' },
-    { id: 'friends', label: '친구', ico: 'FRD' },
-    { id: 'games', label: '게임', ico: 'PLAY' },
-    { id: 'actions', label: '실행', ico: 'RUN' },
-    { id: 'settings', label: '설정', ico: 'SET' },
+    { id: 'chat', label: t('nav.chat'), ico: 'CHAT' },
+    { id: 'invest', label: t('nav.invest'), ico: 'INV' },
+    { id: 'life', label: t('nav.life'), ico: 'LIFE' },
+    { id: 'family', label: t('nav.family'), ico: 'FAM' },
+    { id: 'friends', label: t('nav.friends'), ico: 'FRD' },
+    { id: 'global', label: t('nav.global'), ico: 'TR' },
+    { id: 'games', label: t('nav.games'), ico: 'PLAY' },
+    { id: 'actions', label: t('nav.actions'), ico: 'RUN' },
+    { id: 'settings', label: t('nav.settings'), ico: 'SET' },
   ]
   return `
     <nav class="nav nav-8">
@@ -1266,6 +1401,54 @@ function renderNav(): string {
         )
         .join('')}
     </nav>
+  `
+}
+
+function renderGlobal(): string {
+  const s = state.settings
+  const locales = supportedAppLocales()
+  return `
+    <section class="panel view-scroll">
+      <h2 class="section-title">${escapeHtml(t('global.title'))}</h2>
+      <p class="hint">${escapeHtml(t('global.subtitle'))}</p>
+      <p class="hint">${escapeHtml(t('global.noCentralServer'))}</p>
+      <p class="hint">${escapeHtml(t('global.usesFamilyFriends'))}</p>
+      <div class="row-btns">
+        <button type="button" class="primary-btn" data-view="family">${escapeHtml(t('global.openFamily'))}</button>
+        <button type="button" class="ghost-btn" data-view="friends">${escapeHtml(t('global.openFriends'))}</button>
+      </div>
+      <h3 class="subsection-title">${escapeHtml(t('settings.translation.title'))}</h3>
+      <form id="global-translation-form" class="settings-form life-input-form">
+        <div class="toggle-row"><span>${escapeHtml(t('settings.translation.auto'))}</span>
+          <input type="checkbox" name="autoTranslateMessages" ${s.autoTranslateMessages !== false ? 'checked' : ''} /></div>
+        <div class="toggle-row"><span>${escapeHtml(t('settings.translation.showOriginal'))}</span>
+          <input type="checkbox" name="showOriginalText" ${s.showOriginalText ? 'checked' : ''} /></div>
+        <div class="toggle-row"><span>${escapeHtml(t('settings.translation.detect'))}</span>
+          <input type="checkbox" name="detectMessageLanguage" ${s.detectMessageLanguage !== false ? 'checked' : ''} /></div>
+        <label>${escapeHtml(t('settings.translation.target'))}
+          <select name="translationLocale">
+            ${locales
+              .map(
+                (code) =>
+                  `<option value="${code}" ${(s.translationLocale || 'ko') === code ? 'selected' : ''}>${localeNativeName(code)}</option>`,
+              )
+              .join('')}
+          </select>
+        </label>
+        <label>${escapeHtml(t('settings.language.title'))}
+          <select name="appLocale">
+            ${locales
+              .map(
+                (code) =>
+                  `<option value="${code}" ${getAppLocale() === code ? 'selected' : ''}>${localeNativeName(code)}</option>`,
+              )
+              .join('')}
+          </select>
+        </label>
+        <button class="primary-btn" type="submit">${escapeHtml(t('common.save'))}</button>
+      </form>
+      <p class="hint">${escapeHtml(t('global.privacyNote'))}</p>
+    </section>
   `
 }
 
@@ -1994,8 +2177,11 @@ function renderFamily(): string {
       )}</div>
       <form id="family-chat-form" class="composer family-composer">
         <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'family' ? 'listening' : ''}" data-action="space-mic" data-space="family" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'family' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'family' ? 'STOP' : 'MIC'}</button>
-        <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required autocomplete="off" />
-        <button class="primary-btn" type="submit">전송</button>
+        <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
+          <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="family" hidden />
+        </label>
+        <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" autocomplete="off" />
+        <button class="primary-btn" type="submit">${escapeHtml(t('common.send'))}</button>
       </form>
       <div class="row-btns space-chat-tools">
         <button type="button" class="ghost-btn danger-btn" data-action="family-clear-chat">대화 초기화</button>
@@ -2173,8 +2359,11 @@ function renderFriends(): string {
       )}</div>
       <form id="friends-chat-form" class="composer family-composer">
         <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'friends' ? 'listening' : ''}" data-action="space-mic" data-space="friends" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'friends' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'friends' ? 'STOP' : 'MIC'}</button>
-        <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" required autocomplete="off" />
-        <button class="primary-btn" type="submit">전송</button>
+        <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
+          <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="friends" hidden />
+        </label>
+        <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" autocomplete="off" />
+        <button class="primary-btn" type="submit">${escapeHtml(t('common.send'))}</button>
       </form>
       <div class="row-btns space-chat-tools">
         <button type="button" class="ghost-btn danger-btn" data-action="friends-clear-chat">대화 초기화</button>
@@ -2330,6 +2519,32 @@ function renderSettings(): string {
         <label>기본 도시
           <input name="city" value="${escapeAttr(s.city)}" placeholder="서울" />
         </label>
+        <label>${escapeHtml(t('settings.language.title'))}
+          <select name="appLocale">
+            ${supportedAppLocales()
+              .map(
+                (code) =>
+                  `<option value="${code}" ${getAppLocale() === code ? 'selected' : ''}>${localeNativeName(code)}</option>`,
+              )
+              .join('')}
+          </select>
+        </label>
+        <p class="hint">${escapeHtml(t('settings.language.help'))}</p>
+        <h3 class="subsection-title">${escapeHtml(t('settings.translation.title'))}</h3>
+        <div class="toggle-row"><span>${escapeHtml(t('settings.translation.auto'))}</span>
+          <input type="checkbox" name="autoTranslateMessages" ${s.autoTranslateMessages !== false ? 'checked' : ''} /></div>
+        <div class="toggle-row"><span>${escapeHtml(t('settings.translation.showOriginal'))}</span>
+          <input type="checkbox" name="showOriginalText" ${s.showOriginalText ? 'checked' : ''} /></div>
+        <label>${escapeHtml(t('settings.translation.target'))}
+          <select name="translationLocale">
+            ${supportedAppLocales()
+              .map(
+                (code) =>
+                  `<option value="${code}" ${(s.translationLocale || 'ko') === code ? 'selected' : ''}>${localeNativeName(code)}</option>`,
+              )
+              .join('')}
+          </select>
+        </label>
         <div class="toggle-row">
           <span>답변 읽어주기</span>
           <input type="checkbox" name="speakReplies" ${s.speakReplies ? 'checked' : ''} />
@@ -2398,11 +2613,13 @@ function render(): void {
             ? renderFamily()
             : state.view === 'friends'
               ? renderFriends()
-              : state.view === 'games'
-                ? renderGames()
-                : state.view === 'actions'
-                  ? renderActions()
-                  : renderSettings()
+              : state.view === 'global'
+                ? renderGlobal()
+                : state.view === 'games'
+                  ? renderGames()
+                  : state.view === 'actions'
+                    ? renderActions()
+                    : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
   document.body.dataset.jarvisView = state.view
   bind()
@@ -2414,11 +2631,17 @@ function render(): void {
   }
   if (state.view === 'family' && loadFamilyRoom()) {
     void ensureFamilySyncOnce()
-    if (state.familyTab === 'chat') scrollSpaceChat('family')
+    if (state.familyTab === 'chat') {
+      scrollSpaceChat('family')
+      void hydrateSpaceTranslations()
+    }
   }
   if (state.view === 'friends' && loadFriendsRoom()) {
     void ensureFriendsSyncOnce()
-    if (state.friendsTab === 'chat') scrollSpaceChat('friends')
+    if (state.friendsTab === 'chat') {
+      scrollSpaceChat('friends')
+      void hydrateSpaceTranslations()
+    }
   }
 }
 
@@ -3520,7 +3743,9 @@ function bind(): void {
   settingsForm?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(settingsForm)
+    const appLocale = String(fd.get('appLocale') || getAppLocale()) as AppLocale
     const next: JarvisSettings = {
+      ...state.settings,
       displayName: String(fd.get('displayName') || '주인님').trim() || '주인님',
       speakReplies: Boolean(fd.get('speakReplies')),
       apiKey: String(fd.get('apiKey') || '').trim(),
@@ -3530,9 +3755,14 @@ function bind(): void {
       notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
       notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
       notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
+      appLocale,
+      translationLocale: String(fd.get('translationLocale') || appLocale),
+      autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
+      showOriginalText: Boolean(fd.get('showOriginalText')),
     }
     state.settings = next
     saveSettings(next)
+    setAppLocale(appLocale)
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
         if (sub) {
@@ -3542,6 +3772,54 @@ function bind(): void {
     }
     showFlash('설정을 저장했습니다.')
     render()
+  })
+
+  document.getElementById('global-translation-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const appLocale = String(fd.get('appLocale') || getAppLocale()) as AppLocale
+    const next: JarvisSettings = {
+      ...state.settings,
+      appLocale,
+      translationLocale: String(fd.get('translationLocale') || appLocale),
+      autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
+      showOriginalText: Boolean(fd.get('showOriginalText')),
+      detectMessageLanguage: Boolean(fd.get('detectMessageLanguage')),
+    }
+    state.settings = next
+    saveSettings(next)
+    setAppLocale(appLocale)
+    showFlash(t('common.save'))
+    render()
+  })
+
+  document.querySelectorAll<HTMLInputElement>('[data-space-media]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      const space = input.dataset.spaceMedia as 'family' | 'friends' | undefined
+      input.value = ''
+      if (!file || !space) return
+      void sendSpaceMedia(space, file)
+    })
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-toggle-orig]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.fam-msg-tr') as HTMLElement | null
+      if (!wrap) return
+      const body = wrap.parentElement?.querySelector<HTMLElement>('[data-role="body"]')
+      if (!body) return
+      const showing = wrap.dataset.showing || 'translated'
+      if (showing === 'translated') {
+        body.textContent = wrap.dataset.original || body.textContent || ''
+        wrap.dataset.showing = 'original'
+        btn.textContent = t('chat.translation.showTranslated')
+      } else {
+        body.textContent = wrap.dataset.translated || body.textContent || ''
+        wrap.dataset.showing = 'translated'
+        btn.textContent = t('chat.translation.showOriginal')
+      }
+    })
   })
 
   document.querySelector('[data-action="enable-chat-push"]')?.addEventListener('click', () => {
@@ -3747,6 +4025,11 @@ function boot(): void {
 
   state.messages = loadChat()
   state.settings = loadSettings()
+  initAppLocale(state.settings.appLocale)
+  if (!state.settings.appLocale) {
+    state.settings = { ...state.settings, appLocale: getAppLocale() }
+    saveSettings(state.settings)
+  }
   captureViewFromUrl()
   captureInviteFromUrl()
   refreshInstallHint()

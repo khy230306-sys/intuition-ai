@@ -131,15 +131,22 @@ export function leaveFamilyRoom(): void {
   saveFamilyRoom(null)
 }
 
-export function postFamilyChat(text: string): FamilyChatMsg | null {
+export function postFamilyChat(
+  text: string,
+  opts?: { media?: FamilyChatMsg['media']; sourceLanguage?: string },
+): FamilyChatMsg | null {
   const room = loadFamilyRoom()
-  if (!room || !text.trim()) return null
+  if (!room) return null
+  const caption = (text || '').trim()
+  if (!caption && !opts?.media) return null
   const message: FamilyChatMsg = {
     id: uid(),
     authorId: room.memberId,
     authorName: room.memberName,
-    text: text.trim().slice(0, 500),
+    text: (caption || (opts?.media?.kind === 'video' ? '[동영상]' : '[사진]')).slice(0, 500),
     createdAt: Date.now(),
+    media: opts?.media,
+    sourceLanguage: opts?.sourceLanguage,
   }
   room.messages.push(message)
   saveFamilyRoom(room)

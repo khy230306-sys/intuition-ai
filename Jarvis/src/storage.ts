@@ -48,6 +48,11 @@ const defaultSettings: JarvisSettings = {
   notifyFamilyChat: true,
   notifyFriendsChat: true,
   notifyWhileOpen: false,
+  appLocale: undefined,
+  translationLocale: 'ko',
+  autoTranslateMessages: true,
+  showOriginalText: false,
+  detectMessageLanguage: true,
 }
 
 const defaultProfile: UserProfile = {
@@ -566,6 +571,10 @@ export function loadSettings(): JarvisSettings {
     notifyFamilyChat: raw.notifyFamilyChat !== false,
     notifyFriendsChat: raw.notifyFriendsChat !== false,
     notifyWhileOpen: raw.notifyWhileOpen === true,
+    autoTranslateMessages: raw.autoTranslateMessages !== false,
+    showOriginalText: raw.showOriginalText === true,
+    detectMessageLanguage: raw.detectMessageLanguage !== false,
+    translationLocale: raw.translationLocale || raw.appLocale || 'ko',
   }
 }
 

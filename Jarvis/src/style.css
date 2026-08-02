@@ -1509,6 +1509,40 @@ body {
   margin-top: 8px;
 }
 
+.fam-media {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 10px;
+  margin: 4px 0 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.fam-msg-tr {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.fam-msg-tr .linkish {
+  border: 0;
+  background: none;
+  color: var(--cyan-bright);
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.fam-orig {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .space-chat-tools {
   margin-top: 8px;
 }

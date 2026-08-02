@@ -1,10 +1,8 @@
-name: Deploy PICK AI (permanent gh-pages)
+name: Deploy PICK AI GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      - cursor/dorijitgottaeng-pick-ai-dddb
+    branches: [main]
     paths:
       - 'DoriJitGoTtaeng-PICK-AI/**'
       - '.github/workflows/deploy-pick-ai.yml'
@@ -12,17 +10,17 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+  actions: write
 
 concurrency:
   group: pages-pick-ai
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: DoriJitGoTtaeng-PICK-AI
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,15 +28,57 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: DoriJitGoTtaeng-PICK-AI/package-lock.json
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - name: SPA 404 fallback
-        run: cp dist/index.html dist/404.html
+      - working-directory: DoriJitGoTtaeng-PICK-AI
+        run: |
+          npm ci
+          npm test
+          npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+      - name: Enable GitHub Pages (legacy gh-pages)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<'EOF' || true
+          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
+          EOF
+          gh api -X PUT "repos/${{ github.repository }}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<'EOF' || true
+          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
+          EOF
+          gh api -X POST "repos/${{ github.repository }}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            -f build_type=workflow || true
+          gh api "repos/${{ github.repository }}/pages" || true
       - name: Publish gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: DoriJitGoTtaeng-PICK-AI/dist
           force_orphan: true
+          enable_jekyll: false
           commit_message: Deploy PICK AI static site
+      - name: Setup Pages
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        continue-on-error: true
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: DoriJitGoTtaeng-PICK-AI/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4

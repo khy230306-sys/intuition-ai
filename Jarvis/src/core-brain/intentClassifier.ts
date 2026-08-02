@@ -10,7 +10,11 @@ import { lastIntent } from './brainState'
 type Rule = { intent: CoreIntent; re: RegExp; confidence: number }
 
 const RULES: Rule[] = [
-  { intent: 'help', re: /도움말|헬프|^help$|뭐\s*할\s*수|사용법|명령어/i, confidence: 0.92 },
+  {
+    intent: 'help',
+    re: /사용\s*설명서|시작\s*가이드|도움말|헬프|^help$|뭐\s*할\s*수|사용법|명령어|이\s*앱(?:이|은)?\s*뭐/i,
+    confidence: 0.92,
+  },
   { intent: 'change_setting', re: /설정\s*(열어|보여|가|켜)|settings?\s*open|언어\s*바꿔|tts\s*설정/i, confidence: 0.9 },
   { intent: 'app_navigation', re: /(투자|생활|가족|친구|게임|액션|설정|채팅)\s*(탭|화면|메뉴)?\s*(열어|보여|가|이동)/i, confidence: 0.88 },
   {

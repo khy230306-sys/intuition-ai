@@ -40,7 +40,12 @@ export function TimerPage() {
         </div>
         <Button
           variant="secondary"
-          onClick={() => window.open(`/display/tournament/${tournamentId}`, '_blank')}
+          onClick={() =>
+            window.open(
+              `${window.location.pathname}${window.location.search}#/display/tournament/${tournamentId}`,
+              '_blank',
+            )
+          }
         >
           전체 화면 TV
         </Button>

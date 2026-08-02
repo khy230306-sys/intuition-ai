@@ -275,25 +275,47 @@ export const useAppStore = create<AppStore>((set, get) => {
 
     login: (username, password) => {
       const creds = getDemoCredentials()
+      const id = username.trim()
+      const pw = password.trim()
+      // Ensure demo users exist even if local storage was wiped/corrupted
+      if (get().users.length === 0) {
+        const demo = createDemoSnapshot()
+        set({
+          ...demo,
+          session: get().session,
+          hydrated: true,
+          selectedTournamentId:
+            demo.tournaments.find((t) => t.status === 'running')?.id ??
+            demo.tournaments[0]?.id ??
+            null,
+        })
+      }
       if (isCloudMode()) {
-        // Cloud auth hook — demo local fallback still available if users exist
-        const user = get().users.find((u) => u.username === username)
+        const user = get().users.find((u) => u.username === id)
         if (!user) {
-          set({ lastError: '클라우드 모드: Supabase 로그인 연동 후 이용하세요.' })
+          // Keep demo credentials usable until Supabase Auth UI is connected
+          if (id !== creds.username || pw !== creds.password) {
+            set({ lastError: '클라우드 모드: Supabase 로그인 연동 후 이용하세요.' })
+            return false
+          }
+        } else if (pw !== creds.password) {
+          set({ lastError: '아이디 또는 비밀번호가 올바르지 않습니다.' })
           return false
         }
-      } else if (username !== creds.username || password !== creds.password) {
-        // Allow director/staff demo shortcuts
-        const user = get().users.find((u) => u.username === username)
-        if (!user || password !== creds.password) {
+      } else if (id !== creds.username || pw !== creds.password) {
+        const user = get().users.find((u) => u.username === id)
+        if (!user || pw !== creds.password) {
           set({ lastError: '아이디 또는 비밀번호가 올바르지 않습니다.' })
           return false
         }
       }
       const user =
-        get().users.find((u) => u.username === username) ??
+        get().users.find((u) => u.username === id) ??
         get().users.find((u) => u.role === 'admin')
-      if (!user) return false
+      if (!user) {
+        set({ lastError: '사용자 데이터를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.' })
+        return false
+      }
       const session: AuthSession = {
         userId: user.id,
         username: user.username,

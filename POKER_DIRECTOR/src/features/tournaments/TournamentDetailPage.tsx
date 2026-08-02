@@ -44,7 +44,16 @@ export function TournamentDetailPage() {
         <Link className="min-h-12 rounded-xl bg-panel-2 px-4 py-3 text-sm" to={`/tournaments/${t.id}/blinds`}>
           블라인드 편집
         </Link>
-        <Button onClick={() => window.open(`/display/tournament/${t.id}`, '_blank')}>TV</Button>
+        <Button
+          onClick={() =>
+            window.open(
+              `${window.location.pathname}${window.location.search}#/display/tournament/${t.id}`,
+              '_blank',
+            )
+          }
+        >
+          TV
+        </Button>
         {leaders[0] ? (
           <Button variant="gold" onClick={() => finalizeWinner(t.id, leaders[0].id)}>
             우승자 확정 ({getEntryName(leaders[0].id)})

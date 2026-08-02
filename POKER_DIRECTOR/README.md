@@ -11,6 +11,14 @@
 
 React · TypeScript · Vite · Tailwind CSS · React Router · Zustand · Supabase(선택) · PWA · IndexedDB · Vitest · ESLint
 
+## 상시 접속 주소
+
+**https://poker-director.tiiny.site/**
+
+예비 CDN: https://cdn.jsdelivr.net/gh/khy230306-sys/intuition-ai@deploy/poker-director/index.html
+
+로그인 화면에서 **데모 계정으로 바로 입장**을 누르면 바로 사용할 수 있습니다. (`admin` / `1234`)
+
 ## 설치
 
 ```bash

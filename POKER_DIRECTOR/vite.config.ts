@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
     tailwindcss(),
@@ -23,7 +24,8 @@ export default defineConfig({
         background_color: '#0a0a0a',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
+        start_url: './',
+        scope: './',
         lang: 'ko',
         icons: [
           {

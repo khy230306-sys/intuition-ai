@@ -50,7 +50,7 @@ export function MorePage() {
               블라인드 편집
             </Link>
             <a
-              href={`/display/tournament/${selectedTournamentId}`}
+              href={`#/display/tournament/${selectedTournamentId}`}
               target="_blank"
               rel="noreferrer"
               className="min-h-14 rounded-2xl border border-line bg-panel px-4 py-4 font-medium"

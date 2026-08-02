@@ -32,7 +32,7 @@ export function LoginPage() {
         className="rounded-2xl border border-line bg-panel/90 p-5"
         onSubmit={(e) => {
           e.preventDefault()
-          if (login(username.trim(), password)) navigate('/')
+          if (login(username.trim(), password.trim())) navigate('/')
         }}
       >
         <div className="mb-3">
@@ -52,11 +52,25 @@ export function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="1234"
           />
         </div>
         {lastError ? <p className="mb-3 text-sm text-rose-300">{lastError}</p> : null}
         <Button type="submit" variant="gold" block size="lg">
           {t('login')}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          block
+          className="mt-2"
+          onClick={() => {
+            setUsername(creds.username)
+            setPassword(creds.password)
+            if (login(creds.username, creds.password)) navigate('/')
+          }}
+        >
+          데모 계정으로 바로 입장
         </Button>
         {!isCloudMode() ? (
           <p className="mt-4 text-center text-xs text-mute">{t('demoHint')}</p>

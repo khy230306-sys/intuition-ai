@@ -35,7 +35,11 @@ export function DashboardPage() {
           </Button>
           <Button onClick={() => navigate('/players')}>{t('quickRegister')}</Button>
           {selectedId ? (
-            <Button onClick={() => window.open(`/display/tournament/${selectedId}`, '_blank')}>
+            <Button
+              onClick={() =>
+                window.open(`${window.location.pathname}${window.location.search}#/display/tournament/${selectedId}`, '_blank')
+              }
+            >
               {t('openTv')}
             </Button>
           ) : null}

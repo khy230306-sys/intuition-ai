@@ -27,3 +27,7 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Published static snapshot for CDN
+!public-site/
+!public-site/**

@@ -235,8 +235,13 @@ export function PlayersPage() {
             <div>조회 코드: {selectedEntry.accessCode}</div>
             <div>
               플레이어 화면:{' '}
-              <a className="text-gold underline" href={`/player/${selectedEntry.accessCode}`} target="_blank" rel="noreferrer">
-                /player/{selectedEntry.accessCode}
+              <a
+                className="text-gold underline"
+                href={`#/player/${selectedEntry.accessCode}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                #/player/{selectedEntry.accessCode}
               </a>
             </div>
             <Select

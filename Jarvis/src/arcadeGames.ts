@@ -11,7 +11,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
   gyeokpa: {
     title: '스페이스2',
-    blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드→레이저) · 라이프·실드·폭탄',
+    blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드) · 라이프·실드·폭탄',
   },
 }
 
@@ -1505,46 +1505,42 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-/** —— 스페이스2 (id: gyeokpa — waves/boss/power-ups, no wingmen) —— */
-export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
+/** —— 스페이스2 (id: gyeokpa — waves/boss/power-ups, no laser / no wingmen) —— */
+export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread'
 
-export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
+export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread']
 
-/**
- * Final laser reach (px upward from ship tip).
- * Short bolts felt weak; this is a long-range beam (~screen height).
- */
-export const GYEOKPA_LASER_BEAM_LEN = 280
+/** @deprecated laser weapon removed from 스페이스2 */
+export const GYEOKPA_LASER_BEAM_LEN = 0
 
 export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
   if (w === 'pulse') return '펄스'
   if (w === 'twin') return '트윈'
-  if (w === 'spread') return '스프레드'
-  return '레이저'
+  return '스프레드'
 }
 
-/** First-version upgrade cycle (wraps after laser). */
+/** Upgrade cycle: pulse → twin → spread → pulse (no laser). */
 export function gyeokpaNextWeapon(w: GyeokpaWeapon): GyeokpaWeapon {
   const i = GYEOKPA_WEAPONS.indexOf(w)
-  return GYEOKPA_WEAPONS[(i + 1) % GYEOKPA_WEAPONS.length]!
+  const idx = i < 0 ? 0 : (i + 1) % GYEOKPA_WEAPONS.length
+  return GYEOKPA_WEAPONS[idx]!
 }
 
-/** @deprecated kept for older tests/imports — first version has no timed laser. */
+/** @deprecated laser removed */
 export const GYEOKPA_LASER_SEC = 0
 /** @deprecated first version has no wingmen. */
 export const GYEOKPA_MAX_ALLIES = 0
-export const GYEOKPA_MAX_LASER = 1
+export const GYEOKPA_MAX_LASER = 0
 export const GYEOKPA_LASER_DROP_RATE = 0
 
-/** @deprecated */
-export type GyeokpaBaseWeapon = 'pulse' | 'twin' | 'spread'
+/** @deprecated alias — use GyeokpaWeapon */
+export type GyeokpaBaseWeapon = GyeokpaWeapon
 /** @deprecated alias — use gyeokpaNextWeapon */
 export function gyeokpaNextBaseWeapon(w: GyeokpaBaseWeapon): GyeokpaBaseWeapon {
-  const n = gyeokpaNextWeapon(w)
-  return n === 'laser' ? 'pulse' : n
+  return gyeokpaNextWeapon(w)
 }
 export function gyeokpaLaserOffsets(_count: number): number[] {
-  return [0]
+  return []
 }
 export function gyeokpaAllySlotOffsets(): ReadonlyArray<{ x: number; y: number }> {
   return []
@@ -1559,9 +1555,6 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     r: number
     dmg: number
     friendly: boolean
-    laser?: boolean
-    /** Upward beam length for laser weapon (px). */
-    laserLen?: number
     life?: number
   }
   type Enemy = {
@@ -1858,26 +1851,11 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     } else if (weapon === 'twin') {
       mk(-8, -8, 0, -640, 1)
       mk(8, -8, 0, -640, 1)
-    } else if (weapon === 'spread') {
+    } else {
+      // spread (max weapon — no laser)
       mk(0, -10, 0, -600, 1)
       mk(-4, -8, -160, -560, 1)
       mk(4, -8, 160, -560, 1)
-    } else {
-      // Long-range piercing beam anchored to the ship tip (사정거리).
-      const reach = Math.max(GYEOKPA_LASER_BEAM_LEN, Math.floor(h * 0.72))
-      bullets = bullets.filter((b) => !(b.friendly && b.laser))
-      bullets.push({
-        x: shipX,
-        y: shipY - 14,
-        vx: 0,
-        vy: 0,
-        r: 5,
-        dmg: 0.6,
-        friendly: true,
-        laser: true,
-        laserLen: reach,
-        life: 0.07,
-      })
     }
   }
 
@@ -1894,7 +1872,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     shipY += (targetY - shipY) * Math.min(1, dt * 14)
 
     fireCd -= dt
-    const rate = weapon === 'laser' ? 0.05 : weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
+    const rate = weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
     if (fireCd <= 0) {
       fire()
       fireCd = rate
@@ -2019,15 +1997,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i]!
-      if (b.laser && b.friendly) {
-        // Keep beam locked to the ship so range stays constant while firing.
-        b.x = shipX
-        b.y = shipY - 14
-        b.laserLen = Math.max(GYEOKPA_LASER_BEAM_LEN, Math.floor(h * 0.72))
-      } else {
-        b.x += b.vx * dt
-        b.y += b.vy * dt
-      }
+      b.x += b.vx * dt
+      b.y += b.vy * dt
       if (b.life != null) {
         b.life -= dt
         if (b.life <= 0) {
@@ -2035,30 +2006,18 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
           continue
         }
       }
-      if (!b.laser && (b.y < -40 || b.y > h + 40 || b.x < -40 || b.x > w + 40)) {
+      if (b.y < -40 || b.y > h + 40 || b.x < -40 || b.x > w + 40) {
         bullets.splice(i, 1)
         continue
       }
       if (b.friendly) {
         for (let ei = enemies.length - 1; ei >= 0; ei--) {
           const e = enemies[ei]!
-          let hit = false
-          if (b.laser) {
-            const len = b.laserLen ?? GYEOKPA_LASER_BEAM_LEN
-            const beamTop = b.y - len
-            const beamBot = b.y + 4
-            hit =
-              Math.abs(e.x - b.x) <= e.r + b.r &&
-              e.y + e.r >= beamTop &&
-              e.y - e.r <= beamBot
-          } else {
-            hit = Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r
-          }
-          if (hit) {
+          if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
             e.hp -= b.dmg
-            if (!b.laser) bullets.splice(i, 1)
+            bullets.splice(i, 1)
             if (e.hp <= 0) killEnemy(e, ei)
-            if (!b.laser) break
+            break
           }
         }
       } else if (Math.hypot(shipX - b.x, shipY - b.y) < 14 + b.r) {
@@ -2135,26 +2094,10 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     }
 
     for (const b of bullets) {
-      if (b.friendly) {
-        if (b.laser) {
-          const len = b.laserLen ?? GYEOKPA_LASER_BEAM_LEN
-          const top = b.y - len
-          ctx.fillStyle = 'rgba(124,255,239,0.22)'
-          ctx.fillRect(b.x - 4.5, top, 9, len)
-          ctx.fillStyle = '#7cffef'
-          ctx.fillRect(b.x - 2, top, 4, len)
-        } else {
-          ctx.fillStyle = '#ffd1c8'
-          ctx.beginPath()
-          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      } else {
-        ctx.fillStyle = '#ff7a6b'
-        ctx.beginPath()
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
-        ctx.fill()
-      }
+      ctx.fillStyle = b.friendly ? '#ffd1c8' : '#ff7a6b'
+      ctx.beginPath()
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
+      ctx.fill()
     }
 
     for (const e of enemies) {

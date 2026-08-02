@@ -71,17 +71,16 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().gyeokpa).toBeNull()
   })
 
-  it('configures 스페이스2 weapon cycle (no wingmen)', () => {
+  it('configures 스페이스2 weapon cycle without laser', () => {
     expect(ARCADE_META.gyeokpa.title).toBe('스페이스2')
     expect(GYEOKPA_MAX_ALLIES).toBe(0)
     expect(gyeokpaAllySlotOffsets()).toHaveLength(0)
-    expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread', 'laser'])
-    expect(GYEOKPA_LASER_BEAM_LEN).toBeGreaterThanOrEqual(240)
+    expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread'])
+    expect(GYEOKPA_LASER_BEAM_LEN).toBe(0)
     expect(gyeokpaNextWeapon('pulse')).toBe('twin')
     expect(gyeokpaNextWeapon('twin')).toBe('spread')
-    expect(gyeokpaNextWeapon('spread')).toBe('laser')
-    expect(gyeokpaNextWeapon('laser')).toBe('pulse')
-    expect(gyeokpaWeaponLabel('laser')).toBe('레이저')
+    expect(gyeokpaNextWeapon('spread')).toBe('pulse')
+    expect(gyeokpaWeaponLabel('spread')).toBe('스프레드')
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {

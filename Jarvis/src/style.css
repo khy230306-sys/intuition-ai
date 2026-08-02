@@ -1553,10 +1553,6 @@ body[data-jarvis-view='friends'] .orb::after {
   font-weight: 600;
 }
 
-.nav-ico {
-  position: relative;
-}
-
 .nav-badge {
   position: absolute;
   top: -6px;
@@ -1586,26 +1582,48 @@ body[data-jarvis-view='friends'] .orb::after {
   z-index: 80;
   display: grid;
   place-items: end center;
-  padding: 16px;
+  /* Keep sheet below notch / Dynamic Island and above home indicator */
+  padding: calc(14px + var(--safe-top)) 12px calc(14px + var(--safe-bottom));
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
 }
 
 .share-sheet {
   width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 20px 20px 16px 16px;
   border: 1px solid var(--line);
   background: #0e1826;
   box-shadow: var(--shadow);
-  padding: 14px 16px 18px;
+  padding: 12px 16px 18px;
   animation: rise 0.3s ease both;
 }
 
 .share-sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin: -4px 0 12px;
+  padding: 8px 0 10px;
+  background: #0e1826;
+}
+
+.share-sheet-head .ghost-btn.tiny {
+  flex-shrink: 0;
+  min-height: 40px;
+  min-width: 56px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border-color: rgba(0, 210, 190, 0.35);
+  background: rgba(0, 210, 190, 0.12);
+  width: auto;
 }
 
 .share-qr {

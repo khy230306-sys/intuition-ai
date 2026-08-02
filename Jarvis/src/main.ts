@@ -1035,6 +1035,7 @@ function spaceChatBubbleHtml(
     authorId: string
     authorName: string
     text: string
+    createdAt?: number
     media?: { kind: 'image' | 'video'; dataUrl: string; mime: string; name?: string }
     sourceLanguage?: string
   },
@@ -1052,11 +1053,22 @@ function spaceChatBubbleHtml(
     s.autoTranslateMessages !== false &&
     Boolean((m.text || '').trim()) &&
     !/^\[(사진|동영상)\]$/.test(m.text.trim())
-  return `<div class="fam-msg ${mine ? 'mine' : ''}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>
-    <span class="meta">${escapeHtml(m.authorName)}</span>
-    ${mediaHtml}
-    <div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>
-    <div class="fam-msg-tr" data-role="tr" hidden></div>
+  const clock = formatChatClock(m.createdAt || 0)
+  const avatar = mine
+    ? ''
+    : `<div class="msg-avatar" aria-hidden="true">${escapeHtml(chatAvatarLetter(m.authorName))}</div>`
+  const nameRow = mine
+    ? ''
+    : `<span class="meta">${escapeHtml(m.authorName)}</span>`
+  return `<div class="fam-msg-row ${mine ? 'mine' : 'theirs'}">
+    ${avatar}
+    <div class="fam-msg ${mine ? 'mine' : 'theirs'}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>
+      ${nameRow}
+      ${mediaHtml}
+      <div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>
+      <div class="fam-msg-tr" data-role="tr" hidden></div>
+      ${clock ? `<time class="msg-time">${clock}</time>` : ''}
+    </div>
   </div>`
 }
 
@@ -1293,6 +1305,18 @@ function escapeHtml(s: string): string {
 
 function escapeAttr(s: string): string {
   return escapeHtml(s).replace(/'/g, '&#39;')
+}
+
+/** HH:mm for Cursor/Kakao-style chat timestamps. */
+function formatChatClock(ts: number): string {
+  if (!ts || !Number.isFinite(ts)) return ''
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function chatAvatarLetter(name: string): string {
+  const t = name.trim()
+  return t ? t.slice(0, 1).toUpperCase() : '?'
 }
 
 function renderBrand(): string {
@@ -1707,36 +1731,47 @@ function renderShareModal(): string {
 
 function renderChat(): string {
   const mode = loadInterpretMode()
-  const body =
-    state.messages.length === 0
-      ? `
+  const empty = state.messages.length === 0
+  const body = empty
+    ? `
         <div class="hero-empty">
           <div class="big-orb"></div>
           <h2>AIZIO</h2>
-          <p>아래 <strong>번역</strong> 버튼을 누르면<br/>스톱할 때까지 한국말만 그 언어로 번역합니다.</p>
+          <p>메시지를 보내거나 MIC로 말해 보세요.<br/>아래 <strong>번역</strong>으로 통역도 켤 수 있습니다.</p>
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>
         </div>
       `
-      : state.messages
-          .map(
-            (m) => `
-          <div class="msg ${m.role}">
-            <span class="meta">${m.role === 'user' ? 'YOU' : 'AIZIO'}</span>
-            ${escapeHtml(m.text)}
-          </div>
-        `,
-          )
-          .join('')
+    : state.messages
+        .map((m) => {
+          const mine = m.role === 'user'
+          const name = mine ? state.settings.displayName || 'YOU' : 'AIZIO'
+          const clock = formatChatClock(m.createdAt)
+          const avatar = mine
+            ? ''
+            : `<div class="msg-avatar aizio" aria-hidden="true">A</div>`
+          return `
+          <div class="msg-row ${mine ? 'user' : 'assistant'}">
+            ${avatar}
+            <div class="msg-col">
+              <div class="msg-head">
+                <span class="msg-name">${escapeHtml(name)}</span>
+                ${clock ? `<time class="msg-time">${clock}</time>` : ''}
+              </div>
+              <div class="msg-bubble ${mine ? 'user' : 'assistant'}">${escapeHtml(m.text)}</div>
+            </div>
+          </div>`
+        })
+        .join('')
 
   const lockBar = `
     ${renderUpdateCard(true)}
-    <div class="translate-bar ${mode.active ? 'on' : ''}">
-      <div class="translate-bar-head">
+    <details class="translate-bar ${mode.active ? 'on' : ''}" ${mode.active ? 'open' : ''}>
+      <summary class="translate-bar-head">
         <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
         <span class="ver">v${APP_VERSION}</span>
-      </div>
+      </summary>
       <div class="translate-chips">
         ${TRANSLATE_LANGS.map(
           (l) =>
@@ -1747,35 +1782,35 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · 홈요약·QR · v' + APP_VERSION
+          : '언어 버튼 → 말한 뒤 스톱 · v' + APP_VERSION
       }</p>
-    </div>
+    </details>
   `
 
-  const chatTools =
-    state.messages.length > 0
-      ? `
+  const chatTools = empty
+    ? ''
+    : `
       <div class="chat-tools">
         <button type="button" class="ghost-btn tiny" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
       </div>`
-      : ''
 
   return `
-    <section class="panel chat-panel">
-      ${renderHomeWidget()}
-      ${chatTools}
-      <div class="messages">${body}</div>
+    <section class="panel chat-panel chat-shell">
+      ${empty ? renderHomeWidget() : chatTools}
+      <div class="messages chat-thread" id="chat-thread">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
       )}</div>
-      ${lockBar}
-      <form class="composer" id="composer">
-        <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
-        <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
-          mode.active ? '한국말로 입력 → 번역' : state.listening ? '음성 인식 중…' : '시세, 브리핑, 공유…'
-        }" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
-        <button class="primary-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
-      </form>
+      <div class="composer-dock">
+        ${lockBar}
+        <form class="composer chat-composer" id="composer">
+          <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
+          <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
+            mode.active ? '한국말로 입력 → 번역' : state.listening ? '음성 인식 중…' : 'AIZIO에게 메시지…'
+          }" value="${escapeAttr(state.draft)}" ${state.busy ? 'disabled' : ''} />
+          <button class="primary-btn send-btn" type="submit" ${state.busy ? 'disabled' : ''}>전송</button>
+        </form>
+      </div>
     </section>
   `
 }
@@ -2165,28 +2200,31 @@ function renderFamily(): string {
       .map((m) => spaceChatBubbleHtml(m, room.memberId))
       .join('')
     body = `
-      <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
-      <div id="family-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'family' ? 'live' : ''}" ${
-        state.listening && state.dictationTarget === 'family' || state.voiceHint && state.dictationTarget === 'family' ? '' : 'hidden'
-      }>${escapeHtml(
-        state.dictationTarget === 'family'
-          ? state.listening
-            ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
-            : state.voiceHint
-          : '',
-      )}</div>
-      <form id="family-chat-form" class="composer family-composer">
-        <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'family' ? 'listening' : ''}" data-action="space-mic" data-space="family" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'family' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'family' ? 'STOP' : 'MIC'}</button>
-        <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
-          <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="family" hidden />
-        </label>
-        <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" autocomplete="off" />
-        <button class="primary-btn" type="submit">${escapeHtml(t('common.send'))}</button>
-      </form>
-      <div class="row-btns space-chat-tools">
-        <button type="button" class="ghost-btn danger-btn" data-action="family-clear-chat">대화 초기화</button>
+      <div class="space-chat-shell">
+        <div class="fam-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+        <div id="family-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'family' ? 'live' : ''}" ${
+          state.listening && state.dictationTarget === 'family' || state.voiceHint && state.dictationTarget === 'family' ? '' : 'hidden'
+        }>${escapeHtml(
+          state.dictationTarget === 'family'
+            ? state.listening
+              ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
+              : state.voiceHint
+            : '',
+        )}</div>
+        <div class="composer-dock">
+          <form id="family-chat-form" class="composer family-composer chat-composer">
+            <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'family' ? 'listening' : ''}" data-action="space-mic" data-space="family" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'family' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'family' ? 'STOP' : 'MIC'}</button>
+            <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
+              <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="family" hidden />
+            </label>
+            <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" autocomplete="off" />
+            <button class="primary-btn send-btn" type="submit">${escapeHtml(t('common.send'))}</button>
+          </form>
+          <div class="row-btns space-chat-tools">
+            <button type="button" class="ghost-btn tiny danger-btn" data-action="family-clear-chat">대화 초기화</button>
+          </div>
+        </div>
       </div>
-      <p class="hint">대화 초기화는 이 기기의 대화만 지웁니다. 공지·일정·멤버는 유지됩니다.</p>
     `
   } else if (state.familyTab === 'notices') {
     const list = [...room.notices]
@@ -2241,25 +2279,25 @@ function renderFamily(): string {
   const memberNames = uniqueMemberNames(room.members, room.memberName)
   const members = memberNames.map((n) => escapeHtml(n)).join(' · ')
   const online = getFamilyPeerCount()
+  const chatMode = state.familyTab === 'chat'
 
   return `
-    <section class="panel view-scroll family-panel">
-      <div class="family-head">
+    <section class="panel family-panel ${chatMode ? 'space-chat-panel' : 'view-scroll'}">
+      <div class="family-head ${chatMode ? 'compact' : ''}">
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)}</p>
-          <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다</p>
+          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 온라인 <strong>${online}</strong></p>
+          ${chatMode ? '' : `<p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>`}
         </div>
       </div>
       ${inviteSwitchBanner('family', room.code)}
-      <div class="row-btns">
+      <div class="row-btns ${chatMode ? 'compact-actions' : ''}">
         <button type="button" class="primary-btn" data-action="family-invite">초대 공유</button>
         <button type="button" class="ghost-btn" data-action="family-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="family-leave">나가기</button>
       </div>
-      <details class="space-switch">
-        <summary>오프라인일 때만 · 멤버 수동 등록</summary>
+      <details class="space-switch ${chatMode ? 'chat-more' : ''}">
+        <summary>${chatMode ? '방 설정 · 오프라인 등록' : '오프라인일 때만 · 멤버 수동 등록'}</summary>
         <div class="row-btns">
           <button type="button" class="ghost-btn" data-action="family-join-share">내 참여 확인 보내기</button>
         </div>
@@ -2269,12 +2307,9 @@ function renderFamily(): string {
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
-        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다. 상대·내가 동시에 앱을 못 열 때만 사용하세요.</p>
-      </details>
-      <details class="space-switch">
-        <summary>다른 코드로 전환</summary>
+        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다.</p>
         <form id="family-switch" class="settings-form">
-          <label>코드·링크·초대 문구
+          <label>다른 코드로 전환
             <textarea name="code" rows="2" placeholder="새 가족 코드 또는 링크" required></textarea>
           </label>
           <button class="primary-btn" type="submit">전환 참여</button>
@@ -2282,7 +2317,6 @@ function renderFamily(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">둘 다 AIZIO를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }
@@ -2347,28 +2381,31 @@ function renderFriends(): string {
       .map((m) => spaceChatBubbleHtml(m, room.memberId))
       .join('')
     body = `
-      <div class="fam-chat friends-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
-      <div id="friends-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'friends' ? 'live' : ''}" ${
-        state.listening && state.dictationTarget === 'friends' || state.voiceHint && state.dictationTarget === 'friends' ? '' : 'hidden'
-      }>${escapeHtml(
-        state.dictationTarget === 'friends'
-          ? state.listening
-            ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
-            : state.voiceHint
-          : '',
-      )}</div>
-      <form id="friends-chat-form" class="composer family-composer">
-        <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'friends' ? 'listening' : ''}" data-action="space-mic" data-space="friends" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'friends' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'friends' ? 'STOP' : 'MIC'}</button>
-        <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
-          <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="friends" hidden />
-        </label>
-        <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" autocomplete="off" />
-        <button class="primary-btn" type="submit">${escapeHtml(t('common.send'))}</button>
-      </form>
-      <div class="row-btns space-chat-tools">
-        <button type="button" class="ghost-btn danger-btn" data-action="friends-clear-chat">대화 초기화</button>
+      <div class="space-chat-shell">
+        <div class="fam-chat friends-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+        <div id="friends-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'friends' ? 'live' : ''}" ${
+          state.listening && state.dictationTarget === 'friends' || state.voiceHint && state.dictationTarget === 'friends' ? '' : 'hidden'
+        }>${escapeHtml(
+          state.dictationTarget === 'friends'
+            ? state.listening
+              ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
+              : state.voiceHint
+            : '',
+        )}</div>
+        <div class="composer-dock">
+          <form id="friends-chat-form" class="composer family-composer chat-composer">
+            <button type="button" class="icon-btn ${state.listening && state.dictationTarget === 'friends' ? 'listening' : ''}" data-action="space-mic" data-space="friends" aria-label="음성 입력" aria-pressed="${state.listening && state.dictationTarget === 'friends' ? 'true' : 'false'}">${state.listening && state.dictationTarget === 'friends' ? 'STOP' : 'MIC'}</button>
+            <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
+              <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="friends" hidden />
+            </label>
+            <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" autocomplete="off" />
+            <button class="primary-btn send-btn" type="submit">${escapeHtml(t('common.send'))}</button>
+          </form>
+          <div class="row-btns space-chat-tools">
+            <button type="button" class="ghost-btn tiny danger-btn" data-action="friends-clear-chat">대화 초기화</button>
+          </div>
+        </div>
       </div>
-      <p class="hint">대화 초기화는 이 기기의 대화만 지웁니다. 공지·일정·멤버는 유지됩니다.</p>
     `
   } else if (state.friendsTab === 'notices') {
     const list = [...room.notices]
@@ -2423,25 +2460,25 @@ function renderFriends(): string {
   const memberNames = uniqueMemberNames(room.members, room.memberName)
   const members = memberNames.map((n) => escapeHtml(n)).join(' · ')
   const online = getFriendsPeerCount()
+  const chatMode = state.friendsTab === 'chat'
 
   return `
-    <section class="panel view-scroll family-panel friends-panel">
-      <div class="family-head friends-head">
+    <section class="panel family-panel friends-panel ${chatMode ? 'space-chat-panel' : 'view-scroll'}">
+      <div class="family-head friends-head ${chatMode ? 'compact' : ''}">
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)}</p>
-          <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다</p>
+          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 온라인 <strong>${online}</strong></p>
+          ${chatMode ? '' : `<p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>`}
         </div>
       </div>
       ${inviteSwitchBanner('friends', room.code)}
-      <div class="row-btns">
+      <div class="row-btns ${chatMode ? 'compact-actions' : ''}">
         <button type="button" class="primary-btn" data-action="friends-invite">초대 공유</button>
         <button type="button" class="ghost-btn" data-action="friends-reconnect">동기화</button>
         <button type="button" class="ghost-btn" data-action="friends-leave">나가기</button>
       </div>
-      <details class="space-switch">
-        <summary>오프라인일 때만 · 멤버 수동 등록</summary>
+      <details class="space-switch ${chatMode ? 'chat-more' : ''}">
+        <summary>${chatMode ? '방 설정 · 오프라인 등록' : '오프라인일 때만 · 멤버 수동 등록'}</summary>
         <div class="row-btns">
           <button type="button" class="ghost-btn" data-action="friends-join-share">내 참여 확인 보내기</button>
         </div>
@@ -2451,12 +2488,9 @@ function renderFriends(): string {
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
-        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다. 상대·내가 동시에 앱을 못 열 때만 사용하세요.</p>
-      </details>
-      <details class="space-switch">
-        <summary>다른 코드로 전환</summary>
+        <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다.</p>
         <form id="friends-switch" class="settings-form">
-          <label>코드·링크·초대 문구
+          <label>다른 코드로 전환
             <textarea name="code" rows="2" placeholder="새 친구 코드 또는 링크" required></textarea>
           </label>
           <button class="primary-btn" type="submit">전환 참여</button>
@@ -2464,7 +2498,6 @@ function renderFriends(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">둘 다 AIZIO를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }

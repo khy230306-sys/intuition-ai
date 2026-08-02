@@ -21,7 +21,11 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
   const text = String(raw || '').trim()
   if (!text || text.length > 160) return null
 
-  if (/가족\s*일정|전체\s*일정|모든\s*일정|일정\s*(전부|모두)\s*보여/.test(text)) {
+  // Smart-reminder list only — do not steal 「가족 일정」(family space / calendar skill).
+  if (
+    /(?:스마트\s*)?알림\s*(목록|보여|리스트)|리마인더\s*(목록|보여|리스트)|저장된\s*알림/.test(text) ||
+    (/일정\s*(전부|모두)\s*보여|전체\s*일정/.test(text) && /알림|예약|리마인더/.test(text))
+  ) {
     return { kind: 'list', raw: text, hasScheduleCue: true }
   }
 
@@ -37,12 +41,14 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
   }
 
   // “엄마 오늘 일정 뭐야?” — not “예약 있어”(create)
+  // 「가족 일정」 alone → calendar / family space (return null); person relation required here.
   if (
     /일정\s*(뭐|알려|보여|있어\??)|예약\s*(뭐|언제)|다음\s*예약/.test(text) &&
-    !/(시|분)\s*.*(예약|진찰|병원)|예약\s*있어/.test(text)
+    !/(시|분)\s*.*(예약|진찰|병원)|예약\s*있어/.test(text) &&
+    !/^가족\s*일정|가족\s*일정\s*(보여|알려|전부|모두)/.test(text)
   ) {
     const rel = matchRelation(text)
-    if (rel || /가족/.test(text)) {
+    if (rel) {
       return {
         kind: 'ask_person',
         raw: text,
@@ -57,7 +63,11 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
     return { kind: 'cancel', raw: text, hasScheduleCue: true }
   }
 
-  if (/완료|끝났어|봤어|확인했/.test(text) && text.length < 24) {
+  // Require schedule cue — bare 「완료/봤어/확인했」 is casual chat, not reminder complete.
+  if (
+    /(?:알림|일정|예약|리마인더)\s*(?:완료|끝|체크)|(?:완료|끝)\s*(?:했어|처리)|체크\s*완료/.test(text) &&
+    text.length < 36
+  ) {
     return { kind: 'complete', raw: text, hasScheduleCue: true }
   }
 

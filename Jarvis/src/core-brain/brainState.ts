@@ -20,7 +20,40 @@ function hashText(s: string): string {
   return String(h)
 }
 
+/**
+ * Record a turn for short follow-ups.
+ * Soft social/general_chat does not overwrite skill context (music/reminder/project),
+ * so 「고마워」 after music does not poison the next clear music control cue window
+ * beyond what applyContextFollowUp already guards — skill intents stay sticky until
+ * another skill-owned intent lands.
+ */
 export function rememberTurn(intent: CoreIntent, entities: Record<string, unknown>, text: string): void {
+  const softSocial =
+    (intent === 'general_chat' || intent === 'ask_information' || intent === 'unknown') &&
+    Boolean(entities.social || /고마|감사|최고|피곤|심심|안녕|대박|ㅋㅋ|ㅎㅎ|thanks|hello|^hi\b/i.test(text))
+  if (softSocial) {
+    const prev = lastTurn()
+    if (
+      prev &&
+      (prev.intent === 'play_music' ||
+        prev.intent === 'control_music' ||
+        prev.intent === 'create_reminder' ||
+        prev.intent === 'update_reminder' ||
+        prev.intent === 'ask_person_schedule' ||
+        prev.intent === 'project_status' ||
+        prev.intent === 'project_planning')
+    ) {
+      // Keep previous skill intent for a short window; still push a marker without replacing intent.
+      recent.push({
+        at: Date.now(),
+        intent: prev.intent,
+        entities: { ...prev.entities, socialAck: true },
+        textHash: hashText(text),
+      })
+      if (recent.length > MAX_RECENT) recent = recent.slice(-MAX_RECENT)
+      return
+    }
+  }
   recent.push({ at: Date.now(), intent, entities: { ...entities }, textHash: hashText(text) })
   if (recent.length > MAX_RECENT) recent = recent.slice(-MAX_RECENT)
 }

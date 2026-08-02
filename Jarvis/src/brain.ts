@@ -714,6 +714,7 @@ async function replyWeather(
 export async function think(
   input: string,
   history: { role: string; text: string }[] = [],
+  opts?: { source?: 'text' | 'voice' | 'system' },
 ): Promise<BrainReply> {
   const settings = loadSettings()
   const name = settings.displayName
@@ -722,6 +723,8 @@ export async function think(
 
   // AIZIO Core Brain — classify & run registered Skills; otherwise continue legacy pipeline
   let text = raw
+  let coreClaimedMusic = false
+  let coreFailedMusicOrTranslate = false
   try {
     const stripped = stripWakeWord(raw).text
     if (stripped) text = stripped
@@ -729,10 +732,18 @@ export async function think(
       text: raw,
       history,
       locale: getAppLocale(),
-      source: 'text',
+      source: opts?.source || 'text',
     })
+    coreClaimedMusic = core.intent === 'play_music' || core.intent === 'control_music'
     const handled = coreResultToBrainReply(core)
     if (handled) return handled
+    // onlyFailed music/translate sets fallbackLegacy=true so legacy may retry once
+    coreFailedMusicOrTranslate =
+      core.fallbackLegacy &&
+      (core.intent === 'play_music' ||
+        core.intent === 'control_music' ||
+        core.intent === 'translate') &&
+      core.selectedSkills.some((id) => id === 'music' || id === 'translation')
     // Use wake-stripped text for the rest of the legacy handlers
     if (stripped) text = stripped
   } catch {
@@ -796,20 +807,23 @@ export async function think(
     }
   }
 
-  // AIZIO Music Skill — independent module; ambiguous intents fall through to AI
-  try {
-    const music = await tryHandleMusicSkill(text, getAppLocale())
-    if (music) {
-      return {
-        text: music.text,
-        speak: music.speak !== false,
-        musicNeedsGesture: music.needsGesture,
-        musicPlayUrl: music.playUrl,
-        musicShowMiniPlayer: true,
+  // Music: Core Brain is the primary path. Legacy runs only if Core did not claim
+  // music, or Core claimed it and failed (retry once). Avoid double music handling.
+  if (!coreClaimedMusic || coreFailedMusicOrTranslate) {
+    try {
+      const music = await tryHandleMusicSkill(text, getAppLocale())
+      if (music) {
+        return {
+          text: music.text,
+          speak: music.speak !== false,
+          musicNeedsGesture: music.needsGesture,
+          musicPlayUrl: music.playUrl,
+          musicShowMiniPlayer: true,
+        }
       }
+    } catch {
+      /* never block normal AI on music classifier errors */
     }
-  } catch {
-    /* never block normal AI on music classifier errors */
   }
 
   // App update (home-screen PWA)

@@ -1,5 +1,14 @@
 # AI Engine changelog
 
+## 1.13.1
+
+- **Core Stability & Integration**: single text/voice pipeline (`handleUserText` → `think` → Core Brain)
+- Intent hygiene: reminder parser no longer steals 「가족 일정」/bare「완료」; calendar owns family schedule list
+- Music: no dishonest `playing` claim; legacy music only when Core did not claim (or onlyFailed retry)
+- brainState: soft social turns do not wipe sticky music/reminder/project intent
+- SW update interval de-duplicated; voice source passed into Core Brain
+- Docs: `AIZIO_CURRENT_FLOW_MAP.md`, `AIZIO_MOBILE_DEVICE_TEST_CHECKLIST.md`
+
 ## 1.13.0
 
 - **Hybrid AI Provider System** (`src/ai-providers/`)

@@ -204,7 +204,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.0'
+const APP_VERSION = '1.13.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1175,7 +1175,7 @@ function speakableReplyText(text: string): string {
   return text
 }
 
-async function handleUserText(raw: string): Promise<void> {
+async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' }): Promise<void> {
   const text = raw.trim()
   if (!text || state.busy) return
   const gen = ++thinkGen
@@ -1204,7 +1204,7 @@ async function handleUserText(raw: string): Promise<void> {
 
   try {
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
-    const reply = await think(text, history.slice(0, -1))
+    const reply = await think(text, history.slice(0, -1), { source: opts?.source || 'text' })
     if (gen !== thinkGen || timedOut) return
     window.clearTimeout(timeoutId)
     if (reply.clearChat) {
@@ -4212,7 +4212,7 @@ function bind(): void {
       state.listening = false
       state.voiceHint = ''
       patchVoiceUi()
-      if (partial) void handleUserText(partial)
+      if (partial) void handleUserText(partial, { source: 'voice' })
       else render()
       return
     }
@@ -4263,7 +4263,7 @@ function bind(): void {
             state.voiceHint = '인식 완료'
             state.draft = text
             patchVoiceUi()
-            void handleUserText(text)
+            void handleUserText(text, { source: 'voice' })
           },
           onState: (s) => {
             if (session !== voiceSessionGen) return
@@ -4931,6 +4931,8 @@ function bind(): void {
   })
 }
 
+let swUpdateTimer: number | null = null
+
 function boot(): void {
   bootMediaPreviewDelegation()
   bootNavDelegation()
@@ -4942,7 +4944,9 @@ function boot(): void {
     onRegisteredSW(_url, reg) {
       if (!reg) return
       void reg.update()
-      window.setInterval(() => void reg.update(), 60_000)
+      // Single interval — avoid stacking on re-register / HMR
+      if (swUpdateTimer != null) window.clearInterval(swUpdateTimer)
+      swUpdateTimer = window.setInterval(() => void reg.update(), 60_000)
     },
   })
   const seen = localStorage.getItem(SEEN_APP_VERSION_KEY)

@@ -1,0 +1,8 @@
+export type { AiMode, AiRequest, AiResponse, AiRouteDecision, AiProvider } from './types'
+export { selectAiMode } from './modeSelect'
+export { buildAiContext } from './contextManager'
+export { buildSystemPrompt, buildChatMessages } from './promptBuilder'
+export { validateAiResponse } from './responseValidator'
+export { routeAiRequest, listAiProviders, getProvider } from './aiRouter'
+export { runAiEngine, aiEngineErrorText, __resetAiEngineInFlight } from './aiEngine'
+export { AiError, userFacingAiError, redactSecrets } from './errors'

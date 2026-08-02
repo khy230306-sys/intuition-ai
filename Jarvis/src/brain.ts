@@ -87,6 +87,7 @@ import {
 } from './friendsStore'
 import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
+import { aiEngineErrorText, runAiEngine } from './ai'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,
@@ -138,55 +139,27 @@ function helpText(name: string): string {
   ].join('\n')
 }
 
+/** Cloud free-chat via shared AI engine (local commands stay above this). */
 async function callCloudLLM(
   userText: string,
   settings: JarvisSettings,
   history: { role: string; text: string }[],
 ): Promise<string | null> {
   if (!settings.apiKey.trim()) return null
-  const base = settings.apiBase.replace(/\/$/, '')
   const profile = loadProfile()
-  const messages = [
-    {
-      role: 'system',
-      content: [
-        `당신은 iPhone용 만능 비서 JARVIS입니다. 호칭: "${settings.displayName}".`,
-        '한국어로 명확·실용적으로 답하고, 실행 가능한 다음 행동을 제안하세요.',
-        '주식/투자: 교육·분석 프레임·리스크 관점을 제공하되, 매수/매도 강요 금지. 반드시 면책 한 줄.',
-        `투자 성향: ${profile.riskTolerance}, horizon: ${profile.investHorizon}.`,
-        '사용자 컨텍스트:',
-        lifeContextBlock(),
-      ].join('\n'),
-    },
-    ...history.slice(-14).map((m) => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.text,
-    })),
-    { role: 'user', content: userText },
-  ]
-
-  const res = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey.trim()}`,
-    },
-    body: JSON.stringify({
-      model: settings.model || 'gpt-4o-mini',
-      messages,
-      temperature: 0.45,
-    }),
+  const result = await runAiEngine({
+    message: userText,
+    history,
+    displayName: settings.displayName,
+    lifeContext: lifeContextBlock(),
+    riskTolerance: profile.riskTolerance,
+    investHorizon: profile.investHorizon,
+    apiKey: settings.apiKey,
+    apiBase: settings.apiBase,
+    model: settings.model || 'gpt-4o-mini',
+    locale: 'ko-KR',
   })
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    throw new Error(`API 오류 (${res.status}): ${errText.slice(0, 180)}`)
-  }
-
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-  }
-  return data.choices?.[0]?.message?.content?.trim() || null
+  return result.text || null
 }
 
 async function handleInvest(text: string): Promise<BrainReply | null> {
@@ -1140,8 +1113,7 @@ export async function think(
       const cloud = await callCloudLLM(text, settings, history)
       if (cloud) return { text: cloud, speak: true }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'API 호출 실패'
-      return { text: `${msg}\n로컬 명령은 "도움말"을 참고하세요.` }
+      return { text: aiEngineErrorText(err), speak: true }
     }
   }
 

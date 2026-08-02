@@ -73,7 +73,7 @@ describe('jarvis brain investing + life', () => {
     const time = await think('지금 몇 시야')
     expect(time.text).toMatch(/시|분|오전|오후|지금/)
     const garbage = await think('대화식자제헤달')
-    expect(garbage.text).toMatch(/음성을 정확히|또박또박|날씨/)
+    expect(garbage.text).toMatch(/음성을 잘 듣지|음성을 정확히|또박또박/)
     const wipe = await think('대화 초기화')
     expect(wipe.clearChat).toBe(true)
     expect(wipe.text).toMatch(/초기화|삭제/)

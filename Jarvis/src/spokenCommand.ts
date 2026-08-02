@@ -195,15 +195,88 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
   return null
 }
 
-/** True when transcript looks like STT garbage (no useful Korean intent words). */
+/** Strip emoji / decorative symbols; keep letters & numbers for intent checks. */
+export function stripDecorative(text: string): string {
+  return String(text || '')
+    .replace(/\p{Extended_Pictographic}/gu, ' ')
+    .replace(/[\uFE0F\u200D]/g, '')
+    .replace(/[^\p{L}\p{N}\s~!?.…ㅋㅎㅠㅜㅎ]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Compliment / gratitude / greeting / emotion / short casual chat.
+ * These are real utterances — never treat as STT failure.
+ */
+export function isCasualChatText(text: string): boolean {
+  const raw = String(text || '').trim()
+  if (!raw) return false
+  const t = stripDecorative(raw)
+  const body = t || raw
+  const c = compactKo(body)
+
+  // Emoji-only / laugh-only short reactions
+  if (!/[가-힣a-zA-Z]{2,}/.test(body) && /[\p{Extended_Pictographic}ㅋㅎㅠㅜ~!?.]/u.test(raw) && raw.length <= 12) {
+    return true
+  }
+  if (/^(ㅋ+|ㅎ+|ㅠ+|ㅜ+|대박ㅋ*|헐|오|와+|굿+|ok|okay|lol|haha)+$/i.test(c)) return true
+
+  // Explicit social patterns
+  if (
+    /고마|감사|사랑|최고|멋지|대단|잘했|똑똑|멋있|짱|훌륭|수고|덕분|피곤|심심|기분|안녕|하이|헬로|대박|hello|hi\b|thanks|thank\s*you|love\s*you|great|awesome/i.test(
+      body,
+    )
+  ) {
+    return true
+  }
+  if (/(비서|너|넌|당신).*(최고|대단|똑똑|잘|멋)/.test(c)) return true
+  if (/(최고|대단|똑똑|잘했|멋지).*(비서|야|다|네|요)?$/.test(c)) return true
+
+  return false
+}
+
+/** Short local reply when API key is missing (AI Engine unavailable). */
+export function localCasualReply(text: string): string | null {
+  if (!isCasualChatText(text)) return null
+  const c = compactKo(stripDecorative(text) || text)
+  if (/고마|감사|thanks|thank/i.test(c)) return '천만에요. 더 필요한 일 있으면 편하게 말해 주세요.'
+  if (/사랑|love/i.test(c)) return '저도 함께여서 기뻐요. 언제든지 불러 주세요.'
+  if (/안녕|하이|헬로|hello|^hi$/i.test(c)) return '안녕하세요. 무엇을 도와드릴까요?'
+  if (/피곤|심심|기분/.test(c)) return '말씀 감사합니다. 잠깐 쉬어도 좋고, 원하시면 음악이나 브리핑도 도와드릴게요.'
+  if (/최고|대단|똑똑|잘했|멋지|짱|훌륭|굿|대박|비서/.test(c)) {
+    return '고마워요. 그렇게 말해 주시니 힘이 나요. 앞으로도 더 잘 도와드릴게요.'
+  }
+  if (/ㅋㅋ+|ㅎㅎ+/.test(c)) return 'ㅎㅎ 저도 같이 웃었어요. 다음엔 뭐 도와드릴까요?'
+  return '말씀 감사해요. 필요한 일이 있으면 편하게 말해 주세요.'
+}
+
+/**
+ * True when transcript looks like STT garbage (gibberish), NOT when it is
+ * casual chat / compliments / readable Korean without a command keyword.
+ */
 export function looksLikeSttGarbage(text: string): boolean {
   const t = normalizeCommandText(text)
   if (!t) return true
-  if (t.length > 28) return false
-  if (/[a-zA-Z]{4,}/.test(t) && !/[가-힣]{2,}/.test(t)) return true
+  const stripped = stripDecorative(t)
+  // Keep emoji-only / punctuation-only short reactions as casual, not garbage
+  if (!stripped) return !isCasualChatText(t)
+  if (stripped.length > 28) return false
+  if (isCasualChatText(t) || isCasualChatText(stripped)) return false
+
+  // Structured Korean (particles / sentence endings) = real speech
+  const c = compactKo(stripped)
+  if (
+    /[가-힣]{2,}/.test(stripped) &&
+    (/(은|는|이|가|을|를|의|도|만|와|과|으로|에서)/.test(stripped) ||
+      /(요|다|해|워|야|네|지|까|께|음|습니다|해요|했어|이야|거든|잖아)$/.test(c))
+  ) {
+    return false
+  }
+
+  if (/[a-zA-Z]{4,}/.test(stripped) && !/[가-힣]{2,}/.test(stripped)) return true
   // Hangul but no common content tokens and fails all seeds
-  if (!/[가-힣]{2,}/.test(t)) return true
-  const c = compactKo(t)
+  if (!/[가-힣]{2,}/.test(stripped)) return true
   const useful =
     /날씨|시간|시세|브리핑|위치|번역|통역|가족|친구|게임|지출|알림|환율|통계|도움|시세|주가|검색|지도/.test(
       c,
@@ -216,5 +289,6 @@ export function looksLikeSttGarbage(text: string): boolean {
     bestSeedScore(c, LOC_SEEDS),
     bestSeedScore(c, HELP_SEEDS),
   )
+  // Only short nonsense without command seeds counts as STT garbage
   return best < 0.35 && c.length >= 4 && c.length <= 16
 }

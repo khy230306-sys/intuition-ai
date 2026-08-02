@@ -1,5 +1,13 @@
 # AI Engine changelog
 
+## 1.11.1
+
+- Fix casual chat (칭찬·감사·감정) misclassified as STT failure (`looksLikeSttGarbage`)
+- Social phrases → `general_chat` / local polite fallback when API key absent
+- Music context follow-ups no longer inherit onto unrelated compliments
+- Shorter STT error copy; interpret «스톱» hint only while translate lock is active
+- Music mini status line: keep-all wrapping + “YouTube 외부 앱으로 열림” (no vertical glyph stack)
+
 ## 1.11.0
 
 - **AIZIO Core Brain** (`src/core-brain/`): Intent Router, Context Resolver, Skill Registry, Execution Planner, Response Composer, safety policy

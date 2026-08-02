@@ -37,6 +37,8 @@ describe('spokenCommand', () => {
   it('flags STT garbage and scores similar seeds', () => {
     expect(looksLikeSttGarbage('대화식자제헤달')).toBe(true)
     expect(looksLikeSttGarbage('오늘 날씨 알려줘')).toBe(false)
+    expect(looksLikeSttGarbage('넌 정말 최고의 비서야 👍')).toBe(false)
+    expect(looksLikeSttGarbage('고마워')).toBe(false)
     expect(bigramSimilarity('오늘날씨알려줘', '오늘날씨어때')).toBeGreaterThan(0.4)
   })
 })

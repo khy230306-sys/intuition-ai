@@ -32,17 +32,29 @@ function statusLabel(status: MusicSession['status']): string {
   }
 }
 
+function providerLabel(provider: string): string {
+  const p = String(provider || '').toLowerCase()
+  if (p.includes('youtube')) return 'YouTube'
+  if (p.includes('spotify')) return 'Spotify'
+  if (p.includes('apple')) return 'Apple Music'
+  return provider || 'Music'
+}
+
 /** Compact foldable mini player above the composer (does not cover MIC/send). */
 export function renderMusicMiniPlayer(session: MusicSession | null, visible: boolean): string {
   if (!visible || !session || session.status === 'idle') return ''
   const title = session.title || session.query || '—'
   const canOpen = Boolean(session.url)
+  const sub =
+    session.status === 'opened_external'
+      ? `${providerLabel(session.provider)} ${statusLabel(session.status)}`
+      : `${providerLabel(session.provider)} · ${statusLabel(session.status)}`
   return `
     <div class="music-mini" data-music-mini="1" role="region" aria-label="AIZIO Music">
       <div class="music-mini-main">
         <div class="music-mini-meta">
           <strong class="music-mini-title">${escapeHtml(title)}</strong>
-          <span class="music-mini-sub">${escapeHtml(session.provider)} · ${escapeHtml(statusLabel(session.status))}</span>
+          <span class="music-mini-sub">${escapeHtml(sub)}</span>
         </div>
         <button type="button" class="ghost-btn tiny music-mini-close" data-music-action="close" aria-label="${escapeHtml(t('music.close'))}">×</button>
       </div>

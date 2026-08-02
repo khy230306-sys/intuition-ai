@@ -1,5 +1,6 @@
 import { classifyMusicIntent } from '../music/musicIntent'
 import type { AppLocale } from '../i18n'
+import { isCasualChatText } from '../spokenCommand'
 import { extractEntities } from './entityExtractor'
 import type { CoreIntent, IntentClassification } from './types'
 import { lastIntent } from './brainState'
@@ -77,11 +78,19 @@ function applyContextFollowUp(text: string, base: IntentClassification): IntentC
   const prev = lastIntent()
   const t = text.trim()
 
-  // “조금 더 신나는 걸로” after music
+  // Never inherit music/project context onto unrelated casual chat
+  if (
+    /고마|감사|최고|사랑|피곤|심심|안녕|잘했|똑똑|멋지|대박|ㅋㅋ|ㅎㅎ|thanks|hello|^hi\b/i.test(t) &&
+    !/(음악|노래|곡|볼륨|재생|틀어|멈춰|playlist|music)/i.test(t)
+  ) {
+    return base
+  }
+
+  // “조금 더 신나는 걸로” after music — only clear music-follow-up cues
   if (
     prev &&
     (prev === 'play_music' || prev === 'control_music') &&
-    /(더\s*(조용|잔잔|신나|빠르)|으로\s*바꿔|걸로\s*바꿔|다른\s*(음악|노래)|change)/i.test(t) &&
+    /(더\s*(조용|잔잔|신나|빠르)|으로\s*바꿔|걸로\s*바꿔|다른\s*(음악|노래)|다음\s*곡|이전\s*곡|change)/i.test(t) &&
     t.length < 40
   ) {
     return {
@@ -118,6 +127,16 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
   const t = text.trim()
   if (!t) {
     return { intent: 'unknown', confidence: 0, source: 'default', entities: {} }
+  }
+
+  // Social / casual chat → general_chat (never skill / never STT-error)
+  if (isCasualChatText(t) && !/(음악|노래|틀어|재생|멈춰|번역|통역|일정|할\s*일|설정)/i.test(t)) {
+    return {
+      intent: 'general_chat',
+      confidence: 0.86,
+      source: 'local',
+      entities: { social: true },
+    }
   }
 
   // Prefer dedicated music classifier when it fires

@@ -36,4 +36,19 @@ describe('lifestyle recommend router', () => {
     expect(travel.text).toMatch(/제주|부산|강릉|국내/)
     expect(travel.searchQuery).toBeTruthy()
   })
+
+  it('brain routes food/travel away from stock screening', async () => {
+    const { think } = await import('./brain')
+    const food = await think('맛집추천')
+    expect(food.text).toMatch(/먹을|맛집|후보|지도/)
+    expect(food.text).not.toMatch(/냉정 스크리닝|종목/)
+
+    const travel = await think('국내여행은 어디가좋을까?')
+    expect(travel.text).toMatch(/제주|부산|강릉|여행/)
+    expect(travel.text).not.toMatch(/냉정 스크리닝/)
+
+    const music = await think('좋은 음악을 추천해줘')
+    expect(music.text).not.toMatch(/냉정 스크리닝|종목/)
+    expect(music.musicShowMiniPlayer || /음악|YouTube|재생|검색/i.test(music.text)).toBeTruthy()
+  }, 30000)
 })

@@ -603,7 +603,7 @@ body[data-jarvis-view='friends'] .orb::after {
 }
 
 .composer input,
-.settings-form input,
+.settings-form input:not([type='checkbox']):not([type='radio']),
 .settings-form select {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -617,7 +617,7 @@ body[data-jarvis-view='friends'] .orb::after {
 }
 
 .composer input:focus,
-.settings-form input:focus {
+.settings-form input:not([type='checkbox']):not([type='radio']):focus {
   border-color: rgba(0, 210, 190, 0.55);
 }
 
@@ -817,6 +817,33 @@ body[data-jarvis-view='friends'] .orb::after {
   padding: 10px 0;
   color: var(--ink);
   font-size: 0.9rem;
+  width: 100%;
+}
+
+.toggle-row > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+
+.toggle-row input[type='checkbox'],
+.toggle-row input[type='radio'],
+.settings-form input[type='checkbox'],
+.settings-form input[type='radio'] {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  flex: 0 0 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  accent-color: var(--cyan);
+  align-self: center;
 }
 
 .row-btns {

@@ -12,6 +12,8 @@ export type FamilyMember = {
   joinedAt: number
   /** Web Push subscription for background chat alerts */
   push?: PushSubJson | null
+  /** Optional square profile photo (JPEG data URL). */
+  avatarUrl?: string | null
 }
 
 export type FamilyChatMedia = {

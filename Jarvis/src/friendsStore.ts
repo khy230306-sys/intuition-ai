@@ -259,6 +259,7 @@ export function mergeFriendsSnapshot(
       name: m.name || prev.name,
       joinedAt: Math.min(prev.joinedAt || m.joinedAt, m.joinedAt || prev.joinedAt),
       push: m.push != null ? m.push : prev.push,
+      avatarUrl: m.avatarUrl != null ? m.avatarUrl : prev.avatarUrl,
     })
   }
 
@@ -299,6 +300,10 @@ export function upsertMember(room: FriendsRoom, member: FriendsMember): FriendsR
             id: byId ? member.id : m.id,
             name: member.name || m.name,
             push: member.push !== undefined ? member.push : m.push,
+            avatarUrl:
+              member.avatarUrl !== undefined
+                ? member.avatarUrl
+                : m.avatarUrl,
             joinedAt: Math.min(m.joinedAt || member.joinedAt, member.joinedAt || m.joinedAt),
           }
         : m,

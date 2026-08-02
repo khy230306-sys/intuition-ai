@@ -178,12 +178,15 @@ async function announceSelf(): Promise<void> {
   if (!current) return
   if (!syncAction && !packetRelay) return
   const { loadStoredPushSubscription } = await import('./chatNotify')
+  const { loadSettings } = await import('./storage')
   const push = loadStoredPushSubscription()
+  const avatarUrl = loadSettings().avatarDataUrl || null
   const member = {
     id: current.memberId,
     name: current.memberName,
     joinedAt: Date.now(),
     push,
+    avatarUrl,
   }
   upsertMember(current, member)
   saveFriendsRoom(current)

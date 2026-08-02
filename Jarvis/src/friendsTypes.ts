@@ -11,6 +11,8 @@ export type FriendsMember = {
   name: string
   joinedAt: number
   push?: PushSubJson | null
+  /** Optional square profile photo (JPEG data URL). */
+  avatarUrl?: string | null
 }
 
 export type FriendsChatMedia = {

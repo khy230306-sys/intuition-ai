@@ -117,6 +117,8 @@ import {
   leaveFamilyRoom,
   loadFamilyRoom,
   postFamilyChat,
+  saveFamilyRoom,
+  upsertMember as upsertFamilyMember,
 } from './familyStore'
 import {
   broadcastFamilyPacket,
@@ -139,6 +141,8 @@ import {
   leaveFriendsRoom,
   loadFriendsRoom,
   postFriendsChat,
+  saveFriendsRoom,
+  upsertMember as upsertFriendsMember,
 } from './friendsStore'
 import {
   broadcastFriendsPacket,
@@ -151,6 +155,7 @@ import {
 import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
 import { fileToChatMedia, mediaCaption, type ChatMedia } from './chatMedia'
+import { fileToProfileAvatar, isAvatarDataUrl } from './profileAvatar'
 import {
   getAppLocale,
   initAppLocale,
@@ -167,7 +172,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.16'
+const APP_VERSION = '1.9.17'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -747,7 +752,19 @@ function bootMediaPreviewDelegation(): void {
   if (mediaPreviewDelegationReady) return
   mediaPreviewDelegationReady = true
   document.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement | null)?.closest?.('[data-media-preview]') as HTMLElement | null
+    const t = e.target as HTMLElement | null
+    const profile = t?.closest?.('[data-profile-open]') as HTMLElement | null
+    if (profile) {
+      e.preventDefault()
+      e.stopPropagation()
+      openProfileSheet({
+        name: profile.getAttribute('data-profile-name') || '나',
+        src: profile.getAttribute('data-profile-src') || undefined,
+        mine: profile.getAttribute('data-profile-mine') === '1',
+      })
+      return
+    }
+    const btn = t?.closest?.('[data-media-preview]') as HTMLElement | null
     if (!btn) return
     e.preventDefault()
     e.stopPropagation()
@@ -1103,18 +1120,24 @@ function spaceChatBubbleHtml(
     Boolean((m.text || '').trim()) &&
     !/^\[(사진|동영상)\]$/.test(m.text.trim())
   const clock = formatChatClock(m.createdAt || 0)
-  const avatar = mine
-    ? ''
-    : `<div class="msg-avatar" aria-hidden="true">${escapeHtml(chatAvatarLetter(m.authorName))}</div>`
-  const nameRow = mine
-    ? ''
-    : `<span class="meta">${escapeHtml(m.authorName)}</span>`
+  const avatarSrc = lookupSpaceAvatar(m.authorId, memberId)
+  const avatar = avatarButtonHtml({
+    name: m.authorName,
+    src: avatarSrc,
+    mine,
+  })
+  const nameRow = mine ? '' : `<span class="meta">${escapeHtml(m.authorName)}</span>`
+  const bareMediaLabel = /^\[(사진|동영상)\]$/.test((m.text || '').trim())
+  const textHtml =
+    bareMediaLabel && mediaHtml
+      ? `<div class="fam-msg-text" data-role="body" hidden>${escapeHtml(m.text)}</div>`
+      : `<div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>`
   return `<div class="fam-msg-row ${mine ? 'mine' : 'theirs'}">
     ${avatar}
     <div class="fam-msg ${mine ? 'mine' : 'theirs'}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>
       ${nameRow}
       ${mediaHtml}
-      <div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>
+      ${textHtml}
       <div class="fam-msg-tr" data-role="tr" hidden></div>
       ${clock ? `<time class="msg-time">${clock}</time>` : ''}
     </div>
@@ -1379,6 +1402,151 @@ function formatChatClock(ts: number): string {
 function chatAvatarLetter(name: string): string {
   const t = name.trim()
   return t ? t.slice(0, 1).toUpperCase() : '?'
+}
+
+function lookupSpaceAvatar(authorId: string, memberId: string): string | undefined {
+  if (authorId === memberId && isAvatarDataUrl(state.settings.avatarDataUrl)) {
+    return state.settings.avatarDataUrl
+  }
+  const room =
+    state.view === 'friends'
+      ? loadFriendsRoom()
+      : state.view === 'family'
+        ? loadFamilyRoom()
+        : loadFamilyRoom() || loadFriendsRoom()
+  const url = room?.members.find((m) => m.id === authorId)?.avatarUrl
+  return isAvatarDataUrl(url) ? url : undefined
+}
+
+function avatarButtonHtml(opts: {
+  name: string
+  src?: string
+  mine?: boolean
+}): string {
+  const letter = chatAvatarLetter(opts.name)
+  const src = isAvatarDataUrl(opts.src) ? opts.src : ''
+  const inner = src
+    ? `<img class="msg-avatar-img" src="${escapeAttr(src)}" alt="" />`
+    : `<span class="msg-avatar-letter">${escapeHtml(letter)}</span>`
+  return `<button type="button" class="msg-avatar-btn ${src ? 'has-photo' : ''}" data-profile-open="1" data-profile-name="${escapeAttr(opts.name)}" data-profile-src="${escapeAttr(src)}" data-profile-mine="${opts.mine ? '1' : '0'}" aria-label="${escapeAttr(opts.name)} 프로필">
+    ${inner}
+  </button>`
+}
+
+async function applyMyAvatar(dataUrl: string | undefined): Promise<void> {
+  const next = {
+    ...state.settings,
+    avatarDataUrl: dataUrl && isAvatarDataUrl(dataUrl) ? dataUrl : undefined,
+  }
+  state.settings = next
+  saveSettings(next)
+  const avatarUrl = next.avatarDataUrl || null
+  const fam = loadFamilyRoom()
+  if (fam) {
+    upsertFamilyMember(fam, {
+      id: fam.memberId,
+      name: fam.memberName,
+      joinedAt: Date.now(),
+      avatarUrl,
+    })
+    saveFamilyRoom(fam)
+  }
+  const fr = loadFriendsRoom()
+  if (fr) {
+    upsertFriendsMember(fr, {
+      id: fr.memberId,
+      name: fr.memberName,
+      joinedAt: Date.now(),
+      avatarUrl,
+    })
+    saveFriendsRoom(fr)
+  }
+  showFlash(avatarUrl ? '프로필 사진을 저장했습니다.' : '프로필 사진을 제거했습니다.')
+  render()
+  void ensureFamilySyncOnce(true)
+  void ensureFriendsSyncOnce(true)
+}
+
+function pickProfileAvatarFile(): void {
+  let input = document.getElementById('profile-avatar-input') as HTMLInputElement | null
+  if (!input) {
+    input = document.createElement('input')
+    input.id = 'profile-avatar-input'
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.hidden = true
+    document.body.appendChild(input)
+    input.addEventListener('change', () => {
+      const file = input!.files?.[0]
+      input!.value = ''
+      if (!file) return
+      void fileToProfileAvatar(file)
+        .then((url) => applyMyAvatar(url))
+        .catch((err) => showFlash(err instanceof Error ? err.message : '프로필 선택 실패'))
+    })
+  }
+  input.click()
+}
+
+function closeProfileSheet(): void {
+  document.getElementById('profile-sheet')?.remove()
+}
+
+function openProfileSheet(opts: { name: string; src?: string; mine?: boolean }): void {
+  closeProfileSheet()
+  const src = isAvatarDataUrl(opts.src) ? opts.src : ''
+  const letter = chatAvatarLetter(opts.name)
+  const overlay = document.createElement('div')
+  overlay.id = 'profile-sheet'
+  overlay.className = 'profile-sheet'
+  overlay.setAttribute('role', 'dialog')
+  overlay.setAttribute('aria-modal', 'true')
+  overlay.setAttribute('aria-label', '프로필')
+  overlay.innerHTML = `
+    <div class="profile-sheet-card" data-profile-card="1">
+      <button type="button" class="profile-sheet-close" data-profile-close="1" aria-label="닫기">×</button>
+      <button type="button" class="profile-sheet-avatar ${src ? 'has-photo' : ''}" data-profile-zoom="${src ? '1' : '0'}" aria-label="프로필 사진 크게 보기">
+        ${
+          src
+            ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(opts.name)}" />`
+            : `<span>${escapeHtml(letter)}</span>`
+        }
+      </button>
+      <strong class="profile-sheet-name">${escapeHtml(opts.name)}</strong>
+      ${
+        opts.mine
+          ? `<div class="profile-sheet-actions">
+              <button type="button" class="primary-btn" data-profile-pick="1">프로필 사진 선택</button>
+              ${src ? `<button type="button" class="ghost-btn" data-profile-clear="1">사진 제거</button>` : ''}
+            </div>`
+          : src
+            ? `<p class="hint">사진을 누르면 크게 볼 수 있습니다.</p>`
+            : `<p class="hint">아직 프로필 사진이 없습니다.</p>`
+      }
+    </div>
+  `
+  const close = () => closeProfileSheet()
+  overlay.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement
+    if (t === overlay || t.closest('[data-profile-close]')) {
+      close()
+      return
+    }
+    if (t.closest('[data-profile-pick]')) {
+      close()
+      pickProfileAvatarFile()
+      return
+    }
+    if (t.closest('[data-profile-clear]')) {
+      close()
+      void applyMyAvatar(undefined)
+      return
+    }
+    if (t.closest('[data-profile-zoom="1"]') && src) {
+      openMediaLightbox(src, opts.name)
+    }
+  })
+  document.body.appendChild(overlay)
 }
 
 function renderBrand(): string {
@@ -1811,8 +1979,14 @@ function renderChat(): string {
           const name = mine ? state.settings.displayName || 'YOU' : 'AIZIO'
           const clock = formatChatClock(m.createdAt)
           const avatar = mine
-            ? ''
-            : `<div class="msg-avatar aizio" aria-hidden="true">A</div>`
+            ? avatarButtonHtml({
+                name,
+                src: state.settings.avatarDataUrl,
+                mine: true,
+              })
+            : `<button type="button" class="msg-avatar-btn aizio" data-profile-open="1" data-profile-name="AIZIO" data-profile-src="" data-profile-mine="0" aria-label="AIZIO">
+                <span class="msg-avatar-letter">A</span>
+              </button>`
           return `
           <div class="msg-row ${mine ? 'user' : 'assistant'}">
             ${avatar}
@@ -2608,6 +2782,23 @@ function renderSettings(): string {
       <h2 class="section-title">SETTINGS</h2>
       ${renderUpdateCard(false)}
       <form class="settings-form" id="settings-form">
+        <div class="profile-picker">
+          <button type="button" class="profile-picker-avatar ${s.avatarDataUrl ? 'has-photo' : ''}" data-profile-open="1" data-profile-name="${escapeAttr(s.displayName)}" data-profile-src="${escapeAttr(s.avatarDataUrl || '')}" data-profile-mine="1" aria-label="내 프로필">
+            ${
+              s.avatarDataUrl
+                ? `<img src="${escapeAttr(s.avatarDataUrl)}" alt="" />`
+                : `<span>${escapeHtml(chatAvatarLetter(s.displayName))}</span>`
+            }
+          </button>
+          <div class="profile-picker-meta">
+            <strong>프로필 사진</strong>
+            <p class="hint">대화창 아바타에 표시됩니다. 탭해서 선택하세요.</p>
+            <div class="row-btns">
+              <button type="button" class="primary-btn" data-action="pick-avatar">사진 선택</button>
+              ${s.avatarDataUrl ? `<button type="button" class="ghost-btn" data-action="clear-avatar">제거</button>` : ''}
+            </div>
+          </div>
+        </div>
         <label>호칭
           <input name="displayName" value="${escapeAttr(s.displayName)}" />
         </label>
@@ -4086,6 +4277,13 @@ function bind(): void {
       render()
     })
     input.click()
+  })
+
+  document.querySelector('[data-action="pick-avatar"]')?.addEventListener('click', () => {
+    pickProfileAvatarFile()
+  })
+  document.querySelector('[data-action="clear-avatar"]')?.addEventListener('click', () => {
+    void applyMyAvatar(undefined)
   })
 
   document.querySelectorAll('[data-action="clear-chat"]').forEach((btn) => {

@@ -124,6 +124,8 @@ export interface JarvisSettings {
   apiBase: string
   model: string
   city: string
+  /** Square profile photo (JPEG data URL) for chat avatars. */
+  avatarDataUrl?: string
   /** OS alert when family chat arrives (default on). */
   notifyFamilyChat?: boolean
   /** OS alert when friends chat arrives (default on). */

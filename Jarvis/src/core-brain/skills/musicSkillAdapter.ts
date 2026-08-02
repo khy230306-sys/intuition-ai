@@ -22,24 +22,37 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
         error: { code: 'no_skill_available' },
       }
     }
+    const showPlayer =
+      music.showMiniPlayer !== false &&
+      music.session.status !== 'stopped' &&
+      music.session.status !== 'idle' &&
+      (ctx.intent === 'play_music' ||
+        music.needsGesture === true ||
+        music.showMiniPlayer === true ||
+        music.session.status === 'ready' ||
+        music.session.status === 'paused' ||
+        music.session.status === 'opened_external' ||
+        music.session.status === 'searching')
     return {
       success: true,
       status: music.needsGesture ? 'needs_user_action' : 'completed',
       data: { playUrl: music.playUrl ?? null },
       message: music.text,
       speakText: music.text.slice(0, 160),
-      uiActions: [
-        {
-          type: 'SHOW_MUSIC_PLAYER',
-          payload: { playUrl: music.playUrl, needsGesture: music.needsGesture },
-        },
-      ],
+      uiActions: showPlayer
+        ? [
+            {
+              type: 'SHOW_MUSIC_PLAYER',
+              payload: { playUrl: music.playUrl, needsGesture: music.needsGesture },
+            },
+          ]
+        : [],
       brainPatch: {
         text: music.text,
         speak: music.speak !== false,
         musicNeedsGesture: music.needsGesture,
         musicPlayUrl: music.playUrl,
-        musicShowMiniPlayer: true,
+        musicShowMiniPlayer: showPlayer,
       },
       error: null,
     }

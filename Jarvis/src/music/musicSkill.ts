@@ -121,6 +121,7 @@ async function prepareSearch(intent: MusicIntentResult, locale: AppLocale): Prom
       speak: true,
       needsGesture: true,
       playUrl: session.url,
+      showMiniPlayer: true,
       session,
     }
   } catch (err) {

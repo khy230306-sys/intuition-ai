@@ -822,12 +822,16 @@ export async function think(
     try {
       const music = await tryHandleMusicSkill(text, getAppLocale())
       if (music) {
+        const show =
+          music.showMiniPlayer !== false &&
+          music.session.status !== 'stopped' &&
+          music.session.status !== 'idle'
         return {
           text: music.text,
           speak: music.speak !== false,
           musicNeedsGesture: music.needsGesture,
           musicPlayUrl: music.playUrl,
-          musicShowMiniPlayer: true,
+          musicShowMiniPlayer: show,
         }
       }
     } catch {

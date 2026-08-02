@@ -24,10 +24,11 @@ describe('AIZIO Music Skill handler', () => {
     expect(await tryHandleMusicSkill('오늘 일정 알려줘', 'ko')).toBeNull()
   })
 
-  it('handles stop without fake external success', async () => {
+  it('handles stop by clearing session and hiding mini player', async () => {
     await tryHandleMusicSkill('카페 분위기 음악 틀어줘', 'ko')
     const stop = await tryHandleMusicSkill('음악 중지', 'ko')
-    expect(stop?.session.status).toBe('stopped')
+    expect(stop?.session.status).toBe('idle')
+    expect(stop?.showMiniPlayer).toBe(false)
     expect(stop?.text).toBeTruthy()
   })
 

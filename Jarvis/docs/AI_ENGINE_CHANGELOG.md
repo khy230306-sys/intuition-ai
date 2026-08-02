@@ -1,5 +1,11 @@
 # AI Engine changelog
 
+## 1.10.3
+
+- Fix space-chat voice repeats: 전송+자동전송 겹침 차단, 입력창에 STT 초안 미기입, 2.5초 동일문구 스토어 디듀프
+- Faster peer chat: broadcast without waiting for reconnect, drop 600ms join delay, MQTT qos1, slim 12s announce
+- Sync UI: health ticks only patch status; data path soft-appends immediately
+
 ## 1.10.2
 
 - Fix voice dictation double-send (silence auto-final racing MIC STOP) via `consumeTranscript` + once-per-session delivery

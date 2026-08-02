@@ -40,6 +40,10 @@ export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise
   return m.broadcastFriendsPacket(packet)
 }
 
+export function canBroadcastFriendsNow(): boolean {
+  return cached?.canBroadcastFriendsNow() ?? false
+}
+
 export function getFriendsPeerCount(): number {
   return cached?.getFriendsPeerCount() ?? 0
 }

@@ -198,13 +198,13 @@ async function announceSelf(): Promise<void> {
   })
   const snap = snapshotPacket()
   if (snap) {
-    // Keep MQTT payloads smaller
+    // Keep MQTT payloads small: recent text only (no media dataUrls)
     if (snap.type === 'snapshot') {
       snap.room = {
         ...snap.room,
-        messages: snap.room.messages.slice(-80),
-        notices: snap.room.notices.slice(0, 30),
-        events: snap.room.events.slice(0, 50),
+        messages: snap.room.messages.slice(-40).map(({ media: _media, ...rest }) => rest),
+        notices: snap.room.notices.slice(0, 20),
+        events: snap.room.events.slice(0, 40),
       }
     }
     await send(snap)
@@ -233,7 +233,7 @@ function startWatchdogs(): void {
   announceTimer = window.setInterval(() => {
     if (!roomHandle || reconnecting) return
     void announceSelf().then(() => emitStatus('health'))
-  }, 20_000)
+  }, 12_000)
   healthTimer = window.setInterval(() => {
     if (!roomHandle || reconnecting) return
     const health = readRelayHealth()
@@ -275,6 +275,11 @@ async function fanoutChatPush(message: {
 export async function broadcastFriendsPacket(packet: FriendsSyncPacket): Promise<void> {
   await send(packet)
   if (packet.type === 'chat') void fanoutChatPush(packet.message)
+}
+
+/** True when a chat packet can leave the device without waiting for reconnect. */
+export function canBroadcastFriendsNow(): boolean {
+  return Boolean(syncAction || packetRelay?.connected())
 }
 
 export function isFriendsSyncConnected(): boolean {
@@ -349,7 +354,6 @@ async function joinFresh(): Promise<{ ok: boolean; message: string }> {
 
     startWatchdogs()
     await announceSelf()
-    await new Promise((r) => setTimeout(r, 600))
     const msg = `친구 동기화 연결 · 코드 ${room.code} · ${statusLine()}`
     emit(msg, 'conn')
     return { ok: true, message: msg }

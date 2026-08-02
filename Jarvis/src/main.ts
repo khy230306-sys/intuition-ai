@@ -122,6 +122,7 @@ import {
 } from './familyStore'
 import {
   broadcastFamilyPacket,
+  canBroadcastFamilyNow,
   disconnectFamilySync,
   ensureFamilySync,
   getFamilyPeerCount,
@@ -146,6 +147,7 @@ import {
 } from './friendsStore'
 import {
   broadcastFriendsPacket,
+  canBroadcastFriendsNow,
   disconnectFriendsSync,
   ensureFriendsSync,
   getFriendsPeerCount,
@@ -189,7 +191,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.10.2'
+const APP_VERSION = '1.10.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1241,8 +1243,14 @@ function patchVoiceUi(): void {
   const inputId = target === 'family' ? 'family-draft' : target === 'friends' ? 'friends-draft' : 'draft'
   const input = document.getElementById(inputId) as HTMLInputElement | null
   if (input && state.listening) {
-    input.value = state.draft
-    input.placeholder = '음성 인식 중…'
+    // Space rooms: keep draft out of the text field so 전송 + auto-final cannot both send.
+    if (target === 'jarvis') {
+      input.value = state.draft
+      input.placeholder = '음성 인식 중…'
+    } else {
+      input.value = ''
+      input.placeholder = state.draft ? '말씀하는 중… (자동 전송)' : '음성 인식 중…'
+    }
   }
 }
 
@@ -1417,18 +1425,58 @@ function spaceSourceLang(text: string): string | undefined {
   return d.language === 'und' ? undefined : d.language
 }
 
-/** Prevent voice auto-final + MIC STOP from posting the same line twice. */
+/** Prevent voice auto-final + MIC STOP / 전송 from posting the same line twice. */
 let lastSpaceSend = { key: '', at: 0 }
+
+function normalizeSpaceChatText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function isRecentDuplicateSpaceChat(space: 'family' | 'friends', caption: string): boolean {
+  const norm = normalizeSpaceChatText(caption)
+  if (!norm) return false
+  const key = `${space}:${norm}`
+  const now = Date.now()
+  if (key === lastSpaceSend.key && now - lastSpaceSend.at < 2500) return true
+  const room = space === 'family' ? loadFamilyRoom() : loadFriendsRoom()
+  if (!room) return false
+  for (let i = room.messages.length - 1; i >= 0 && i >= room.messages.length - 6; i--) {
+    const m = room.messages[i]!
+    if (m.authorId !== room.memberId) continue
+    if (normalizeSpaceChatText(m.text) === norm && now - m.createdAt < 2500) return true
+    break
+  }
+  return false
+}
+
+async function publishSpaceChat(
+  space: 'family' | 'friends',
+  packet: { type: 'chat'; message: { id: string; authorId: string; authorName: string; text: string; createdAt: number } },
+): Promise<void> {
+  // Send immediately if relay/WebRTC is up — do not wait for reconnect first
+  const ready = space === 'family' ? canBroadcastFamilyNow() : canBroadcastFriendsNow()
+  if (ready) {
+    if (space === 'family') await broadcastFamilyPacket(packet)
+    else await broadcastFriendsPacket(packet)
+    void (space === 'family' ? ensureFamilySyncOnce() : ensureFriendsSyncOnce())
+    return
+  }
+  if (space === 'family') {
+    await ensureFamilySyncOnce()
+    await broadcastFamilyPacket(packet)
+  } else {
+    await ensureFriendsSyncOnce()
+    await broadcastFriendsPacket(packet)
+  }
+}
 
 function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMedia): void {
   const trimmed = text.trim()
   if (!trimmed && !media) return
   const caption = media ? mediaCaption(media, trimmed) : trimmed
+  if (!media && isRecentDuplicateSpaceChat(space, caption)) return
   if (!media) {
-    const key = `${space}:${caption}`
-    const now = Date.now()
-    if (key === lastSpaceSend.key && now - lastSpaceSend.at < 1600) return
-    lastSpaceSend = { key, at: now }
+    lastSpaceSend = { key: `${space}:${normalizeSpaceChatText(caption)}`, at: Date.now() }
   }
   const sourceLanguage = spaceSourceLang(caption)
   if (space === 'family') {
@@ -1437,12 +1485,8 @@ function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMe
     invalidateSpaceInboxCache()
     const form = document.getElementById('family-chat-form') as HTMLFormElement | null
     form?.reset()
-    // Soft append — avoid full remount + nav ghost-guard after every send
     softRefreshSpaceChat('family')
-    void (async () => {
-      await ensureFamilySyncOnce()
-      await broadcastFamilyPacket({ type: 'chat', message: msg })
-    })()
+    void publishSpaceChat('family', { type: 'chat', message: msg })
     return
   }
   const msg = postFriendsChat(caption, { media, sourceLanguage })
@@ -1451,10 +1495,22 @@ function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMe
   const form = document.getElementById('friends-chat-form') as HTMLFormElement | null
   form?.reset()
   softRefreshSpaceChat('friends')
-  void (async () => {
-    await ensureFriendsSyncOnce()
-    await broadcastFriendsPacket({ type: 'chat', message: msg })
-  })()
+  void publishSpaceChat('friends', { type: 'chat', message: msg })
+}
+
+/** MIC listening + 전송 tap must not double-post. */
+function submitSpaceChatFromForm(space: 'family' | 'friends', formText: string): void {
+  if (state.listening && state.dictationTarget === space) {
+    voiceSessionGen += 1
+    const partial = voice.consumeTranscript() || formText.trim()
+    state.listening = false
+    state.voiceHint = ''
+    state.draft = ''
+    patchVoiceUi()
+    if (partial) sendSpaceChat(space, partial)
+    return
+  }
+  sendSpaceChat(space, formText)
 }
 
 async function sendSpaceMedia(space: 'family' | 'friends', file: File): Promise<void> {
@@ -3190,13 +3246,13 @@ type RenderOpts = {
 }
 
 /** Soft-refresh space chat without remounting nav (avoids accidental tab jumps). */
-function softRefreshSpaceChat(kind: 'family' | 'friends'): void {
+function softRefreshSpaceChat(kind: 'family' | 'friends', opts?: { badges?: boolean }): void {
   patchSpaceHead(kind, {
     status: kind === 'family' ? state.familySyncStatus : state.friendsSyncStatus,
     peers: kind === 'family' ? getFamilyPeerCount() : getFriendsPeerCount(),
   })
   appendLiveSpaceChats(kind)
-  patchNavBadges()
+  if (opts?.badges !== false) patchNavBadges()
 }
 
 /** Update CHAT/FAM/FRD badges without remounting the shell. */
@@ -3416,14 +3472,14 @@ function scheduleResumeSpaceSync(mode: 'soft' | 'force' = 'soft'): void {
     const now = Date.now()
     // Avoid reconnect storms from iOS focus/visibility thrash
     if (mode === 'force' && now - lastResumeAt < 8_000) mode = 'soft'
-    if (mode === 'soft' && now - lastResumeAt < 2_000) return
+    if (mode === 'soft' && now - lastResumeAt < 1_200) return
     lastResumeAt = now
     const force = mode === 'force'
     void (async () => {
       if (loadFamilyRoom()) await ensureFamilySyncOnce(force)
       if (loadFriendsRoom()) await ensureFriendsSyncOnce(force)
     })()
-  }, 800)
+  }, mode === 'force' ? 250 : 120)
 }
 
 function bindLocationGate(): void {
@@ -3563,7 +3619,7 @@ function bind(): void {
   document.getElementById('family-chat-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
-    sendSpaceChat('family', String(fd.get('text') || ''))
+    submitSpaceChatFromForm('family', String(fd.get('text') || ''))
   })
   document.getElementById('family-draft')?.addEventListener('focus', () => scrollSpaceChat('family'))
 
@@ -3759,7 +3815,7 @@ function bind(): void {
   document.getElementById('friends-chat-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
-    sendSpaceChat('friends', String(fd.get('text') || ''))
+    submitSpaceChatFromForm('friends', String(fd.get('text') || ''))
   })
   document.getElementById('friends-draft')?.addEventListener('focus', () => scrollSpaceChat('friends'))
 
@@ -4753,18 +4809,19 @@ function boot(): void {
     state.familySyncStatus = info.status
     if (state.view !== 'family' || !state.locationReady) return
     if (state.shareModal) return
-    // Never steal focus with a full remount while on the chat tab.
-    if (state.familyTab === 'chat' || info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
-      softRefreshSpaceChat('family')
+    // Health/peer: status text only — avoid storage thrash that delays chat paint
+    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      patchSpaceHead('family', { status: info.status, peers: getFamilyPeerCount() })
       return
     }
-    if (state.listening) {
+    // New chat/notice data: append immediately on chat tab
+    if (state.familyTab === 'chat' || state.listening) {
       softRefreshSpaceChat('family')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      softRefreshSpaceChat('family')
+      softRefreshSpaceChat('family', { badges: false })
       return
     }
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
@@ -4772,23 +4829,23 @@ function boot(): void {
       if (state.view === 'family' && state.familyTab !== 'chat' && !state.shareModal && !state.listening) {
         render({ guardNav: 'async' })
       }
-    }, 320)
+    }, 180)
   })
   setFriendsSyncListener((info) => {
     state.friendsSyncStatus = info.status
     if (state.view !== 'friends' || !state.locationReady) return
     if (state.shareModal) return
-    if (state.friendsTab === 'chat' || info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
-      softRefreshSpaceChat('friends')
+    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      patchSpaceHead('friends', { status: info.status, peers: getFriendsPeerCount() })
       return
     }
-    if (state.listening) {
+    if (state.friendsTab === 'chat' || state.listening) {
       softRefreshSpaceChat('friends')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      softRefreshSpaceChat('friends')
+      softRefreshSpaceChat('friends', { badges: false })
       return
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
@@ -4796,7 +4853,7 @@ function boot(): void {
       if (state.view === 'friends' && state.friendsTab !== 'chat' && !state.shareModal && !state.listening) {
         render({ guardNav: 'async' })
       }
-    }, 320)
+    }, 180)
   })
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {

@@ -40,6 +40,10 @@ export async function broadcastFamilyPacket(packet: FamilySyncPacket): Promise<v
   return m.broadcastFamilyPacket(packet)
 }
 
+export function canBroadcastFamilyNow(): boolean {
+  return cached?.canBroadcastFamilyNow() ?? false
+}
+
 export function getFamilyPeerCount(): number {
   return cached?.getFamilyPeerCount() ?? 0
 }

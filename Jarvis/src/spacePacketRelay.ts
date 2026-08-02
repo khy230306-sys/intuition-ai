@@ -194,8 +194,9 @@ export async function createSpacePacketRelay(input: {
                 resolve()
                 return
               }
-              c.publish(topic, body, { qos: 0 }, () => resolve())
-              window.setTimeout(resolve, 2_000)
+              // qos 1: at-least-once for chat/sync catch-up (dedupe keys drop duplicates)
+              c.publish(topic, body, { qos: 1 }, () => resolve())
+              window.setTimeout(resolve, 1_200)
             }),
         ),
       )

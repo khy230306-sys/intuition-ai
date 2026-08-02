@@ -54,9 +54,16 @@ export async function playWithUserGesture(locale: Locale = 'ko'): Promise<MusicS
               : '음악 앱 또는 브라우저에서 열었어요. 실제 재생 여부는 AIZIO가 확인할 수 없습니다.',
       )
     }
-    patchMusicSession({ status: 'playing', startedAt: Date.now() })
+    // Do not claim confirmed playback — in-app providers may still need a gesture / OS audio focus.
+    patchMusicSession({ status: 'ready', startedAt: Date.now(), lastAction: 'play_music' })
     return reply(
-      locale.startsWith('en') ? 'Playing.' : locale.startsWith('ja') ? '再生中です。' : '재생 중이에요.',
+      locale.startsWith('en')
+        ? 'Playback was requested. If you hear nothing, tap Play again.'
+        : locale.startsWith('ja')
+          ? '再生を要求しました。聞こえない場合は再生をもう一度押してください。'
+          : locale.startsWith('vi')
+            ? 'Đã yêu cầu phát. Nếu không nghe thấy, hãy nhấn Phát lại.'
+            : '재생을 요청했어요. 소리가 나지 않으면 재생 버튼을 다시 눌러 주세요.',
     )
   } catch (err) {
     if (err instanceof MusicSkillError) {

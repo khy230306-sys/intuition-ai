@@ -92,7 +92,12 @@ import {
 } from './friendsStore'
 import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
-import { aiEngineErrorText, runAiEngine } from './ai'
+import { aiEngineErrorText } from './ai'
+import {
+  hasAnyConfiguredProvider,
+  hybridNoProviderMessage,
+  runHybridChat,
+} from './ai-providers'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,
@@ -140,30 +145,27 @@ function helpText(name: string): string {
     '• 적립식 매달 50만 10년 연7%',
     '• 삼성전자 투자체크',
     '',
-    '날씨·시세·환율·브리핑·통역·통계는 API 키 없이 동작합니다. 심화 자유대화만 설정 API 키가 필요합니다.',
+    '날씨·시세·환율·브리핑·통역·통계·메모·일정·알림은 API 키 없이 동작합니다. 자유 대화는 설정에서 무료 AI(OpenRouter/Gemini/Groq) 또는 OpenAI를 연결하세요.',
     '로컬 알림은 앱/탭이 열려 있을 때 가장 확실합니다(iOS 백그라운드 제한).',
     '면책: 투자 조언이 아니며 손실 책임은 본인에게 있습니다.',
   ].join('\n')
 }
 
-/** Cloud free-chat via shared AI engine (local commands stay above this). */
+/** Cloud free-chat via Hybrid AI Provider System (local commands stay above this). */
 async function callCloudLLM(
   userText: string,
   settings: JarvisSettings,
   history: { role: string; text: string }[],
 ): Promise<string | null> {
-  if (!settings.apiKey.trim()) return null
+  if (!hasAnyConfiguredProvider()) return null
   const profile = loadProfile()
-  const result = await runAiEngine({
+  const result = await runHybridChat({
     message: userText,
     history,
     displayName: settings.displayName,
     lifeContext: lifeContextBlock(),
     riskTolerance: profile.riskTolerance,
     investHorizon: profile.investHorizon,
-    apiKey: settings.apiKey,
-    apiBase: settings.apiBase,
-    model: settings.model || 'gpt-4o-mini',
     locale: 'ko-KR',
   })
   return result.text || null
@@ -712,6 +714,7 @@ async function replyWeather(
 export async function think(
   input: string,
   history: { role: string; text: string }[] = [],
+  opts?: { source?: 'text' | 'voice' | 'system' },
 ): Promise<BrainReply> {
   const settings = loadSettings()
   const name = settings.displayName
@@ -720,6 +723,8 @@ export async function think(
 
   // AIZIO Core Brain — classify & run registered Skills; otherwise continue legacy pipeline
   let text = raw
+  let coreClaimedMusic = false
+  let coreFailedMusicOrTranslate = false
   try {
     const stripped = stripWakeWord(raw).text
     if (stripped) text = stripped
@@ -727,10 +732,18 @@ export async function think(
       text: raw,
       history,
       locale: getAppLocale(),
-      source: 'text',
+      source: opts?.source || 'text',
     })
+    coreClaimedMusic = core.intent === 'play_music' || core.intent === 'control_music'
     const handled = coreResultToBrainReply(core)
     if (handled) return handled
+    // onlyFailed music/translate sets fallbackLegacy=true so legacy may retry once
+    coreFailedMusicOrTranslate =
+      core.fallbackLegacy &&
+      (core.intent === 'play_music' ||
+        core.intent === 'control_music' ||
+        core.intent === 'translate') &&
+      core.selectedSkills.some((id) => id === 'music' || id === 'translation')
     // Use wake-stripped text for the rest of the legacy handlers
     if (stripped) text = stripped
   } catch {
@@ -794,20 +807,23 @@ export async function think(
     }
   }
 
-  // AIZIO Music Skill — independent module; ambiguous intents fall through to AI
-  try {
-    const music = await tryHandleMusicSkill(text, getAppLocale())
-    if (music) {
-      return {
-        text: music.text,
-        speak: music.speak !== false,
-        musicNeedsGesture: music.needsGesture,
-        musicPlayUrl: music.playUrl,
-        musicShowMiniPlayer: true,
+  // Music: Core Brain is the primary path. Legacy runs only if Core did not claim
+  // music, or Core claimed it and failed (retry once). Avoid double music handling.
+  if (!coreClaimedMusic || coreFailedMusicOrTranslate) {
+    try {
+      const music = await tryHandleMusicSkill(text, getAppLocale())
+      if (music) {
+        return {
+          text: music.text,
+          speak: music.speak !== false,
+          musicNeedsGesture: music.needsGesture,
+          musicPlayUrl: music.playUrl,
+          musicShowMiniPlayer: true,
+        }
       }
+    } catch {
+      /* never block normal AI on music classifier errors */
     }
-  } catch {
-    /* never block normal AI on music classifier errors */
   }
 
   // App update (home-screen PWA)
@@ -1173,7 +1189,7 @@ export async function think(
     return { text: 'YouTube를 엽니다.', speak: true, action: () => openApp('유튜브') }
   }
 
-  if (settings.apiKey.trim()) {
+  if (hasAnyConfiguredProvider()) {
     try {
       const cloud = await callCloudLLM(text, settings, history)
       if (cloud) return { text: cloud, speak: true }
@@ -1217,7 +1233,7 @@ export async function think(
     text: [
       '잘 이해하지 못했어요. 조금 다르게 말해 주시겠어요?',
       '예: 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 삼성전자 시세 · 통계 · 도움말',
-      settings.apiKey.trim() ? '' : '설정에 API 키를 넣으면 자유 대화·심화 분석이 가능합니다.',
+      hasAnyConfiguredProvider() ? '' : hybridNoProviderMessage(),
     ]
       .filter(Boolean)
       .join('\n'),

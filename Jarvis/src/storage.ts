@@ -603,10 +603,44 @@ export function exportBackup(): string {
       family: loadFamilyRoom(),
       friends: loadFriendsRoom(),
       settings: { ...loadSettings(), apiKey: '' },
+      // Hybrid AI keys never leave the device via backup (metadata only).
+      hybridAi: exportHybridAiMetaSafe(),
     },
     null,
     2,
   )
+}
+
+/** Strip secrets from hybrid AI config for backups — no import cycle with ai-providers. */
+function exportHybridAiMetaSafe(): unknown {
+  try {
+    const raw = localStorage.getItem('jarvis_hybrid_ai_v1')
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as {
+      mode?: string
+      fixedProvider?: string
+      allowPaidFallback?: boolean
+      wizardDismissed?: boolean
+      providers?: Record<string, { apiKey?: string; apiKeyEnc?: string; model?: string; enabled?: boolean }>
+    }
+    const providers: Record<string, { hasKey: boolean; model?: string; enabled?: boolean }> = {}
+    for (const [id, slot] of Object.entries(parsed.providers || {})) {
+      providers[id] = {
+        hasKey: Boolean(slot.apiKeyEnc || slot.apiKey),
+        model: slot.model,
+        enabled: slot.enabled,
+      }
+    }
+    return {
+      mode: parsed.mode,
+      fixedProvider: parsed.fixedProvider,
+      allowPaidFallback: parsed.allowPaidFallback === true,
+      wizardDismissed: parsed.wizardDismissed === true,
+      providers,
+    }
+  } catch {
+    return null
+  }
 }
 
 export function importBackup(json: string): { ok: boolean; message: string } {

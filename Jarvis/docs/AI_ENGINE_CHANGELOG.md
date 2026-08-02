@@ -1,5 +1,25 @@
 # AI Engine changelog
 
+## 1.13.1
+
+- **Core Stability & Integration**: single text/voice pipeline (`handleUserText` → `think` → Core Brain)
+- Intent hygiene: reminder parser no longer steals 「가족 일정」/bare「완료」; calendar owns family schedule list
+- Music: no dishonest `playing` claim; legacy music only when Core did not claim (or onlyFailed retry)
+- brainState: soft social turns do not wipe sticky music/reminder/project intent
+- SW update interval de-duplicated; voice source passed into Core Brain
+- Docs: `AIZIO_CURRENT_FLOW_MAP.md`, `AIZIO_MOBILE_DEVICE_TEST_CHECKLIST.md`
+
+## 1.13.0
+
+- **Hybrid AI Provider System** (`src/ai-providers/`)
+- OpenRouter (`openrouter/free`), Gemini (native), Groq, OpenAI, custom OpenAI-compatible
+- Free-first auto routing; paid auto-use **off** by default
+- Provider fallback for rate/quota/unavailable/network
+- Settings UI cards + first-run AI wizard
+- Key masking, obfuscated local storage, backup strips secrets
+- Differentiated error messages (not a single “quota exceeded” string)
+- Docs: `AIZIO_AI_PROVIDER_GUIDE.md`, `AIZIO_API_KEY_SECURITY.md`, `AIZIO_FREE_AI_LIMITS.md`, `AIZIO_PROVIDER_FALLBACK.md`
+
 ## 1.12.0
 
 - **AIZIO Relationship Memory** (`src/relationship/`): conversation family links → `jarvis_relationships_v1`

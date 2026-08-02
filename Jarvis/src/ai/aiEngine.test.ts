@@ -95,8 +95,9 @@ describe('routeAiRequest', () => {
 describe('errors', () => {
   it('maps kinds to Korean user text', () => {
     expect(userFacingAiError(new AiError('timeout', 'x'))).toMatch(/초과/)
-    expect(userFacingAiError(new AiError('auth', 'x'))).toMatch(/인증/)
-    expect(aiEngineErrorText(new AiError('rate_limit', 'x'))).toMatch(/한도/)
+    expect(userFacingAiError(new AiError('auth', 'x'))).toMatch(/API 키|인증/)
+    expect(aiEngineErrorText(new AiError('rate_limit', 'x'))).toMatch(/요청이 너무 많|한도|사용량/)
+    expect(aiEngineErrorText(new AiError('rate_limit', '무료 한도'))).toMatch(/한도/)
   })
   it('redacts bearer tokens', () => {
     expect(redactSecrets('Authorization Bearer sk-abcdefghijklmnop')).not.toMatch(/sk-abcdef/)
@@ -169,7 +170,7 @@ describe('runAiEngine', () => {
       await runAiEngine({ message: '안녕', apiKey: 'sk-x' })
       expect.unreachable()
     } catch (err) {
-      expect(aiEngineErrorText(err)).toMatch(/한도|사용량/)
+      expect(aiEngineErrorText(err)).toMatch(/한도|사용량|요청이 너무 많/)
     }
   })
 })

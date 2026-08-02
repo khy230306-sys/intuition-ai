@@ -1,5 +1,9 @@
 # AI Engine changelog
 
+## 1.11.2
+
+- Show 「대화 초기화」 on chat home (empty hero), not only when messages exist
+
 ## 1.11.1
 
 - Fix casual chat (칭찬·감사·감정) misclassified as STT failure (`looksLikeSttGarbage`)

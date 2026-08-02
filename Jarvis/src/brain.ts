@@ -5,6 +5,7 @@ import {
   openMail,
   openMaps,
   openSearch,
+  openUrl,
   openWeather,
   resolveAppIntent,
   sendSms,
@@ -25,6 +26,7 @@ import {
   riskProfileAdvice,
 } from './finance'
 import { buildColdRecommendations, wantsStockRecommend } from './recommend'
+import { buildLifestyleReply, detectLifestyleRecommend } from './lifestyleRecommend'
 import {
   convertUnit,
   decide,
@@ -998,6 +1000,27 @@ export async function think(
 
   const stats = await handleStats(text)
   if (stats) return stats
+
+  // Lifestyle recommends (food / travel / movies / …) before stock screening
+  const lifestyleKind = detectLifestyleRecommend(text)
+  if (lifestyleKind) {
+    const life = buildLifestyleReply(text, lifestyleKind)
+    return {
+      text: life.text,
+      speak: true,
+      action: () => {
+        if (life.youtubeQuery) {
+          return openUrl(
+            `https://www.youtube.com/results?search_query=${encodeURIComponent(life.youtubeQuery)}`,
+            'YouTube',
+          )
+        }
+        if (life.mapsQuery) return openMaps(life.mapsQuery)
+        if (life.searchQuery) return openSearch(life.searchQuery)
+        return { ok: true, message: '추천' }
+      },
+    }
+  }
 
   const invest = await handleInvest(text)
   if (invest) return invest

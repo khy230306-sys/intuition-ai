@@ -26,9 +26,10 @@ const CONTROL_PATTERNS: Array<{ intent: MusicIntent; re: RegExp }> = [
 ]
 
 const MUSIC_TRIGGER =
-  /(음악|노래|뮤직|플레이리스트|playlist|music|song|곡\s*틀|틀어|재생해|流して|音楽|bài\s*hát|nhạc)/i
+  /(음악|노래|뮤직|플레이리스트|playlist|music|song|곡\s*틀|틀어|재생해|가요|케이팝|k[\s-]?pop|流して|音楽|bài\s*hát|nhạc)/i
 
-const PLAY_TRIGGER = /(틀어|재생|들려|찾아|search|play|かけて|流して|phát|mở\s*nhạc)/i
+const PLAY_TRIGGER =
+  /(틀어|재생|들려|찾아|추천|골라|search|play|recommend|suggest|かけて|流して|phát|mở\s*nhạc)/i
 
 const ARTIST_SONG =
   /(?:(?:가수|아티스트|artist)\s*)?([A-Za-z가-힣0-9 .'\-]{2,40})\s*(?:의|의\s*)?(?:노래|곡|song|track)\s*(?:틀어|재생|찾아)?/i
@@ -289,13 +290,16 @@ export function classifyMusicIntent(raw: string, language: AppLocale = 'ko'): Mu
     return null
   }
 
+  // Music noun, or explicit play verb. Bare "추천해줘" alone is not music.
   if (!MUSIC_TRIGGER.test(text) && !/(틀어|재생|play|かけて)/i.test(text)) return null
+  if (/추천|골라|recommend|suggest/i.test(text) && !MUSIC_TRIGGER.test(text)) return null
 
   if (/(뭐야|무엇|what\s+is|이란|뜻|역사|작곡가)/i.test(text) && !PLAY_TRIGGER.test(text)) {
     return null
   }
 
-  const isSearchOnly = /(찾아|search|探し)/i.test(text) && !/(틀어|재생|play|かけて)/i.test(text)
+  const isSearchOnly =
+    /(찾아|search|探し)/i.test(text) && !/(틀어|재생|play|かけて|추천|골라|recommend)/i.test(text)
   const base: MusicIntentResult = {
     intent: isSearchOnly ? 'search_music' : 'play_music',
     confidence: 0.8,

@@ -9,6 +9,13 @@ describe('AIZIO Music Intent Classifier', () => {
     expect(r?.searchQuery).toMatch(/플레이리스트|음악/)
   })
 
+  it('detects music recommend phrasing', () => {
+    const r = classifyMusicIntent('좋은 음악을 추천해줘', 'ko')
+    expect(r?.intent).toBe('play_music')
+    expect(r?.searchQuery).toBeTruthy()
+    expect(classifyMusicIntent('신나는 노래 추천', 'ko')?.intent).toBe('play_music')
+  })
+
   it('passes non-music to AI (null)', () => {
     expect(classifyMusicIntent('오늘 일정 알려줘', 'ko')).toBeNull()
     expect(classifyMusicIntent('날씨 어때', 'ko')).toBeNull()

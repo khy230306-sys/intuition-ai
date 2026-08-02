@@ -1,5 +1,11 @@
 # AI Engine changelog
 
+## 1.10.5
+
+- Fix stock-recommend false positives: bare “추천해줘” / music·맛집·여행 asks no longer open stock screening
+- Lifestyle recommend router (`lifestyleRecommend.ts`): food, cafe, domestic/world travel, movie, book, gift, workout, date, study, fashion, hotel
+- Music intent: “좋은 음악 추천” / playlist-style phrasing maps to Music Skill before invest
+
 ## 1.10.4
 
 - Add Chinese (中文 / `zh`) to app display language and room translation language pickers

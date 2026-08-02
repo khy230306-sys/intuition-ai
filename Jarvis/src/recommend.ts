@@ -220,12 +220,25 @@ function detectRiskOverride(text: string): 'conservative' | 'balanced' | 'aggres
 }
 
 export function wantsStockRecommend(text: string): boolean {
+  const t = text.trim()
+  // Lifestyle asks (music, food, travel, …) must never open stock screening.
+  if (
+    /음악|노래|뮤직|플레이리스트|playlist|맛집|카페|커피|여행|관광|휴가|호텔|숙소|펜션|영화|드라마|넷플릭스|책\b|독서|선물|데이트|운동|헬스|홈트|코디|패션|옷\s*추천|뭐\s*먹|어디\s*먹|어디\s*가|어디가\s*좋|국내\s*여행|해외\s*여행|music\b|restaurant|travel/i.test(
+      t,
+    ) &&
+    !/주식|종목|코인|비트|환율|매수|매도|포트폴리오|투자\s*종목|etf|nasdaq|kospi|kosdaq|stock|crypto/i.test(t)
+  ) {
+    return false
+  }
   return (
-    /종목\s*추천|추천\s*종목|주식\s*추천|뭐\s*살까|매수\s*추천|추천주|픽\s*좀|포트\s*추천|투자\s*추천|어디에\s*넣|스크리닝|유니버스/.test(
-      text,
+    /종목\s*추천|추천\s*종목|주식\s*추천|뭐\s*살까|매수\s*추천|추천주|픽\s*좀|포트\s*추천|투자\s*추천|어디에\s*넣|스크리닝|유니버스|냉정\s*스크리닝/.test(
+      t,
     ) ||
-    /(?:냉정|차갑|팩트|객관|보수|공격|미국|한국|국내).{0,8}추천/.test(text) ||
-    /추천(?:해|해줘|좀)|^(추천)$/.test(text.trim())
+    /(?:냉정|차갑|팩트|객관).{0,12}추천/.test(t) ||
+    /(?:미국|한국).{0,10}(?:보수|공격|균형|주식|종목)?.{0,8}추천/.test(t) ||
+    /(?:보수|공격|균형).{0,8}(?:미국|한국|주식|종목)?.{0,8}추천/.test(t) ||
+    (/(?:주식|종목|코인|etf|nasdaq|kospi|kosdaq|포트폴리오)/i.test(t) &&
+      /추천|골라|스크리닝|뭐\s*살/.test(t))
   )
 }
 

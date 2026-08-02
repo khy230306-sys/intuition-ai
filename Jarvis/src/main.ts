@@ -191,7 +191,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.10.4'
+const APP_VERSION = '1.10.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */

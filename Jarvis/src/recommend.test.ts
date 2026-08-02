@@ -30,6 +30,15 @@ describe('cold stock recommend', () => {
     expect(wantsStockRecommend('안녕')).toBe(false)
   })
 
+  it('does not treat lifestyle asks as stock picks', () => {
+    expect(wantsStockRecommend('좋은 음악을 추천해줘')).toBe(false)
+    expect(wantsStockRecommend('맛집추천')).toBe(false)
+    expect(wantsStockRecommend('국내여행은 어디가좋을까?')).toBe(false)
+    expect(wantsStockRecommend('카페 추천해줘')).toBe(false)
+    expect(wantsStockRecommend('영화 추천')).toBe(false)
+    expect(wantsStockRecommend('추천해줘')).toBe(false)
+  })
+
   it('returns cold screening for 주식 종목 추천', async () => {
     const { think } = await import('./brain')
     const reply = await think('주식 종목 추천')

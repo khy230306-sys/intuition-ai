@@ -133,7 +133,7 @@ import {
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
 
-const APP_VERSION = '1.9.7'
+const APP_VERSION = '1.9.8'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -895,6 +895,7 @@ async function handleUserText(raw: string): Promise<void> {
       } else {
         pushMsg('assistant', reply.text)
       }
+      if (result && 'view' in result && result.view) state.view = result.view
     } else {
       pushMsg('assistant', reply.text)
     }
@@ -2117,6 +2118,7 @@ function renderActions(): string {
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">QUICK RUN</h2>
+      <p class="hint">버튼을 누르면 앱·웹·카메라·JARVIS 설정으로 바로 연결됩니다. 카카오톡·메모·캘린더는 iPhone에 해당 앱이 있어야 열립니다.</p>
       <div class="action-grid">
         <button type="button" class="action-card" data-action="open-share-app">
           <span>QR</span>
@@ -3075,7 +3077,12 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const action = quickActions.find((a) => a.id === btn.dataset.quick)
       if (!action) return
-      showFlash(action.run().message)
+      const result = action.run()
+      showFlash(result.message)
+      if (result.view) {
+        state.view = result.view
+        render()
+      }
     })
   })
 

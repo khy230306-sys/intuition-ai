@@ -132,13 +132,15 @@ export interface JarvisSettings {
   notifyWhileOpen?: boolean
 }
 
+export type View = 'chat' | 'invest' | 'life' | 'family' | 'friends' | 'games' | 'actions' | 'settings'
+
 export interface ActionResult {
   ok: boolean
   message: string
   opened?: string
+  /** Switch JARVIS tab after the action (e.g. settings). */
+  view?: View
 }
-
-export type View = 'chat' | 'invest' | 'life' | 'family' | 'friends' | 'games' | 'actions' | 'settings'
 
 export interface BrainReply {
   text: string

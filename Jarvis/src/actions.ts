@@ -1,4 +1,4 @@
-import type { ActionResult } from './types'
+import type { ActionResult, View } from './types'
 
 export interface QuickAction {
   id: string
@@ -7,12 +7,51 @@ export interface QuickAction {
   run: () => ActionResult
 }
 
-function openUrl(url: string, label: string): ActionResult {
+function isHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
+/**
+ * iOS Safari / home-screen PWA-safe open.
+ * Custom schemes must use an <a> click (not window.open) inside the user gesture.
+ */
+export function navigateHref(url: string, opts: { newTab?: boolean } = {}): boolean {
   try {
-    window.open(url, '_blank')
-    return { ok: true, message: `${label}을(를) 열었습니다.`, opened: url }
+    const a = document.createElement('a')
+    a.href = url
+    a.rel = 'noopener noreferrer'
+    if (opts.newTab ?? isHttpUrl(url)) a.target = '_blank'
+    a.style.cssText = 'display:none;position:fixed;left:0;top:0;width:1px;height:1px;opacity:0'
+    document.body.appendChild(a)
+    a.click()
+    window.setTimeout(() => {
+      try {
+        a.remove()
+      } catch {
+        /* ignore */
+      }
+    }, 0)
+    return true
   } catch {
-    return { ok: false, message: `${label}을(를) 열 수 없습니다.` }
+    return false
+  }
+}
+
+export function openUrl(url: string, label: string): ActionResult {
+  const ok = navigateHref(url, { newTab: isHttpUrl(url) })
+  return ok
+    ? { ok: true, message: `${label}을(를) 열었습니다.`, opened: url }
+    : { ok: false, message: `${label}을(를) 열 수 없습니다.` }
+}
+
+/** Prefer native app scheme; always keep a working HTTPS (or in-app) fallback. */
+export function openAppOrWeb(appUrl: string, webUrl: string | null, label: string): ActionResult {
+  if (appUrl) navigateHref(appUrl, { newTab: false })
+  if (webUrl) return openUrl(webUrl, label)
+  return {
+    ok: true,
+    message: `${label} 앱을 실행했습니다. 열리지 않으면 해당 앱 설치 여부를 확인해 주세요.`,
+    opened: appUrl,
   }
 }
 
@@ -203,19 +242,29 @@ export async function shareText(text: string, opts: ShareTextOpts = {}): Promise
   return copied
 }
 
-export function openMaps(query: string): ActionResult {
-  const q = encodeURIComponent(query.trim())
-  return openUrl(`https://maps.apple.com/?q=${q}`, '지도')
+export function openMaps(query = ''): ActionResult {
+  const q = query.trim()
+  // Universal HTTPS opens Apple Maps app when installed on iPhone.
+  const url = q ? `https://maps.apple.com/?q=${encodeURIComponent(q)}` : 'https://maps.apple.com/'
+  navigateHref('maps://', { newTab: false })
+  return openUrl(url, '지도')
 }
 
 export function openSearch(query: string): ActionResult {
-  const q = encodeURIComponent(query.trim())
-  return openUrl(`https://www.google.com/search?q=${q}`, '검색')
+  const trimmed = query.trim()
+  if (!trimmed) return openUrl('https://www.google.com/', '검색')
+  return openUrl(`https://www.google.com/search?q=${encodeURIComponent(trimmed)}`, '검색')
 }
 
-export function openTranslate(text: string, to = 'en'): ActionResult {
-  const q = encodeURIComponent(text.trim())
-  return openUrl(`https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate`, '번역')
+export function openTranslate(text = '', to = 'en'): ActionResult {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return openUrl(`https://translate.google.com/?sl=auto&tl=${to}&op=translate`, '번역')
+  }
+  return openUrl(
+    `https://translate.google.com/?sl=auto&tl=${to}&text=${encodeURIComponent(trimmed)}&op=translate`,
+    '번역',
+  )
 }
 
 export function openWeather(city = ''): ActionResult {
@@ -223,15 +272,15 @@ export function openWeather(city = ''): ActionResult {
   return openUrl(`https://www.google.com/search?q=${q}`, '날씨')
 }
 
-export function callPhone(number: string): ActionResult {
+export function callPhone(number = ''): ActionResult {
   const cleaned = number.replace(/[^\d+]/g, '')
-  if (!cleaned) return { ok: false, message: '전화번호를 알려주세요.' }
-  return openUrl(`tel:${cleaned}`, '전화')
+  // Empty tel: opens the Phone dialer on iOS.
+  return openUrl(cleaned ? `tel:${cleaned}` : 'tel:', '전화')
 }
 
-export function sendSms(number: string, body = ''): ActionResult {
+export function sendSms(number = '', body = ''): ActionResult {
   const cleaned = number.replace(/[^\d+]/g, '')
-  if (!cleaned) return { ok: false, message: '전화번호를 알려주세요.' }
+  if (!cleaned) return openUrl('sms:', '문자')
   const b = body ? `&body=${encodeURIComponent(body)}` : ''
   return openUrl(`sms:${cleaned}${b}`, '문자')
 }
@@ -244,54 +293,163 @@ export function openMail(to: string, subject = '', body = ''): ActionResult {
   return openUrl(`mailto:${to}${qs ? `?${qs}` : ''}`, '메일')
 }
 
-const APP_SCHEMES: Record<string, { url: string; label: string }> = {
-  유튜브: { url: 'youtube://', label: 'YouTube' },
-  youtube: { url: 'youtube://', label: 'YouTube' },
-  카카오: { url: 'kakaotalk://', label: '카카오톡' },
-  카카오톡: { url: 'kakaotalk://', label: '카카오톡' },
-  인스타: { url: 'instagram://', label: 'Instagram' },
-  인스타그램: { url: 'instagram://', label: 'Instagram' },
-  텔레그램: { url: 'tg://', label: 'Telegram' },
-  telegram: { url: 'tg://', label: 'Telegram' },
-  지도: { url: 'maps://', label: '지도' },
-  설정: { url: 'App-prefs://', label: '설정' },
-  카메라: { url: 'camera://', label: '카메라' },
-  사진: { url: 'photos-redirect://', label: '사진' },
-  음악: { url: 'music://', label: '음악' },
-  사파리: { url: 'x-web-search://', label: 'Safari' },
-  캘린더: { url: 'calshow://', label: '캘린더' },
-  시계: { url: 'clock-alarm://', label: '시계' },
-  메모: { url: 'mobilenotes://', label: '메모' },
-  메시지: { url: 'sms:', label: '메시지' },
-  전화: { url: 'tel://', label: '전화' },
+/** Open device camera via capture file input (camera:// is not a public iOS scheme). */
+export function openCamera(): ActionResult {
+  try {
+    let input = document.getElementById('jarvis-camera-input') as HTMLInputElement | null
+    if (!input) {
+      input = document.createElement('input')
+      input.id = 'jarvis-camera-input'
+      input.type = 'file'
+      input.accept = 'image/*'
+      input.setAttribute('capture', 'environment')
+      input.style.cssText = 'display:none;position:fixed;width:0;height:0;opacity:0'
+      input.addEventListener('change', () => {
+        input!.value = ''
+      })
+      document.body.appendChild(input)
+    }
+    input.click()
+    return { ok: true, message: '카메라를 엽니다. 촬영 후 사진을 선택할 수 있습니다.' }
+  } catch {
+    return {
+      ok: false,
+      message: '카메라를 열 수 없습니다. 홈 화면에서 카메라 앱을 사용해 주세요.',
+    }
+  }
+}
+
+export function openJarvisSettings(): ActionResult {
+  return {
+    ok: true,
+    message: 'JARVIS 설정으로 이동합니다.',
+    view: 'settings' as View,
+  }
+}
+
+type AppLaunch = { app?: string; web?: string | null; label: string; special?: 'camera' | 'settings' }
+
+const APP_LAUNCH: Record<string, AppLaunch> = {
+  유튜브: { app: 'youtube://', web: 'https://www.youtube.com', label: 'YouTube' },
+  youtube: { app: 'youtube://', web: 'https://www.youtube.com', label: 'YouTube' },
+  카카오: { app: 'kakaotalk://', web: null, label: '카카오톡' },
+  카카오톡: { app: 'kakaotalk://', web: null, label: '카카오톡' },
+  인스타: { app: 'instagram://', web: 'https://www.instagram.com', label: 'Instagram' },
+  인스타그램: { app: 'instagram://', web: 'https://www.instagram.com', label: 'Instagram' },
+  텔레그램: { app: 'tg://', web: 'https://web.telegram.org', label: 'Telegram' },
+  telegram: { app: 'tg://', web: 'https://web.telegram.org', label: 'Telegram' },
+  지도: { web: 'https://maps.apple.com/', label: '지도' },
+  설정: { special: 'settings', label: '설정' },
+  카메라: { special: 'camera', label: '카메라' },
+  사진: { app: 'photos-redirect://', web: null, label: '사진' },
+  음악: { app: 'music://', web: 'https://music.apple.com', label: '음악' },
+  사파리: { web: 'https://www.google.com', label: 'Safari' },
+  캘린더: { app: 'calshow://', web: null, label: '캘린더' },
+  시계: { app: 'clock-alarm://', web: null, label: '시계' },
+  메모: { app: 'mobilenotes://', web: null, label: '메모' },
+  메시지: { app: 'sms:', web: null, label: '메시지' },
+  전화: { app: 'tel:', web: null, label: '전화' },
 }
 
 export function openApp(name: string): ActionResult {
   const key = name.trim().toLowerCase()
-  const found = Object.entries(APP_SCHEMES).find(([k]) => k.toLowerCase() === key || key.includes(k.toLowerCase()))
-  if (!found) {
-    return openSearch(`${name} 앱`)
-  }
-  return openUrl(found[1].url, found[1].label)
+  const found = Object.entries(APP_LAUNCH).find(
+    ([k]) => k.toLowerCase() === key || key.includes(k.toLowerCase()),
+  )
+  if (!found) return openSearch(`${name} 앱`)
+  const launch = found[1]
+  if (launch.special === 'camera') return openCamera()
+  if (launch.special === 'settings') return openJarvisSettings()
+  if (launch.app && launch.web) return openAppOrWeb(launch.app, launch.web, launch.label)
+  if (launch.app) return openAppOrWeb(launch.app, null, launch.label)
+  if (launch.web) return openUrl(launch.web, launch.label)
+  return { ok: false, message: `${launch.label}을(를) 열 수 없습니다.` }
 }
 
 export function resolveAppIntent(text: string): ActionResult | null {
-  const m = text.match(/(?:앱\s*열어|열어줘|실행해|켜줘)\s*(.+)$/i) || text.match(/^(.+?)\s*(?:앱\s*)?(?:열어줘|실행해|켜줘)$/i)
+  const m =
+    text.match(/(?:앱\s*열어|열어줘|실행해|켜줘)\s*(.+)$/i) ||
+    text.match(/^(.+?)\s*(?:앱\s*)?(?:열어줘|실행해|켜줘)$/i)
   if (!m) return null
   return openApp(m[1].replace(/앱/g, '').trim())
 }
 
+function promptText(message: string): string | null {
+  try {
+    const v = window.prompt(message)
+    return v == null ? null : v
+  } catch {
+    return null
+  }
+}
+
 export const quickActions: QuickAction[] = [
-  { id: 'yt', label: 'YouTube', icon: 'YT', run: () => openApp('유튜브') },
-  { id: 'maps', label: '지도', icon: 'MAP', run: () => openUrl('maps://', '지도') },
-  { id: 'kakao', label: '카카오톡', icon: 'TALK', run: () => openApp('카카오톡') },
+  {
+    id: 'yt',
+    label: 'YouTube',
+    icon: 'YT',
+    run: () => openAppOrWeb('youtube://', 'https://www.youtube.com', 'YouTube'),
+  },
+  { id: 'maps', label: '지도', icon: 'MAP', run: () => openMaps() },
+  {
+    id: 'kakao',
+    label: '카카오톡',
+    icon: 'TALK',
+    run: () => openAppOrWeb('kakaotalk://', null, '카카오톡'),
+  },
   { id: 'weather', label: '날씨', icon: 'WX', run: () => openWeather() },
-  { id: 'notes', label: '메모', icon: 'NOTE', run: () => openApp('메모') },
-  { id: 'calendar', label: '캘린더', icon: 'CAL', run: () => openApp('캘린더') },
-  { id: 'camera', label: '카메라', icon: 'CAM', run: () => openApp('카메라') },
-  { id: 'settings', label: '설정', icon: 'SET', run: () => openApp('설정') },
-  { id: 'search', label: '검색', icon: 'FIND', run: () => openSearch('') },
-  { id: 'translate', label: '번역', icon: 'TR', run: () => openTranslate('Hello') },
-  { id: 'phone', label: '전화', icon: 'TEL', run: () => openUrl('tel://', '전화') },
-  { id: 'sms', label: '문자', icon: 'SMS', run: () => openUrl('sms:', '문자') },
+  {
+    id: 'notes',
+    label: '메모',
+    icon: 'NOTE',
+    run: () => openAppOrWeb('mobilenotes://', null, '메모'),
+  },
+  {
+    id: 'calendar',
+    label: '캘린더',
+    icon: 'CAL',
+    run: () => openAppOrWeb('calshow://', null, '캘린더'),
+  },
+  { id: 'camera', label: '카메라', icon: 'CAM', run: () => openCamera() },
+  { id: 'settings', label: '설정', icon: 'SET', run: () => openJarvisSettings() },
+  {
+    id: 'search',
+    label: '검색',
+    icon: 'FIND',
+    run: () => {
+      const q = promptText('검색어를 입력하세요')
+      if (q === null) return { ok: false, message: '검색을 취소했습니다.' }
+      return openSearch(q)
+    },
+  },
+  {
+    id: 'translate',
+    label: '번역',
+    icon: 'TR',
+    run: () => {
+      const q = promptText('번역할 문장을 입력하세요 (비우면 번역 페이지)')
+      if (q === null) return { ok: false, message: '번역을 취소했습니다.' }
+      return openTranslate(q)
+    },
+  },
+  {
+    id: 'phone',
+    label: '전화',
+    icon: 'TEL',
+    run: () => {
+      const n = promptText('전화번호 (비우면 전화 앱)')
+      if (n === null) return { ok: false, message: '전화를 취소했습니다.' }
+      return callPhone(n)
+    },
+  },
+  {
+    id: 'sms',
+    label: '문자',
+    icon: 'SMS',
+    run: () => {
+      const n = promptText('문자 받을 번호 (비우면 메시지 앱)')
+      if (n === null) return { ok: false, message: '문자를 취소했습니다.' }
+      return sendSms(n)
+    },
+  },
 ]

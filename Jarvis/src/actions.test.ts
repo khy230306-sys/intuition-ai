@@ -1,5 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { copyText, copyTextNow, shareText } from './actions'
+import {
+  callPhone,
+  copyText,
+  copyTextNow,
+  navigateHref,
+  openApp,
+  openCamera,
+  openJarvisSettings,
+  openMaps,
+  openSearch,
+  openTranslate,
+  openWeather,
+  quickActions,
+  sendSms,
+  shareText,
+} from './actions'
 
 function stubDom(execResult = true) {
   const exec = vi.fn().mockReturnValue(execResult)
@@ -121,5 +136,110 @@ describe('share/copy helpers', () => {
     expect(r.ok).toBe(true)
     expect(field.focus).toHaveBeenCalled()
     expect(exec).toHaveBeenCalledWith('copy')
+  })
+})
+
+describe('quick-run open helpers', () => {
+  const clicks: string[] = []
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    clicks.length = 0
+    const anchors: Array<{ href: string; target: string; click: () => void; style: { cssText: string }; rel: string }> =
+      []
+    vi.stubGlobal('document', {
+      body: {
+        appendChild: vi.fn((el: { click?: () => void }) => {
+          el.click?.()
+        }),
+      },
+      createElement: vi.fn((tag: string) => {
+        if (tag === 'a') {
+          const a = {
+            href: '',
+            target: '',
+            rel: '',
+            style: { cssText: '' },
+            click: () => {
+              clicks.push(a.href)
+            },
+            remove: vi.fn(),
+          }
+          anchors.push(a)
+          return a
+        }
+        if (tag === 'input') {
+          return {
+            id: '',
+            type: '',
+            accept: '',
+            style: { cssText: '' },
+            value: '',
+            setAttribute: vi.fn(),
+            addEventListener: vi.fn(),
+            click: vi.fn(function (this: { id: string }) {
+              clicks.push('camera-input')
+            }),
+          }
+        }
+        return { style: { cssText: '' }, setAttribute: vi.fn() }
+      }),
+      getElementById: vi.fn(() => null),
+      querySelector: vi.fn(() => null),
+    })
+    vi.stubGlobal('window', {
+      ...globalThis,
+      setTimeout: (fn: () => void) => {
+        fn()
+        return 0
+      },
+      prompt: vi.fn(() => '서울'),
+    })
+  })
+
+  it('navigateHref clicks an anchor (not window.open)', () => {
+    expect(navigateHref('https://example.com', { newTab: true })).toBe(true)
+    expect(clicks.some((u) => u.includes('example.com'))).toBe(true)
+  })
+
+  it('opens maps/youtube/weather via working https urls', () => {
+    expect(openMaps('서울').opened).toMatch(/maps\.apple\.com/)
+    expect(openWeather('부산').opened).toMatch(/google\.com\/search/)
+    expect(openApp('유튜브').opened).toMatch(/youtube\.com/)
+  })
+
+  it('opens phone/sms dialers and camera capture', () => {
+    expect(callPhone('01012345678').opened).toBe('tel:01012345678')
+    expect(callPhone('').opened).toBe('tel:')
+    expect(sendSms('01012345678', 'hi').opened).toMatch(/^sms:01012345678/)
+    expect(openCamera().ok).toBe(true)
+    expect(clicks).toContain('camera-input')
+  })
+
+  it('routes settings to in-app JARVIS settings view', () => {
+    const r = openJarvisSettings()
+    expect(r.ok).toBe(true)
+    expect(r.view).toBe('settings')
+    expect(openApp('설정').view).toBe('settings')
+  })
+
+  it('exposes all expected quick-run ids', () => {
+    const ids = quickActions.map((a) => a.id)
+    expect(ids).toEqual([
+      'yt',
+      'maps',
+      'kakao',
+      'weather',
+      'notes',
+      'calendar',
+      'camera',
+      'settings',
+      'search',
+      'translate',
+      'phone',
+      'sms',
+    ])
+    expect(openSearch('날씨').ok).toBe(true)
+    expect(openTranslate('hello').opened).toMatch(/translate\.google/)
   })
 })

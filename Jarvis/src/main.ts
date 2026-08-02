@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.5'
+const APP_VERSION = '1.13.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2169,7 +2169,7 @@ function renderGames(): string {
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
       <p class="hint">오프라인 아케이드 · 7종 · v${APP_VERSION}</p>
-      <p class="hint arcade-new-hint">새 게임 · 격파 (세로 슈팅)</p>
+      <p class="hint arcade-new-hint">새 게임 · 스페이스2 (세로 슈팅)</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">
         <div class="arcade-hud">Lv.${state.arcadeLevel} · SCORE ${state.arcadeScore} · BEST ${hi ?? '—'} · BEST Lv.${bestLv ?? '—'}</div>

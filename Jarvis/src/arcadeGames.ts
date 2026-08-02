@@ -10,7 +10,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
   gyeokpa: {
-    title: '격파',
+    title: '스페이스2',
     blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드→레이저) · 라이프·실드·폭탄',
   },
 }
@@ -1505,7 +1505,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-/** —— 격파 (first version: waves/boss/power-ups, no wingmen) —— */
+/** —— 스페이스2 (id: gyeokpa — waves/boss/power-ups, no wingmen) —— */
 export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
 
 export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
@@ -1624,8 +1624,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
   function hudTitle(): string {
     const boss = enemies.find((e) => e.kind === 'boss')
-    if (boss) return `격파 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
-    return `격파 W${wave} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
+    if (boss) return `스페이스2 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
+    return `스페이스2 W${wave} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
   }
 
   function syncLevel(): void {

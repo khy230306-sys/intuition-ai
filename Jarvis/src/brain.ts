@@ -43,6 +43,7 @@ import { parseExpenseLine } from './expenseParse'
 import { buildAlarmFromText, formatWhenAt, wantsLocalAlarm } from './notify'
 import { getAppLocale } from './i18n'
 import { tryHandleMusicSkill } from './music'
+import { coreResultToBrainReply, processCoreBrain, stripWakeWord } from './core-brain'
 import {
   addExpense,
   addHabit,
@@ -710,9 +711,30 @@ export async function think(
   input: string,
   history: { role: string; text: string }[] = [],
 ): Promise<BrainReply> {
-  const text = input.trim()
   const settings = loadSettings()
   const name = settings.displayName
+  const raw = input.trim()
+  if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
+
+  // AIZIO Core Brain — classify & run registered Skills; otherwise continue legacy pipeline
+  let text = raw
+  try {
+    const stripped = stripWakeWord(raw).text
+    if (stripped) text = stripped
+    const core = await processCoreBrain({
+      text: raw,
+      history,
+      locale: getAppLocale(),
+      source: 'text',
+    })
+    const handled = coreResultToBrainReply(core)
+    if (handled) return handled
+    // Use wake-stripped text for the rest of the legacy handlers
+    if (stripped) text = stripped
+  } catch {
+    /* Core Brain must never block legacy commands */
+    text = stripWakeWord(raw).text || raw
+  }
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 

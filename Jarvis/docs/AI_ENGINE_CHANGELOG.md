@@ -1,5 +1,13 @@
 # AI Engine changelog
 
+## 1.11.0
+
+- **AIZIO Core Brain** (`src/core-brain/`): Intent Router, Context Resolver, Skill Registry, Execution Planner, Response Composer, safety policy
+- All chat/voice text enters Core Brain via `think()`; Skills lazy-loaded; unclear → legacy pipeline (invest/life/geo/AI preserved)
+- Connected Skills: music, translation, note, todo, calendar (list), settings, navigation, help; project + personal calendar create = unavailable (honest)
+- Docs: `AIZIO_CORE_BRAIN.md`, `AIZIO_SKILL_INTERFACE.md`, `AIZIO_INTENT_CATALOG.md`, `AIZIO_SAFETY_POLICY.md`, `AIZIO_CORE_TESTS.md`, `AIZIO_CORE_CURRENT_STATE.md`
+- Checkpoint: `checkpoint/pre-core-brain-1.10.5`
+
 ## 1.10.5
 
 - Fix stock-recommend false positives: bare “추천해줘” / music·맛집·여행 asks no longer open stock screening

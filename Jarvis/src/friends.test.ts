@@ -10,6 +10,7 @@ import {
   leaveFriendsRoom,
   saveFriendsRoom,
   upsertMember,
+  clearFriendsChat,
 } from './friendsStore'
 
 const store = new Map<string, string>()
@@ -63,6 +64,17 @@ describe('friends space', () => {
     })
     expect(merged.messages.some((m) => m.text === '첫 친구 메시지')).toBe(true)
     expect(merged.members.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('clears chat while keeping notices and members', () => {
+    createFriendsRoom('테스트친구', '민수')
+    postFriendsChat('지울 메시지')
+    addFriendsNotice('유지 공지', '내용')
+    expect(clearFriendsChat()).toBe(true)
+    const loaded = loadFriendsRoom()!
+    expect(loaded.messages).toHaveLength(0)
+    expect(loaded.notices).toHaveLength(1)
+    expect(loaded.members.length).toBeGreaterThanOrEqual(1)
   })
 
   it('dedupes members with the same display name', () => {

@@ -146,6 +146,15 @@ export function postFamilyChat(text: string): FamilyChatMsg | null {
   return message
 }
 
+/** Clear local chat history only (notices/events/members kept). */
+export function clearFamilyChat(): boolean {
+  const room = loadFamilyRoom()
+  if (!room) return false
+  room.messages = []
+  saveFamilyRoom(room)
+  return true
+}
+
 export function addFamilyNotice(title: string, body: string, pinned = false): FamilyNotice | null {
   const room = loadFamilyRoom()
   if (!room || !title.trim()) return null

@@ -1509,6 +1509,14 @@ body {
   margin-top: 8px;
 }
 
+.space-chat-tools {
+  margin-top: 8px;
+}
+
+.space-chat-tools .danger-btn {
+  width: 100%;
+}
+
 .fam-notice.pinned {
   border-color: rgba(0, 210, 190, 0.35);
 }

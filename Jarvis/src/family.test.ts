@@ -10,6 +10,7 @@ import {
   leaveFamilyRoom,
   saveFamilyRoom,
   upsertMember,
+  clearFamilyChat,
 } from './familyStore'
 
 const store = new Map<string, string>()
@@ -63,6 +64,17 @@ describe('family space', () => {
     })
     expect(merged.messages.some((m) => m.text === '첫 메시지')).toBe(true)
     expect(merged.members.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('clears chat while keeping notices and members', () => {
+    createFamilyRoom('테스트가족', '아빠')
+    postFamilyChat('지울 메시지')
+    addFamilyNotice('유지 공지', '내용')
+    expect(clearFamilyChat()).toBe(true)
+    const loaded = loadFamilyRoom()!
+    expect(loaded.messages).toHaveLength(0)
+    expect(loaded.notices).toHaveLength(1)
+    expect(loaded.members.length).toBeGreaterThanOrEqual(1)
   })
 
   it('dedupes members with the same display name', () => {

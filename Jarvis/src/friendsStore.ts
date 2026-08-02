@@ -146,6 +146,15 @@ export function postFriendsChat(text: string): FriendsChatMsg | null {
   return message
 }
 
+/** Clear local chat history only (notices/events/members kept). */
+export function clearFriendsChat(): boolean {
+  const room = loadFriendsRoom()
+  if (!room) return false
+  room.messages = []
+  saveFriendsRoom(room)
+  return true
+}
+
 export function addFriendsNotice(title: string, body: string, pinned = false): FriendsNotice | null {
   const room = loadFriendsRoom()
   if (!room || !title.trim()) return null

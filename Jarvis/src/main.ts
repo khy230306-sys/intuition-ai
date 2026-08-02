@@ -93,6 +93,7 @@ import {
   addFamilyEvent,
   addFamilyNotice,
   applyFamilyJoinReceipt,
+  clearFamilyChat,
   createFamilyRoom,
   deleteFamilyEvent,
   deleteFamilyNotice,
@@ -114,6 +115,7 @@ import {
   addFriendsEvent,
   addFriendsNotice,
   applyFriendsJoinReceipt,
+  clearFriendsChat,
   createFriendsRoom,
   deleteFriendsEvent,
   deleteFriendsNotice,
@@ -134,7 +136,7 @@ import {
 import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
 
-const APP_VERSION = '1.9.9'
+const APP_VERSION = '1.9.10'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1881,6 +1883,10 @@ function renderFamily(): string {
         <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" required autocomplete="off" />
         <button class="primary-btn" type="submit">전송</button>
       </form>
+      <div class="row-btns space-chat-tools">
+        <button type="button" class="ghost-btn danger-btn" data-action="family-clear-chat">대화 초기화</button>
+      </div>
+      <p class="hint">대화 초기화는 이 기기의 대화만 지웁니다. 공지·일정·멤버는 유지됩니다.</p>
     `
   } else if (state.familyTab === 'notices') {
     const list = [...room.notices]
@@ -2056,6 +2062,10 @@ function renderFriends(): string {
         <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" required autocomplete="off" />
         <button class="primary-btn" type="submit">전송</button>
       </form>
+      <div class="row-btns space-chat-tools">
+        <button type="button" class="ghost-btn danger-btn" data-action="friends-clear-chat">대화 초기화</button>
+      </div>
+      <p class="hint">대화 초기화는 이 기기의 대화만 지웁니다. 공지·일정·멤버는 유지됩니다.</p>
     `
   } else if (state.friendsTab === 'notices') {
     const list = [...room.notices]
@@ -2635,6 +2645,19 @@ function bind(): void {
     })()
   })
 
+  document.querySelector('[data-action="family-clear-chat"]')?.addEventListener('click', () => {
+    const room = loadFamilyRoom()
+    if (!room) return
+    const ok = window.confirm(
+      `가족 대화 ${room.messages.length}개를 이 기기에서 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+    )
+    if (!ok) return
+    if (clearFamilyChat()) {
+      showFlash('가족 대화를 초기화했습니다.')
+      render()
+    }
+  })
+
   document.querySelector('[data-action="family-reconnect"]')?.addEventListener('click', () => {
     void ensureFamilySyncOnce(true).then(() => {
       showFlash(state.familySyncStatus)
@@ -2915,6 +2938,19 @@ function bind(): void {
       showFlash('친구 공간에서 나갔습니다.')
       render()
     })()
+  })
+
+  document.querySelector('[data-action="friends-clear-chat"]')?.addEventListener('click', () => {
+    const room = loadFriendsRoom()
+    if (!room) return
+    const ok = window.confirm(
+      `친구 대화 ${room.messages.length}개를 이 기기에서 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+    )
+    if (!ok) return
+    if (clearFriendsChat()) {
+      showFlash('친구 대화를 초기화했습니다.')
+      render()
+    }
   })
 
   document.querySelector('[data-action="friends-reconnect"]')?.addEventListener('click', () => {

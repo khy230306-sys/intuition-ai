@@ -262,6 +262,8 @@ export class VoiceListener {
   private heardSpeech = false
   private starting = false
   private finishing = false
+  /** Ensures onFinal / manual consume delivers at most once per MIC session. */
+  private finalDelivered = false
   private sessionId = 0
   private emptyEnds = 0
   private listenLang = 'ko-KR'
@@ -285,6 +287,11 @@ export class VoiceListener {
     return this.compose(this.interim)
   }
 
+  /** True after this session already delivered a final (auto or consumeTranscript). */
+  get didDeliverFinal(): boolean {
+    return this.finalDelivered
+  }
+
   start(callbacks: VoiceCallbacks, lang = 'ko-KR'): boolean {
     if (!getRecognitionCtor()) {
       callbacks.onError?.('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
@@ -294,6 +301,7 @@ export class VoiceListener {
     this.callbacks = callbacks
     this.wanted = true
     this.finishing = false
+    this.finalDelivered = false
     this.finals = []
     this.interim = ''
     this.heardSpeech = false
@@ -319,30 +327,58 @@ export class VoiceListener {
   }
 
   stop(): void {
+    // Invalidate in-flight silence/safety finish so it cannot onFinal after STOP.
+    this.finalDelivered = true
+    this.sessionId += 1
     this.stopInternal(true)
+  }
+
+  /**
+   * Atomically take the current transcript and stop without calling onFinal.
+   * Use for MIC STOP → manual send (prevents silence-timer double send).
+   */
+  consumeTranscript(): string {
+    const raw = this.compose(this.interim).trim()
+    const cleaned = collapseStutteredTranscript(raw.replace(/\s+/g, ' ').trim())
+    this.finalDelivered = true
+    this.sessionId += 1
+    this.wanted = false
+    this.finishing = true
+    this.clearTimers()
+    this.abortRecognition()
+    this.finals = []
+    this.interim = ''
+    this.starting = false
+    this.finishing = false
+    this.setState('idle')
+    return cleaned
+  }
+
+  private abortRecognition(): void {
+    if (!this.recognition) return
+    const rec = this.recognition
+    this.recognition = null
+    rec.onresult = null
+    rec.onerror = null
+    rec.onend = null
+    try {
+      rec.abort()
+    } catch {
+      try {
+        rec.stop()
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   private stopInternal(notifyIdle: boolean): void {
     this.wanted = false
-    this.finishing = false
+    this.finishing = true
     this.clearTimers()
-    if (this.recognition) {
-      const rec = this.recognition
-      this.recognition = null
-      rec.onresult = null
-      rec.onerror = null
-      rec.onend = null
-      try {
-        rec.abort()
-      } catch {
-        try {
-          rec.stop()
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    this.abortRecognition()
     this.starting = false
+    this.finishing = false
     if (notifyIdle) this.setState('idle')
   }
 
@@ -412,28 +448,23 @@ export class VoiceListener {
   }
 
   private finishWith(text: string): void {
-    if (this.finishing) return
+    if (this.finishing || this.finalDelivered) return
     this.finishing = true
+    const sid = this.sessionId
     const cleaned = collapseStutteredTranscript(text.replace(/\s+/g, ' ').trim())
     this.wanted = false
     this.clearTimers()
-    if (this.recognition) {
-      const rec = this.recognition
-      this.recognition = null
-      rec.onend = null
-      rec.onresult = null
-      rec.onerror = null
-      try {
-        rec.abort()
-      } catch {
-        try {
-          rec.stop()
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    this.abortRecognition()
     this.starting = false
+    // STOP / consumeTranscript may have invalidated this session mid-flight
+    if (this.finalDelivered || this.sessionId !== sid) {
+      this.finishing = false
+      this.setState('idle')
+      return
+    }
+    this.finalDelivered = true
+    this.finals = []
+    this.interim = ''
     this.setState('processing')
     if (cleaned) this.callbacks.onFinal?.(cleaned)
     this.setState('idle')

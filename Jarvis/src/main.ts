@@ -189,7 +189,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.10.1'
+const APP_VERSION = '1.10.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1417,10 +1417,19 @@ function spaceSourceLang(text: string): string | undefined {
   return d.language === 'und' ? undefined : d.language
 }
 
+/** Prevent voice auto-final + MIC STOP from posting the same line twice. */
+let lastSpaceSend = { key: '', at: 0 }
+
 function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMedia): void {
   const trimmed = text.trim()
   if (!trimmed && !media) return
   const caption = media ? mediaCaption(media, trimmed) : trimmed
+  if (!media) {
+    const key = `${space}:${caption}`
+    const now = Date.now()
+    if (key === lastSpaceSend.key && now - lastSpaceSend.at < 1600) return
+    lastSpaceSend = { key, at: now }
+  }
   const sourceLanguage = spaceSourceLang(caption)
   if (space === 'family') {
     const msg = postFamilyChat(caption, { media, sourceLanguage })
@@ -1475,8 +1484,8 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
   }
   if (state.listening && state.dictationTarget === space) {
     voiceSessionGen += 1
-    const partial = voice.transcript.trim()
-    voice.stop()
+    // consumeTranscript suppresses silence-timer onFinal (avoids double send)
+    const partial = voice.consumeTranscript()
     state.listening = false
     state.voiceHint = ''
     patchVoiceUi()
@@ -1514,6 +1523,7 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
           patchVoiceUi()
         },
         onFinal: (text) => {
+          if (session !== voiceSessionGen || state.dictationTarget !== space) return
           state.listening = false
           state.voiceHint = '인식 완료'
           state.draft = text
@@ -1521,11 +1531,13 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
           sendSpaceChat(space, text)
         },
         onState: (s) => {
+          if (session !== voiceSessionGen) return
           state.listening = s === 'listening' || s === 'processing'
           if (s === 'idle') state.listening = false
           patchVoiceUi()
         },
         onError: (err) => {
+          if (session !== voiceSessionGen) return
           state.listening = false
           state.voiceHint = ''
           showFlash(err)
@@ -4063,8 +4075,7 @@ function bind(): void {
     }
     if (state.listening && state.dictationTarget === 'jarvis') {
       voiceSessionGen += 1
-      const partial = voice.transcript.trim()
-      voice.stop()
+      const partial = voice.consumeTranscript()
       state.listening = false
       state.voiceHint = ''
       patchVoiceUi()
@@ -4114,6 +4125,7 @@ function bind(): void {
             patchVoiceUi()
           },
           onFinal: (text) => {
+            if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis') return
             state.listening = false
             state.voiceHint = '인식 완료'
             state.draft = text
@@ -4121,11 +4133,13 @@ function bind(): void {
             void handleUserText(text)
           },
           onState: (s) => {
+            if (session !== voiceSessionGen) return
             state.listening = s === 'listening' || s === 'processing'
             if (s === 'idle' && !state.busy) state.listening = false
             patchVoiceUi()
           },
           onError: (err) => {
+            if (session !== voiceSessionGen) return
             state.listening = false
             state.voiceHint = ''
             showFlash(err)

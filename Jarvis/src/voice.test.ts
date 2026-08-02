@@ -197,6 +197,47 @@ describe('VoiceListener patient mode', () => {
     vi.advanceTimersByTime(1600)
     expect(finalText).toBe('오늘 확인 날씨 알려줘')
   })
+
+  it('does not double-deliver when STOP consume races silence final', () => {
+    const listener = new VoiceListener()
+    listener.silenceMs = 1000
+    let finals = 0
+    let last = ''
+    listener.start({
+      onFinal: (t) => {
+        finals += 1
+        last = t
+      },
+    })
+    lastFake!.onspeechstart?.()
+    lastFake!.emitFinal('일찍 일어나지')
+    // Silence about to fire — user hits STOP and sends manually
+    vi.advanceTimersByTime(990)
+    const taken = listener.consumeTranscript()
+    expect(taken).toBe('일찍 일어나지')
+    vi.advanceTimersByTime(200)
+    expect(finals).toBe(0)
+    expect(last).toBe('')
+    expect(listener.didDeliverFinal).toBe(true)
+  })
+
+  it('delivers onFinal only once even if finish is attempted twice', () => {
+    const listener = new VoiceListener()
+    listener.silenceMs = 500
+    let finals = 0
+    listener.start({
+      onFinal: () => {
+        finals += 1
+      },
+    })
+    lastFake!.onspeechstart?.()
+    lastFake!.emitFinal('테스트')
+    vi.advanceTimersByTime(600)
+    expect(finals).toBe(1)
+    listener.stop()
+    vi.advanceTimersByTime(600)
+    expect(finals).toBe(1)
+  })
 })
 
 describe('mergeUtteranceFinals / collapseStutteredTranscript', () => {

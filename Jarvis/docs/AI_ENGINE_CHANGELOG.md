@@ -1,5 +1,10 @@
 # AI Engine changelog
 
+## 1.10.2
+
+- Fix voice dictation double-send (silence auto-final racing MIC STOP) via `consumeTranscript` + once-per-session delivery
+- Dedupe identical family/friends chat posts within 1.6s
+
 ## 1.10.1
 
 - Faster home/room navigation: point-based ghost-click guard (no more dead taps for 480ms on nearby buttons)

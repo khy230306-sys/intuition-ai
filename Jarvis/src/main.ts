@@ -30,7 +30,6 @@ import {
   bindPwaInstallEvents,
   detectInstallPlatform,
   installGuideSteps,
-  isRunningAsInstalledPwa,
   onPwaInstallChange,
   shouldShowInstallButton,
   type InstallPlatform,

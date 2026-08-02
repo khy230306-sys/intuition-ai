@@ -1,0 +1,44 @@
+name: Deploy PICK AI (permanent gh-pages)
+
+on:
+  push:
+    branches:
+      - main
+      - cursor/dorijitgottaeng-pick-ai-dddb
+    paths:
+      - 'DoriJitGoTtaeng-PICK-AI/**'
+      - '.github/workflows/deploy-pick-ai.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-pick-ai
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DoriJitGoTtaeng-PICK-AI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: DoriJitGoTtaeng-PICK-AI/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: SPA 404 fallback
+        run: cp dist/index.html dist/404.html
+      - name: Publish gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: DoriJitGoTtaeng-PICK-AI/dist
+          force_orphan: true
+          commit_message: Deploy PICK AI static site

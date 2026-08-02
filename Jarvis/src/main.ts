@@ -13,9 +13,19 @@ import {
 import { canUseCameraScan, decodeQrFromFile, decodeQrFromVideo } from './qrDecode'
 import { think } from './brain'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
-import { formatDescriptive } from './stats'
+import { formatDescriptive, parseNumbers } from './stats'
+import { extractTickerFromText, resolveTicker } from './tickers'
 import {
   INSTALL_DISMISS_KEY,
+  addExpense,
+  addHabit,
+  addJournal,
+  addReminder,
+  addShoppingItems,
+  addTradeNote,
+  addWatch,
+  appendSeriesValues,
+  checkHabit,
   clearChat,
   deleteExpense,
   deleteHabit,
@@ -31,6 +41,7 @@ import {
   loadExpenses,
   loadHabits,
   loadHoldings,
+  loadJournal,
   loadMemory,
   loadReminders,
   loadSeriesList,
@@ -40,10 +51,14 @@ import {
   loadWatchlist,
   removeHolding,
   removeWatch,
+  replaceSeriesValues,
   saveChat,
   saveSettings,
+  setActiveSeriesName,
   toggleReminder,
   toggleShopping,
+  upsertHolding,
+  upsertMemory,
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, ensureMicPermission, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
@@ -136,7 +151,7 @@ import {
 import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
 
-const APP_VERSION = '1.9.10'
+const APP_VERSION = '1.9.11'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1600,9 +1615,15 @@ function renderInvest(): string {
       </div>
 
       <h2 class="section-title">HOLDINGS</h2>
+      <form id="invest-holding-form" class="settings-form life-input-form">
+        <label>종목 <input name="ticker" required maxlength="40" placeholder="삼성전자 또는 AAPL" autocomplete="off" /></label>
+        <label>수량(주) <input name="shares" type="number" inputmode="decimal" step="any" min="0" required placeholder="10" /></label>
+        <label>평단가 <input name="avg" type="number" inputmode="decimal" step="any" min="0" required placeholder="70000" /></label>
+        <button class="primary-btn" type="submit">보유 등록</button>
+      </form>
       ${
         holdings.length === 0
-          ? '<div class="empty">예: 대화에서 "보유 삼성전자 10주 평단 70000"</div>'
+          ? '<div class="empty">위에서 종목·수량·평단을 입력하세요.</div>'
           : holdings
               .map((h) => {
                 const q = state.quoteCache[h.symbol]
@@ -1624,9 +1645,14 @@ function renderInvest(): string {
       }
 
       <h2 class="section-title">WATCHLIST</h2>
+      <form id="invest-watch-form" class="settings-form life-input-form">
+        <label>종목 <input name="ticker" required maxlength="40" placeholder="엔비디아 / NVDA" autocomplete="off" /></label>
+        <label>목표가 (선택) <input name="target" type="number" inputmode="decimal" step="any" min="0" placeholder="선택" /></label>
+        <button class="primary-btn" type="submit">관심종목 추가</button>
+      </form>
       ${
         watch.length === 0
-          ? '<div class="empty">예: "관심종목 엔비디아 추가"</div>'
+          ? '<div class="empty">위에서 관심 종목을 추가하세요.</div>'
           : watch
               .map((w) => {
                 const q = state.quoteCache[w.symbol]
@@ -1645,9 +1671,22 @@ function renderInvest(): string {
       }
 
       <h2 class="section-title">TRADE NOTES</h2>
+      <form id="invest-trade-form" class="settings-form life-input-form">
+        <label>종목 <input name="ticker" required maxlength="40" placeholder="삼성전자" autocomplete="off" /></label>
+        <label>구분
+          <select name="side">
+            <option value="buy">매수</option>
+            <option value="sell">매도</option>
+            <option value="watch">관망</option>
+            <option value="idea">아이디어</option>
+          </select>
+        </label>
+        <label>메모 <input name="thesis" required maxlength="200" placeholder="반도체 회복 기대" /></label>
+        <button class="primary-btn" type="submit">노트 저장</button>
+      </form>
       ${
         trades.length === 0
-          ? '<div class="empty">예: "삼성전자 매수아이디어 반도체 회복"</div>'
+          ? '<div class="empty">위에서 매매 노트를 남기세요.</div>'
           : trades
               .map(
                 (t) => `
@@ -1672,6 +1711,7 @@ function renderLife(): string {
   const habits = loadHabits()
   const reminders = loadReminders().slice(0, 8)
   const memories = loadMemory().slice(0, 6)
+  const journals = loadJournal().slice(0, 5)
   const totals = expenseTotals()
   const seriesList = loadSeriesList()
   const activeName = getActiveSeriesName()
@@ -1681,16 +1721,26 @@ function renderLife(): string {
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">STATS</h2>
-      <p class="hint">실시간으로 숫자를 넣으면 평균·분산·확률 등 통계 해답을 줍니다. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
+      <p class="hint">아래에 숫자를 직접 입력하세요. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
+      <form id="life-stats-form" class="settings-form life-input-form">
+        <label>데이터셋 이름
+          <input name="name" maxlength="40" value="${escapeAttr(activeName)}" placeholder="기본" autocomplete="off" />
+        </label>
+        <label>숫자 입력 (공백·쉼표로 구분)
+          <input name="values" inputmode="decimal" required placeholder="예: 1.2 -0.5 3.1 4" autocomplete="off" />
+        </label>
+        <div class="toggle-row"><span>기존 값 덮어쓰기</span><input type="checkbox" name="replace" /></div>
+        <button class="primary-btn" type="submit">숫자 넣기</button>
+      </form>
       <div class="chips left">
-        <button type="button" data-suggest="통계">통계 분석</button>
+        <button type="button" data-action="life-stats-analyze">지금 분석</button>
         <button type="button" data-suggest="데이터셋 목록">데이터셋</button>
         <button type="button" data-suggest="통계 도움말">사용법</button>
         <button type="button" data-suggest="시세기록 삼성전자">시세 기록</button>
       </div>
       ${
         seriesList.length === 0
-          ? '<div class="empty">예: 대화에서 "데이터 수익률 1.2 -0.5 3.1"</div>'
+          ? '<div class="empty">숫자를 입력하면 데이터셋이 생깁니다.</div>'
           : seriesList
               .slice(0, 8)
               .map((s) => {
@@ -1715,16 +1765,19 @@ function renderLife(): string {
         <button type="button" data-suggest="오늘 날씨 알려줘">오늘 날씨</button>
         <button type="button" data-suggest="브리핑">브리핑</button>
         <button type="button" data-suggest="환율">환율</button>
-        <button type="button" data-suggest="커피 4500">커피 4500</button>
         <button type="button" data-suggest="알림 30분 뒤 약">30분 알림</button>
-        <button type="button" data-suggest="장바구니 목록">장바구니</button>
-        <button type="button" data-suggest="지출 현황">지출 현황</button>
       </div>
 
       <h2 class="section-title">TODO</h2>
+      <form id="life-todo-form" class="settings-form life-input-form">
+        <label>할 일
+          <input name="text" required maxlength="120" placeholder="운동하기" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">추가</button>
+      </form>
       ${
         reminders.length === 0
-          ? '<div class="empty">"할 일 운동하기" · "알림 30분 뒤 약"</div>'
+          ? '<div class="empty">할 일을 입력해 추가하세요.</div>'
           : reminders
               .map(
                 (r) => `
@@ -1740,9 +1793,15 @@ function renderLife(): string {
       }
 
       <h2 class="section-title">SHOPPING</h2>
+      <form id="life-shop-form" class="settings-form life-input-form">
+        <label>장바구니 품목 (공백으로 여러 개)
+          <input name="items" required maxlength="200" placeholder="우유 계란 빵" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">담기</button>
+      </form>
       ${
         shopping.length === 0
-          ? '<div class="empty">"장바구니 우유 계란"</div>'
+          ? '<div class="empty">품목을 입력해 담으세요.</div>'
           : shopping
               .map(
                 (s) => `
@@ -1756,14 +1815,21 @@ function renderLife(): string {
       }
 
       <h2 class="section-title">HABITS</h2>
+      <form id="life-habit-form" class="settings-form life-input-form">
+        <label>습관 이름
+          <input name="name" required maxlength="40" placeholder="운동" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">습관 추가</button>
+      </form>
       ${
         habits.length === 0
-          ? '<div class="empty">"습관 추가 운동" → "습관 완료 운동"</div>'
+          ? '<div class="empty">습관을 추가한 뒤 «완료»를 누르세요.</div>'
           : habits
               .map(
                 (h) => `
           <div class="list-item">
             <div class="body"><strong>${escapeHtml(h.name)}</strong><p>연속 ${h.streak}일 ${h.lastDone ? `· 최근 ${h.lastDone}` : ''}</p></div>
+            <button type="button" data-check-habit="${escapeAttr(h.id)}">완료</button>
             <button type="button" data-del-habit="${h.id}">삭제</button>
           </div>`,
               )
@@ -1771,9 +1837,22 @@ function renderLife(): string {
       }
 
       <h2 class="section-title">EXPENSES</h2>
+      <form id="life-expense-form" class="settings-form life-input-form">
+        <label>금액
+          <input name="amount" type="number" inputmode="numeric" min="1" step="1" required placeholder="4500" />
+        </label>
+        <label>항목
+          <input name="category" required maxlength="40" placeholder="커피 / 택시 / 식비" autocomplete="off" />
+        </label>
+        <label>메모 (선택)
+          <input name="note" maxlength="80" placeholder="선택" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">지출 기록</button>
+      </form>
+      <p class="hint">오늘 ${formatMoney(totals.today, 'KRW')} · 이번달 ${formatMoney(totals.month, 'KRW')}</p>
       ${
         expenses.length === 0
-          ? '<div class="empty">"커피 4500" / "지출 택시 12000"</div>'
+          ? '<div class="empty">금액과 항목을 입력해 기록하세요.</div>'
           : expenses
               .map(
                 (e) => `
@@ -1785,10 +1864,45 @@ function renderLife(): string {
               .join('')
       }
 
+      <h2 class="section-title">JOURNAL</h2>
+      <form id="life-journal-form" class="settings-form life-input-form">
+        <label>오늘 일기
+          <textarea name="text" rows="3" required maxlength="1000" placeholder="오늘 있었던 일을 적어 주세요"></textarea>
+        </label>
+        <label>기분 (선택)
+          <input name="mood" maxlength="20" placeholder="좋음 / 보통 / 피곤" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">일기 저장</button>
+      </form>
+      ${
+        journals.length === 0
+          ? '<div class="empty">일기를 입력해 저장하세요.</div>'
+          : journals
+              .map(
+                (j) => `
+          <div class="list-item">
+            <div class="body">
+              <strong>${j.mood ? escapeHtml(j.mood) + ' · ' : ''}${new Date(j.createdAt).toLocaleString('ko-KR')}</strong>
+              <p>${escapeHtml(j.text)}</p>
+            </div>
+          </div>`,
+              )
+              .join('')
+      }
+
       <h2 class="section-title">MEMORY</h2>
+      <form id="life-memory-form" class="settings-form life-input-form">
+        <label>키
+          <input name="key" required maxlength="40" placeholder="와이파이" autocomplete="off" />
+        </label>
+        <label>값
+          <input name="value" required maxlength="200" placeholder="cafe123" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">기억하기</button>
+      </form>
       ${
         memories.length === 0
-          ? '<div class="empty">"기억해 와이파이는 cafe123"</div>'
+          ? '<div class="empty">키와 값을 입력해 기억하세요.</div>'
           : memories
               .map(
                 (m) => `
@@ -3168,6 +3282,147 @@ function bind(): void {
     })
   })
 
+  document.getElementById('life-stats-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const name = String(fd.get('name') || '').trim() || getActiveSeriesName() || '기본'
+    const values = parseNumbers(String(fd.get('values') || ''))
+    if (!values.length) {
+      showFlash('숫자를 하나 이상 입력해 주세요.')
+      return
+    }
+    const series = fd.get('replace')
+      ? replaceSeriesValues(name, values)
+      : appendSeriesValues(name, values)
+    showFlash(`${series.name}에 ${values.length}개 ${fd.get('replace') ? '저장' : '추가'} · n=${series.values.length}`)
+    render()
+  })
+  document.querySelector('[data-action="life-stats-analyze"]')?.addEventListener('click', () => {
+    const active = loadSeriesList().find(
+      (s) => s.name.toLowerCase() === getActiveSeriesName().toLowerCase(),
+    )
+    if (!active?.values.length) {
+      showFlash('먼저 숫자를 입력해 주세요.')
+      return
+    }
+    render()
+    showFlash(`${active.name} 분석 완료 (n=${active.values.length})`)
+  })
+  document.getElementById('life-todo-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const text = String(fd.get('text') || '').trim()
+    if (!text) return
+    addReminder(text)
+    showFlash('할 일을 추가했습니다.')
+    render()
+  })
+  document.getElementById('life-shop-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const raw = String(fd.get('items') || '').trim()
+    if (!raw) return
+    const created = addShoppingItems(raw.split(/[\s,，、]+/).filter(Boolean))
+    showFlash(created.length ? `${created.length}개 담았습니다.` : '이미 담긴 품목입니다.')
+    render()
+  })
+  document.getElementById('life-habit-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const name = String(fd.get('name') || '').trim()
+    if (!name) return
+    addHabit(name)
+    showFlash(`습관 «${name}»을 추가했습니다.`)
+    render()
+  })
+  document.getElementById('life-expense-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const amount = Number(fd.get('amount'))
+    const category = String(fd.get('category') || '').trim()
+    const note = String(fd.get('note') || '').trim()
+    if (!Number.isFinite(amount) || amount <= 0 || !category) {
+      showFlash('금액과 항목을 확인해 주세요.')
+      return
+    }
+    addExpense(amount, category, note)
+    showFlash(`${category} ${formatMoney(amount, 'KRW')} 기록`)
+    render()
+  })
+  document.getElementById('life-journal-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const text = String(fd.get('text') || '').trim()
+    const mood = String(fd.get('mood') || '').trim()
+    if (!text) return
+    addJournal(text, mood || undefined)
+    showFlash('일기를 저장했습니다.')
+    render()
+  })
+  document.getElementById('life-memory-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const key = String(fd.get('key') || '').trim()
+    const value = String(fd.get('value') || '').trim()
+    if (!key || !value) return
+    upsertMemory(key, value)
+    showFlash(`기억: ${key}`)
+    render()
+  })
+
+  document.getElementById('invest-holding-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const raw = String(fd.get('ticker') || '').trim()
+    const shares = Number(fd.get('shares'))
+    const avg = Number(fd.get('avg'))
+    const ticker = extractTickerFromText(raw) || resolveTicker(raw)
+    if (!ticker || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(avg) || avg < 0) {
+      showFlash('종목·수량·평단을 확인해 주세요.')
+      return
+    }
+    upsertHolding({
+      symbol: ticker.symbol,
+      name: ticker.name,
+      shares,
+      avgPrice: avg,
+      currency: ticker.currency,
+    })
+    addTradeNote(ticker.symbol, 'buy', `보유 등록 ${shares}주 @ ${avg}`)
+    showFlash(`${ticker.name} ${shares}주 보유 반영`)
+    render()
+  })
+  document.getElementById('invest-watch-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const raw = String(fd.get('ticker') || '').trim()
+    const targetRaw = String(fd.get('target') || '').trim()
+    const ticker = extractTickerFromText(raw) || resolveTicker(raw)
+    if (!ticker) {
+      showFlash('종목을 인식하지 못했습니다.')
+      return
+    }
+    const target = targetRaw ? Number(targetRaw) : undefined
+    addWatch(ticker.symbol, ticker.name, Number.isFinite(target) ? target : undefined)
+    showFlash(`관심종목: ${ticker.name}`)
+    render()
+  })
+  document.getElementById('invest-trade-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const raw = String(fd.get('ticker') || '').trim()
+    const side = String(fd.get('side') || 'buy') as 'buy' | 'sell' | 'watch' | 'idea'
+    const thesis = String(fd.get('thesis') || '').trim()
+    const ticker = extractTickerFromText(raw) || resolveTicker(raw)
+    if (!ticker || !thesis) {
+      showFlash('종목과 메모를 입력해 주세요.')
+      return
+    }
+    addTradeNote(ticker.symbol, side, thesis)
+    showFlash('매매 노트를 저장했습니다.')
+    render()
+  })
+
   document.querySelectorAll<HTMLButtonElement>('[data-del-memory]').forEach((btn) => {
     btn.addEventListener('click', () => {
       deleteMemory(btn.dataset.delMemory || '')
@@ -3195,6 +3450,13 @@ function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-toggle-shop]').forEach((btn) => {
     btn.addEventListener('click', () => {
       toggleShopping(btn.dataset.toggleShop || '')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-check-habit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const h = checkHabit(btn.dataset.checkHabit || '')
+      showFlash(h ? `${h.name} 완료 · 연속 ${h.streak}일` : '습관을 찾지 못했습니다.')
       render()
     })
   })
@@ -3236,8 +3498,12 @@ function bind(): void {
   })
   document.querySelectorAll<HTMLButtonElement>('[data-stats-use]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      state.view = 'chat'
-      void handleUserText(`통계 ${btn.dataset.statsUse || ''}`)
+      const name = btn.dataset.statsUse || ''
+      if (!name) return
+      setActiveSeriesName(name)
+      state.view = 'life'
+      render()
+      showFlash(`${name} 분석`)
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-quote]').forEach((btn) => {

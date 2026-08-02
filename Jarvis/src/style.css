@@ -1517,6 +1517,15 @@ body {
   width: 100%;
 }
 
+.life-input-form {
+  margin: 8px 0 12px;
+  gap: 8px;
+}
+
+.life-input-form .primary-btn {
+  width: 100%;
+}
+
 .fam-notice.pinned {
   border-color: rgba(0, 210, 190, 0.35);
 }

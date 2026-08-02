@@ -4,24 +4,23 @@
 
 기존 FlowMate 프로젝트와 **완전히 분리**된 독립 앱입니다. 데이터는 브라우저(LocalStorage)에만 저장됩니다.
 
-## 실행 URL
+## 영구 실행 URL
 
-### 공개 HTTPS (지금 바로 사용)
-**https://zenith-dust-b1knm7x.shipstatic.com**
+### GitHub Pages (권장 · 영구)
+**https://khy230306-sys.github.io/intuition-ai/**
 
-iPhone Safari에서 위 주소를 연 뒤 홈 화면에 추가하면 됩니다.
+이 URL은 저장소 `gh-pages` / GitHub Actions로 유지됩니다.  
+워크플로 `Deploy PICK AI to GitHub Pages`가 푸시마다 자동 배포합니다.
 
-- 익명 배포는 **약 3일 후 만료**됩니다. 404가 나오면 아래 재배포를 실행하세요.
-- 영구 보관(클레임): https://my.shipstatic.com/claim/ac2e37a24be819770b913e3ae01f986319908681ac622e06472898d229244758
-
-재배포:
+### 임시 미러 (만료될 수 있음)
+필요 시 재배포:
 ```bash
 cd DoriJitGoTtaeng-PICK-AI
 npm install
 npm run build && npm run deploy:web
 ```
 
-### 로컬
+## 로컬 실행
 ```bash
 cd DoriJitGoTtaeng-PICK-AI
 npm install
@@ -30,19 +29,9 @@ npm run dev
 - 개발: `http://localhost:5173/`
 - 미리보기: `npm run build && npm run preview` → `http://localhost:4173/`
 
-### GitHub Pages (영구 HTTPS)
-목표 URL: **https://khy230306-sys.github.io/intuition-ai/**
-
-1. 저장소 **Settings → Pages**
-2. Source: **Deploy from a branch** → branch `gh-pages` / folder `/ (root)`  
-   또는 Source: **GitHub Actions** (워크플로 `Deploy PICK AI to GitHub Pages` 사용)
-3. 저장 후 1~2분 뒤 위 URL로 접속
-
-`gh-pages` 브랜치에는 최신 정적 빌드가 푸시되어 있습니다.
-
 ## iPhone 홈 화면 설치
 
-1. **Safari**로 HTTPS 앱 URL을 엽니다.
+1. **Safari**로 GitHub Pages HTTPS URL을 엽니다.
 2. 공유 버튼(□↑)을 탭합니다.
 3. **홈 화면에 추가**를 선택합니다.
 4. 추가된 아이콘으로 실행하면 전체 화면(standalone) 앱처럼 동작합니다.
@@ -73,7 +62,7 @@ npm run dev
 | `npm run dev` | 개발 서버 |
 | `npm run build` | 타입체크 + 프로덕션 빌드 |
 | `npm run preview` | 빌드 결과 미리보기 |
-| `npm run deploy:web` | ShipStatic HTTPS 재배포 |
+| `npm run deploy:web` | 임시 HTTPS 미러 배포 |
 | `npm test` | 단위 테스트 |
 
 ## 기술
@@ -81,4 +70,4 @@ npm run dev
 - Vite + TypeScript
 - vite-plugin-pwa (manifest · Service Worker · 오프라인 캐시)
 - LocalStorage + 자동 JSON 백업
-- GitHub Actions → GitHub Pages 배포
+- GitHub Actions → GitHub Pages 영구 배포

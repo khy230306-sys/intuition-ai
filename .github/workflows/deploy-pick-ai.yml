@@ -2,16 +2,19 @@ name: Deploy PICK AI to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - cursor/dorijitgottaeng-pick-ai-dddb
     paths:
       - 'DoriJitGoTtaeng-PICK-AI/**'
       - '.github/workflows/deploy-pick-ai.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: pages-pick-ai
@@ -33,14 +36,49 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Add SPA 404 fallback
+      - name: SPA 404 fallback
         run: cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: DoriJitGoTtaeng-PICK-AI/dist
+      - name: Mirror to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: DoriJitGoTtaeng-PICK-AI/dist
+          force_orphan: true
+          commit_message: Deploy PICK AI static site
+
+  enable-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure GitHub Pages (Actions source)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          # Prefer GitHub Actions as Pages source (permanent github.io URL)
+          gh api -X POST "repos/${{ github.repository }}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            -f build_type=workflow
+          code=$?
+          if [ $code -ne 0 ]; then
+            gh api -X PUT "repos/${{ github.repository }}/pages" \
+              -H "Accept: application/vnd.github+json" \
+              -f build_type=workflow
+          fi
+          # Fallback: legacy gh-pages branch publishing
+          gh api -X POST "repos/${{ github.repository }}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<EOF || true
+          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
+          EOF
+          gh api "repos/${{ github.repository }}/pages" || true
+          set -e
 
   deploy:
-    needs: build
+    needs: [build, enable-pages]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

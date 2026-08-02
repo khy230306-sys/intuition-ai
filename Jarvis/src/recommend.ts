@@ -1,0 +1,331 @@
+import { fetchQuote, formatMoney } from './finance'
+import { loadHoldings, loadProfile, loadWatchlist } from './storage'
+import type { QuoteSnapshot } from './types'
+
+export type RecMarket = 'KR' | 'US' | 'ALL'
+
+export interface RecCandidate {
+  symbol: string
+  name: string
+  currency: 'KRW' | 'USD'
+  sector: string
+  market: 'KR' | 'US'
+  kind: 'stock' | 'etf' | 'index'
+}
+
+/** Liquid universe only — cold screening, not hype picks. */
+export const REC_UNIVERSE: RecCandidate[] = [
+  { symbol: '005930.KS', name: '삼성전자', currency: 'KRW', sector: '반도체', market: 'KR', kind: 'stock' },
+  { symbol: '000660.KS', name: 'SK하이닉스', currency: 'KRW', sector: '반도체', market: 'KR', kind: 'stock' },
+  { symbol: '035420.KS', name: 'NAVER', currency: 'KRW', sector: '플랫폼', market: 'KR', kind: 'stock' },
+  { symbol: '035720.KS', name: '카카오', currency: 'KRW', sector: '플랫폼', market: 'KR', kind: 'stock' },
+  { symbol: '005380.KS', name: '현대차', currency: 'KRW', sector: '자동차', market: 'KR', kind: 'stock' },
+  { symbol: '000270.KS', name: '기아', currency: 'KRW', sector: '자동차', market: 'KR', kind: 'stock' },
+  { symbol: '105560.KS', name: 'KB금융', currency: 'KRW', sector: '금융', market: 'KR', kind: 'stock' },
+  { symbol: '055550.KS', name: '신한지주', currency: 'KRW', sector: '금융', market: 'KR', kind: 'stock' },
+  { symbol: '005490.KS', name: 'POSCO홀딩스', currency: 'KRW', sector: '소재', market: 'KR', kind: 'stock' },
+  { symbol: '068270.KS', name: '셀트리온', currency: 'KRW', sector: '바이오', market: 'KR', kind: 'stock' },
+  { symbol: '373220.KS', name: 'LG에너지솔루션', currency: 'KRW', sector: '배터리', market: 'KR', kind: 'stock' },
+  { symbol: '012450.KS', name: '한화에어로스페이스', currency: 'KRW', sector: '방산', market: 'KR', kind: 'stock' },
+  { symbol: 'AAPL', name: 'Apple', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
+  { symbol: 'MSFT', name: 'Microsoft', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
+  { symbol: 'GOOGL', name: 'Alphabet', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
+  { symbol: 'AMZN', name: 'Amazon', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
+  { symbol: 'META', name: 'Meta', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
+  { symbol: 'NVDA', name: 'NVIDIA', currency: 'USD', sector: '반도체', market: 'US', kind: 'stock' },
+  { symbol: 'TSM', name: 'TSMC', currency: 'USD', sector: '반도체', market: 'US', kind: 'stock' },
+  { symbol: 'TSLA', name: 'Tesla', currency: 'USD', sector: '자동차', market: 'US', kind: 'stock' },
+  { symbol: 'SPY', name: 'S&P500 ETF', currency: 'USD', sector: '지수ETF', market: 'US', kind: 'etf' },
+  { symbol: 'QQQ', name: 'Nasdaq100 ETF', currency: 'USD', sector: '지수ETF', market: 'US', kind: 'etf' },
+  { symbol: 'VOO', name: 'Vanguard S&P500', currency: 'USD', sector: '지수ETF', market: 'US', kind: 'etf' },
+  { symbol: 'SCHD', name: 'SCHD', currency: 'USD', sector: '배당ETF', market: 'US', kind: 'etf' },
+]
+
+export interface ScoredPick {
+  candidate: RecCandidate
+  quote: QuoteSnapshot
+  score: number
+  reasons: string[]
+  warnings: string[]
+  rangePos: number | null
+}
+
+const quoteCache = new Map<string, { at: number; quote: QuoteSnapshot | null }>()
+const CACHE_MS = 45_000
+
+async function cachedQuote(symbol: string): Promise<QuoteSnapshot | null> {
+  const hit = quoteCache.get(symbol)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.quote
+  try {
+    // Screening must be fast: snapshot first, no hanging CORS proxies
+    const quote = await fetchQuote(symbol, {
+      preferSnapshot: true,
+      allowProxy: false,
+      timeoutMs: 2000,
+    })
+    quoteCache.set(symbol, { at: Date.now(), quote })
+    return quote
+  } catch {
+    quoteCache.set(symbol, { at: Date.now(), quote: null })
+    return null
+  }
+}
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let i = 0
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++
+      out[idx] = await fn(items[idx])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return out
+}
+
+function structuralFallback(
+  universe: RecCandidate[],
+  risk: 'conservative' | 'balanced' | 'aggressive',
+  owned: Set<string>,
+): string {
+  const rank = (c: RecCandidate): number => {
+    let s = 50
+    if (c.kind === 'etf') s += risk === 'aggressive' ? 4 : 16
+    if (risk === 'conservative') {
+      if (['금융', '지수ETF', '배당ETF'].includes(c.sector)) s += 12
+      if (['방산', '바이오', '배터리'].includes(c.sector) || c.symbol === 'TSLA' || c.symbol === 'NVDA') s -= 14
+    } else if (risk === 'aggressive') {
+      if (['반도체', '빅테크', '방산', '배터리'].includes(c.sector)) s += 10
+    } else if (['반도체', '빅테크', '금융', '지수ETF'].includes(c.sector)) s += 6
+    if (owned.has(c.symbol)) s -= 10
+    return s
+  }
+  const sorted = [...universe].sort((a, b) => rank(b) - rank(a)).slice(0, 5)
+  const riskLabel = risk === 'conservative' ? '보수' : risk === 'aggressive' ? '공격' : '균형'
+  const lines = [
+    '【구조 스크리닝】 실시간 시세 연결 실패 → 섹터·성향 기준 후보',
+    `성향: ${riskLabel} · 유니버스 ${universe.length}종`,
+    '',
+    '— 참고 후보 (가격 없이 구조만) —',
+  ]
+  sorted.forEach((c, i) => {
+    lines.push(`${i + 1}. ${c.name} (${c.symbol}) · ${c.sector}${c.kind === 'etf' ? ' · ETF' : ''}`)
+  })
+  lines.push('')
+  lines.push('팁: 잠시 후 다시 "종목 추천"을 입력하거나 개별 "삼성전자 시세"를 확인해 보세요.')
+  lines.push('면책: 투자 권유가 아니며, 시세 미연결 상태의 참고용입니다.')
+  return lines.join('\n')
+}
+
+function rangePosition(q: QuoteSnapshot): number | null {
+  if (q.fiftyTwoHigh == null || q.fiftyTwoLow == null) return null
+  const span = q.fiftyTwoHigh - q.fiftyTwoLow
+  if (span <= 0) return null
+  return (q.price - q.fiftyTwoLow) / span
+}
+
+function scorePick(
+  c: RecCandidate,
+  q: QuoteSnapshot,
+  risk: 'conservative' | 'balanced' | 'aggressive',
+  owned: Set<string>,
+  watched: Set<string>,
+): ScoredPick {
+  const reasons: string[] = []
+  const warnings: string[] = []
+  let score = 50
+  const rangePos = rangePosition(q)
+  const ch = q.changePct
+
+  if (c.kind === 'etf') {
+    score += risk === 'aggressive' ? 4 : 12
+    reasons.push('분산 코어(ETF)')
+  }
+
+  if (rangePos != null) {
+    if (rangePos <= 0.35) {
+      const bonus = risk === 'aggressive' ? 6 : 14
+      score += bonus
+      reasons.push(`52주 하단대 ${(rangePos * 100).toFixed(0)}%`)
+    } else if (rangePos >= 0.85) {
+      score -= risk === 'conservative' ? 18 : 10
+      warnings.push(`52주 고점 근접 ${(rangePos * 100).toFixed(0)}% — 추격 매수 경계`)
+    } else {
+      score += 2
+      reasons.push(`52주 중위 ${(rangePos * 100).toFixed(0)}%`)
+    }
+  }
+
+  if (ch != null) {
+    if (ch <= -3) {
+      score += risk === 'conservative' ? 2 : 8
+      reasons.push(`당일 급락 ${ch.toFixed(2)}% (냉정 점검 구간)`)
+    } else if (ch >= 4) {
+      score -= risk === 'conservative' ? 12 : 6
+      warnings.push(`당일 급등 ${ch.toFixed(2)}% — FOMO 위험`)
+    } else if (ch >= 0 && ch < 1.5) {
+      score += 3
+      reasons.push(`당일 안정 ${ch.toFixed(2)}%`)
+    }
+  }
+
+  if (risk === 'conservative') {
+    if (['금융', '지수ETF', '배당ETF'].includes(c.sector)) {
+      score += 8
+      reasons.push('보수 성향 적합 섹터')
+    }
+    if (['방산', '바이오', '배터리'].includes(c.sector) || c.symbol === 'TSLA' || c.symbol === 'NVDA') {
+      score -= 10
+      warnings.push('변동성·테마 성격 — 보수 포트에 과비중 비권고')
+    }
+  } else if (risk === 'aggressive') {
+    if (['반도체', '빅테크', '방산', '배터리'].includes(c.sector)) {
+      score += 6
+      reasons.push('성장·모멘텀 섹터')
+    }
+    if (c.kind === 'etf') score -= 2
+  } else {
+    if (['반도체', '빅테크', '금융', '지수ETF'].includes(c.sector)) score += 4
+  }
+
+  if (owned.has(c.symbol)) {
+    score -= 8
+    warnings.push('이미 보유 — 추가 매수 전 비중 점검')
+  }
+  if (watched.has(c.symbol)) {
+    score += 2
+    reasons.push('관심종목')
+  }
+
+  // Hard cold caps
+  if (rangePos != null && rangePos > 0.92) score = Math.min(score, 42)
+  if (c.symbol === 'TSLA' && risk !== 'aggressive') score = Math.min(score, 45)
+
+  return { candidate: c, quote: q, score, reasons: reasons.slice(0, 3), warnings: warnings.slice(0, 2), rangePos }
+}
+
+function detectMarket(text: string): RecMarket {
+  if (/미국|나스닥|미장|달러|us\b/i.test(text)) return 'US'
+  if (/한국|국내|코스피|코스닥|한장/i.test(text)) return 'KR'
+  return 'ALL'
+}
+
+function detectRiskOverride(text: string): 'conservative' | 'balanced' | 'aggressive' | null {
+  if (/보수|안전|배당|안정/.test(text)) return 'conservative'
+  if (/공격|고위험|성장|테마/.test(text)) return 'aggressive'
+  if (/균형|중립/.test(text)) return 'balanced'
+  if (/냉정|차갑|팩트|객관/.test(text)) return null // keep profile, tone cold anyway
+  return null
+}
+
+export function wantsStockRecommend(text: string): boolean {
+  const t = text.trim()
+  // Lifestyle asks (music, food, travel, …) must never open stock screening.
+  if (
+    /음악|노래|뮤직|플레이리스트|playlist|맛집|카페|커피|여행|관광|휴가|호텔|숙소|펜션|영화|드라마|넷플릭스|책\b|독서|선물|데이트|운동|헬스|홈트|코디|패션|옷\s*추천|뭐\s*먹|어디\s*먹|어디\s*가|어디가\s*좋|국내\s*여행|해외\s*여행|music\b|restaurant|travel/i.test(
+      t,
+    ) &&
+    !/주식|종목|코인|비트|환율|매수|매도|포트폴리오|투자\s*종목|etf|nasdaq|kospi|kosdaq|stock|crypto/i.test(t)
+  ) {
+    return false
+  }
+  return (
+    /종목\s*추천|추천\s*종목|주식\s*추천|뭐\s*살까|매수\s*추천|추천주|픽\s*좀|포트\s*추천|투자\s*추천|어디에\s*넣|스크리닝|유니버스|냉정\s*스크리닝/.test(
+      t,
+    ) ||
+    /(?:냉정|차갑|팩트|객관).{0,12}추천/.test(t) ||
+    /(?:미국|한국).{0,10}(?:보수|공격|균형|주식|종목)?.{0,8}추천/.test(t) ||
+    /(?:보수|공격|균형).{0,8}(?:미국|한국|주식|종목)?.{0,8}추천/.test(t) ||
+    (/(?:주식|종목|코인|etf|nasdaq|kospi|kosdaq|포트폴리오)/i.test(t) &&
+      /추천|골라|스크리닝|뭐\s*살/.test(t))
+  )
+}
+
+export async function buildColdRecommendations(text: string): Promise<string> {
+  const profile = loadProfile()
+  const risk = detectRiskOverride(text) || profile.riskTolerance || 'balanced'
+  const market = detectMarket(text)
+  const owned = new Set(loadHoldings().map((h) => h.symbol.toUpperCase()))
+  const watched = new Set(loadWatchlist().map((w) => w.symbol.toUpperCase()))
+
+  const universe = REC_UNIVERSE.filter((c) => {
+    if (c.kind === 'index') return false
+    if (market === 'KR') return c.market === 'KR'
+    if (market === 'US') return c.market === 'US'
+    return true
+  })
+
+  // Limit concurrency — snapshot-first, short timeouts
+  const quotes = await mapPool(universe, 6, async (c) => ({ c, q: await cachedQuote(c.symbol) }))
+  const scored = quotes
+    .filter((x): x is { c: RecCandidate; q: QuoteSnapshot } => Boolean(x.q))
+    .map(({ c, q }) => scorePick(c, q, risk, owned, watched))
+    .sort((a, b) => b.score - a.score)
+
+  if (!scored.length) {
+    return structuralFallback(universe, risk, owned)
+  }
+
+  const top = scored.slice(0, 5)
+  const avoid = scored.filter((s) => s.score < 40 || (s.rangePos != null && s.rangePos > 0.9)).slice(-3).reverse()
+
+  const marketLabel = market === 'KR' ? '한국' : market === 'US' ? '미국' : '한·미'
+  const riskLabel =
+    risk === 'conservative' ? '보수' : risk === 'aggressive' ? '공격' : '균형'
+
+  const stale = scored.filter((s) => Date.now() - s.quote.fetchedAt > 6 * 60 * 60 * 1000).length
+  const sourceNote =
+    stale > scored.length / 2
+      ? '시세 출처: 배포 스냅샷/캐시 (실시간 지연 가능)'
+      : `시세 수집 ${scored.length}/${universe.length}종`
+
+  const lines: string[] = [
+    '【냉정 스크리닝】 감정 배제 · 시세 기반',
+    `범위: ${marketLabel} · 성향: ${riskLabel} · 유니버스 ${universe.length}종`,
+    sourceNote,
+    '',
+    '— 상위 후보 (매수 강요가 아님) —',
+  ]
+
+  top.forEach((p, i) => {
+    const ch =
+      p.quote.changePct == null
+        ? ''
+        : ` ${p.quote.changePct >= 0 ? '+' : ''}${p.quote.changePct.toFixed(2)}%`
+    lines.push(
+      `${i + 1}. ${p.candidate.name} (${p.candidate.symbol}) 점수 ${p.score.toFixed(0)}`,
+    )
+    lines.push(
+      `   ${formatMoney(p.quote.price, p.quote.currency)}${ch} · ${p.candidate.sector}`,
+    )
+    if (p.reasons.length) lines.push(`   근거: ${p.reasons.join(' / ')}`)
+    if (p.warnings.length) lines.push(`   경고: ${p.warnings.join(' / ')}`)
+  })
+
+  // Always force a core ETF mention for cold advice
+  const etf = scored.find((s) => s.candidate.kind === 'etf')
+  if (etf && !top.some((t) => t.candidate.symbol === etf.candidate.symbol)) {
+    lines.push('')
+    lines.push(
+      `코어 대안: ${etf.candidate.name} — 개별주 확신이 없으면 ETF가 더 냉정한 선택입니다.`,
+    )
+  }
+
+  if (avoid.length) {
+    lines.push('')
+    lines.push('— 지금은 거리 두기 —')
+    for (const p of avoid.slice(0, 2)) {
+      lines.push(
+        `· ${p.candidate.name}: 점수 ${p.score.toFixed(0)}${p.warnings[0] ? ` · ${p.warnings[0]}` : ''}`,
+      )
+    }
+  }
+
+  lines.push('')
+  lines.push('운용 규칙(냉정): 단일 종목 ≤10~15% · 손절 기준 사전 기입 · 추격 매수 금지')
+  lines.push('면책: 투자 권유가 아닙니다. 스크리닝 참고용이며 손실 책임은 본인에게 있습니다.')
+  lines.push('다음: "삼성전자 시세" / "삼성전자 투자체크" / "관심종목 엔비디아 추가"')
+
+  return lines.join('\n')
+}

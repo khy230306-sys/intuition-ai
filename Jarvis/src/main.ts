@@ -172,7 +172,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.19'
+const APP_VERSION = '1.9.20'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -582,53 +582,61 @@ function captureViewFromUrl(): void {
 
 type InviteApplyResult = 'joined' | 'needs-switch' | 'failed' | 'none'
 
-function applyPendingInvite(): InviteApplyResult {
+/**
+ * Apply a pending invite without yanking the user away from an active screen.
+ * - Same room already joined: clear pending, keep current view.
+ * - Different room: stash switch banner code, only jump to that tab if already there
+ *   or if `forceView` (location-gate accept / first join).
+ */
+function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
   const pending = state.pendingInvite
   if (!pending || !state.locationReady) return 'none'
+  const forceView = opts?.forceView === true
   state.pendingInvite = null
   savePendingInvite(null)
   const member = state.settings.displayName || '나'
   try {
     if (pending.kind === 'friends') {
       const current = loadFriendsRoom()
+      if (current && current.code === pending.code) {
+        state.prefillJoinCode = ''
+        return 'joined'
+      }
       if (current && current.code !== pending.code) {
-        // Keep current room visible + show one-tap switch banner (do not silently no-op)
-        state.view = 'friends'
         state.prefillJoinCode = pending.code
         state.pendingInvite = pending
         savePendingInvite(pending)
-        showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
+        if (forceView || state.view === 'friends') state.view = 'friends'
+        showFlash(`초대 ${pending.code} 수신 · 친구 탭에서 «전환 참여»`)
         return 'needs-switch'
       }
-      const firstJoin = !current
-      if (!current) {
-        joinFriendsRoomLocal(pending.code, '친구 공간', member)
-      }
+      joinFriendsRoomLocal(pending.code, '친구 공간', member)
       state.view = 'friends'
       state.friendsTab = 'chat'
       state.prefillJoinCode = ''
-      if (firstJoin) postJoinPresence('friends')
+      postJoinPresence('friends')
       showFlash(`친구 초대 승인 · 코드 ${pending.code} 입장 완료`)
       void ensureFriendsSyncOnce(true)
       return 'joined'
     }
     const current = loadFamilyRoom()
+    if (current && current.code === pending.code) {
+      state.prefillJoinCode = ''
+      return 'joined'
+    }
     if (current && current.code !== pending.code) {
-      state.view = 'family'
       state.prefillJoinCode = pending.code
       state.pendingInvite = pending
       savePendingInvite(pending)
-      showFlash(`초대 ${pending.code} 수신 · «전환 참여» 한 번이면 입장합니다`)
+      if (forceView || state.view === 'family') state.view = 'family'
+      showFlash(`초대 ${pending.code} 수신 · 가족 탭에서 «전환 참여»`)
       return 'needs-switch'
     }
-    const firstJoin = !current
-    if (!current) {
-      joinFamilyRoomLocal(pending.code, '가족 공간', member)
-    }
+    joinFamilyRoomLocal(pending.code, '가족 공간', member)
     state.view = 'family'
     state.familyTab = 'chat'
     state.prefillJoinCode = ''
-    if (firstJoin) postJoinPresence('family')
+    postJoinPresence('family')
     showFlash(`가족 초대 승인 · 코드 ${pending.code} 입장 완료`)
     void ensureFamilySyncOnce(true)
     return 'joined'
@@ -636,8 +644,10 @@ function applyPendingInvite(): InviteApplyResult {
     state.pendingInvite = pending
     savePendingInvite(pending)
     showFlash(err instanceof Error ? err.message : '초대 참여에 실패했습니다.')
-    state.view = pending.kind
-    state.prefillJoinCode = pending.code
+    if (forceView) {
+      state.view = pending.kind
+      state.prefillJoinCode = pending.code
+    }
     return 'failed'
   }
 }
@@ -2872,6 +2882,24 @@ function renderSettings(): string {
   `
 }
 
+/** Ignore nav/tab taps shortly after remount (iOS ghost-click after innerHTML replace). */
+let navGuardUntil = 0
+function armNavGuard(ms = 480): void {
+  navGuardUntil = Date.now() + ms
+}
+function isNavGuarded(): boolean {
+  return Date.now() < navGuardUntil
+}
+
+/** Soft-refresh space chat without remounting nav (avoids accidental tab jumps). */
+function softRefreshSpaceChat(kind: 'family' | 'friends'): void {
+  patchSpaceHead(kind, {
+    status: kind === 'family' ? state.familySyncStatus : state.friendsSyncStatus,
+    peers: kind === 'family' ? getFamilyPeerCount() : getFriendsPeerCount(),
+  })
+  appendLiveSpaceChats(kind)
+}
+
 function render(): void {
   const app = document.getElementById('app')
   if (!app) return
@@ -2900,6 +2928,7 @@ function render(): void {
                     : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
   document.body.dataset.jarvisView = state.view
+  armNavGuard()
   bind()
   if (state.view === 'games') {
     // remount after DOM ready
@@ -3030,7 +3059,7 @@ function bindLocationGate(): void {
     state.locationReady = true
     state.locationError = ''
     state.locationBusy = false
-    applyPendingInvite()
+    applyPendingInvite({ forceView: Boolean(state.pendingInvite) })
     showFlash('오프라인 모드로 시작합니다. 날씨·위치 기능은 제한됩니다.')
     render()
     void bootSpaceSyncAndPush()
@@ -3040,7 +3069,7 @@ function bindLocationGate(): void {
     state.locationReady = true
     state.locationError = ''
     state.locationBusy = false
-    const invited = applyPendingInvite()
+    const invited = applyPendingInvite({ forceView: true })
     if (invited === 'joined') showFlash('초대 승인 · AIZIO 입장 완료')
     else if (invited === 'needs-switch') {
       /* applyPendingInvite already flashed switch banner */
@@ -3073,7 +3102,9 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
     state.lastFix = fix
     state.locationReady = true
     state.locationError = ''
-    const invited = applyPendingInvite()
+    const invited = applyPendingInvite({
+      forceView: interactive || Boolean(state.pendingInvite),
+    })
     if (interactive && invited === 'none') showFlash('위치 허용 완료')
     render()
     void refreshWeather()
@@ -3109,9 +3140,16 @@ async function refreshQuotes(): Promise<void> {
 
 function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (ev) => {
+      if (isNavGuarded()) {
+        ev.preventDefault()
+        ev.stopPropagation()
+        return
+      }
+      const next = btn.dataset.view as View
+      if (!next || next === state.view) return
       stopArcade()
-      state.view = btn.dataset.view as View
+      state.view = next
       stopSpeaking()
       voice.stop()
       state.listening = false
@@ -3121,8 +3159,14 @@ function bind(): void {
   })
 
   document.querySelectorAll<HTMLButtonElement>('[data-family-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.familyTab = btn.dataset.familyTab as 'chat' | 'notices' | 'events'
+    btn.addEventListener('click', (ev) => {
+      if (isNavGuarded()) {
+        ev.preventDefault()
+        return
+      }
+      const next = btn.dataset.familyTab as 'chat' | 'notices' | 'events'
+      if (!next || next === state.familyTab) return
+      state.familyTab = next
       render()
     })
   })
@@ -3287,8 +3331,14 @@ function bind(): void {
   })
 
   document.querySelectorAll<HTMLButtonElement>('[data-friends-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.friendsTab = btn.dataset.friendsTab as 'chat' | 'notices' | 'events'
+    btn.addEventListener('click', (ev) => {
+      if (isNavGuarded()) {
+        ev.preventDefault()
+        return
+      }
+      const next = btn.dataset.friendsTab as 'chat' | 'notices' | 'events'
+      if (!next || next === state.friendsTab) return
+      state.friendsTab = next
       render()
     })
   })
@@ -4340,50 +4390,49 @@ function boot(): void {
     state.familySyncStatus = info.status
     if (state.view !== 'family' || !state.locationReady) return
     if (state.shareModal) return
-    // Health ticks / peer count: patch text only — full render re-triggers rise animation (flicker).
-    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
-      patchSpaceHead('family', info)
+    // Never steal focus with a full remount while on the chat tab.
+    if (state.familyTab === 'chat' || info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      softRefreshSpaceChat('family')
       return
     }
-    // Incoming chat/notice/event data — soft remount
     if (state.listening) {
-      patchSpaceHead('family', info)
-      appendLiveSpaceChats('family')
+      softRefreshSpaceChat('family')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      patchSpaceHead('family', info)
-      appendLiveSpaceChats('family')
+      softRefreshSpaceChat('family')
       return
     }
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
     ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
-      if (state.view === 'family' && !state.shareModal && !state.listening) render()
+      if (state.view === 'family' && state.familyTab !== 'chat' && !state.shareModal && !state.listening) {
+        render()
+      }
     }, 500)
   })
   setFriendsSyncListener((info) => {
     state.friendsSyncStatus = info.status
     if (state.view !== 'friends' || !state.locationReady) return
     if (state.shareModal) return
-    if (info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
-      patchSpaceHead('friends', info)
+    if (state.friendsTab === 'chat' || info.reason === 'health' || info.reason === 'conn' || info.reason === 'peer') {
+      softRefreshSpaceChat('friends')
       return
     }
     if (state.listening) {
-      patchSpaceHead('friends', info)
-      appendLiveSpaceChats('friends')
+      softRefreshSpaceChat('friends')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      patchSpaceHead('friends', info)
-      appendLiveSpaceChats('friends')
+      softRefreshSpaceChat('friends')
       return
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
     ;(window as unknown as { __frdRefresh?: number }).__frdRefresh = window.setTimeout(() => {
-      if (state.view === 'friends' && !state.shareModal && !state.listening) render()
+      if (state.view === 'friends' && state.friendsTab !== 'chat' && !state.shareModal && !state.listening) {
+        render()
+      }
     }, 500)
   })
   startAlarmScheduler()
@@ -4393,8 +4442,29 @@ function boot(): void {
       void speakAsync(`알림. ${alarm.body}`.slice(0, 160), 'ko-KR')
     }
     showFlash(`알림: ${alarm.body}`)
-    if (state.locationReady && !state.listening) render()
-    else if (state.listening) patchVoiceUi()
+    if (!state.locationReady) return
+    if (state.listening) {
+      patchVoiceUi()
+      return
+    }
+    // Chat: append bubble without remounting nav (prevents ghost tab jumps).
+    if (state.view === 'chat') {
+      const thread = document.getElementById('chat-thread') || document.querySelector('.messages')
+      if (thread && !thread.querySelector('.hero-empty')) {
+        const last = state.messages[state.messages.length - 1]
+        if (last) {
+          const name = 'AIZIO'
+          const clock = formatChatClock(last.createdAt)
+          thread.insertAdjacentHTML(
+            'beforeend',
+            `<div class="msg-row assistant"><button type="button" class="msg-avatar-btn aizio" data-profile-open="1" data-profile-name="AIZIO" data-profile-src="" data-profile-mine="0" aria-label="AIZIO"><span class="msg-avatar-letter">A</span></button><div class="msg-col"><div class="msg-head"><span class="msg-name">${escapeHtml(name)}</span>${clock ? `<time class="msg-time">${clock}</time>` : ''}</div><div class="msg-bubble assistant">${escapeHtml(last.text)}</div></div></div>`,
+          )
+          scrollChat()
+          return
+        }
+      }
+    }
+    render()
   })
   void ensureNotificationPermission()
   window.addEventListener('online', () => {

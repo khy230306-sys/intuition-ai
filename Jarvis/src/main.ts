@@ -172,7 +172,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.17'
+const APP_VERSION = '1.9.18'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1132,16 +1132,8 @@ function spaceChatBubbleHtml(
     bareMediaLabel && mediaHtml
       ? `<div class="fam-msg-text" data-role="body" hidden>${escapeHtml(m.text)}</div>`
       : `<div class="fam-msg-text" data-role="body">${escapeHtml(m.text)}</div>`
-  return `<div class="fam-msg-row ${mine ? 'mine' : 'theirs'}">
-    ${avatar}
-    <div class="fam-msg ${mine ? 'mine' : 'theirs'}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>
-      ${nameRow}
-      ${mediaHtml}
-      ${textHtml}
-      <div class="fam-msg-tr" data-role="tr" hidden></div>
-      ${clock ? `<time class="msg-time">${clock}</time>` : ''}
-    </div>
-  </div>`
+  // Keep bubble markup on one line so layout whitespace cannot inflate height.
+  return `<div class="fam-msg-row ${mine ? 'mine' : 'theirs'}">${avatar}<div class="fam-msg ${mine ? 'mine' : 'theirs'}" data-msg-id="${escapeAttr(m.id)}" data-author="${escapeAttr(m.authorId)}" data-src-lang="${escapeAttr(m.sourceLanguage || '')}" data-orig="${escapeAttr(encodeURIComponent(m.text))}" ${wantTranslate ? 'data-need-translate="1"' : ''}>${nameRow}${mediaHtml}${textHtml}<div class="fam-msg-tr" data-role="tr" hidden></div>${clock ? `<time class="msg-time">${clock}</time>` : ''}</div></div>`
 }
 
 async function hydrateSpaceTranslations(): Promise<void> {

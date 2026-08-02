@@ -13,7 +13,7 @@ React · TypeScript · Vite · Tailwind CSS · React Router · Zustand · Supaba
 
 ## 접속 주소 (공유용)
 
-**https://poker-director.tiiny.site**
+**https://poker-director-0da8fc.tiiny.site**
 
 로그인: `admin` / `1234` 또는 **데모 계정으로 바로 입장**
 

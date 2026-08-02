@@ -36,25 +36,21 @@ function PartialJeong({ strokes, className }: { strokes: number; className?: str
   const n = Math.min(4, Math.max(1, strokes))
   return (
     <span
-      className={clsx('relative inline-block h-[1.15em] w-[1.15em] align-middle', className)}
+      className={clsx('relative inline-block h-[1.2em] w-[1.2em] align-[-0.15em]', className)}
       aria-hidden
     >
       <svg viewBox="0 0 40 40" className="h-full w-full overflow-visible">
-        {/* 1 top */}
         {n >= 1 ? (
-          <line x1="6" y1="8" x2="34" y2="8" stroke="currentColor" strokeWidth="3.2" strokeLinecap="square" />
+          <line x1="5" y1="7" x2="35" y2="7" stroke="currentColor" strokeWidth="4" strokeLinecap="square" />
         ) : null}
-        {/* 2 left vertical */}
         {n >= 2 ? (
-          <line x1="12" y1="8" x2="12" y2="32" stroke="currentColor" strokeWidth="3.2" strokeLinecap="square" />
+          <line x1="11" y1="7" x2="11" y2="33" stroke="currentColor" strokeWidth="4" strokeLinecap="square" />
         ) : null}
-        {/* 3 middle */}
         {n >= 3 ? (
-          <line x1="12" y1="20" x2="30" y2="20" stroke="currentColor" strokeWidth="3.2" strokeLinecap="square" />
+          <line x1="11" y1="20" x2="31" y2="20" stroke="currentColor" strokeWidth="4" strokeLinecap="square" />
         ) : null}
-        {/* 4 short vertical */}
         {n >= 4 ? (
-          <line x1="22" y1="8" x2="22" y2="32" stroke="currentColor" strokeWidth="3.2" strokeLinecap="square" />
+          <line x1="22" y1="7" x2="22" y2="33" stroke="currentColor" strokeWidth="4" strokeLinecap="square" />
         ) : null}
       </svg>
     </span>

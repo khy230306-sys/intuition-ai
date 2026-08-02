@@ -156,6 +156,7 @@ import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
 import { fileToChatMedia, mediaCaption, type ChatMedia } from './chatMedia'
 import { fileToProfileAvatar, isAvatarDataUrl } from './profileAvatar'
+import { getHomeSpaceInbox, markSpaceInboxSeen, type SpaceInboxSummary } from './spaceInbox'
 import {
   getAppLocale,
   initAppLocale,
@@ -172,7 +173,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.20'
+const APP_VERSION = '1.9.21'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1633,12 +1634,13 @@ function renderLocationGate(): string {
 }
 
 function renderNav(): string {
-  const items: Array<{ id: View; label: string; ico: string }> = [
-    { id: 'chat', label: t('nav.chat'), ico: 'CHAT' },
+  const inbox = getHomeSpaceInbox()
+  const items: Array<{ id: View; label: string; ico: string; badge?: number }> = [
+    { id: 'chat', label: t('nav.chat'), ico: 'CHAT', badge: inbox.unreadTotal || undefined },
     { id: 'invest', label: t('nav.invest'), ico: 'INV' },
     { id: 'life', label: t('nav.life'), ico: 'LIFE' },
-    { id: 'family', label: t('nav.family'), ico: 'FAM' },
-    { id: 'friends', label: t('nav.friends'), ico: 'FRD' },
+    { id: 'family', label: t('nav.family'), ico: 'FAM', badge: inbox.family.unread || undefined },
+    { id: 'friends', label: t('nav.friends'), ico: 'FRD', badge: inbox.friends.unread || undefined },
     { id: 'global', label: t('nav.global'), ico: 'TR' },
     { id: 'games', label: t('nav.games'), ico: 'PLAY' },
     { id: 'actions', label: t('nav.actions'), ico: 'RUN' },
@@ -1650,7 +1652,11 @@ function renderNav(): string {
         .map(
           (i) => `
         <button type="button" data-view="${i.id}" class="${state.view === i.id ? 'active' : ''}">
-          <span class="nav-ico">${i.ico}</span>
+          <span class="nav-ico">${i.ico}${
+            i.badge
+              ? `<span class="nav-badge">${i.badge > 99 ? '99+' : i.badge}</span>`
+              : ''
+          }</span>
           <span>${i.label}</span>
         </button>
       `,
@@ -1859,6 +1865,68 @@ function mountActiveArcade(): void {
   canvas.addEventListener('mouseup', onUp)
 }
 
+function renderHomeRoomCard(box: SpaceInboxSummary): string {
+  if (!box.hasRoom) {
+    return `
+      <button type="button" class="home-room-card empty" data-view="${box.kind}">
+        <div class="home-room-head">
+          <strong>${box.kind === 'family' ? '가족 방' : '친구 방'}</strong>
+          <span class="home-room-count">없음</span>
+        </div>
+        <p class="hint">${box.kind === 'family' ? '가족' : '친구'} 탭에서 방을 만들거나 참여하세요.</p>
+      </button>`
+  }
+  const recent =
+    box.recent.length > 0
+      ? box.recent
+          .map(
+            (m) =>
+              `<li><span class="home-room-who">${escapeHtml(m.mine ? '나' : m.authorName)}</span> ${escapeHtml(m.text)}</li>`,
+          )
+          .join('')
+      : '<li class="muted">아직 대화가 없습니다.</li>'
+  const unread =
+    box.unread > 0 ? `<span class="home-room-badge">${box.unread > 99 ? '99+' : box.unread}</span>` : ''
+  return `
+    <button type="button" class="home-room-card ${box.unread ? 'has-unread' : ''}" data-view="${box.kind}">
+      <div class="home-room-head">
+        <strong>${escapeHtml(box.name)}</strong>
+        ${unread}
+        <span class="home-room-count">대화 ${box.total}개</span>
+      </div>
+      <ul class="home-room-recent">${recent}</ul>
+    </button>`
+}
+
+/** Expandable family/friends inbox on the chat home. */
+function renderHomeRoomsPanel(compact = false): string {
+  const inbox = getHomeSpaceInbox()
+  const famLabel = inbox.family.hasRoom
+    ? `가족 ${inbox.family.total}${inbox.family.unread ? ` · 새 ${inbox.family.unread}` : ''}`
+    : '가족 없음'
+  const frLabel = inbox.friends.hasRoom
+    ? `친구 ${inbox.friends.total}${inbox.friends.unread ? ` · 새 ${inbox.friends.unread}` : ''}`
+    : '친구 없음'
+  const openAttr = inbox.unreadTotal > 0 || !compact ? ' open' : ''
+  return `
+    <details class="home-rooms ${compact ? 'compact' : ''}" data-home-rooms="1"${openAttr}>
+      <summary class="home-rooms-summary">
+        <span class="home-rooms-title">대화방</span>
+        <span class="home-rooms-stats">
+          <span class="${inbox.family.unread ? 'hot' : ''}">${escapeHtml(famLabel)}</span>
+          <span class="dot">·</span>
+          <span class="${inbox.friends.unread ? 'hot' : ''}">${escapeHtml(frLabel)}</span>
+        </span>
+        <span class="home-rooms-chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="home-rooms-body">
+        ${renderHomeRoomCard(inbox.family)}
+        ${renderHomeRoomCard(inbox.friends)}
+      </div>
+    </details>
+  `
+}
+
 function renderHomeWidget(): string {
   const s = buildHomeSummary(state.weather)
   const todos =
@@ -1886,6 +1954,7 @@ function renderHomeWidget(): string {
           <p class="home-value small">${escapeHtml(s.nextAlarm || '없음')}</p>
         </div>
       </div>
+      ${renderHomeRoomsPanel(false)}
     </div>
   `
 }
@@ -2034,7 +2103,7 @@ function renderChat(): string {
 
   return `
     <section class="panel chat-panel chat-shell">
-      ${empty ? renderHomeWidget() : chatTools}
+      ${empty ? renderHomeWidget() : `${renderHomeRoomsPanel(true)}${chatTools}`}
       <div class="messages chat-thread" id="chat-thread">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
@@ -2939,6 +3008,7 @@ function render(): void {
   if (state.view === 'family' && loadFamilyRoom()) {
     void ensureFamilySyncOnce()
     if (state.familyTab === 'chat') {
+      markSpaceInboxSeen('family')
       scrollSpaceChat('family')
       void hydrateSpaceTranslations()
     }
@@ -2946,6 +3016,7 @@ function render(): void {
   if (state.view === 'friends' && loadFriendsRoom()) {
     void ensureFriendsSyncOnce()
     if (state.friendsTab === 'chat') {
+      markSpaceInboxSeen('friends')
       scrollSpaceChat('friends')
       void hydrateSpaceTranslations()
     }

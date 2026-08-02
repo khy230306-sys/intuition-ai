@@ -1,5 +1,10 @@
 # AI Engine changelog
 
+## 1.11.3
+
+- Fix white screen on launch: version-upgrade path no longer returns before paint; cache clear timed out; stuck `jarvis.refreshing` no longer blocks reload
+- Boot splash + 5s safety continue if navigation hangs (iOS SW)
+
 ## 1.11.2
 
 - Show 「대화 초기화」 on chat home (empty hero), not only when messages exist

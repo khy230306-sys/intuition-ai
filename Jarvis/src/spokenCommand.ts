@@ -197,12 +197,22 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
 
 /** Strip emoji / decorative symbols; keep letters & numbers for intent checks. */
 export function stripDecorative(text: string): string {
-  return String(text || '')
-    .replace(/\p{Extended_Pictographic}/gu, ' ')
-    .replace(/[\uFE0F\u200D]/g, '')
-    .replace(/[^\p{L}\p{N}\s~!?.…ㅋㅎㅠㅜㅎ]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  const raw = String(text || '')
+  try {
+    return raw
+      .replace(/\p{Extended_Pictographic}/gu, ' ')
+      .replace(/[\uFE0F\u200D]/g, '')
+      .replace(/[^\p{L}\p{N}\s~!?.…ㅋㅎㅠㅜ]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  } catch {
+    // Older engines without Unicode property escapes
+    return raw
+      .replace(/[\u{1F300}-\u{1FAFF}]/gu, ' ')
+      .replace(/[^\w\s가-힣ㄱ-ㅎㅏ-ㅣ~!?.…ㅋㅎㅠㅜ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
 }
 
 /**

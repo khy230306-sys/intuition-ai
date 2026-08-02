@@ -1,0 +1,42 @@
+name: Deploy PICK AI (gh-pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'DoriJitGoTtaeng-PICK-AI/**'
+      - '.github/workflows/deploy-pick-ai.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-pick-ai
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: DoriJitGoTtaeng-PICK-AI/package-lock.json
+      - working-directory: DoriJitGoTtaeng-PICK-AI
+        run: |
+          npm ci
+          npm test
+          npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+      - name: Publish gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: DoriJitGoTtaeng-PICK-AI/dist
+          force_orphan: true
+          enable_jekyll: false
+          commit_message: Deploy PICK AI static site

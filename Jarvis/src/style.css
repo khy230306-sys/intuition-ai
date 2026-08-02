@@ -811,6 +811,63 @@ body[data-jarvis-view='friends'] .orb::after {
   gap: 10px;
 }
 
+.hybrid-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+
+.hybrid-ai-card {
+  border: 1px solid rgba(90, 255, 232, 0.18);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(160deg, rgba(12, 28, 36, 0.9), rgba(8, 16, 24, 0.95));
+}
+
+.hybrid-ai-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.hybrid-ai-badge {
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+}
+
+.hybrid-ai-badge.free {
+  color: #5affe8;
+  border-color: rgba(90, 255, 232, 0.35);
+}
+
+.hybrid-ai-badge.paid {
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.35);
+}
+
+.ai-wizard-card {
+  margin: 10px 12px 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(90, 255, 232, 0.25);
+  background: linear-gradient(145deg, rgba(0, 80, 72, 0.35), rgba(8, 18, 28, 0.92));
+}
+
+.ai-wizard-card .row-btns {
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.danger-text {
+  color: #ff8a7a;
+}
+
 .settings-form label {
   display: flex;
   flex-direction: column;

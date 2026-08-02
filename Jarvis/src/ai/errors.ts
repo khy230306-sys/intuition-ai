@@ -29,15 +29,25 @@ export class AiError extends Error {
 
 export function userFacingAiError(err: unknown): string {
   if (err instanceof AiError) {
+    const msg = err.message || ''
+    if (msg.includes('현재 AI가 연결되지 않았습니다') || msg.includes('기본 기능은')) {
+      return msg
+    }
     switch (err.kind) {
       case 'offline':
-        return '인터넷 연결이 없어 AI 서버에 연결할 수 없습니다. 로컬 명령은 「도움말」을 참고하세요.'
+        return '인터넷 연결이 없어 AI 답변을 받을 수 없습니다. 일정·메모·알림 등 기본 기능은 계속 사용할 수 있습니다.'
       case 'network':
         return 'AI 서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.'
       case 'auth':
-        return 'AI 인증 설정이 필요합니다. 설정에서 API 키를 확인해 주세요.'
+        if (/결제|payment|billing|credit/i.test(msg)) {
+          return '이 제공자는 결제 설정이 필요합니다.'
+        }
+        return 'API 키가 올바르지 않습니다. 키를 다시 확인해 주세요.'
       case 'rate_limit':
-        return 'AI 사용량 또는 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.'
+        if (/무료|quota|daily|한도/i.test(msg)) {
+          return '오늘 사용할 수 있는 무료 AI 한도를 모두 사용했습니다. 다른 무료 AI로 전환하거나 나중에 다시 시도해 주세요.'
+        }
+        return '요청이 너무 많습니다. 잠시 후 자동으로 다시 시도합니다.'
       case 'timeout':
         return 'AI 응답 시간이 초과되었습니다. 다시 시도해 주세요.'
       case 'cancelled':
@@ -45,17 +55,21 @@ export function userFacingAiError(err: unknown): string {
       case 'bad_response':
         return 'AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.'
       case 'config':
-        return 'AI 설정이 비어 있습니다. 설정에 API 키를 넣어 주세요.'
+        return msg.length > 10
+          ? msg
+          : 'AI 제공자 설정이 필요합니다. 설정에서 무료 AI를 연결하거나 기본 기능만 사용할 수 있습니다.'
       case 'unavailable':
-        return '현재 AI를 일시적으로 사용할 수 없습니다.'
+        return msg.length > 10
+          ? msg
+          : '현재 연결된 AI를 사용할 수 없습니다. 기본 기능은 정상적으로 사용할 수 있습니다.'
       default:
-        return 'AI 처리 중 오류가 발생했습니다. 로컬 명령은 「도움말」을 참고하세요.'
+        return 'AI 처리 중 오류가 발생했습니다. 일정·메모·알림 등 기본 기능은 계속 사용할 수 있습니다.'
     }
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return '인터넷 연결이 없어 AI 서버에 연결할 수 없습니다. 로컬 명령은 「도움말」을 참고하세요.'
+    return '인터넷 연결이 없어 AI 답변을 받을 수 없습니다. 일정·메모·알림 등 기본 기능은 계속 사용할 수 있습니다.'
   }
-  return 'AI 처리 중 오류가 발생했습니다. 로컬 명령은 「도움말」을 참고하세요.'
+  return 'AI 처리 중 오류가 발생했습니다. 일정·메모·알림 등 기본 기능은 계속 사용할 수 있습니다.'
 }
 
 /** Strip secrets from diagnostic strings. */

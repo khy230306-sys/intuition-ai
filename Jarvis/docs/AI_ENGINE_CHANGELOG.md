@@ -1,5 +1,16 @@
 # AI Engine changelog
 
+## 1.13.0
+
+- **Hybrid AI Provider System** (`src/ai-providers/`)
+- OpenRouter (`openrouter/free`), Gemini (native), Groq, OpenAI, custom OpenAI-compatible
+- Free-first auto routing; paid auto-use **off** by default
+- Provider fallback for rate/quota/unavailable/network
+- Settings UI cards + first-run AI wizard
+- Key masking, obfuscated local storage, backup strips secrets
+- Differentiated error messages (not a single “quota exceeded” string)
+- Docs: `AIZIO_AI_PROVIDER_GUIDE.md`, `AIZIO_API_KEY_SECURITY.md`, `AIZIO_FREE_AI_LIMITS.md`, `AIZIO_PROVIDER_FALLBACK.md`
+
 ## 1.12.0
 
 - **AIZIO Relationship Memory** (`src/relationship/`): conversation family links → `jarvis_relationships_v1`

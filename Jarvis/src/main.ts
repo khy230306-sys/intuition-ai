@@ -1,6 +1,19 @@
 import { registerSW } from 'virtual:pwa-register'
 import './style.css'
 import { FIXED_APP_URL, fetchRemoteAppVersion } from './appUpdate'
+import {
+  clearProviderKey,
+  dismissAiWizard,
+  hasAnyConfiguredProvider,
+  loadHybridAiConfig,
+  mergeKeyInput,
+  saveHybridAiConfig,
+  shouldShowAiWizard,
+  testProviderConnection,
+  updateProviderSlot,
+  type HybridProviderId,
+} from './ai-providers'
+import { renderAiWizardHtml, renderHybridAiSettingsHtml } from './ai-providers/settingsUi'
 import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
 import {
   buildSpaceInviteUrl,
@@ -191,7 +204,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.12.0'
+const APP_VERSION = '1.13.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -1178,7 +1191,7 @@ async function handleUserText(raw: string): Promise<void> {
   let timedOut = false
   const heavy =
     /포트폴리오|관심\s*종목|워치|종목\s*추천|시세|차트|보유|분석/.test(text) ||
-    Boolean(state.settings.apiKey)
+    hasAnyConfiguredProvider()
   const thinkMs = heavy ? 22_000 : 12_000
   const timeoutId = window.setTimeout(() => {
     timedOut = true
@@ -2398,9 +2411,12 @@ function renderChat(): string {
         <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
       </div>`
 
+  const wizard = shouldShowAiWizard() ? renderAiWizardHtml() : ''
+
   return `
     <section class="panel chat-panel chat-shell">
       ${empty ? renderHomeWidget() : renderHomeRoomsPanel(true)}
+      ${wizard}
       ${chatTools}
       <div class="messages chat-thread" id="chat-thread">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
@@ -3240,8 +3256,10 @@ function renderSettings(): string {
         </div>
         <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 앱을 쓰지 않을 때(백그라운드) 알림은 iPhone에서 <strong>홈 화면에 추가</strong>한 PWA + 아래 버튼으로 푸시를 켜야 합니다.</p>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
+        ${renderHybridAiSettingsHtml()}
+        <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
-          <input name="apiKey" type="password" value="${escapeAttr(s.apiKey)}" placeholder="sk-..." autocomplete="off" />
+          <input name="apiKey" type="password" value="" placeholder="${escapeAttr(s.apiKey ? '저장됨 · 변경 시에만 입력' : 'sk-...')}" autocomplete="off" />
         </label>
         <label>API Base
           <input name="apiBase" value="${escapeAttr(s.apiBase)}" />
@@ -4543,11 +4561,35 @@ function bind(): void {
     e.preventDefault()
     const fd = new FormData(settingsForm)
     const appLocale = String(fd.get('appLocale') || getAppLocale()) as AppLocale
+    const hybrid = loadHybridAiConfig()
+    const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
+    for (const id of ids) {
+      const existing = hybrid.providers[id]?.apiKey || ''
+      const keyIn = String(fd.get(`hybridKey_${id}`) || '')
+      const modelCustom = String(fd.get(`hybridModelCustom_${id}`) || '').trim()
+      const modelSel = String(fd.get(`hybridModel_${id}`) || '').trim()
+      const base = String(fd.get(`hybridBase_${id}`) || '').trim()
+      updateProviderSlot(id, {
+        apiKey: mergeKeyInput(keyIn, existing),
+        model: modelCustom || modelSel || hybrid.providers[id]?.model || '',
+        ...(base || id === 'openai' || id === 'custom' ? { apiBase: base || hybrid.providers[id]?.apiBase } : {}),
+        enabled: true,
+      })
+    }
+    const mode = String(fd.get('hybridMode') || 'auto') === 'fixed' ? 'fixed' : 'auto'
+    const fixed = String(fd.get('hybridFixed') || '') as HybridProviderId | ''
+    saveHybridAiConfig({
+      ...loadHybridAiConfig(),
+      mode,
+      fixedProvider: fixed || undefined,
+      allowPaidFallback: Boolean(fd.get('hybridAllowPaid')),
+    })
+
     const next: JarvisSettings = {
       ...state.settings,
       displayName: String(fd.get('displayName') || '주인님').trim() || '주인님',
       speakReplies: Boolean(fd.get('speakReplies')),
-      apiKey: String(fd.get('apiKey') || '').trim(),
+      apiKey: mergeKeyInput(String(fd.get('apiKey') || ''), state.settings.apiKey),
       apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
       model: String(fd.get('model') || 'gpt-4o-mini').trim(),
       city: String(fd.get('city') || '서울').trim() || '서울',
@@ -4561,6 +4603,13 @@ function bind(): void {
     }
     state.settings = next
     saveSettings(next)
+    // Sync OpenAI slot ↔ legacy fields (also refreshes settings openai fields)
+    updateProviderSlot('openai', {
+      apiKey: next.apiKey,
+      apiBase: next.apiBase,
+      model: next.model,
+    })
+    state.settings = loadSettings()
     setAppLocale(appLocale)
     const musicProvider = String(fd.get('musicProvider') || 'youtube') as
       | 'youtube'
@@ -4633,6 +4682,64 @@ function bind(): void {
         btn.textContent = t('chat.translation.showOriginal')
       }
     })
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-hybrid-test]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-hybrid-test') as HybridProviderId | null
+      if (!id) return
+      showFlash('연결 테스트 중…')
+      void testProviderConnection(id).then((r) => {
+        showFlash(r.ok ? `${id} 연결 성공${r.latencyMs ? ` (${r.latencyMs}ms)` : ''}` : `${id} 실패: ${r.message}`)
+        render()
+      })
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-hybrid-clear]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-hybrid-clear') as HybridProviderId | null
+      if (!id) return
+      clearProviderKey(id)
+      if (id === 'openai') {
+        state.settings = { ...state.settings, apiKey: '' }
+        saveSettings(state.settings)
+      }
+      showFlash(`${id} 키를 삭제했습니다.`)
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-hybrid-default]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-hybrid-default') as HybridProviderId | null
+      if (!id) return
+      const cfg = loadHybridAiConfig()
+      saveHybridAiConfig({ ...cfg, mode: 'fixed', fixedProvider: id })
+      showFlash(`${id}를 기본 Provider로 고정했습니다.`)
+      render()
+    })
+  })
+
+  document.querySelector('[data-action="ai-wizard-free"]')?.addEventListener('click', () => {
+    dismissAiWizard()
+    state.view = 'settings'
+    showFlash('OpenRouter · Gemini · Groq 중 하나를 연결하세요.')
+    render()
+  })
+  document.querySelector('[data-action="ai-wizard-openai"]')?.addEventListener('click', () => {
+    dismissAiWizard()
+    state.view = 'settings'
+    showFlash('OpenAI 키를 입력한 뒤 설정 저장을 누르세요. ChatGPT Plus와 API 결제는 별개입니다.')
+    render()
+  })
+  document.querySelector('[data-action="ai-wizard-later"]')?.addEventListener('click', () => {
+    dismissAiWizard()
+    showFlash('나중에 설정에서 AI를 연결할 수 있습니다.')
+    render()
+  })
+  document.querySelector('[data-action="ai-wizard-local"]')?.addEventListener('click', () => {
+    dismissAiWizard()
+    showFlash('AI 없이 일정·메모·알림 등 기본 기능을 사용합니다.')
+    render()
   })
 
   document.querySelector('[data-action="enable-chat-push"]')?.addEventListener('click', () => {

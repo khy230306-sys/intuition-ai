@@ -203,7 +203,7 @@ body[data-jarvis-view='friends'] .orb::after {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  padding: 2px 10px 0;
+  padding: 4px 10px 2px;
   flex-shrink: 0;
 }
 

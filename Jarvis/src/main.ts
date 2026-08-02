@@ -191,7 +191,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.11.1'
+const APP_VERSION = '1.11.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2333,16 +2333,16 @@ function renderChat(): string {
     </details>
   `
 
-  const chatTools = empty
-    ? ''
-    : `
+  // Always show on chat home (empty hero) and in active threads — was hidden when empty
+  const chatTools = `
       <div class="chat-tools">
-        <button type="button" class="ghost-btn tiny" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+        <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
       </div>`
 
   return `
     <section class="panel chat-panel chat-shell">
-      ${empty ? renderHomeWidget() : `${renderHomeRoomsPanel(true)}${chatTools}`}
+      ${empty ? renderHomeWidget() : renderHomeRoomsPanel(true)}
+      ${chatTools}
       <div class="messages chat-thread" id="chat-thread">${body}</div>
       <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,

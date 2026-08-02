@@ -147,42 +147,59 @@ export function buildMusicSearchQuery(text: string, intent: MusicIntentResult, l
   if (intent.track) return intent.track
   if (intent.artist) {
     const songWord =
-      language === 'en' ? 'songs' : language === 'ja' ? '曲' : language === 'vi' ? 'bài hát' : '노래'
+      language === 'en'
+        ? 'songs'
+        : language === 'ja'
+          ? '曲'
+          : language === 'vi'
+            ? 'bài hát'
+            : language === 'zh'
+              ? '歌曲'
+              : '노래'
     return `${intent.artist} ${songWord}`
   }
 
   const moodLabel: Partial<Record<MusicMood, Record<AppLocale, string>>> = {
-    calm: { ko: '조용한 잔잔한', en: 'calm relaxing', ja: '落ち着いた', vi: 'êm dịu' },
+    calm: { ko: '조용한 잔잔한', en: 'calm relaxing', ja: '落ち着いた', vi: 'êm dịu', zh: '安静舒缓' },
     focus: {
       ko: '집중 작업용 가사 없는',
       en: 'focus instrumental study',
       ja: '集中用インスト',
       vi: 'tập trung không lời',
+      zh: '专注工作无歌词',
     },
-    sleep: { ko: '수면 자장가 잔잔한', en: 'sleep lullaby calm', ja: '睡眠・子守唄', vi: 'nhạc ngủ êm' },
-    cafe: { ko: '카페 분위기', en: 'cafe atmosphere', ja: 'カフェ雰囲気', vi: 'nhạc quán cà phê' },
+    sleep: {
+      ko: '수면 자장가 잔잔한',
+      en: 'sleep lullaby calm',
+      ja: '睡眠・子守唄',
+      vi: 'nhạc ngủ êm',
+      zh: '睡眠安眠曲',
+    },
+    cafe: { ko: '카페 분위기', en: 'cafe atmosphere', ja: 'カフェ雰囲気', vi: 'nhạc quán cà phê', zh: '咖啡馆氛围' },
     rain: {
       ko: '비 오는 날 조용한 카페',
       en: 'rainy day calm cafe',
       ja: '雨の日カフェ',
       vi: 'ngày mưa quán cà phê',
+      zh: '雨天安静咖啡馆',
     },
-    workout: { ko: '운동 신나는', en: 'workout upbeat', ja: 'ワークアウト', vi: 'tập gym sôi động' },
-    healing: { ko: '힐링', en: 'healing', ja: '癒し', vi: 'chữa lành' },
-    meditation: { ko: '명상', en: 'meditation', ja: '瞑想', vi: 'thiền' },
-    upbeat: { ko: '신나는', en: 'upbeat', ja: '元気な', vi: 'sôi động' },
-    romantic: { ko: '로맨틱', en: 'romantic', ja: 'ロマンチック', vi: 'lãng mạn' },
-    sad: { ko: '슬픈', en: 'sad', ja: '悲しい', vi: 'buồn' },
-    happy: { ko: '행복한', en: 'happy', ja: '楽しい', vi: 'vui vẻ' },
-    driving: { ko: '드라이브', en: 'driving', ja: 'ドライブ', vi: 'lái xe' },
-    study: { ko: '공부', en: 'study', ja: '勉強', vi: 'học tập' },
+    workout: { ko: '운동 신나는', en: 'workout upbeat', ja: 'ワークアウト', vi: 'tập gym sôi động', zh: '运动动感' },
+    healing: { ko: '힐링', en: 'healing', ja: '癒し', vi: 'chữa lành', zh: '疗愈' },
+    meditation: { ko: '명상', en: 'meditation', ja: '瞑想', vi: 'thiền', zh: '冥想' },
+    upbeat: { ko: '신나는', en: 'upbeat', ja: '元気な', vi: 'sôi động', zh: '欢快' },
+    romantic: { ko: '로맨틱', en: 'romantic', ja: 'ロマンチック', vi: 'lãng mạn', zh: '浪漫' },
+    sad: { ko: '슬픈', en: 'sad', ja: '悲しい', vi: 'buồn', zh: '悲伤' },
+    happy: { ko: '행복한', en: 'happy', ja: '楽しい', vi: 'vui vẻ', zh: '快乐' },
+    driving: { ko: '드라이브', en: 'driving', ja: 'ドライブ', vi: 'lái xe', zh: '驾车' },
+    study: { ko: '공부', en: 'study', ja: '勉強', vi: 'học tập', zh: '学习' },
     kids: {
       ko: '아이 재우는 잔잔한',
       en: 'kids calm lullaby',
       ja: '子ども向け穏やか',
       vi: 'cho trẻ êm dịu',
+      zh: '哄睡安静',
     },
-    relaxing: { ko: '편안한', en: 'relaxing', ja: 'リラックス', vi: 'thư giãn' },
+    relaxing: { ko: '편안한', en: 'relaxing', ja: 'リラックス', vi: 'thư giãn', zh: '放松' },
   }
 
   const parts: string[] = []
@@ -199,14 +216,36 @@ export function buildMusicSearchQuery(text: string, intent: MusicIntentResult, l
 
   if (intent.instrumental === true || intent.instrumental === 'preferred') {
     parts.push(
-      language === 'en' ? 'instrumental' : language === 'ja' ? 'インスト' : language === 'vi' ? 'không lời' : '가사 없는',
+      language === 'en'
+        ? 'instrumental'
+        : language === 'ja'
+          ? 'インスト'
+          : language === 'vi'
+            ? 'không lời'
+            : language === 'zh'
+              ? '纯音乐'
+              : '가사 없는',
     )
   }
 
   const playlist =
-    language === 'en' ? 'playlist' : language === 'ja' ? 'プレイリスト' : language === 'vi' ? 'playlist' : '플레이리스트'
+    language === 'en' || language === 'vi'
+      ? 'playlist'
+      : language === 'ja'
+        ? 'プレイリスト'
+        : language === 'zh'
+          ? '播放列表'
+          : '플레이리스트'
   parts.push(
-    language === 'en' ? 'music' : language === 'ja' ? '音楽' : language === 'vi' ? 'nhạc' : '음악',
+    language === 'en'
+      ? 'music'
+      : language === 'ja'
+        ? '音楽'
+        : language === 'vi'
+          ? 'nhạc'
+          : language === 'zh'
+            ? '音乐'
+            : '음악',
     playlist,
   )
 

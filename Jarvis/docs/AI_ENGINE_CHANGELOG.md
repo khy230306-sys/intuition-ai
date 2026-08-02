@@ -1,5 +1,9 @@
 # AI Engine changelog
 
+## 1.10.4
+
+- Add Chinese (中文 / `zh`) to app display language and room translation language pickers
+
 ## 1.10.3
 
 - Fix space-chat voice repeats: 전송+자동전송 겹침 차단, 입력창에 STT 초안 미기입, 2.5초 동일문구 스토어 디듀프

@@ -2,10 +2,11 @@ import en from './locales/en'
 import ja from './locales/ja'
 import ko from './locales/ko'
 import vi from './locales/vi'
+import zh from './locales/zh'
 import { detectAppLocale, localeNativeName, normalizeAppLocale, supportedAppLocales } from './localeDetector'
 import type { AppLocale, Dictionary, MessageKey } from './types'
 
-const TABLES: Record<AppLocale, Dictionary> = { ko, en, ja, vi }
+const TABLES: Record<AppLocale, Dictionary> = { ko, en, ja, vi, zh }
 
 let current: AppLocale = 'ko'
 

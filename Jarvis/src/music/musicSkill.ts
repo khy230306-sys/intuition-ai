@@ -31,40 +31,44 @@ function msg(
       en: 'Searching for music…',
       ja: '音楽を探しています…',
       vi: 'Đang tìm nhạc…',
+      zh: '正在搜索音乐…',
     },
     ready: {
       ko: '재생할 음악을 준비했어요. 아래 재생 버튼을 눌러 주세요.',
       en: 'Music is ready. Tap the play button below.',
       ja: '再生する音楽を用意しました。下の再生ボタンを押してください。',
       vi: 'Đã chuẩn bị nhạc. Hãy nhấn nút phát bên dưới.',
+      zh: '已准备好音乐。请点击下方播放按钮。',
     },
     focusReady: {
       ko: '가사 없는 집중 음악을 준비했어요. 아래 재생 버튼을 눌러 주세요.',
       en: 'Focus instrumental music is ready. Tap play below.',
       ja: '集中用のインスト音楽を用意しました。再生ボタンを押してください。',
       vi: 'Đã chuẩn bị nhạc tập trung không lời. Nhấn phát bên dưới.',
+      zh: '已准备好专注纯音乐。请点击下方播放按钮。',
     },
     sleepReady: {
       ko: '잔잔한 수면 음악을 준비했어요. 아래 재생 버튼을 눌러 주세요.',
       en: 'Calm sleep music is ready. Tap play below.',
       ja: '穏やかな睡眠用音楽を用意しました。再生ボタンを押してください。',
       vi: 'Đã chuẩn bị nhạc ngủ êm. Nhấn phát bên dưới.',
+      zh: '已准备好舒缓睡眠音乐。请点击下方播放按钮。',
     },
     changed: {
-      ko: '분위기 mid 맞춰 다시 준비했어요. 아래 재생 버튼을 눌러 주세요.',
+      ko: '분위기에 맞춰 다시 준비했어요. 아래 재생 버튼을 눌러 주세요.',
       en: 'Prepared a different mood. Tap play below.',
       ja: '雰囲気を変えて用意しました。再生ボタンを押してください。',
       vi: 'Đã chuẩn bị mood khác. Nhấn phát bên dưới.',
+      zh: '已按氛围重新准备。请点击下方播放按钮。',
     },
     searchOnly: {
       ko: '검색 결과를 준비했어요. 아래 버튼으로 YouTube에서 열어 주세요.',
       en: 'Search is ready. Open it on YouTube with the button below.',
       ja: '検索結果を用意しました。下のボタンでYouTubeを開いてください。',
       vi: 'Đã sẵn sàng kết quả tìm. Mở YouTube bằng nút bên dưới.',
+      zh: '已准备好搜索结果。请用下方按钮在 YouTube 打开。',
     },
   }
-  // Fix typo in ko changed
-  table.changed.ko = '분위기에 맞춰 다시 준비했어요. 아래 재생 버튼을 눌러 주세요.'
   return table[key][locale] || table[key].en
 }
 
@@ -74,13 +78,11 @@ function readyCopy(intent: MusicIntentResult, locale: AppLocale): string {
   if (intent.mood === 'focus' || intent.activity === 'focus') return msg(locale, 'focusReady')
   if (intent.mood === 'sleep' || intent.activity === 'sleep') return msg(locale, 'sleepReady')
   if (intent.mood === 'calm' || intent.mood === 'relaxing') {
-    return locale === 'en'
-      ? 'Found calm music. Tap the play button below.'
-      : locale === 'ja'
-        ? '落ち着いた音楽を見つけました。下の再生ボタンを押してください。'
-        : locale === 'vi'
-          ? 'Đã tìm nhạc êm. Nhấn nút phát bên dưới.'
-          : '잔잔한 음악을 찾았어요. 아래 재생 버튼을 눌러 주세요.'
+    if (locale === 'en') return 'Found calm music. Tap the play button below.'
+    if (locale === 'ja') return '落ち着いた音楽を見つけました。下の再生ボタンを押してください。'
+    if (locale === 'vi') return 'Đã tìm nhạc êm. Nhấn nút phát bên dưới.'
+    if (locale === 'zh') return '已找到舒缓音乐。请点击下方播放按钮。'
+    return '잔잔한 음악을 찾았어요. 아래 재생 버튼을 눌러 주세요.'
   }
   return msg(locale, 'ready')
 }

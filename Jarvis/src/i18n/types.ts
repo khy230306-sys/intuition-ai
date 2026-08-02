@@ -1,4 +1,4 @@
-export type AppLocale = 'ko' | 'en' | 'ja' | 'vi'
+export type AppLocale = 'ko' | 'en' | 'ja' | 'vi' | 'zh'
 
 export type MessageKey =
   | 'nav.chat'

@@ -6,6 +6,8 @@ describe('i18n', () => {
     expect(normalizeAppLocale('ko-KR')).toBe('ko')
     expect(normalizeAppLocale('ja')).toBe('ja')
     expect(normalizeAppLocale('vi-VN')).toBe('vi')
+    expect(normalizeAppLocale('zh-CN')).toBe('zh')
+    expect(normalizeAppLocale('zh-TW')).toBe('zh')
     expect(normalizeAppLocale('fr-FR')).toBe(null)
   })
 
@@ -20,6 +22,9 @@ describe('i18n', () => {
     expect(t('nav.family')).toBe('家族')
     setAppLocale('vi')
     expect(t('common.send')).toBe('Gửi')
+    setAppLocale('zh')
+    expect(t('nav.settings')).toBe('设置')
+    expect(t('settings.language.title')).toBe('应用显示语言')
     initAppLocale('ko')
     expect(t('nav.chat')).toBe('대화')
   })

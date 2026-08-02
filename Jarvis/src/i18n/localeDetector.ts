@@ -1,10 +1,13 @@
 import type { AppLocale } from './types'
 
-const SUPPORTED: AppLocale[] = ['ko', 'en', 'ja', 'vi']
+const SUPPORTED: AppLocale[] = ['ko', 'en', 'ja', 'vi', 'zh']
 
 export function normalizeAppLocale(raw: string | null | undefined): AppLocale | null {
   if (!raw) return null
-  const base = raw.trim().toLowerCase().replace('_', '-').split('-')[0] || ''
+  const lower = raw.trim().toLowerCase().replace('_', '-')
+  // Treat zh-TW / zh-HK / zh-CN as simplified UI locale `zh` for now
+  if (lower === 'zh' || lower.startsWith('zh-')) return 'zh'
+  const base = lower.split('-')[0] || ''
   if ((SUPPORTED as string[]).includes(base)) return base as AppLocale
   return null
 }
@@ -41,6 +44,8 @@ export function localeNativeName(code: AppLocale): string {
       return '日本語'
     case 'vi':
       return 'Tiếng Việt'
+    case 'zh':
+      return '中文'
     default:
       return code
   }

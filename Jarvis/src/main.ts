@@ -156,7 +156,12 @@ import { buildJoinReceipt } from './joinReceipt'
 import { uniqueMemberNames } from './spaceMembers'
 import { fileToChatMedia, mediaCaption, type ChatMedia } from './chatMedia'
 import { fileToProfileAvatar, isAvatarDataUrl } from './profileAvatar'
-import { getHomeSpaceInbox, markSpaceInboxSeen, type SpaceInboxSummary } from './spaceInbox'
+import {
+  getHomeSpaceInbox,
+  invalidateSpaceInboxCache,
+  markSpaceInboxSeen,
+  type SpaceInboxSummary,
+} from './spaceInbox'
 import {
   getAppLocale,
   initAppLocale,
@@ -184,7 +189,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.10.0'
+const APP_VERSION = '1.10.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -404,6 +409,8 @@ const state = {
   familySyncStatus: '대기',
   friendsTab: 'chat' as 'chat' | 'notices' | 'events',
   friendsSyncStatus: '대기',
+  /** Persist home "대화방" panel open/closed across remounts (null = auto). */
+  homeRoomsOpen: null as boolean | null,
   /** Deep-link / QR invite waiting for location gate */
   pendingInvite: null as null | { kind: SpaceKind; code: string },
   prefillJoinCode: '',
@@ -797,6 +804,87 @@ function bootMediaPreviewDelegation(): void {
     const img = btn.querySelector('img')
     openMediaLightbox(src, img?.alt || '사진')
   })
+}
+
+/** One-time nav/tab delegation — survives remounts; faster than rebinding every render. */
+let navDelegationReady = false
+function bootNavDelegation(): void {
+  if (navDelegationReady) return
+  navDelegationReady = true
+
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      const t = e.target as HTMLElement | null
+      const hit = t?.closest?.(
+        '[data-view], [data-family-tab], [data-friends-tab], .home-room-card',
+      ) as HTMLElement | null
+      if (!hit || isNavGuarded(e)) return
+      hit.classList.add('tap-flash')
+      window.setTimeout(() => hit.classList.remove('tap-flash'), 160)
+    },
+    { passive: true },
+  )
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      const t = e.target as HTMLElement | null
+      if (!t) return
+
+      const famTab = t.closest?.('[data-family-tab]') as HTMLElement | null
+      if (famTab) {
+        if (isNavGuarded(e)) {
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        const next = famTab.getAttribute('data-family-tab') as 'chat' | 'notices' | 'events' | null
+        if (!next) return
+        e.preventDefault()
+        goToSpaceTab('family', next, e)
+        return
+      }
+
+      const frTab = t.closest?.('[data-friends-tab]') as HTMLElement | null
+      if (frTab) {
+        if (isNavGuarded(e)) {
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        const next = frTab.getAttribute('data-friends-tab') as 'chat' | 'notices' | 'events' | null
+        if (!next) return
+        e.preventDefault()
+        goToSpaceTab('friends', next, e)
+        return
+      }
+
+      const viewBtn = t.closest?.('[data-view]') as HTMLElement | null
+      if (viewBtn) {
+        if (isNavGuarded(e)) {
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        const next = viewBtn.getAttribute('data-view') as View | null
+        if (!next) return
+        e.preventDefault()
+        goToView(next, e)
+      }
+    },
+    true,
+  )
+
+  document.addEventListener(
+    'toggle',
+    (e) => {
+      const d = e.target as HTMLDetailsElement | null
+      if (!d || !d.matches?.('[data-home-rooms]')) return
+      state.homeRoomsOpen = d.open
+    },
+    true,
+  )
 }
 
 async function scanInviteWithCamera(kind: SpaceKind): Promise<void> {
@@ -1313,7 +1401,9 @@ function appendLiveSpaceChats(kind: 'family' | 'friends'): void {
   }
   if (changed) {
     scrollSpaceChat(kind)
-    void hydrateSpaceTranslations()
+    requestAnimationFrame(() => {
+      void hydrateSpaceTranslations()
+    })
   }
 }
 
@@ -1335,8 +1425,11 @@ function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMe
   if (space === 'family') {
     const msg = postFamilyChat(caption, { media, sourceLanguage })
     if (!msg) return
-    render()
-    scrollSpaceChat('family')
+    invalidateSpaceInboxCache()
+    const form = document.getElementById('family-chat-form') as HTMLFormElement | null
+    form?.reset()
+    // Soft append — avoid full remount + nav ghost-guard after every send
+    softRefreshSpaceChat('family')
     void (async () => {
       await ensureFamilySyncOnce()
       await broadcastFamilyPacket({ type: 'chat', message: msg })
@@ -1345,8 +1438,10 @@ function sendSpaceChat(space: 'family' | 'friends', text: string, media?: ChatMe
   }
   const msg = postFriendsChat(caption, { media, sourceLanguage })
   if (!msg) return
-  render()
-  scrollSpaceChat('friends')
+  invalidateSpaceInboxCache()
+  const form = document.getElementById('friends-chat-form') as HTMLFormElement | null
+  form?.reset()
+  softRefreshSpaceChat('friends')
   void (async () => {
     await ensureFriendsSyncOnce()
     await broadcastFriendsPacket({ type: 'chat', message: msg })
@@ -1976,7 +2071,10 @@ function renderHomeRoomsPanel(compact = false): string {
   const frLabel = inbox.friends.hasRoom
     ? `친구 ${inbox.friends.total}${inbox.friends.unread ? ` · 새 ${inbox.friends.unread}` : ''}`
     : '친구 없음'
-  const openAttr = inbox.unreadTotal > 0 || !compact ? ' open' : ''
+  const autoOpen = inbox.unreadTotal > 0 || !compact
+  const open =
+    state.homeRoomsOpen === null ? autoOpen : state.homeRoomsOpen
+  const openAttr = open ? ' open' : ''
   return `
     <details class="home-rooms ${compact ? 'compact' : ''}" data-home-rooms="1"${openAttr}>
       <summary class="home-rooms-summary">
@@ -3045,13 +3143,38 @@ function renderSettings(): string {
   `
 }
 
-/** Ignore nav/tab taps shortly after remount (iOS ghost-click after innerHTML replace). */
-let navGuardUntil = 0
-function armNavGuard(ms = 480): void {
-  navGuardUntil = Date.now() + ms
+/**
+ * iOS ghost-click guard after innerHTML remount.
+ * Prefer point-based blocking (same finger spot) so nearby nav/tab taps stay instant.
+ */
+let ghostNavGuard = { until: 0, x: -1, y: -1, mode: 'none' as 'none' | 'point' | 'async' }
+
+function armNavGuard(opts?: { x?: number; y?: number; ms?: number; mode?: 'point' | 'async' }): void {
+  const mode = opts?.mode || (opts?.x != null && opts?.y != null ? 'point' : 'async')
+  const ms = opts?.ms ?? (mode === 'point' ? 340 : 260)
+  ghostNavGuard = {
+    until: Date.now() + ms,
+    x: opts?.x ?? -1,
+    y: opts?.y ?? -1,
+    mode,
+  }
 }
-function isNavGuarded(): boolean {
-  return Date.now() < navGuardUntil
+
+function isNavGuarded(ev?: Pick<MouseEvent, 'clientX' | 'clientY'>): boolean {
+  if (Date.now() >= ghostNavGuard.until) return false
+  if (!ev || ghostNavGuard.mode === 'async' || ghostNavGuard.x < 0 || ghostNavGuard.y < 0) {
+    return true
+  }
+  const dx = ev.clientX - ghostNavGuard.x
+  const dy = ev.clientY - ghostNavGuard.y
+  return dx * dx + dy * dy < 52 * 52
+}
+
+type RenderOpts = {
+  /** Pointer that triggered remount — used for point-based ghost guard. */
+  pointer?: { x: number; y: number }
+  /** false = no guard (rare); 'async' = short blanket; default point/async auto */
+  guardNav?: boolean | 'async'
 }
 
 /** Soft-refresh space chat without remounting nav (avoids accidental tab jumps). */
@@ -3061,9 +3184,73 @@ function softRefreshSpaceChat(kind: 'family' | 'friends'): void {
     peers: kind === 'family' ? getFamilyPeerCount() : getFriendsPeerCount(),
   })
   appendLiveSpaceChats(kind)
+  patchNavBadges()
 }
 
-function render(): void {
+/** Update CHAT/FAM/FRD badges without remounting the shell. */
+function patchNavBadges(): void {
+  const nav = document.querySelector('nav.nav')
+  if (!nav) return
+  invalidateSpaceInboxCache()
+  const inbox = getHomeSpaceInbox()
+  const setBadge = (view: View, count: number) => {
+    const btn = nav.querySelector<HTMLButtonElement>(`[data-view="${view}"]`)
+    if (!btn) return
+    const ico = btn.querySelector('.nav-ico')
+    if (!ico) return
+    const existing = ico.querySelector('.nav-badge')
+    if (count > 0) {
+      const label = count > 99 ? '99+' : String(count)
+      if (existing) existing.textContent = label
+      else ico.insertAdjacentHTML('beforeend', `<span class="nav-badge">${label}</span>`)
+    } else if (existing) {
+      existing.remove()
+    }
+  }
+  setBadge('chat', inbox.unreadTotal)
+  setBadge('family', inbox.family.unread)
+  setBadge('friends', inbox.friends.unread)
+}
+
+function goToView(next: View, ev?: MouseEvent): void {
+  const same = next === state.view
+  if (same) {
+    // Re-tapping FAM/FRD jumps to chat tab (faster than hunting sub-tabs)
+    if (next === 'family' && state.familyTab !== 'chat') {
+      state.familyTab = 'chat'
+      render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
+      return
+    }
+    if (next === 'friends' && state.friendsTab !== 'chat') {
+      state.friendsTab = 'chat'
+      render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
+      return
+    }
+    return
+  }
+  stopArcade()
+  state.view = next
+  if (next === 'family') state.familyTab = 'chat'
+  if (next === 'friends') state.friendsTab = 'chat'
+  stopSpeaking()
+  voice.stop()
+  state.listening = false
+  render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
+  if (state.view === 'invest') void refreshQuotes()
+}
+
+function goToSpaceTab(kind: 'family' | 'friends', next: 'chat' | 'notices' | 'events', ev?: MouseEvent): void {
+  if (kind === 'family') {
+    if (next === state.familyTab) return
+    state.familyTab = next
+  } else {
+    if (next === state.friendsTab) return
+    state.friendsTab = next
+  }
+  render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
+}
+
+function render(opts: RenderOpts = {}): void {
   const app = document.getElementById('app')
   if (!app) return
   if (!state.locationReady) {
@@ -3071,6 +3258,7 @@ function render(): void {
     bindLocationGate()
     return
   }
+  invalidateSpaceInboxCache()
   const main =
     state.view === 'chat'
       ? renderChat()
@@ -3091,7 +3279,13 @@ function render(): void {
                     : renderSettings()
   app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
   document.body.dataset.jarvisView = state.view
-  armNavGuard()
+  if (opts.guardNav !== false) {
+    if (opts.guardNav === 'async' || !opts.pointer) {
+      armNavGuard({ mode: 'async', ms: 260 })
+    } else {
+      armNavGuard({ mode: 'point', x: opts.pointer.x, y: opts.pointer.y, ms: 340 })
+    }
+  }
   bind()
   if (state.view === 'games') {
     // remount after DOM ready
@@ -3103,16 +3297,22 @@ function render(): void {
     void ensureFamilySyncOnce()
     if (state.familyTab === 'chat') {
       markSpaceInboxSeen('family')
+      patchNavBadges()
       scrollSpaceChat('family')
-      void hydrateSpaceTranslations()
+      requestAnimationFrame(() => {
+        void hydrateSpaceTranslations()
+      })
     }
   }
   if (state.view === 'friends' && loadFriendsRoom()) {
     void ensureFriendsSyncOnce()
     if (state.friendsTab === 'chat') {
       markSpaceInboxSeen('friends')
+      patchNavBadges()
       scrollSpaceChat('friends')
-      void hydrateSpaceTranslations()
+      requestAnimationFrame(() => {
+        void hydrateSpaceTranslations()
+      })
     }
   }
 }
@@ -3164,15 +3364,14 @@ function patchSpaceHead(
 ): void {
   const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
   if (!room) return
-  const head = document.querySelector(kind === 'family' ? '.family-head' : '.friends-head')
+  const head = document.querySelector(
+    kind === 'family' ? '.family-head:not(.friends-head)' : '.friends-head',
+  )
   if (!head) return
-  const hints = head.querySelectorAll('.hint')
-  if (hints[0]) {
-    hints[0].innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)}`
-  }
-  // Third hint line is "지금 온라인(동료)"
-  if (hints[2]) {
-    hints[2].innerHTML = `지금 온라인(동료) <strong>${info.peers}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다`
+  // Markup is a single hint: "코드 · status · 온라인 N"
+  const hint = head.querySelector('.hint')
+  if (hint) {
+    hint.innerHTML = `코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(info.status)} · 온라인 <strong>${info.peers}</strong>`
   }
 }
 
@@ -3313,37 +3512,7 @@ function bind(): void {
     })
   })
 
-  document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((btn) => {
-    btn.addEventListener('click', (ev) => {
-      if (isNavGuarded()) {
-        ev.preventDefault()
-        ev.stopPropagation()
-        return
-      }
-      const next = btn.dataset.view as View
-      if (!next || next === state.view) return
-      stopArcade()
-      state.view = next
-      stopSpeaking()
-      voice.stop()
-      state.listening = false
-      render()
-      if (state.view === 'invest') void refreshQuotes()
-    })
-  })
-
-  document.querySelectorAll<HTMLButtonElement>('[data-family-tab]').forEach((btn) => {
-    btn.addEventListener('click', (ev) => {
-      if (isNavGuarded()) {
-        ev.preventDefault()
-        return
-      }
-      const next = btn.dataset.familyTab as 'chat' | 'notices' | 'events'
-      if (!next || next === state.familyTab) return
-      state.familyTab = next
-      render()
-    })
-  })
+  // [data-view] / family·friends tabs: document delegation in bootNavDelegation()
 
   document.getElementById('family-create')?.addEventListener('submit', (e) => {
     e.preventDefault()
@@ -3500,19 +3669,6 @@ function bind(): void {
   document.querySelector('[data-action="family-reconnect"]')?.addEventListener('click', () => {
     void ensureFamilySyncOnce(true).then(() => {
       showFlash(state.familySyncStatus)
-      render()
-    })
-  })
-
-  document.querySelectorAll<HTMLButtonElement>('[data-friends-tab]').forEach((btn) => {
-    btn.addEventListener('click', (ev) => {
-      if (isNavGuarded()) {
-        ev.preventDefault()
-        return
-      }
-      const next = btn.dataset.friendsTab as 'chat' | 'notices' | 'events'
-      if (!next || next === state.friendsTab) return
-      state.friendsTab = next
       render()
     })
   })
@@ -4541,6 +4697,7 @@ function bind(): void {
 
 function boot(): void {
   bootMediaPreviewDelegation()
+  bootNavDelegation()
   registerSW({
     immediate: true,
     onNeedRefresh() {
@@ -4599,9 +4756,9 @@ function boot(): void {
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
     ;(window as unknown as { __famRefresh?: number }).__famRefresh = window.setTimeout(() => {
       if (state.view === 'family' && state.familyTab !== 'chat' && !state.shareModal && !state.listening) {
-        render()
+        render({ guardNav: 'async' })
       }
-    }, 500)
+    }, 320)
   })
   setFriendsSyncListener((info) => {
     state.friendsSyncStatus = info.status
@@ -4623,9 +4780,9 @@ function boot(): void {
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)
     ;(window as unknown as { __frdRefresh?: number }).__frdRefresh = window.setTimeout(() => {
       if (state.view === 'friends' && state.friendsTab !== 'chat' && !state.shareModal && !state.listening) {
-        render()
+        render({ guardNav: 'async' })
       }
-    }, 500)
+    }, 320)
   })
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {

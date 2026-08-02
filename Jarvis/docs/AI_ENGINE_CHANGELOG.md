@@ -1,5 +1,13 @@
 # AI Engine changelog
 
+## 1.10.1
+
+- Faster home/room navigation: point-based ghost-click guard (no more dead taps for 480ms on nearby buttons)
+- Document-level nav/tab delegation + instant tap feedback
+- Soft-append family/friends chat sends (no full remount)
+- Inbox short cache + unread scan from newest; fix soft sync header online count
+- Snappier shell/home animations; preserve “대화방” open state
+
 ## 1.10.0
 
 - AIZIO Music Skill (`src/music/`) as an independent module

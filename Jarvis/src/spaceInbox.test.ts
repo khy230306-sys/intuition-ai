@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFamilyRoom, postFamilyChat } from './familyStore'
+import { createFamilyRoom, postFamilyChat, loadFamilyRoom, saveFamilyRoom } from './familyStore'
 import { createFriendsRoom, postFriendsChat } from './friendsStore'
-import { getHomeSpaceInbox, markSpaceInboxSeen } from './spaceInbox'
+import {
+  getHomeSpaceInbox,
+  getSpaceInboxSummary,
+  invalidateSpaceInboxCache,
+  markSpaceInboxSeen,
+} from './spaceInbox'
 
 const store = new Map<string, string>()
 
@@ -21,7 +26,10 @@ vi.stubGlobal('crypto', {
 })
 
 describe('spaceInbox', () => {
-  beforeEach(() => store.clear())
+  beforeEach(() => {
+    store.clear()
+    invalidateSpaceInboxCache()
+  })
 
   it('counts family/friends messages and unread after mark seen', () => {
     createFamilyRoom('우리가족', '나')
@@ -37,5 +45,52 @@ describe('spaceInbox', () => {
     markSpaceInboxSeen('friends')
     const after = getHomeSpaceInbox()
     expect(after.unreadTotal).toBe(0)
+  })
+
+  it('counts only newer other-author messages as unread (from end)', () => {
+    createFamilyRoom('우리가족', '나')
+    const room = loadFamilyRoom()!
+    const now = Date.now()
+    room.messages = [
+      {
+        id: 'a',
+        authorId: 'other',
+        authorName: '형',
+        text: '옛글',
+        createdAt: now - 10_000,
+      },
+      {
+        id: 'b',
+        authorId: room.memberId,
+        authorName: '나',
+        text: '내글',
+        createdAt: now - 5_000,
+      },
+      {
+        id: 'c',
+        authorId: 'other',
+        authorName: '형',
+        text: '새글',
+        createdAt: now,
+      },
+    ]
+    saveFamilyRoom(room)
+    markSpaceInboxSeen('family', now - 6_000)
+    invalidateSpaceInboxCache()
+    const box = getSpaceInboxSummary('family')
+    expect(box.unread).toBe(1)
+    expect(box.recent[0]?.text).toBe('새글')
+  })
+
+  it('reuses short-lived home inbox cache within a paint window', () => {
+    createFamilyRoom('우리가족', '나')
+    postFamilyChat('캐시')
+    const a = getHomeSpaceInbox()
+    const b = getHomeSpaceInbox()
+    expect(a).toBe(b)
+    invalidateSpaceInboxCache()
+    const c = getHomeSpaceInbox()
+    expect(c).not.toBe(a)
+    expect(c.family.total).toBe(a.family.total)
   })
 })

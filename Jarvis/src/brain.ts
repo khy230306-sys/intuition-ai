@@ -857,7 +857,7 @@ export async function think(
   }
   if (/스페이스\s*2|스페이스2|격파|세로\s*슈팅|gyeokpa|space\s*2/i.test(text) && text.length < 28) {
     return {
-      text: '스페이스2 세로 슈팅을 엽니다. 웨이브와 보스가 나오고, 무기 아이템으로 펄스→트윈→스프레드→레이저로 강화됩니다. 라이프·실드·폭탄도 있습니다.',
+      text: '스페이스2 세로 슈팅을 엽니다. 웨이브와 보스가 나오고, 무기 아이템으로 펄스→트윈→스프레드로 강화됩니다. 라이프·실드·폭탄도 있습니다.',
       speak: true,
       view: 'games',
       arcadeId: 'gyeokpa',

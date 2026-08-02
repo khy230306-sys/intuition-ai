@@ -78,12 +78,14 @@ import {
   loadFamilyRoom,
   upcomingFamilyEvents,
 } from './familyStore'
+import { broadcastFamilyPacket } from './familySyncLazy'
 import {
   addFriendsNotice,
   createFriendsRoom,
   loadFriendsRoom,
   upcomingFriendsEvents,
 } from './friendsStore'
+import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
 import type { BrainReply, JarvisSettings } from './types'
 import {
@@ -886,6 +888,7 @@ export async function think(
     const m = text.match(/가족\s*공지\s*(.+)$/)
     if (m) {
       const notice = addFamilyNotice(m[1].slice(0, 40), m[1])
+      if (notice) void broadcastFamilyPacket({ type: 'notice', notice })
       return {
         text: notice ? `공지 등록: ${notice.title}` : '공지 등록에 실패했습니다.',
         speak: true,
@@ -950,6 +953,7 @@ export async function think(
     const m = text.match(/친구\s*공지\s*(.+)$/)
     if (m) {
       const notice = addFriendsNotice(m[1].slice(0, 40), m[1])
+      if (notice) void broadcastFriendsPacket({ type: 'notice', notice })
       return {
         text: notice ? `공지 등록: ${notice.title}` : '공지 등록에 실패했습니다.',
         speak: true,

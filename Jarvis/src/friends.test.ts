@@ -8,6 +8,8 @@ import {
   addFriendsNotice,
   addFriendsEvent,
   leaveFriendsRoom,
+  saveFriendsRoom,
+  upsertMember,
 } from './friendsStore'
 
 const store = new Map<string, string>()
@@ -61,5 +63,18 @@ describe('friends space', () => {
     })
     expect(merged.messages.some((m) => m.text === '첫 친구 메시지')).toBe(true)
     expect(merged.members.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('dedupes members with the same display name', () => {
+    const room = createFriendsRoom('우리', '친구')
+    upsertMember(room, { id: 'dup-1', name: '친구', joinedAt: Date.now() })
+    upsertMember(room, { id: 'dup-2', name: ' 친구 ', joinedAt: Date.now() + 1 })
+    upsertMember(room, { id: 'other', name: '민수', joinedAt: Date.now() })
+    saveFriendsRoom(room)
+    const loaded = loadFriendsRoom()!
+    const names = loaded.members.map((m) => m.name.trim().toLowerCase())
+    expect(names.filter((n) => n === '친구')).toHaveLength(1)
+    expect(names).toContain('민수')
+    expect(loaded.members).toHaveLength(2)
   })
 })

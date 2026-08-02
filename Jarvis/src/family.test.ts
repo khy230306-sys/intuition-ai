@@ -8,6 +8,8 @@ import {
   addFamilyNotice,
   addFamilyEvent,
   leaveFamilyRoom,
+  saveFamilyRoom,
+  upsertMember,
 } from './familyStore'
 
 const store = new Map<string, string>()
@@ -61,5 +63,18 @@ describe('family space', () => {
     })
     expect(merged.messages.some((m) => m.text === '첫 메시지')).toBe(true)
     expect(merged.members.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('dedupes members with the same display name', () => {
+    const room = createFamilyRoom('우리', '주인님')
+    upsertMember(room, { id: 'dup-1', name: '주인님', joinedAt: Date.now() })
+    upsertMember(room, { id: 'dup-2', name: ' 주인님 ', joinedAt: Date.now() + 1 })
+    upsertMember(room, { id: 'other', name: '성규', joinedAt: Date.now() })
+    saveFamilyRoom(room)
+    const loaded = loadFamilyRoom()!
+    const names = loaded.members.map((m) => m.name.trim().toLowerCase())
+    expect(names.filter((n) => n === '주인님')).toHaveLength(1)
+    expect(names).toContain('성규')
+    expect(loaded.members).toHaveLength(2)
   })
 })

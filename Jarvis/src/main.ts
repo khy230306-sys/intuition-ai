@@ -132,8 +132,9 @@ import {
   setFriendsSyncListener,
 } from './friendsSyncLazy'
 import { buildJoinReceipt } from './joinReceipt'
+import { uniqueMemberNames } from './spaceMembers'
 
-const APP_VERSION = '1.9.8'
+const APP_VERSION = '1.9.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -972,6 +973,53 @@ function patchVoiceUi(): void {
   }
 }
 
+/** Keep the latest space chat bubble in view (layout may settle after paint). */
+function scrollSpaceChat(space?: 'family' | 'friends'): void {
+  const kind = space || (state.view === 'friends' ? 'friends' : 'family')
+  const box = document.querySelector(kind === 'friends' ? '.friends-chat' : '.fam-chat')
+  if (!box) return
+  const go = () => {
+    box.scrollTop = box.scrollHeight
+  }
+  go()
+  requestAnimationFrame(() => {
+    go()
+    requestAnimationFrame(go)
+  })
+}
+
+function spaceChatBubbleHtml(
+  m: { id: string; authorId: string; authorName: string; text: string },
+  memberId: string,
+): string {
+  const mine = m.authorId === memberId
+  return `<div class="fam-msg ${mine ? 'mine' : ''}" data-msg-id="${escapeAttr(m.id)}"><span class="meta">${escapeHtml(m.authorName)}</span>${escapeHtml(m.text)}</div>`
+}
+
+/** Append newly arrived chat rows without remounting the composer (typing / MIC). */
+function appendLiveSpaceChats(kind: 'family' | 'friends'): void {
+  const onChat =
+    kind === 'family'
+      ? state.view === 'family' && state.familyTab === 'chat'
+      : state.view === 'friends' && state.friendsTab === 'chat'
+  if (!onChat) return
+  const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
+  const wrap = document.querySelector(kind === 'friends' ? '.friends-chat' : '.fam-chat')
+  if (!room || !wrap) return
+  const existing = new Set(
+    [...wrap.querySelectorAll<HTMLElement>('[data-msg-id]')].map((el) => el.dataset.msgId || ''),
+  )
+  let added = false
+  for (const m of room.messages.slice(-80)) {
+    if (existing.has(m.id)) continue
+    if (wrap.querySelector('.empty')) wrap.innerHTML = ''
+    wrap.insertAdjacentHTML('beforeend', spaceChatBubbleHtml(m, room.memberId))
+    existing.add(m.id)
+    added = true
+  }
+  if (added) scrollSpaceChat(kind)
+}
+
 function sendSpaceChat(space: 'family' | 'friends', text: string): void {
   const trimmed = text.trim()
   if (!trimmed) return
@@ -979,8 +1027,7 @@ function sendSpaceChat(space: 'family' | 'friends', text: string): void {
     const msg = postFamilyChat(trimmed)
     if (!msg) return
     render()
-    const box = document.querySelector('.fam-chat')
-    if (box) box.scrollTop = box.scrollHeight
+    scrollSpaceChat('family')
     void (async () => {
       await ensureFamilySyncOnce()
       await broadcastFamilyPacket({ type: 'chat', message: msg })
@@ -990,8 +1037,7 @@ function sendSpaceChat(space: 'family' | 'friends', text: string): void {
   const msg = postFriendsChat(trimmed)
   if (!msg) return
   render()
-  const box = document.querySelector('.friends-chat')
-  if (box) box.scrollTop = box.scrollHeight
+  scrollSpaceChat('friends')
   void (async () => {
     await ensureFriendsSyncOnce()
     await broadcastFriendsPacket({ type: 'chat', message: msg })
@@ -1817,10 +1863,7 @@ function renderFamily(): string {
   if (state.familyTab === 'chat') {
     const msgs = room.messages
       .slice(-80)
-      .map((m) => {
-        const mine = m.authorId === room.memberId
-        return `<div class="fam-msg ${mine ? 'mine' : ''}"><span class="meta">${escapeHtml(m.authorName)}</span>${escapeHtml(m.text)}</div>`
-      })
+      .map((m) => spaceChatBubbleHtml(m, room.memberId))
       .join('')
     body = `
       <div class="fam-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
@@ -1889,7 +1932,8 @@ function renderFamily(): string {
     `
   }
 
-  const members = room.members.map((m) => escapeHtml(m.name)).join(' · ') || room.memberName
+  const memberNames = uniqueMemberNames(room.members, room.memberName)
+  const members = memberNames.map((n) => escapeHtml(n)).join(' · ')
   const online = getFamilyPeerCount()
 
   return `
@@ -1898,7 +1942,7 @@ function renderFamily(): string {
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)}</p>
-          <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
+          <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
           <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
@@ -1994,10 +2038,7 @@ function renderFriends(): string {
   if (state.friendsTab === 'chat') {
     const msgs = room.messages
       .slice(-80)
-      .map((m) => {
-        const mine = m.authorId === room.memberId
-        return `<div class="fam-msg ${mine ? 'mine' : ''}"><span class="meta">${escapeHtml(m.authorName)}</span>${escapeHtml(m.text)}</div>`
-      })
+      .map((m) => spaceChatBubbleHtml(m, room.memberId))
       .join('')
     body = `
       <div class="fam-chat friends-chat">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
@@ -2066,7 +2107,8 @@ function renderFriends(): string {
     `
   }
 
-  const members = room.members.map((m) => escapeHtml(m.name)).join(' · ') || room.memberName
+  const memberNames = uniqueMemberNames(room.members, room.memberName)
+  const members = memberNames.map((n) => escapeHtml(n)).join(' · ')
   const online = getFriendsPeerCount()
 
   return `
@@ -2075,7 +2117,7 @@ function renderFriends(): string {
         <div>
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)}</p>
-          <p class="hint">등록 멤버 ${room.members.length}명: ${members}</p>
+          <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
           <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
@@ -2248,9 +2290,11 @@ function render(): void {
   }
   if (state.view === 'family' && loadFamilyRoom()) {
     void ensureFamilySyncOnce()
+    if (state.familyTab === 'chat') scrollSpaceChat('family')
   }
   if (state.view === 'friends' && loadFriendsRoom()) {
     void ensureFriendsSyncOnce()
+    if (state.friendsTab === 'chat') scrollSpaceChat('friends')
   }
 }
 
@@ -2497,6 +2541,7 @@ function bind(): void {
     const fd = new FormData(e.target as HTMLFormElement)
     sendSpaceChat('family', String(fd.get('text') || ''))
   })
+  document.getElementById('family-draft')?.addEventListener('focus', () => scrollSpaceChat('family'))
 
   document.getElementById('family-notice-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
@@ -2680,6 +2725,7 @@ function bind(): void {
     const fd = new FormData(e.target as HTMLFormElement)
     sendSpaceChat('friends', String(fd.get('text') || ''))
   })
+  document.getElementById('friends-draft')?.addEventListener('focus', () => scrollSpaceChat('friends'))
 
   document.getElementById('friends-notice-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
@@ -3415,11 +3461,13 @@ function boot(): void {
     // Incoming chat/notice/event data — soft remount
     if (state.listening) {
       patchSpaceHead('family', info)
+      appendLiveSpaceChats('family')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       patchSpaceHead('family', info)
+      appendLiveSpaceChats('family')
       return
     }
     window.clearTimeout((window as unknown as { __famRefresh?: number }).__famRefresh)
@@ -3437,11 +3485,13 @@ function boot(): void {
     }
     if (state.listening) {
       patchSpaceHead('friends', info)
+      appendLiveSpaceChats('friends')
       return
     }
     const active = document.activeElement as HTMLElement | null
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       patchSpaceHead('friends', info)
+      appendLiveSpaceChats('friends')
       return
     }
     window.clearTimeout((window as unknown as { __frdRefresh?: number }).__frdRefresh)

@@ -7,6 +7,7 @@ import type {
 } from './familyTypes'
 import { buildSpaceInviteUrl, parseInviteCode, preferSpaceName } from './inviteJoin'
 import { parseJoinReceipt } from './joinReceipt'
+import { dedupeMembersByName } from './spaceMembers'
 
 const KEY = 'jarvis_family_room_v1'
 const MEMBER_KEY = 'jarvis_family_member_id_v1'
@@ -41,7 +42,15 @@ export function loadFamilyRoom(): FamilyRoom | null {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
-    return JSON.parse(raw) as FamilyRoom
+    const room = JSON.parse(raw) as FamilyRoom
+    const members = dedupeMembersByName(room.members || [], room.memberId)
+    if (members.length !== (room.members || []).length) {
+      room.members = members
+      saveFamilyRoom(room)
+    } else {
+      room.members = members
+    }
+    return room
   } catch {
     return null
   }
@@ -57,7 +66,7 @@ export function saveFamilyRoom(room: FamilyRoom | null): void {
     messages: room.messages.slice(-200),
     notices: room.notices.slice(0, 50),
     events: room.events.slice(0, 100),
-    members: room.members.slice(0, 20),
+    members: dedupeMembersByName(room.members, room.memberId).slice(0, 20),
     updatedAt: Date.now(),
   }
   localStorage.setItem(KEY, JSON.stringify(trimmed))
@@ -234,7 +243,7 @@ export function mergeFamilySnapshot(
     ...local,
     name: preferSpaceName(local.name, remote.name, local.updatedAt, remote.updatedAt),
     code: local.code || remote.code,
-    members: [...membersMap.values()],
+    members: dedupeMembersByName([...membersMap.values()], local.memberId),
     messages: byId(local.messages, remote.messages)
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-200),
@@ -249,18 +258,30 @@ export function mergeFamilySnapshot(
 }
 
 export function upsertMember(room: FamilyRoom, member: FamilyMember): FamilyRoom {
-  const exists = room.members.some((m) => m.id === member.id)
-  room.members = exists
-    ? room.members.map((m) =>
-        m.id === member.id
-          ? {
-              ...m,
-              name: member.name || m.name,
-              push: member.push !== undefined ? member.push : m.push,
-            }
-          : m,
-      )
-    : [...room.members, member]
+  const nameKey = (member.name || '').trim().toLowerCase()
+  const byId = room.members.find((m) => m.id === member.id)
+  const byName =
+    !byId && nameKey
+      ? room.members.find((m) => m.name.trim().toLowerCase() === nameKey)
+      : undefined
+  if (byId || byName) {
+    const targetId = (byId || byName)!.id
+    room.members = room.members.map((m) =>
+      m.id === targetId
+        ? {
+            ...m,
+            // Keep stable id for existing name match; only adopt new id when same id.
+            id: byId ? member.id : m.id,
+            name: member.name || m.name,
+            push: member.push !== undefined ? member.push : m.push,
+            joinedAt: Math.min(m.joinedAt || member.joinedAt, member.joinedAt || m.joinedAt),
+          }
+        : m,
+    )
+  } else {
+    room.members = [...room.members, member]
+  }
+  room.members = dedupeMembersByName(room.members, room.memberId)
   return room
 }
 

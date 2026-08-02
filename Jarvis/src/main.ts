@@ -191,7 +191,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.11.2'
+const APP_VERSION = '1.11.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -199,44 +199,102 @@ let voiceSessionGen = 0
 /** Bumps when a newer chat request supersedes an in-flight think(). */
 let thinkGen = 0
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
+  return new Promise((resolve) => {
+    let done = false
+    const timer = window.setTimeout(() => {
+      if (!done) {
+        done = true
+        resolve(undefined)
+      }
+    }, ms)
+    promise.then(
+      (v) => {
+        if (!done) {
+          done = true
+          window.clearTimeout(timer)
+          resolve(v)
+        }
+      },
+      () => {
+        if (!done) {
+          done = true
+          window.clearTimeout(timer)
+          resolve(undefined)
+        }
+      },
+    )
+  })
+}
+
 async function clearAppCaches(): Promise<void> {
   if ('serviceWorker' in navigator) {
-    const regs = await navigator.serviceWorker.getRegistrations()
-    await Promise.all(
-      regs.map(async (r) => {
-        try {
-          await r.unregister()
-        } catch {
-          /* ignore */
-        }
-      }),
-    )
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(
+        regs.map(async (r) => {
+          try {
+            await r.unregister()
+          } catch {
+            /* ignore */
+          }
+        }),
+      )
+    } catch {
+      /* ignore */
+    }
   }
   if ('caches' in window) {
-    const keys = await caches.keys()
-    await Promise.all(keys.map((k) => caches.delete(k)))
+    try {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    } catch {
+      /* ignore */
+    }
   }
 }
 
+/** Minimal paint so version-upgrade refresh never leaves a blank white #app. */
+function paintBootSplash(message: string): void {
+  const app = document.getElementById('app')
+  if (!app) return
+  app.innerHTML = `
+    <section class="location-gate" data-boot-splash="1" style="min-height:70dvh">
+      <div class="loc-card">
+        <div class="big-orb"></div>
+        <h1>AIZIO</h1>
+        <p class="loc-lead">${escapeHtml(message)}</p>
+        <p class="loc-body muted">잠시만 기다려 주세요…</p>
+      </div>
+    </section>`
+}
+
 async function hardRefreshApp(): Promise<void> {
-  if (sessionStorage.getItem('jarvis.refreshing') === '1') return
+  // Stuck flag from a previous interrupted refresh — clear and force navigate
+  const stuck = sessionStorage.getItem('jarvis.refreshing') === '1'
   sessionStorage.setItem('jarvis.refreshing', '1')
+  paintBootSplash(stuck ? '앱을 다시 불러오는 중…' : '최신 버전으로 업데이트하는 중…')
+  // Mark version before cache wipe so a hung clear cannot loop forever on next boot
+  localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
   try {
-    await clearAppCaches()
+    await withTimeout(clearAppCaches(), 3500)
   } catch {
     /* still reload */
   }
-  // Force next boot to accept the new build even if an old SW served this page
-  localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
-  const url = new URL(window.location.href)
-  url.searchParams.set('_v', APP_VERSION)
-  url.searchParams.set('_t', String(Date.now()))
+  const bust = `_v=${encodeURIComponent(APP_VERSION)}&_t=${Date.now()}`
   // Prefer the locked production host if user somehow opened a snapshot URL
-  if (/\.shipstatic\.com$/i.test(url.hostname) && url.hostname !== 'jarvis-app.shipstatic.com') {
-    window.location.replace(`${FIXED_APP_URL}/?_v=${APP_VERSION}&_t=${Date.now()}`)
+  if (/\.shipstatic\.com$/i.test(window.location.hostname) && window.location.hostname !== 'jarvis-app.shipstatic.com') {
+    window.location.replace(`${FIXED_APP_URL}/?${bust}`)
     return
   }
-  window.location.replace(url.toString())
+  try {
+    const url = new URL(window.location.href)
+    url.searchParams.set('_v', APP_VERSION)
+    url.searchParams.set('_t', String(Date.now()))
+    window.location.replace(url.toString())
+  } catch {
+    window.location.replace(`${FIXED_APP_URL}/?${bust}`)
+  }
 }
 
 /**
@@ -261,8 +319,9 @@ async function updateAppToLatest(): Promise<void> {
   } else {
     showFlash('서버 확인 실패 · 캐시를 비우고 다시 불러옵니다…')
   }
+  paintBootSplash('최신판을 불러오는 중…')
   try {
-    await clearAppCaches()
+    await withTimeout(clearAppCaches(), 3500)
   } catch {
     /* still navigate */
   }
@@ -4780,14 +4839,60 @@ function boot(): void {
     },
   })
   const seen = localStorage.getItem(SEEN_APP_VERSION_KEY)
+  const refreshing = sessionStorage.getItem('jarvis.refreshing') === '1'
   if (seen && seen !== APP_VERSION) {
-    // Old build lingered; clear SW caches once when version changes.
-    void hardRefreshApp()
+    // Old build lingered — refresh caches, but never leave a blank white screen.
+    paintBootSplash('최신 버전으로 업데이트하는 중…')
+    void hardRefreshApp().catch(() => {
+      sessionStorage.removeItem('jarvis.refreshing')
+      localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
+      // Fall through to normal boot if navigation did not happen
+      continueBootAfterRefresh()
+    })
+    // Safety net: if replace never fires (iOS SW hang), continue boot after timeout
+    window.setTimeout(() => {
+      if (document.getElementById('app')?.querySelector('[data-boot-splash="1"]')) {
+        sessionStorage.removeItem('jarvis.refreshing')
+        localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
+        continueBootAfterRefresh()
+      }
+    }, 5000)
     return
   }
+  if (refreshing) {
+    // Reload completed (or interrupted) — clear latch and boot normally
+    sessionStorage.removeItem('jarvis.refreshing')
+  }
   localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
-  sessionStorage.removeItem('jarvis.refreshing')
+  continueBootAfterRefresh()
+}
 
+let bootCoreStarted = false
+
+function continueBootAfterRefresh(): void {
+  if (bootCoreStarted) return
+  bootCoreStarted = true
+  try {
+    bootAppCore()
+  } catch (err) {
+    bootCoreStarted = false
+    const msg = err instanceof Error ? err.message : String(err)
+    paintBootSplash(`시작 오류: ${msg.slice(0, 120)}`)
+    const app = document.getElementById('app')
+    if (app) {
+      app.insertAdjacentHTML(
+        'beforeend',
+        `<p style="text-align:center;margin-top:12px"><button type="button" class="primary-btn" id="boot-retry">다시 시도</button></p>`,
+      )
+      document.getElementById('boot-retry')?.addEventListener('click', () => {
+        sessionStorage.removeItem('jarvis.refreshing')
+        window.location.reload()
+      })
+    }
+  }
+}
+
+function bootAppCore(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
   state.musicSession = loadPersistedMusicSession()

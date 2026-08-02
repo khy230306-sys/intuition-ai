@@ -24,7 +24,7 @@ describe('join receipts', () => {
       memberName: '엄마',
       at: 1700000000000,
     })
-    expect(built.payload).toContain('JARVIS-JOIN|v1|family|EWFVFH|')
+    expect(built.payload).toContain('AIZIO-JOIN|v1|family|EWFVFH|')
     const parsed = parseJoinReceipt(built.message)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return

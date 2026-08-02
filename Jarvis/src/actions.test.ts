@@ -75,7 +75,7 @@ describe('share/copy helpers', () => {
   it('falls back to copy when share is unavailable', async () => {
     stubDom(true)
     vi.stubGlobal('navigator', {})
-    const r = await shareText('hello invite', { title: 'JARVIS' })
+    const r = await shareText('hello invite', { title: 'AIZIO' })
     expect(r.ok).toBe(true)
     expect(r.message).toMatch(/복사/)
   })
@@ -83,11 +83,11 @@ describe('share/copy helpers', () => {
   it('uses native share when available', async () => {
     const share = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { share })
-    const r = await shareText('invite body', { title: 'JARVIS 친구 초대', url: 'https://example.com' })
+    const r = await shareText('invite body', { title: 'AIZIO 친구 초대', url: 'https://example.com' })
     expect(r.ok).toBe(true)
     expect(share).toHaveBeenCalledWith({
       text: 'invite body',
-      title: 'JARVIS 친구 초대',
+      title: 'AIZIO 친구 초대',
       url: 'https://example.com',
     })
   })
@@ -216,7 +216,7 @@ describe('quick-run open helpers', () => {
     expect(clicks).toContain('camera-input')
   })
 
-  it('routes settings to in-app JARVIS settings view', () => {
+  it('routes settings to in-app AIZIO settings view', () => {
     const r = openJarvisSettings()
     expect(r.ok).toBe(true)
     expect(r.view).toBe('settings')

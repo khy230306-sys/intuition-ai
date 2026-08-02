@@ -11,7 +11,9 @@ import { QR_SAFE_CHARS } from './shareKit'
 const BOARD_KEY = 'jarvis.arcade.board.v1'
 const NAME_KEY = 'jarvis.arcade.playerName.v1'
 const PLAYER_ID_KEY = 'jarvis.arcade.playerId.v1'
-const CARD_PREFIX = 'JARVIS-ARCADE'
+const CARD_PREFIX = 'AIZIO-ARCADE'
+/** Accept legacy JARVIS-ARCADE cards from older shares. */
+const CARD_PREFIXES = [CARD_PREFIX, 'JARVIS-ARCADE'] as const
 
 export type ArcadeRankEntry = {
   /** Stable key: `${playerId}:${game}` */
@@ -201,16 +203,18 @@ export function extractScoreCardPayload(raw: string): string {
 
   // Prefer an explicit line containing the card
   for (const line of text.split(/\r?\n/)) {
-    const idx = line.indexOf(`${CARD_PREFIX}|`)
-    if (idx >= 0) {
-      // Stop at whitespace after the card (Kakao sometimes appends junk)
-      return line.slice(idx).trim().split(/\s+/)[0]
+    for (const prefix of CARD_PREFIXES) {
+      const idx = line.indexOf(`${prefix}|`)
+      if (idx >= 0) {
+        // Stop at whitespace after the card (Kakao sometimes appends junk)
+        return line.slice(idx).trim().split(/\s+/)[0]
+      }
     }
   }
 
   // Fallback: search anywhere in the blob
   const m = text.match(
-    /JARVIS-ARCADE\|v1\|[A-Za-z0-9_-]+\|\d+\|\d+\|[^|\n]{0,32}\|[A-Za-z0-9._-]{2,64}\|\d{10,}/,
+    /(?:AIZIO|JARVIS)-ARCADE\|v1\|[A-Za-z0-9_-]+\|\d+\|\d+\|[^|\n]{0,32}\|[A-Za-z0-9._-]{2,64}\|\d{10,}/,
   )
   return m ? m[0] : text
 }
@@ -249,8 +253,8 @@ export function parseScoreCard(raw: string): { ok: true; card: ScoreCard } | { o
   }
 
   const parts = text.split('|')
-  if (parts[0] !== CARD_PREFIX || parts[1] !== 'v1' || parts.length < 8) {
-    return { ok: false, message: 'JARVIS 아케이드 기록 코드가 아닙니다. 공유 문구 전체를 붙여넣어도 됩니다.' }
+  if (!CARD_PREFIXES.includes(parts[0] as (typeof CARD_PREFIXES)[number]) || parts[1] !== 'v1' || parts.length < 8) {
+    return { ok: false, message: 'AIZIO 아케이드 기록 코드가 아닙니다. 공유 문구 전체를 붙여넣어도 됩니다.' }
   }
   const game = parts[2]
   const score = Number(parts[3])
@@ -292,7 +296,7 @@ export function buildMyScoreCard(game: ArcadeId): { card: ScoreCard; payload: st
   const payload = encodeScoreCard(card)
   const title = ARCADE_META[game].title
   const message = [
-    `JARVIS 아케이드 기록 · ${title}`,
+    `AIZIO 아케이드 기록 · ${title}`,
     `${card.name} · Lv.${card.level} · SCORE ${card.score}`,
     '',
     '친구 기기 게임 탭 → 친구 기록 받기 에 붙여넣기',

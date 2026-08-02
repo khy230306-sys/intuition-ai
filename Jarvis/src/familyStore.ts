@@ -304,14 +304,14 @@ export function upsertMember(room: FamilyRoom, member: FamilyMember): FamilyRoom
 export function familyInviteText(room: FamilyRoom, appUrl: string): string {
   const link = buildSpaceInviteUrl('family', room.code, appUrl)
   return [
-    `JARVIS 가족 초대`,
+    `AIZIO 가족 초대`,
     `공간: ${room.name}`,
     `코드: ${room.code}`,
     '',
     '링크를 열고 «승인하고 입장»만 누르면 끝입니다.',
     link,
     '',
-    '초대자도 JARVIS를 잠시 열어 두면 멤버·대화가 자동으로 연결됩니다.',
+    '초대자도 AIZIO를 잠시 열어 두면 멤버·대화가 자동으로 연결됩니다.',
   ].join('\n')
 }
 

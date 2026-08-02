@@ -33,7 +33,7 @@ const ja: Dictionary = {
   'chat.translation.failed': '翻訳できないため原文を表示します。',
   'chat.translation.pending': '翻訳中…',
   'chat.translation.sameLang': '同じ言語',
-  'global.title': 'JARVIS Global Conversation',
+  'global.title': 'AIZIO Global Conversation',
   'global.subtitle': '家族・友達ルームの自動翻訳（端末間P2P）',
   'global.noCentralServer': '中央のグローバルチャットサーバーには未接続です。偽の「接続中」は表示しません。',
   'global.usesFamilyFriends': '実際の会話は既存の家族・友達ルームを使います。下の設定は翻訳表示のみ追加します。',

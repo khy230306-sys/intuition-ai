@@ -120,7 +120,7 @@ function armTimer(alarm: LocalAlarm): void {
 export function scheduleAlarm(title: string, body: string, whenAt: number): LocalAlarm {
   const alarm: LocalAlarm = {
     id: crypto.randomUUID(),
-    title: title.trim() || 'JARVIS 알림',
+    title: title.trim() || 'AIZIO 알림',
     body: body.trim() || title,
     whenAt,
     fired: false,
@@ -245,6 +245,6 @@ export function buildAlarmFromText(text: string, now = Date.now()): { alarm: Loc
   const parsed = parseWhenFromText(text, now)
   if (!parsed) return null
   const body = parsed.rest || '알림 시간입니다'
-  const alarm = scheduleAlarm('JARVIS 알림', body, parsed.whenAt)
+  const alarm = scheduleAlarm('AIZIO 알림', body, parsed.whenAt)
   return { alarm, whenLabel: parsed.label }
 }

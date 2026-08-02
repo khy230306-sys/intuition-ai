@@ -130,7 +130,7 @@ async function main() {
   await pageB.waitForSelector('#friends-join', { timeout: 8000 })
   await pageB.waitForSelector('#friends-join textarea[name="code"]')
   await pageB.waitForSelector('#friends-join input[name="member"]')
-  const paste = `JARVIS 친구 공간 초대\n이름: 테스트방\n코드: ${code}\n\nhttps://example.com/?friends=${code}`
+  const paste = `AIZIO 친구 공간 초대\n이름: 테스트방\n코드: ${code}\n\nhttps://example.com/?friends=${code}`
   await pageB.$eval(
     '#friends-join textarea[name="code"]',
     (el, value) => {

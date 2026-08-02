@@ -77,7 +77,13 @@ export function parseInviteCode(raw: string): string | null {
   }
   const loose = upper.match(/[A-Z0-9]{4,8}/g) || []
   for (const token of loose) {
-    if (isValidInviteCode(token) && !token.startsWith('JARVIS') && token !== 'HTTPS' && token !== 'HTTP') {
+    if (
+      isValidInviteCode(token) &&
+      !token.startsWith('AIZIO') &&
+      !token.startsWith('JARVIS') &&
+      token !== 'HTTPS' &&
+      token !== 'HTTP'
+    ) {
       return token
     }
   }

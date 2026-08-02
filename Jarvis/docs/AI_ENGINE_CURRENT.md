@@ -1,4 +1,4 @@
-# JARVIS iPhone PWA — AI Engine Current State
+# AIZIO iPhone PWA — AI Engine Current State
 
 Checkpoint: `8a0c559` · branch `cursor/iphone-jarvis-6b16` · app `jarvis-iphone@1.9.11`
 

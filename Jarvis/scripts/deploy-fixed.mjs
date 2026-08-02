@@ -1,5 +1,5 @@
 /**
- * Deploy JARVIS to the FIXED ShipStatic platform domain.
+ * Deploy AIZIO to the FIXED ShipStatic platform domain.
  *
  * ALWAYS use this address with users — never share random snapshot URLs:
  *   https://jarvis-app.shipstatic.com

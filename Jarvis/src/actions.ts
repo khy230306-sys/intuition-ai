@@ -322,7 +322,7 @@ export function openCamera(): ActionResult {
 export function openJarvisSettings(): ActionResult {
   return {
     ok: true,
-    message: 'JARVIS 설정으로 이동합니다.',
+    message: 'AIZIO 설정으로 이동합니다.',
     view: 'settings' as View,
   }
 }

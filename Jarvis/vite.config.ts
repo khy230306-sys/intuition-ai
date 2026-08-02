@@ -35,9 +35,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'favicon.svg', 'splash.svg', 'quote-snapshot.json'],
       manifest: {
-        name: 'JARVIS',
-        short_name: 'JARVIS',
-        description: 'iPhone 만능 AI 비서 — 번역 잠금, 음성, 투자, 기억',
+        name: 'AIZIO',
+        short_name: 'AIZIO',
+        description: '아이지오 AIZIO — iPhone 만능 AI 비서 · 번역 잠금, 음성, 투자, 기억',
         theme_color: '#0b121c',
         background_color: '#0b121c',
         display: 'standalone',

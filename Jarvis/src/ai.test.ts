@@ -60,7 +60,7 @@ describe('jarvis brain investing + life', () => {
   it('answers briefing and help', async () => {
     const { think } = await import('./brain')
     const brief = await think('브리핑')
-    expect(brief.text).toMatch(/JARVIS|할 일|투자/)
+    expect(brief.text).toMatch(/AIZIO|할 일|투자/)
     const help = await think('도움말')
     expect(help.text).toContain('투자')
   })

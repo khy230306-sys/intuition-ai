@@ -157,7 +157,7 @@ export interface ActionResult {
   ok: boolean
   message: string
   opened?: string
-  /** Switch JARVIS tab after the action (e.g. settings). */
+  /** Switch AIZIO tab after the action (e.g. settings). */
   view?: View
 }
 

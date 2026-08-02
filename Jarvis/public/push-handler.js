@@ -1,8 +1,8 @@
 /* global self, clients */
-/** Imported by Workbox SW — handles Web Push while JARVIS is backgrounded/closed (iOS Home Screen PWA). */
+/** Imported by Workbox SW — handles Web Push while AIZIO is backgrounded/closed (iOS Home Screen PWA). */
 
 self.addEventListener('push', (event) => {
-  let title = 'JARVIS'
+  let title = 'AIZIO'
   let body = '새 알림이 있습니다.'
   let data = { view: 'family', kind: 'family' }
   let tag = 'jarvis-chat'

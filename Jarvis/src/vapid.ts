@@ -1,4 +1,4 @@
-/** Shared VAPID keys for JARVIS family/friends Web Push (client-side send). */
+/** Shared VAPID keys for AIZIO family/friends Web Push (client-side send). */
 
 export const VAPID_PUBLIC_KEY =
   'BKupo7Y_efhJskLSk_xdJwyviAfqjjnFUPdlRVnSvWd6AXQJCELFn-T01U7BOCpOvU9DDUUk-xLhjfjv8Lozis8'

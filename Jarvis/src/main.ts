@@ -167,7 +167,7 @@ import {
   translationSourceLabel,
 } from './globalChat'
 
-const APP_VERSION = '1.9.13'
+const APP_VERSION = '1.9.14'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -270,7 +270,7 @@ function renderUpdateCard(compact = false): string {
         <strong>앱 업데이트</strong>
         <span class="ver">이 기기 v${APP_VERSION}</span>
       </div>
-      <p class="hint">${status}. 홈 화면에 추가한 JARVIS도 이 버튼으로 최신판을 받을 수 있습니다.</p>
+      <p class="hint">${status}. 홈 화면에 추가한 AIZIO도 이 버튼으로 최신판을 받을 수 있습니다.</p>
       <button type="button" class="primary-btn update-btn" data-action="app-update">업데이트</button>
       <button type="button" class="ghost-btn tiny" data-action="check-update">최신 버전만 확인</button>
     </div>`
@@ -500,7 +500,7 @@ async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   state.shareQrSvg = ''
   state.shareStatus = ''
   state.shareStatusOk = null
-  state.shareHint = `친구가 링크를 열고 «승인하고 입장»만 누르면 끝입니다.\n초대자도 JARVIS를 열어 두면 멤버가 자동 표시됩니다.\n${link}`
+  state.shareHint = `친구가 링크를 열고 «승인하고 입장»만 누르면 끝입니다.\n초대자도 AIZIO를 열어 두면 멤버가 자동 표시됩니다.\n${link}`
   render()
   try {
     // Deep-link URL only — phone camera can open it
@@ -1238,7 +1238,7 @@ function startSpaceDictation(space: 'family' | 'friends'): void {
     if (!micOk) {
       state.listening = false
       state.voiceHint = ''
-      showFlash('마이크 권한이 필요합니다. 설정 → JARVIS/Safari → 마이크 허용')
+      showFlash('마이크 권한이 필요합니다. 설정 → AIZIO/Safari → 마이크 허용')
       patchVoiceUi()
       return
     }
@@ -1310,8 +1310,8 @@ function renderBrand(): string {
       <div class="brand">
         <div class="orb" aria-hidden="true"></div>
         <div>
-          <h1>JARVIS</h1>
-          <p>${loadInterpretMode().active ? `실시간 통역 · MIC ${escapeHtml(state.listenLang)}` : `만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}`}</p>
+          <h1>AIZIO</h1>
+          <p>${loadInterpretMode().active ? `실시간 통역 · MIC ${escapeHtml(state.listenLang)}` : `아이지오 · 만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}`}</p>
         </div>
       </div>
       <div class="status-pill">${status}</div>
@@ -1341,7 +1341,7 @@ function renderLocationGate(): string {
   const invite = state.pendingInvite
   const inviteBlock = invite
     ? `<p class="loc-invite"><strong>${invite.kind === 'friends' ? '친구' : '가족'} 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
-        <p class="loc-body">한 번만 승인하면 JARVIS ${invite.kind === 'friends' ? '친구' : '가족'} 공간으로 바로 입장합니다.</p>
+        <p class="loc-body">한 번만 승인하면 AIZIO ${invite.kind === 'friends' ? '친구' : '가족'} 공간으로 바로 입장합니다.</p>
         <button type="button" class="primary-btn loc-invite-go" data-action="accept-invite-start" ${
           state.locationBusy ? 'disabled' : ''
         }>승인하고 입장</button>`
@@ -1350,12 +1350,12 @@ function renderLocationGate(): string {
     <section class="location-gate">
       <div class="loc-card">
         <div class="big-orb"></div>
-        <h1>JARVIS</h1>
+        <h1>AIZIO</h1>
         <p class="loc-lead">위치를 허용하면 날씨·주변 기능이 정확해집니다.</p>
         <p class="loc-body">
           홈 화면에 추가한 뒤 앱을 실행하면,<br/>
           위치 허용을 권장합니다.<br/>
-          <span class="muted">위치는 이 아이폰의 JARVIS 안에서만 쓰입니다.</span>
+          <span class="muted">위치는 이 아이폰의 AIZIO 안에서만 쓰입니다.</span>
         </p>
         ${err}
         ${inviteBlock}
@@ -1369,7 +1369,7 @@ function renderLocationGate(): string {
         }>
           오프라인으로 계속 (대화·투자·생활·가족·친구·게임)
         </button>
-        <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/JARVIS → 허용</p>
+        <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/AIZIO → 허용</p>
         <p class="translate-hint">v${APP_VERSION}</p>
       </div>
     </section>
@@ -1468,7 +1468,7 @@ function renderArcadeRank(): string {
   const importBlock = state.arcadeImportOpen
     ? `
       <form id="arcade-import-form" class="arcade-import">
-        <textarea name="code" rows="4" placeholder="카톡으로 받은 기록 문구 전체, 또는 JARVIS-ARCADE|… 코드" required></textarea>
+        <textarea name="code" rows="4" placeholder="카톡으로 받은 기록 문구 전체, 또는 AIZIO-ARCADE|… 코드" required></textarea>
         <div class="row-btns">
           <button type="submit" class="primary-btn">순위 반영</button>
           <button type="button" class="ghost-btn" data-action="close-arcade-import">취소</button>
@@ -1712,7 +1712,7 @@ function renderChat(): string {
       ? `
         <div class="hero-empty">
           <div class="big-orb"></div>
-          <h2>JARVIS</h2>
+          <h2>AIZIO</h2>
           <p>아래 <strong>번역</strong> 버튼을 누르면<br/>스톱할 때까지 한국말만 그 언어로 번역합니다.</p>
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
@@ -1723,7 +1723,7 @@ function renderChat(): string {
           .map(
             (m) => `
           <div class="msg ${m.role}">
-            <span class="meta">${m.role === 'user' ? 'YOU' : 'JARVIS'}</span>
+            <span class="meta">${m.role === 'user' ? 'YOU' : 'AIZIO'}</span>
             ${escapeHtml(m.text)}
           </div>
         `,
@@ -2249,7 +2249,7 @@ function renderFamily(): string {
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)}</p>
           <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('family', room.code)}
@@ -2265,7 +2265,7 @@ function renderFamily(): string {
         </div>
         <form id="family-join-receipt" class="settings-form">
           <label>가족이 보낸 참여 확인 문구
-            <textarea name="receipt" rows="3" placeholder="JARVIS 가족 참여 확인 … 붙여넣기" required></textarea>
+            <textarea name="receipt" rows="3" placeholder="AIZIO 가족 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
@@ -2282,7 +2282,7 @@ function renderFamily(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">둘 다 JARVIS를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
+      <p class="hint">둘 다 AIZIO를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }
@@ -2431,7 +2431,7 @@ function renderFriends(): string {
           <h2 class="section-title">${escapeHtml(room.name)}</h2>
           <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)}</p>
           <p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>
-          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다</p>
+          <p class="hint">지금 온라인(동료) <strong>${online}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다</p>
         </div>
       </div>
       ${inviteSwitchBanner('friends', room.code)}
@@ -2447,7 +2447,7 @@ function renderFriends(): string {
         </div>
         <form id="friends-join-receipt" class="settings-form">
           <label>친구가 보낸 참여 확인 문구
-            <textarea name="receipt" rows="3" placeholder="JARVIS 친구 참여 확인 … 붙여넣기" required></textarea>
+            <textarea name="receipt" rows="3" placeholder="AIZIO 친구 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
@@ -2464,7 +2464,7 @@ function renderFriends(): string {
       </details>
       <div class="family-tabs">${tabs}</div>
       ${body}
-      <p class="hint">둘 다 JARVIS를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
+      <p class="hint">둘 다 AIZIO를 열어 두면 대화가 바로 전달됩니다. 상태바에 «대화중계 ON»이 보이면 연결됨.</p>
     </section>
   `
 }
@@ -2473,7 +2473,7 @@ function renderActions(): string {
   return `
     <section class="panel view-scroll">
       <h2 class="section-title">QUICK RUN</h2>
-      <p class="hint">버튼을 누르면 앱·웹·카메라·JARVIS 설정으로 바로 연결됩니다. 카카오톡·메모·캘린더는 iPhone에 해당 앱이 있어야 열립니다.</p>
+      <p class="hint">버튼을 누르면 앱·웹·카메라·AIZIO 설정으로 바로 연결됩니다. 카카오톡·메모·캘린더는 iPhone에 해당 앱이 있어야 열립니다.</p>
       <div class="action-grid">
         <button type="button" class="action-card" data-action="open-share-app">
           <span>QR</span>
@@ -2700,7 +2700,7 @@ function patchSpaceHead(
   }
   // Third hint line is "지금 온라인(동료)"
   if (hints[2]) {
-    hints[2].innerHTML = `지금 온라인(동료) <strong>${info.peers}</strong>명 · 둘 다 JARVIS를 열어 두면 자동 재연결됩니다`
+    hints[2].innerHTML = `지금 온라인(동료) <strong>${info.peers}</strong>명 · 둘 다 AIZIO를 열어 두면 자동 재연결됩니다`
   }
 }
 
@@ -2763,7 +2763,7 @@ function bindLocationGate(): void {
     state.locationError = ''
     state.locationBusy = false
     const invited = applyPendingInvite()
-    if (invited === 'joined') showFlash('초대 승인 · JARVIS 입장 완료')
+    if (invited === 'joined') showFlash('초대 승인 · AIZIO 입장 완료')
     else if (invited === 'needs-switch') {
       /* applyPendingInvite already flashed switch banner */
     } else if (invited === 'failed') {
@@ -2789,7 +2789,7 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
   try {
     const perm = await queryPermissionState()
     if (perm === 'denied') {
-      throw new Error('위치가 차단되어 있습니다. 설정 → 위치 서비스에서 JARVIS/Safari를 허용해 주세요.')
+      throw new Error('위치가 차단되어 있습니다. 설정 → 위치 서비스에서 AIZIO/Safari를 허용해 주세요.')
     }
     const fix = await requestLocation()
     state.lastFix = fix
@@ -2954,7 +2954,7 @@ function bind(): void {
       memberId: room.memberId,
       memberName: room.memberName,
     })
-    void shareText(built.message, { title: 'JARVIS 가족 참여 확인' }).then((r) => {
+    void shareText(built.message, { title: 'AIZIO 가족 참여 확인' }).then((r) => {
       if (r.ok) {
         showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
@@ -3151,7 +3151,7 @@ function bind(): void {
       memberId: room.memberId,
       memberName: room.memberName,
     })
-    void shareText(built.message, { title: 'JARVIS 친구 참여 확인' }).then((r) => {
+    void shareText(built.message, { title: 'AIZIO 친구 참여 확인' }).then((r) => {
       if (r.ok) {
         showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
@@ -3211,7 +3211,7 @@ function bind(): void {
     }
     // WebView / blocked clipboard → select visible text, then try native share
     selectVisibleInviteText(kind === 'text' ? text : `${label}\n${payload}`)
-    const title = space === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대'
+    const title = space === 'family' ? 'AIZIO 가족 초대' : 'AIZIO 친구 초대'
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       void navigator
         .share({ title, text: payload, url: kind === 'text' ? link : undefined })
@@ -3232,7 +3232,7 @@ function bind(): void {
       setShareStatus('초대 문구가 없습니다.', false)
       return
     }
-    const title = kind === 'family' ? 'JARVIS 가족 초대' : 'JARVIS 친구 초대'
+    const title = kind === 'family' ? 'AIZIO 가족 초대' : 'AIZIO 친구 초대'
     const url = buildSpaceInviteUrl(kind, code, appShareUrl())
     void shareText(text, { title, url }).then((r) => setShareStatus(r.message, r.ok))
   })
@@ -3432,7 +3432,7 @@ function bind(): void {
       if (!micOk) {
         state.listening = false
         state.voiceHint = ''
-        showFlash('마이크 권한이 필요합니다. 설정 → JARVIS/Safari → 마이크 허용')
+        showFlash('마이크 권한이 필요합니다. 설정 → AIZIO/Safari → 마이크 허용')
         patchVoiceUi()
         return
       }
@@ -3829,7 +3829,7 @@ function bind(): void {
       if (perm !== 'granted') {
         showFlash(
           perm === 'denied'
-            ? '알림이 차단되어 있습니다. iPhone 설정 → JARVIS(또는 Safari) → 알림을 켜 주세요.'
+            ? '알림이 차단되어 있습니다. iPhone 설정 → AIZIO(또는 Safari) → 알림을 켜 주세요.'
             : '알림 권한을 허용해 주세요.',
         )
         render()

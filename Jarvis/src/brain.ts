@@ -98,7 +98,7 @@ import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './wea
 
 function helpText(name: string): string {
   return [
-    `${name}, JARVIS 만능 비서입니다.`,
+    `${name}, AIZIO 만능 비서입니다.`,
     '',
     '【일상】 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【가족】 단체대화 · 공지 · 일정 (하단 가족 탭 / 코드 공유)',
@@ -666,7 +666,7 @@ async function handleLife(text: string): Promise<BrainReply | null> {
 
   if (/안녕|하이|헬로|hello|hi\b/.test(text)) {
     return {
-      text: `안녕하세요, ${name}. JARVIS입니다. "브리핑" 또는 "삼성전자 시세"로 시작해 보세요.`,
+      text: `안녕하세요, ${name}. AIZIO입니다. "브리핑" 또는 "삼성전자 시세"로 시작해 보세요.`,
       speak: true,
     }
   }

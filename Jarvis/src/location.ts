@@ -72,7 +72,7 @@ export function requestLocation(timeoutMs = 20000): Promise<GeoFix> {
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          reject(new Error('위치 권한이 거부되었습니다. 설정 → Safari/JARVIS → 위치 → 허용으로 바꿔 주세요.'))
+          reject(new Error('위치 권한이 거부되었습니다. 설정 → Safari/AIZIO → 위치 → 허용으로 바꿔 주세요.'))
         } else if (err.code === err.TIMEOUT) {
           reject(new Error('위치를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.'))
         } else {

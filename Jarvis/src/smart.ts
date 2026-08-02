@@ -163,5 +163,5 @@ export function decide(optionsText: string): string {
     return Math.random() < 0.5 ? '앞면' : '뒷면'
   }
   const pick = parts[Math.floor(Math.random() * parts.length)]
-  return `선택지 ${parts.length}개 중 JARVIS 추천: 「${pick}」\n최종 결정은 ${loadSettings().displayName}의 몫입니다.`
+  return `선택지 ${parts.length}개 중 AIZIO 추천: 「${pick}」\n최종 결정은 ${loadSettings().displayName}의 몫입니다.`
 }

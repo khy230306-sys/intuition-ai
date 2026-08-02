@@ -3,5 +3,5 @@
   <circle cx="645" cy="1200" r="180" stroke="#00d2be" stroke-width="6" opacity="0.85"/>
   <circle cx="645" cy="1200" r="120" stroke="#5ac8ff" stroke-width="4" opacity="0.55" stroke-dasharray="10 8"/>
   <path d="M645 1080 L725 1200 L645 1320 L565 1200 Z" fill="#00d2be"/>
-  <text x="645" y="1520" text-anchor="middle" fill="#e8eef7" font-family="Orbitron, sans-serif" font-size="72" font-weight="700" letter-spacing="8">JARVIS</text>
+  <text x="645" y="1520" text-anchor="middle" fill="#e8eef7" font-family="Orbitron, sans-serif" font-size="72" font-weight="700" letter-spacing="8">AIZIO</text>
 </svg>

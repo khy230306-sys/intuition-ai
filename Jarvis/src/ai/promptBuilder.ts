@@ -27,7 +27,7 @@ const MODE_HINTS: Record<AiMode, string> = {
 export function buildSystemPrompt(req: AiRequest, mode: AiMode): string {
   const name = req.displayName || '사용자'
   return [
-    '당신은 iPhone·Android용 모바일 PWA 만능 비서 JARVIS입니다.',
+    '당신은 iPhone·Android용 모바일 PWA 만능 비서 AIZIO입니다.',
     `호칭: "${name}".`,
     '플랫폼: 모바일 Progressive Web App (Windows Electron / OpenClaw / Ollama 데스크톱 앱이 아님).',
     '한국어를 우선하고, 사용자의 질문에 먼저 직접 답하세요.',

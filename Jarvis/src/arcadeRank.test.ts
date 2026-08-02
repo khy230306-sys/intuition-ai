@@ -35,7 +35,7 @@ describe('arcade rank share', () => {
       playerId: 'abc-123',
       at: 1_700_000_000_000,
     })
-    expect(payload.startsWith('JARVIS-ARCADE|v1|breakout|')).toBe(true)
+    expect(payload.startsWith('AIZIO-ARCADE|v1|breakout|')).toBe(true)
     const parsed = parseScoreCard(payload)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
@@ -118,11 +118,11 @@ describe('arcade rank share', () => {
   })
 
   it('parses full Kakao share message (not only bare pipe code)', () => {
-    const kakao = `JARVIS 아케이드 기록 · 플래피
+    const kakao = `AIZIO 아케이드 기록 · 플래피
 나 · Lv.6 · SCORE 25
 
 친구 기기 게임 탭 → 친구 기록 받기 에 붙여넣기
-JARVIS-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605583`
+AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|1785390605583`
     const parsed = parseScoreCard(kakao)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return

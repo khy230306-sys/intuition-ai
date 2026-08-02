@@ -96,7 +96,7 @@ describe('local alarms', () => {
     setAlarmUiHandler((a) => {
       fired = a.body
     })
-    scheduleAlarm('JARVIS', '테스트 알림', now + 2000)
+    scheduleAlarm('AIZIO', '테스트 알림', now + 2000)
     expect(fired).toBe('')
     vi.advanceTimersByTime(2100)
     expect(fired).toBe('테스트 알림')

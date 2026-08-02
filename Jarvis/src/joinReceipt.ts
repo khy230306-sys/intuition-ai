@@ -2,7 +2,7 @@
 
 import type { SpaceKind } from './inviteJoin'
 
-export const JOIN_RECEIPT_PREFIX = 'JARVIS-JOIN'
+export const JOIN_RECEIPT_PREFIX = 'AIZIO-JOIN'
 
 export type JoinReceipt = {
   v: 1
@@ -39,7 +39,7 @@ export function buildJoinReceipt(input: {
   ].join('|')
   const label = receipt.kind === 'family' ? '가족' : '친구'
   const message = [
-    `JARVIS ${label} 참여 확인 (오프라인용)`,
+    `AIZIO ${label} 참여 확인 (오프라인용)`,
     `${receipt.memberName} · 코드 ${receipt.code}`,
     '',
     '보통은 초대 링크만으로 충분합니다. 초대자가 앱을 못 열 때만 아래를 «오프라인 멤버 등록»에 붙여넣으세요.',
@@ -48,14 +48,18 @@ export function buildJoinReceipt(input: {
   return { receipt, payload, message }
 }
 
+const JOIN_PREFIXES = [JOIN_RECEIPT_PREFIX, 'JARVIS-JOIN'] as const
+
 export function extractJoinReceiptPayload(raw: string): string {
   const text = String(raw || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
   if (!text) return ''
   for (const line of text.split(/\r?\n/)) {
-    const i = line.indexOf(`${JOIN_RECEIPT_PREFIX}|`)
-    if (i >= 0) return line.slice(i).trim().split(/\s+/)[0] || ''
+    for (const prefix of JOIN_PREFIXES) {
+      const i = line.indexOf(`${prefix}|`)
+      if (i >= 0) return line.slice(i).trim().split(/\s+/)[0] || ''
+    }
   }
-  const m = text.match(/JARVIS-JOIN\|v1\|(?:family|friends)\|[A-Z0-9]{4,8}\|[^\s|]+\|[^|\n]{0,32}\|\d{10,}/)
+  const m = text.match(/(?:AIZIO|JARVIS)-JOIN\|v1\|(?:family|friends)\|[A-Z0-9]{4,8}\|[^\s|]+\|[^|\n]{0,32}\|\d{10,}/)
   return m ? m[0] : text
 }
 
@@ -63,8 +67,8 @@ export function parseJoinReceipt(raw: string): { ok: true; receipt: JoinReceipt 
   const payload = extractJoinReceiptPayload(raw)
   if (!payload) return { ok: false, message: '참여 확인 코드를 붙여넣어 주세요.' }
   const parts = payload.split('|')
-  if (parts[0] !== JOIN_RECEIPT_PREFIX || parts[1] !== 'v1' || parts.length < 7) {
-    return { ok: false, message: 'JARVIS 참여 확인 형식이 아닙니다. 공유 문구 전체를 붙여넣어도 됩니다.' }
+  if (!JOIN_PREFIXES.includes(parts[0] as (typeof JOIN_PREFIXES)[number]) || parts[1] !== 'v1' || parts.length < 7) {
+    return { ok: false, message: 'AIZIO 참여 확인 형식이 아닙니다. 공유 문구 전체를 붙여넣어도 됩니다.' }
   }
   const kind = parts[2]
   const code = (parts[3] || '').toUpperCase()

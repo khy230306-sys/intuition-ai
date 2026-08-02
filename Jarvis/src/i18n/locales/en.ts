@@ -33,7 +33,7 @@ const en: Dictionary = {
   'chat.translation.failed': 'Could not translate — showing original.',
   'chat.translation.pending': 'Translating…',
   'chat.translation.sameLang': 'Same language',
-  'global.title': 'JARVIS Global Conversation',
+  'global.title': 'AIZIO Global Conversation',
   'global.subtitle': 'Auto-translate Family/Friends room messages (device P2P)',
   'global.noCentralServer': 'No central global chat server is connected. We do not show a fake “live” status.',
   'global.usesFamilyFriends': 'Real peer chat uses existing Family/Friends rooms. Settings below only add translation display.',

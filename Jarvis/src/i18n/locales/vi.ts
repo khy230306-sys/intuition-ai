@@ -33,7 +33,7 @@ const vi: Dictionary = {
   'chat.translation.failed': 'Không dịch được — hiện bản gốc.',
   'chat.translation.pending': 'Đang dịch…',
   'chat.translation.sameLang': 'Cùng ngôn ngữ',
-  'global.title': 'JARVIS Global Conversation',
+  'global.title': 'AIZIO Global Conversation',
   'global.subtitle': 'Tự dịch tin Family/Friends (P2P thiết bị)',
   'global.noCentralServer': 'Chưa kết nối máy chủ chat toàn cầu. Không hiển thị trạng thái “đang online” giả.',
   'global.usesFamilyFriends': 'Chat thực dùng phòng Family/Friends hiện có. Cài đặt dưới chỉ thêm hiển thị bản dịch.',

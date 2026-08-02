@@ -23,7 +23,7 @@ export function appShareUrl(): string {
 
 export function appShareMessage(url = appShareUrl()): string {
   return [
-    'JARVIS — iPhone 만능·투자 AI 비서',
+    'AIZIO — iPhone 만능·투자 AI 비서',
     '',
     'Safari로 열고 → 공유 → 홈 화면에 추가',
     url,
@@ -77,7 +77,7 @@ export function buildBackupQrPayload(): BackupQrResult {
     /* ignore */
   }
   const invite = [
-    'JARVIS 백업 안내',
+    'AIZIO 백업 안내',
     `일시 ${new Date().toISOString().slice(0, 16)}`,
     `할일 ${counts.reminders} · 지출 ${counts.expenses} · 보유 ${counts.holdings} · 기억 ${counts.memory}`,
     '전체 백업은 설정 → 공유보내기 사용',
@@ -96,7 +96,7 @@ export async function shareAppLink(): Promise<ActionResult> {
   const text = appShareMessage(url)
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'JARVIS', text, url })
+      await navigator.share({ title: 'AIZIO', text, url })
       return { ok: true, message: '공유 시트를 열었습니다.' }
     } catch {
       return { ok: false, message: '공유가 취소되었습니다.' }
@@ -124,8 +124,8 @@ export async function shareBackupFile(): Promise<ActionResult> {
       if (nav.canShare({ files: [file] })) {
         await nav.share({
           files: [file],
-          title: 'JARVIS 백업',
-          text: 'JARVIS 데이터 백업 JSON — 파일/드라이브/메모에 저장하세요.',
+          title: 'AIZIO 백업',
+          text: 'AIZIO 데이터 백업 JSON — 파일/드라이브/메모에 저장하세요.',
         })
         return { ok: true, message: '백업 파일 공유 시트를 열었습니다. (파일·드라이브·메일)' }
       }
@@ -137,8 +137,8 @@ export async function shareBackupFile(): Promise<ActionResult> {
   if (nav.share) {
     try {
       // iOS may reject huge text; share a short pointer + download fallback below
-      const summary = `JARVIS 백업 ${name}\n크기 ${Math.round(json.length / 1024)}KB\n설정에서 파일로 저장하거나, 아래 복원으로 가져오세요.\n${appShareUrl()}`
-      await nav.share({ title: 'JARVIS 백업', text: summary })
+      const summary = `AIZIO 백업 ${name}\n크기 ${Math.round(json.length / 1024)}KB\n설정에서 파일로 저장하거나, 아래 복원으로 가져오세요.\n${appShareUrl()}`
+      await nav.share({ title: 'AIZIO 백업', text: summary })
       downloadBackupBlob(json, name)
       return {
         ok: true,

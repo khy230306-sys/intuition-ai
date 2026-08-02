@@ -103,10 +103,10 @@ async function main() {
     if (d) d.open = true
   })
   const receipt = [
-    'JARVIS 가족 참여 확인',
+    'AIZIO 가족 참여 확인',
     `아빠 · 코드 ${code}`,
     '',
-    `JARVIS-JOIN|v1|family|${code}|guest-dad|아빠|${Date.now()}`,
+    `AIZIO-JOIN|v1|family|${code}|guest-dad|아빠|${Date.now()}`,
   ].join('\n')
   await page.$eval(
     '#family-join-receipt textarea[name="receipt"]',

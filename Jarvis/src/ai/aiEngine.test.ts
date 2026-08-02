@@ -123,7 +123,7 @@ describe('runAiEngine', () => {
       ok: true,
       json: async () => ({
         model: 'gpt-4o-mini',
-        choices: [{ message: { content: '안녕하세요. JARVIS입니다.' }, finish_reason: 'stop' }],
+        choices: [{ message: { content: '안녕하세요. AIZIO입니다.' }, finish_reason: 'stop' }],
       }),
     })
     const res = await runAiEngine({
@@ -131,7 +131,7 @@ describe('runAiEngine', () => {
       apiKey: 'sk-test',
       history: [{ role: 'user', text: '이전' }],
     })
-    expect(res.text).toMatch(/JARVIS/)
+    expect(res.text).toMatch(/AIZIO/)
     expect(res.provider).toBe('openai-compatible')
     expect(res.mode).toBe('chat')
     expect(res.latencyMs).toBeGreaterThanOrEqual(0)

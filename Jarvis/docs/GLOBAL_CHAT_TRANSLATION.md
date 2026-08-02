@@ -1,4 +1,4 @@
-# JARVIS Global Conversation (v1.9.13)
+# AIZIO Global Conversation (v1.9.13)
 
 ## Reality check
 

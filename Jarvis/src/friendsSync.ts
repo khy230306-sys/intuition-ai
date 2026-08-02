@@ -206,7 +206,7 @@ function statusLine(): string {
   refreshRelayHealth()
   const mqtt = packetRelay?.connected() ? '대화중계 ON' : '대화중계 대기'
   if (n > 0) return `온라인 ${n}명 · ${mqtt} · ${relayLabel}`
-  return `${mqtt} · ${relayLabel} · 상대도 JARVIS를 열어 두면 메시지가 옵니다`
+  return `${mqtt} · ${relayLabel} · 상대도 AIZIO를 열어 두면 메시지가 옵니다`
 }
 
 function emitStatus(reason: 'health' | 'peer' | 'data' | 'conn' = 'health'): void {

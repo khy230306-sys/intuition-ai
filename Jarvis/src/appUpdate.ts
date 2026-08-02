@@ -8,7 +8,7 @@ export function parseJarvisVersionFromHtml(html: string): string | null {
     html.match(/name=["']jarvis-version["'][^>]*content=["']([^"']+)["']/i) ||
     html.match(/content=["']([^"']+)["'][^>]*name=["']jarvis-version["']/i)
   if (meta?.[1]) return meta[1].trim()
-  const title = html.match(/<title>\s*JARVIS\s+(\d+\.\d+\.\d+)/i)
+  const title = html.match(/<title>\s*(?:AIZIO|JARVIS)\s+(\d+\.\d+\.\d+)/i)
   return title?.[1]?.trim() || null
 }
 

@@ -14,11 +14,11 @@ describe('invite join helpers', () => {
     expect(parseInviteCode('코드 MNBV2')).toBe('MNBV2')
     expect(
       parseInviteCode(
-        ['JARVIS 친구 공간 초대', '이름: 우리 친구', '코드: VQT3NY', '', 'https://example.com'].join('\n'),
+        ['AIZIO 친구 공간 초대', '이름: 우리 친구', '코드: VQT3NY', '', 'https://example.com'].join('\n'),
       ),
     ).toBe('VQT3NY')
     // Old bug: first 8 alphanumerics became JARVISK7
-    expect(parseInviteCode('JARVIS 친구 초대\n코드 K7M2PQ\nhttps://x.com')).toBe('K7M2PQ')
+    expect(parseInviteCode('AIZIO 친구 초대\n코드 K7M2PQ\nhttps://x.com')).toBe('K7M2PQ')
     expect(parseInviteCode('hello world')).toBeNull()
   })
 

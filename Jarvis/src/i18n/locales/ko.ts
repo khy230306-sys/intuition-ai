@@ -33,7 +33,7 @@ const ko: Dictionary = {
   'chat.translation.failed': '번역할 수 없어 원문을 표시합니다.',
   'chat.translation.pending': '번역 중…',
   'chat.translation.sameLang': '같은 언어',
-  'global.title': 'JARVIS Global Conversation',
+  'global.title': 'AIZIO Global Conversation',
   'global.subtitle': '가족·친구 대화방 메시지 자동 번역 (기기 간 P2P)',
   'global.noCentralServer': '중앙 글로벌 채팅 서버는 연결되어 있지 않습니다. 가짜 «실시간 연결됨» 상태를 표시하지 않습니다.',
   'global.usesFamilyFriends': '실제 사용자 간 대화는 기존 가족방·친구방(로컬+동기화)을 사용합니다. 아래 설정으로 번역 표시만 추가됩니다.',

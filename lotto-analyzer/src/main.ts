@@ -1,5 +1,6 @@
 import './style.css'
 import dataset from './data/draws.json'
+import { analyzeFlow } from './lib/flow'
 import {
   STRATEGY_META,
   analyzeCombination,
@@ -26,6 +27,7 @@ const patterns = computePatterns(draws)
 const sums = sumStats(draws)
 const ranks = topBottom(stats, 6)
 const chi = chiSquareUniform(stats, draws.length)
+const flow = analyzeFlow(draws)
 const latest = draws[draws.length - 1]
 
 let strategy: Strategy = 'balanced'
@@ -250,10 +252,10 @@ function render() {
         <div class="hero-copy">
           <p class="brand-hero">로또렌즈</p>
           <h1>실제 당첨 데이터로 읽는<br />번호의 결</h1>
-          <p>1회부터 ${latest.round}회까지 ${data.count}번의 추첨을 빈도·공백·페어·패턴 통계로 분해합니다.</p>
+          <p>1회부터 ${latest.round}회까지 ${data.count}번의 추첨을 빈도·공백·페어·회차 흐름으로 분해합니다.</p>
           <div class="cta-row">
-            <a class="btn btn-primary" href="#generate">스마트 번호 받기</a>
-            <a class="btn btn-ghost" href="#stats">통계 보기</a>
+            <a class="btn btn-primary" href="#flow">순서·흐름 보기</a>
+            <a class="btn btn-ghost" href="#generate">스마트 번호 받기</a>
           </div>
         </div>
       </div>
@@ -324,6 +326,132 @@ function render() {
             <div class="panel">
               <h3>회귀 대기 (공백/평균간격)</h3>
               <div class="chip-list">${ranks.overdue.map((s) => ballEl(s.n)).join('')}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="flow">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>순서와 흐름</h2>
+            <p>회차와 회차 사이에서 실제로 관측된 전이·평균회귀·위치 골격을 읽습니다.</p>
+          </div>
+          <ul class="narrative">
+            ${flow.narrative.map((n) => `<li>${n}</li>`).join('')}
+          </ul>
+
+          <div class="insight-grid">
+            <div class="insight">
+              <div class="label">평균 이월(직전∩다음)</div>
+              <div class="value">${flow.overlap.avg.toFixed(2)}</div>
+              <div class="hint">대부분 0~1개만 겹침</div>
+            </div>
+            <div class="insight">
+              <div class="label">합 상승|직전↑</div>
+              <div class="value">${(flow.sumFlow.pUpAfterUp * 100).toFixed(0)}%</div>
+              <div class="hint">올라도 이어지기 어려움</div>
+            </div>
+            <div class="insight">
+              <div class="label">합 상승|직전↓</div>
+              <div class="value">${(flow.sumFlow.pUpAfterDown * 100).toFixed(0)}%</div>
+              <div class="hint">내리면 반등 편향</div>
+            </div>
+            <div class="insight">
+              <div class="label">재등장 중앙값</div>
+              <div class="value">${flow.reappear.median.toFixed(0)}회</div>
+              <div class="hint">평균 ${flow.reappear.mean.toFixed(1)} · P75 ${flow.reappear.p75.toFixed(0)}</div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:1.25rem">
+            <h3>최근 12회 합계 흐름</h3>
+            <p class="strategy-blurb">현재 합 ${flow.sumFlow.lastSum} · Δ${flow.sumFlow.lastDelta >= 0 ? '+' : ''}${flow.sumFlow.lastDelta}
+              · 다음 편향 <strong style="color:var(--gold)">${
+                flow.sumFlow.nextBias === 'up'
+                  ? '상승'
+                  : flow.sumFlow.nextBias === 'down'
+                    ? '하락'
+                    : '중립'
+              }</strong>
+              (${(flow.sumFlow.nextBiasStrength * 100).toFixed(0)}%)</p>
+            <div class="spark" aria-hidden="true">
+              ${(() => {
+                const vals = flow.sumFlow.recentSums.map((x) => x.sum)
+                const min = Math.min(...vals)
+                const max = Math.max(...vals)
+                const span = Math.max(1, max - min)
+                return flow.sumFlow.recentSums
+                  .map((x) => {
+                    const h = 18 + ((x.sum - min) / span) * 90
+                    const down = x.delta < 0
+                    return `<div class="spark-col" title="${x.round}회 합 ${x.sum}">
+                      <div class="spark-bar ${down ? 'down' : ''}" style="height:${h.toFixed(0)}px"></div>
+                      <span class="spark-lab">${String(x.round).slice(-2)}</span>
+                    </div>`
+                  })
+                  .join('')
+              })()}
+            </div>
+          </div>
+
+          <div class="panel-row" style="margin-top:0.5rem">
+            <div class="panel">
+              <h3>정렬 순서 골격 (작은수→큰수)</h3>
+              <p class="strategy-blurb">당첨번호는 항상 정렬되어 공표됩니다. 각 자리의 역사적 구간입니다.</p>
+              <div class="corridor">
+                ${flow.positions
+                  .map((p) => {
+                    const left = ((p.p20 - 1) / 44) * 100
+                    const width = ((p.p80 - p.p20) / 44) * 100
+                    const meanX = ((p.mean - 1) / 44) * 100
+                    return `<div class="corridor-row">
+                      <span>${p.label}</span>
+                      <div class="corridor-track">
+                        <i style="left:${left.toFixed(1)}%;width:${Math.max(width, 2).toFixed(1)}%"></i>
+                        <b style="left:${meanX.toFixed(1)}%"></b>
+                      </div>
+                      <span class="val" style="font-family:var(--font-num);color:var(--ink-soft);font-size:0.85rem">${p.p20.toFixed(0)}–${p.p80.toFixed(0)} · μ${p.mean.toFixed(1)}</span>
+                    </div>`
+                  })
+                  .join('')}
+              </div>
+            </div>
+            <div class="panel">
+              <h3>직전→다음 이월 분포</h3>
+              <div class="stat-list">${barRows(
+                flow.overlap.dist.map((d) => [`${d.k}개 겹침`, d.count]),
+                draws.length - 1,
+              )}</div>
+            </div>
+          </div>
+
+          <div class="panel-row">
+            <div class="panel">
+              <h3>${latest.round}회 기준 다음 후보 (전이 lift)</h3>
+              <p class="strategy-blurb">직전 번호가 나온 뒤, 다음 회에 조건부 출현이 기댓값보다 높은 번호입니다.</p>
+              <div class="flow-links">
+                ${flow.nextFromLatest
+                  .slice(0, 10)
+                  .map(
+                    (t) =>
+                      `<span class="flow-link">${ballEl(t.to, { size: 'sm' })} <span class="lift">×${t.lift.toFixed(2)}</span></span>`,
+                  )
+                  .join('')}
+              </div>
+            </div>
+            <div class="panel">
+              <h3>강한 전역 전이 TOP</h3>
+              <p class="strategy-blurb">A가 나온 다음 회에 B가 따라붙는 비율이 평소보다 높은 쌍입니다.</p>
+              <div class="flow-links">
+                ${flow.topTransitions
+                  .slice(0, 8)
+                  .map(
+                    (t) =>
+                      `<span class="flow-link">${ballEl(t.from, { size: 'sm' })}<span class="flow-arrow">→</span>${ballEl(t.to, { size: 'sm' })} <span class="lift">×${t.lift.toFixed(2)}</span></span>`,
+                  )
+                  .join('')}
+              </div>
             </div>
           </div>
         </div>

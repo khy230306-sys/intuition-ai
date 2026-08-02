@@ -52,7 +52,13 @@ export interface PatternSummary {
   sections: number[]
 }
 
-export type Strategy = 'balanced' | 'hot' | 'cold' | 'overdue' | 'pair'
+export type Strategy =
+  | 'balanced'
+  | 'hot'
+  | 'cold'
+  | 'overdue'
+  | 'pair'
+  | 'flow'
 
 export interface PickResult {
   numbers: number[]

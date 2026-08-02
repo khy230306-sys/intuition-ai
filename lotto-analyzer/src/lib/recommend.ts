@@ -1,3 +1,4 @@
+import { flowScores } from './flow'
 import {
   MAX_N,
   PICK,
@@ -65,11 +66,15 @@ function buildWeights(
   strategy: Strategy,
   selected: number[],
   pairMap: Map<string, number>,
+  flowMap?: Map<number, number>,
 ): { n: number; w: number }[] {
   const maxW = Math.max(...stats.map((s) => s.weightedScore), 1e-9)
   const maxC = Math.max(...stats.map((s) => s.count), 1)
   const maxO = Math.max(...stats.map((s) => s.overdue), 1e-9)
   const maxR = Math.max(...stats.map((s) => s.recentCount), 1)
+  const maxF = flowMap
+    ? Math.max(...[...flowMap.values()], 1e-9)
+    : 1
 
   return stats
     .filter((s) => !selected.includes(s.n))
@@ -91,6 +96,15 @@ function buildWeights(
             (s.weightedScore / maxW) * 1.2 +
             (s.count / maxC) * 0.8
           break
+        case 'flow': {
+          const f = (flowMap?.get(s.n) ?? 0.35) / maxF
+          base =
+            0.35 +
+            f * 2.6 +
+            (s.overdue / maxO) * 0.45 +
+            (s.weightedScore / maxW) * 0.35
+          break
+        }
         case 'balanced':
         default:
           base =
@@ -220,6 +234,7 @@ export function generatePicks(
   const rand = mulberry32(seed >>> 0)
   const pairMap = buildPairMap(pairs)
   const sums = sumStats(draws)
+  const flowMap = strategy === 'flow' ? flowScores(draws) : undefined
   const results: PickResult[] = []
   const seen = new Set<string>()
 
@@ -229,7 +244,7 @@ export function generatePicks(
     const selected: number[] = []
     // sequential weighted picks so affinity can kick in
     for (let i = 0; i < PICK; i++) {
-      const weights = buildWeights(stats, strategy, selected, pairMap)
+      const weights = buildWeights(stats, strategy, selected, pairMap, flowMap)
       const [n] = weightedSample(weights, 1, rand)
       if (n == null) break
       selected.push(n)
@@ -245,14 +260,20 @@ export function generatePicks(
     const stratBonus =
       strategy === 'balanced'
         ? 4
-        : strategy === 'pair'
-          ? 3
-          : 2
+        : strategy === 'flow'
+          ? 5
+          : strategy === 'pair'
+            ? 3
+            : 2
+    const flowReasons =
+      strategy === 'flow'
+        ? ['회차 전이·합계 흐름 가중치 반영']
+        : []
     results.push({
       numbers,
       strategy,
       score: score + stratBonus + rand() * 3,
-      reasons: reasons.slice(0, 4),
+      reasons: [...flowReasons, ...reasons].slice(0, 4),
       pattern: {
         oddEven: formatOddEven(numbers),
         highLow: formatHighLow(numbers),
@@ -318,6 +339,10 @@ export const STRATEGY_META: Record<
   balanced: {
     label: '균형 분석',
     blurb: '최근 가중 빈도 + 공백 회귀 + 패턴 적합도를 섞습니다.',
+  },
+  flow: {
+    label: '흐름 추적',
+    blurb: '직전 회차 전이·합계 평균회귀·이월 억제로 다음 흐름을 읽습니다.',
   },
   hot: {
     label: '핫넘버',

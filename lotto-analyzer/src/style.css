@@ -699,6 +699,137 @@ section {
   color: var(--ink-soft);
 }
 
+/* Flow */
+.narrative {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.narrative li {
+  position: relative;
+  padding-left: 1rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.narrative li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.spark {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.35rem;
+  align-items: end;
+  min-height: 120px;
+  padding: 0.75rem 0 0.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.spark-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.spark-bar {
+  width: 100%;
+  max-width: 28px;
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, var(--gold), var(--mint));
+  min-height: 8px;
+  transition: height 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.spark-bar.down {
+  background: linear-gradient(180deg, var(--sky), #1f6f8a);
+}
+
+.spark-lab {
+  font-family: var(--font-num);
+  font-size: 0.65rem;
+  color: var(--ink-mute);
+}
+
+.corridor {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.corridor-row {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.corridor-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.corridor-track > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(58, 166, 255, 0.35), rgba(242, 193, 78, 0.55));
+}
+
+.corridor-track > b {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+.flow-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.flow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.flow-link .lift {
+  font-family: var(--font-num);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.flow-arrow {
+  color: var(--ink-mute);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

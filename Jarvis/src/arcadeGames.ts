@@ -1505,10 +1505,13 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-//** —— 격파 (first version: waves/boss/power-ups, no wingmen) —— */
+/** —— 격파 (first version: waves/boss/power-ups, no wingmen) —— */
 export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
 
 export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
+
+/** Drawn / hit length of the final laser bolt (was 18; 3× longer). */
+export const GYEOKPA_LASER_BEAM_LEN = 54
 
 export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
   if (w === 'pulse') return '펄스'
@@ -2024,7 +2027,18 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       if (b.friendly) {
         for (let ei = enemies.length - 1; ei >= 0; ei--) {
           const e = enemies[ei]!
-          if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
+          let hit = false
+          if (b.laser) {
+            const beamTop = b.y - GYEOKPA_LASER_BEAM_LEN
+            const beamBot = b.y + 4
+            hit =
+              Math.abs(e.x - b.x) <= e.r + b.r &&
+              e.y + e.r >= beamTop &&
+              e.y - e.r <= beamBot
+          } else {
+            hit = Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r
+          }
+          if (hit) {
             e.hp -= b.dmg
             if (!b.laser) bullets.splice(i, 1)
             if (e.hp <= 0) killEnemy(e, ei)
@@ -2107,7 +2121,13 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     for (const b of bullets) {
       if (b.friendly) {
         ctx.fillStyle = b.laser ? '#7cffef' : '#ffd1c8'
-        if (b.laser) ctx.fillRect(b.x - 2, b.y - 10, 4, 18)
+        if (b.laser) {
+          // Tip at bullet position; beam extends upward 3× the original length.
+          ctx.fillStyle = 'rgba(124,255,239,0.28)'
+          ctx.fillRect(b.x - 3.5, b.y - GYEOKPA_LASER_BEAM_LEN, 7, GYEOKPA_LASER_BEAM_LEN)
+          ctx.fillStyle = '#7cffef'
+          ctx.fillRect(b.x - 2, b.y - GYEOKPA_LASER_BEAM_LEN, 4, GYEOKPA_LASER_BEAM_LEN)
+        }
         else {
           ctx.beginPath()
           ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)

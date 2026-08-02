@@ -18,6 +18,7 @@ import {
   slideScramble,
   slideSolvedBoard,
   slideTimeLimitSec,
+  GYEOKPA_LASER_BEAM_LEN,
   GYEOKPA_MAX_ALLIES,
   GYEOKPA_WEAPONS,
   gyeokpaAllySlotOffsets,
@@ -73,6 +74,8 @@ describe('arcade helpers', () => {
     expect(GYEOKPA_MAX_ALLIES).toBe(0)
     expect(gyeokpaAllySlotOffsets()).toHaveLength(0)
     expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread', 'laser'])
+    expect(GYEOKPA_LASER_BEAM_LEN).toBe(54)
+    expect(GYEOKPA_LASER_BEAM_LEN).toBe(18 * 3)
     expect(gyeokpaNextWeapon('pulse')).toBe('twin')
     expect(gyeokpaNextWeapon('twin')).toBe('spread')
     expect(gyeokpaNextWeapon('spread')).toBe('laser')

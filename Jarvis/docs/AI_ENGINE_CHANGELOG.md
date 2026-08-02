@@ -1,5 +1,12 @@
 # AI Engine changelog
 
+## 1.13.3
+
+- **홈 화면 설치 버튼**: 브라우저로 접속 시에만 표시, 이미 설치된 PWA(standalone)에서는 숨김
+- Android: `beforeinstallprompt` 원클릭 설치, 없으면 안내 시트
+- iPhone: Safari 공유 → 홈 화면에 추가 단계 안내
+- 시작 게이트·홈 위젯·빈 채팅 화면에 CTA 노출
+
 ## 1.13.2
 
 - **간단 사용설명서**: 「사용설명서」/「이 앱이 뭐야」로 앱 소개 안내

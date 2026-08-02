@@ -25,11 +25,20 @@ import {
 } from './inviteJoin'
 import { canUseCameraScan, decodeQrFromFile, decodeQrFromVideo } from './qrDecode'
 import { think } from './brain'
+import {
+  attemptPwaInstall,
+  bindPwaInstallEvents,
+  detectInstallPlatform,
+  installGuideSteps,
+  isRunningAsInstalledPwa,
+  onPwaInstallChange,
+  shouldShowInstallButton,
+  type InstallPlatform,
+} from './pwaInstall'
 import { fetchQuote, formatMoney, formatQuote } from './finance'
 import { formatDescriptive, parseNumbers } from './stats'
 import { extractTickerFromText, resolveTicker } from './tickers'
 import {
-  INSTALL_DISMISS_KEY,
   addExpense,
   addHabit,
   addJournal,
@@ -204,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.2'
+const APP_VERSION = '1.13.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -453,6 +462,8 @@ const state = {
   /** Latest version string from jarvis-app.shipstatic.com, if checked. */
   remoteVersion: null as string | null,
   showInstall: false,
+  /** Step-by-step home-screen install sheet (iOS / Android manual). */
+  installGuideOpen: false as false | InstallPlatform,
   settings: loadSettings(),
   quoteCache: {} as Record<string, QuoteSnapshot | null>,
   listenLang: 'ko-KR',
@@ -503,23 +514,48 @@ function uid(): string {
   return crypto.randomUUID()
 }
 
-function isStandalone(): boolean {
-  const mq = window.matchMedia('(display-mode: standalone)').matches
-  const ios = 'standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
-  return mq || ios
-}
-
-function isIosSafari(): boolean {
-  const ua = navigator.userAgent
-  const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  const webkit = /WebKit/.test(ua)
-  const notOther = !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/.test(ua)
-  return iOS && webkit && notOther
-}
-
 function refreshInstallHint(): void {
-  const dismissed = localStorage.getItem(INSTALL_DISMISS_KEY) === '1'
-  state.showInstall = !dismissed && !isStandalone() && (isIosSafari() || /Android/i.test(navigator.userAgent))
+  // Browser tab only — hide when already launched from the home-screen icon.
+  state.showInstall = shouldShowInstallButton()
+  if (!state.showInstall) state.installGuideOpen = false
+}
+
+function renderHomeInstallButton(opts?: { compact?: boolean }): string {
+  if (!state.showInstall) return ''
+  const compact = opts?.compact
+  return `
+    <button type="button" class="install-home-btn ${compact ? 'compact' : ''}" data-action="install-home" aria-label="홈 화면에 설치">
+      <span class="install-home-ico" aria-hidden="true">↓</span>
+      <span class="install-home-label">${compact ? '홈 화면 설치' : '홈 화면에 설치'}</span>
+    </button>
+  `
+}
+
+async function handleInstallHomeClick(): Promise<void> {
+  const result = await attemptPwaInstall()
+  if (result.kind === 'accepted') {
+    state.showInstall = false
+    state.installGuideOpen = false
+    showFlash('홈 화면에 설치했습니다. 아이콘으로 열어 주세요.')
+    render()
+    return
+  }
+  if (result.kind === 'already-installed') {
+    state.showInstall = false
+    state.installGuideOpen = false
+    showFlash('이미 홈 화면 앱으로 실행 중입니다.')
+    render()
+    return
+  }
+  if (result.kind === 'dismissed') {
+    showFlash('설치가 취소되었습니다. 언제든 다시 누를 수 있어요.')
+    refreshInstallHint()
+    render()
+    return
+  }
+  // Native sheet unavailable — show platform steps (iPhone / Android)
+  state.installGuideOpen = result.kind === 'need-guide' ? result.platform : detectInstallPlatform()
+  render()
 }
 
 function showFlash(msg: string): void {
@@ -1882,14 +1918,41 @@ function renderBrand(): string {
 
 function renderInstall(): string {
   if (!state.showInstall) return ''
+  const platform = detectInstallPlatform()
+  const tip =
+    platform === 'ios'
+      ? '아이폰: 버튼 → 공유 → 홈 화면에 추가'
+      : platform === 'android'
+        ? '안드로이드: 버튼으로 설치하거나 브라우저 메뉴에서 추가'
+        : '브라우저 설치 메뉴로 홈 화면에 추가'
   return `
-    <div class="install-banner">
-      <div>
-        <strong>홈 화면에 추가</strong><br />
-        Safari 공유 → <strong>홈 화면에 추가</strong><br />
-        <span style="opacity:.85">앱을 열면 위치 허용이 필요합니다.</span>
+    <div class="install-banner" data-install-banner="1">
+      <div class="install-banner-copy">
+        <strong>홈 화면에 설치</strong>
+        <span>${tip}</span>
       </div>
-      <button type="button" data-action="dismiss-install" aria-label="닫기">×</button>
+      ${renderHomeInstallButton()}
+    </div>
+  `
+}
+
+function renderInstallGuideModal(): string {
+  if (!state.installGuideOpen) return ''
+  const guide = installGuideSteps(state.installGuideOpen)
+  const steps = guide.steps.map((s, i) => `<li><span class="step-n">${i + 1}</span>${escapeHtml(s)}</li>`).join('')
+  return `
+    <div class="share-modal install-guide-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(guide.title)}" data-action="close-install-guide-backdrop">
+      <div class="share-sheet" data-install-guide-sheet="1">
+        <div class="share-sheet-head">
+          <strong>${escapeHtml(guide.title)}</strong>
+          <button type="button" class="ghost-btn tiny" data-action="close-install-guide">닫기</button>
+        </div>
+        <ol class="install-guide-steps">${steps}</ol>
+        <p class="hint">이미 홈 화면 아이콘으로 실행 중이면 이 버튼은 자동으로 숨겨집니다.</p>
+        <div class="row-btns">
+          <button type="button" class="primary-btn" data-action="close-install-guide">확인</button>
+        </div>
+      </div>
     </div>
   `
 }
@@ -1930,6 +1993,12 @@ function renderLocationGate(): string {
         }>
           오프라인으로 계속 (대화·투자·생활·가족·친구·게임)
         </button>
+        ${
+          state.showInstall
+            ? `<div class="loc-install">${renderHomeInstallButton()}
+                <p class="hint">브라우저로 보셨다면 홈 화면에 설치해 앱처럼 쓰세요.</p></div>`
+            : ''
+        }
         <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/AIZIO → 허용</p>
         <p class="translate-hint">v${APP_VERSION}</p>
       </div>
@@ -2247,7 +2316,10 @@ function renderHomeWidget(): string {
           <p class="home-kicker">TODAY</p>
           <strong class="home-weather">${escapeHtml(s.weatherLine)}</strong>
         </div>
-        <button type="button" class="ghost-btn tiny" data-action="open-share-app" aria-label="앱 공유">QR</button>
+        <div class="home-widget-actions">
+          ${renderHomeInstallButton({ compact: true })}
+          <button type="button" class="ghost-btn tiny" data-action="open-share-app" aria-label="앱 공유">QR</button>
+        </div>
       </div>
       <div class="home-grid">
         <div>
@@ -2346,6 +2418,7 @@ function renderChat(): string {
           <div class="big-orb"></div>
           <h2>AIZIO</h2>
           <p>말로 쓰는 일상 비서입니다.<br/>메시지를 보내거나 MIC로 말해 보세요.<br/><strong>사용설명서</strong>를 누르면 한눈에 볼 수 있어요.</p>
+          ${state.showInstall ? `<div class="hero-install">${renderHomeInstallButton()}</div>` : ''}
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>
@@ -3399,7 +3472,8 @@ function render(opts: RenderOpts = {}): void {
   const app = document.getElementById('app')
   if (!app) return
   if (!state.locationReady) {
-    app.innerHTML = renderLocationGate()
+    refreshInstallHint()
+    app.innerHTML = `${renderLocationGate()}${renderInstallGuideModal()}`
     bindLocationGate()
     return
   }
@@ -3422,7 +3496,7 @@ function render(opts: RenderOpts = {}): void {
                   : state.view === 'actions'
                     ? renderActions()
                     : renderSettings()
-  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}`
+  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
@@ -3589,6 +3663,23 @@ function bindLocationGate(): void {
     }
     render()
     void bootSpaceSyncAndPush()
+  })
+  document.querySelectorAll('[data-action="install-home"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void handleInstallHomeClick()
+    })
+  })
+  document.querySelector('[data-action="close-install-guide"]')?.addEventListener('click', () => {
+    state.installGuideOpen = false
+    render()
+  })
+  document.querySelector('[data-action="close-install-guide-backdrop"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.installGuideOpen = false
+      render()
+    }
   })
 }
 
@@ -4112,10 +4203,22 @@ function bind(): void {
     })
   })
 
-  document.querySelector('[data-action="dismiss-install"]')?.addEventListener('click', () => {
-    localStorage.setItem(INSTALL_DISMISS_KEY, '1')
-    state.showInstall = false
+  document.querySelectorAll('[data-action="install-home"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void handleInstallHomeClick()
+    })
+  })
+  document.querySelector('[data-action="close-install-guide"]')?.addEventListener('click', () => {
+    state.installGuideOpen = false
     render()
+  })
+  document.querySelector('[data-action="close-install-guide-backdrop"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.installGuideOpen = false
+      render()
+    }
   })
 
   const composer = document.getElementById('composer') as HTMLFormElement | null
@@ -5019,6 +5122,11 @@ function bootAppCore(): void {
   }
   captureViewFromUrl()
   captureInviteFromUrl()
+  bindPwaInstallEvents()
+  onPwaInstallChange(() => {
+    refreshInstallHint()
+    if (state.locationReady || document.querySelector('.location-gate')) render()
+  })
   refreshInstallHint()
   registerShareModal(openShareModal)
   setFamilySyncListener((info) => {

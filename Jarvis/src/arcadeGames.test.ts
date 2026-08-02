@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   applyShooterSpread,
+  ARCADE_META,
   breakoutPaddleBounce,
   flappyPipeCleared,
   levelFromUnits,
@@ -70,7 +71,8 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().gyeokpa).toBeNull()
   })
 
-  it('configures first-version 격파 weapon cycle (no wingmen)', () => {
+  it('configures 스페이스2 weapon cycle (no wingmen)', () => {
+    expect(ARCADE_META.gyeokpa.title).toBe('스페이스2')
     expect(GYEOKPA_MAX_ALLIES).toBe(0)
     expect(gyeokpaAllySlotOffsets()).toHaveLength(0)
     expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread', 'laser'])

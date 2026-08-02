@@ -106,11 +106,13 @@ import {
   looksLikeSttGarbage,
   wantsWeatherCommand,
 } from './spokenCommand'
+import { userGuideText, wantsUserGuide } from './userGuide'
 import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './weather'
 
 function helpText(name: string): string {
   return [
-    `${name}, AIZIO 만능 비서입니다.`,
+    `${name}, AIZIO 명령어 목록입니다.`,
+    '앱이 뭔지 먼저 보고 싶으면 「사용설명서」를 입력하세요.',
     '',
     '【일상】 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【가족】 단체대화 · 공지 · 일정 (하단 가족 탭 / 코드 공유)',
@@ -669,6 +671,10 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     }
   }
 
+  if (wantsUserGuide(text)) {
+    return { text: userGuideText(name), speak: true }
+  }
+
   if (/^(도움말|헬프|help|기능)$/i.test(text) || text.includes('도움말')) {
     return { text: helpText(name) }
   }
@@ -779,6 +785,9 @@ export async function think(
   }
   if (everyday?.kind === 'briefing') {
     return { text: morningBriefing(), speak: true }
+  }
+  if (everyday?.kind === 'userGuide') {
+    return { text: userGuideText(name), speak: true }
   }
   if (everyday?.kind === 'help') {
     return { text: helpText(name), speak: true }

@@ -204,7 +204,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.1'
+const APP_VERSION = '1.13.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -406,12 +406,12 @@ async function refreshRemoteVersionBadge(opts?: { announce?: boolean }): Promise
 }
 
 const SUGGESTIONS = [
+  '사용설명서',
   '오늘 날씨 알려줘',
   '조용한 음악 틀어줘',
   '브리핑',
   '지금 몇 시야',
   '삼성전자 시세',
-  '도움말',
 ]
 
 /** Clear main chat history (settings button, chat toolbar, or voice). */
@@ -2345,7 +2345,7 @@ function renderChat(): string {
         <div class="hero-empty">
           <div class="big-orb"></div>
           <h2>AIZIO</h2>
-          <p>메시지를 보내거나 MIC로 말해 보세요.<br/>아래 <strong>번역</strong>으로 통역도 켤 수 있습니다.</p>
+          <p>말로 쓰는 일상 비서입니다.<br/>메시지를 보내거나 MIC로 말해 보세요.<br/><strong>사용설명서</strong>를 누르면 한눈에 볼 수 있어요.</p>
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>

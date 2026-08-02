@@ -63,6 +63,9 @@ describe('jarvis brain investing + life', () => {
     expect(brief.text).toMatch(/AIZIO|할 일|투자/)
     const help = await think('도움말')
     expect(help.text).toContain('투자')
+    const guide = await think('사용설명서')
+    expect(guide.text).toMatch(/일상 비서|아이지오/)
+    expect(guide.text).toContain('오늘 날씨')
   })
 
   it('handles everyday weather / time without API key', async () => {

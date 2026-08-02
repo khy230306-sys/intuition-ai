@@ -28,6 +28,8 @@ describe('spokenCommand', () => {
     expect(detectEverydayIntent('브리핑')?.kind).toBe('briefing')
     expect(detectEverydayIntent('내 위치')?.kind).toBe('location')
     expect(detectEverydayIntent('도움말')?.kind).toBe('help')
+    expect(detectEverydayIntent('사용설명서')?.kind).toBe('userGuide')
+    expect(detectEverydayIntent('이 앱이 뭐야')?.kind).toBe('userGuide')
     expect(detectEverydayIntent('대화삭제해줘')?.kind).toBe('clearChat')
     expect(detectEverydayIntent('채팅 삭제')?.kind).toBe('clearChat')
     expect(detectEverydayIntent('대화 초기화')?.kind).toBe('clearChat')

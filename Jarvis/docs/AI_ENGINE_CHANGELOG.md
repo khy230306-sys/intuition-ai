@@ -1,5 +1,11 @@
 # AI Engine changelog
 
+## 1.13.2
+
+- **간단 사용설명서**: 「사용설명서」/「이 앱이 뭐야」로 앱 소개 안내
+- 홈 빈 화면 칩·문구에 사용설명서 진입점 추가
+- Docs: `AIZIO_USER_GUIDE.md`
+
 ## 1.13.1
 
 - **Core Stability & Integration**: single text/voice pipeline (`handleUserText` → `think` → Core Brain)

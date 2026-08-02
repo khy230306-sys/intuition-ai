@@ -1,5 +1,12 @@
 # AI Engine changelog
 
+## 1.12.1
+
+- Arcade **격파** renamed to **스페이스2** (storage id `gyeokpa` unchanged)
+- 스페이스2 stages extended to **25** (boss every 5th stage; final boss at Lv25)
+- Late-wave enemy speed / spawn soft-capped for playability
+- Voice: 「스페이스2」/「격파」→ Space2; plain 「스페이스」 still opens original Space
+
 ## 1.12.0
 
 - **AIZIO Relationship Memory** (`src/relationship/`): conversation family links → `jarvis_relationships_v1`

@@ -13,11 +13,11 @@ React · TypeScript · Vite · Tailwind CSS · React Router · Zustand · Supaba
 
 ## 상시 접속 주소
 
-**https://poker-director.tiiny.site/**
+**https://cdn.jsdelivr.net/gh/khy230306-sys/intuition-ai@deploy/poker-director/index.html**
 
-예비 CDN: https://cdn.jsdelivr.net/gh/khy230306-sys/intuition-ai@deploy/poker-director/index.html
+이 주소는 GitHub `deploy/poker-director` 브랜치에 배포된 정적 사이트입니다. Cloud Agent가 종료되어도 계속 접속할 수 있습니다.
 
-로그인 화면에서 **데모 계정으로 바로 입장**을 누르면 바로 사용할 수 있습니다. (`admin` / `1234`)
+로그인 화면에서 **데모 계정으로 바로 입장**을 누르거나 `admin` / `1234`로 로그인하세요.
 
 ## 설치
 

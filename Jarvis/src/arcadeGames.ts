@@ -3,15 +3,15 @@
 export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
-  shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
-  flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
-  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
-  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
-  breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
-  slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
+  shooter: { title: '스페이스', blurb: '격추 12기마다 레벨업 · 미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
+  flappy: { title: '플래피', blurb: '기둥 12개마다 레벨업 · 간격 축소' },
+  dodge: { title: '닷지', blurb: '18개 회피마다 레벨업 · 낙하 가속' },
+  pong: { title: '퐁', blurb: '12회 받아칠 때마다 레벨업 · 공 가속' },
+  breakout: { title: '벽돌깨기', blurb: '스테이지 2회 클리어마다 레벨업 · 벽돌·속도 증가' },
+  slide: { title: '스윽', blurb: '퍼즐 2회 클리어마다 레벨업 · 시간 안에 숫자 맞추기' },
   gyeokpa: {
-    title: '격파',
-    blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드→레이저) · 라이프·실드·폭탄',
+    title: '스페이스2',
+    blurb: '세로 슈팅 · 25스테이지(스테이지당 웨이브 강화) · 보스 · 무기 강화 · 라이프·실드·폭탄',
   },
 }
 
@@ -88,23 +88,26 @@ function bumpBestLevel(game: ArcadeId, level: number): void {
   }
 }
 
-/** How many progress units needed to advance one level. */
+/**
+ * How many progress units needed to advance one level.
+ * Tuned slower so each level lasts longer (more thrill, less rush).
+ */
 export function unitsPerLevel(id: ArcadeId): number {
   switch (id) {
     case 'breakout':
-      return 1
+      return 2 // stage clears
     case 'shooter':
-      return 5
+      return 12 // kills
     case 'flappy':
-      return 5
+      return 12 // pipes
     case 'dodge':
-      return 8
+      return 18 // dodges
     case 'pong':
-      return 5
+      return 12 // paddle hits
     case 'slide':
-      return 1
+      return 2 // puzzle clears
     case 'gyeokpa':
-      return 6
+      return 1 // stage/wave (lengthened separately)
   }
 }
 
@@ -217,6 +220,7 @@ function noteLevel(
 export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
   let score = 0
   let level = 1
+  let stagesCleared = 0
   let levelUpUntil = 0
   let over = false
   let paddleX = 0
@@ -235,7 +239,8 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
   function buildBricks(): void {
     bricks = []
     const cols = 8
-    const rows = Math.min(9, 4 + level)
+    // More rows per stage so each clear takes longer; difficulty follows clears not display level.
+    const rows = Math.min(10, 5 + Math.floor(stagesCleared * 0.7))
     const gap = 4
     const bw = (w - gap * (cols + 1)) / cols
     const bh = 14
@@ -254,7 +259,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
   }
 
   function ballSpeed(): number {
-    return 200 + level * 28
+    return 190 + stagesCleared * 18 + level * 8
   }
 
   function resetBall(): void {
@@ -273,6 +278,7 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
     h = sized.h
     score = 0
     level = 1
+    stagesCleared = 0
     levelUpUntil = 0
     over = false
     paddleX = w / 2 - paddleW / 2
@@ -283,10 +289,11 @@ export function mountBreakout(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arc
 
   function nextStage(): void {
     score += 100
-    const next = level + 1
+    stagesCleared += 1
+    const next = levelFromUnits('breakout', stagesCleared)
     const noted = noteLevel('breakout', level, next, score, onScore)
     level = noted.level
-    levelUpUntil = noted.levelUpUntil || performance.now() + 1200
+    if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
     bumpBest('breakout', score)
     buildBricks()
     resetBall()
@@ -1268,6 +1275,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   let h = 400
   let score = 0
   let level = 1
+  let clears = 0
   let levelUpUntil = 0
   let over = false
   let clearedFlash = 0
@@ -1308,6 +1316,7 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
   function reset(): void {
     score = 0
     level = 1
+    clears = 0
     levelUpUntil = 0
     over = false
     clearedFlash = 0
@@ -1333,10 +1342,11 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
     if (slideIsSolved(board)) {
       const bonus = Math.max(20, Math.floor(timeLeft * 8) + Math.max(0, 40 - moves) * 5)
       score += bonus
-      const prev = level
-      level += 1
-      const noted = noteLevel('slide', prev, level, score, onScore)
-      levelUpUntil = noted.levelUpUntil || performance.now() + 900
+      clears += 1
+      const next = levelFromUnits('slide', clears)
+      const noted = noteLevel('slide', level, next, score, onScore)
+      level = noted.level
+      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
       clearedFlash = 0.7
       bumpBest('slide', score)
     }
@@ -1505,16 +1515,33 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-/** —— 격파 (first version: waves/boss/power-ups, no wingmen) —— */
+/** —— 스페이스2 (id: gyeokpa) — waves/boss/power-ups through Lv25, no wingmen —— */
 export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
 
 export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
+
+/** Clear / max stage count for 스페이스2 (wave == level). */
+export const GYEOKPA_MAX_LEVEL = 25
 
 /**
  * Final laser reach (px upward from ship tip).
  * Short bolts felt weak; this is a long-range beam (~screen height).
  */
 export const GYEOKPA_LASER_BEAM_LEN = 280
+
+/** Enemy fall speed — soft-capped after mid levels so Lv25 stays playable. */
+export function gyeokpaEnemyFallSpeed(wave: number, stage = 1): number {
+  const w = Math.max(1, Math.min(GYEOKPA_MAX_LEVEL, Math.floor(wave)))
+  const early = Math.min(w, 15)
+  const late = Math.max(0, w - 15)
+  return 50 + early * 8 + stage * 10 + late * 3
+}
+
+/** Spawn gap between enemies — floor so late waves do not become unreadable. */
+export function gyeokpaSpawnInterval(wave: number, stage = 1): number {
+  const w = Math.max(1, Math.floor(wave))
+  return Math.max(0.2, 0.55 - Math.min(w, 18) * 0.02 - stage * 0.03)
+}
 
 export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
   if (w === 'pulse') return '펄스'
@@ -1624,33 +1651,34 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
   function hudTitle(): string {
     const boss = enemies.find((e) => e.kind === 'boss')
-    if (boss) return `격파 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
-    return `격파 W${wave} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
+    if (boss) return `스페이스2 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
+    return `스페이스2 Lv${wave}/${GYEOKPA_MAX_LEVEL} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
   }
 
   function syncLevel(): void {
-    const next = Math.max(1, wave)
+    const next = Math.max(1, Math.min(GYEOKPA_MAX_LEVEL, wave))
     const noted = noteLevel('gyeokpa', level, next, score, onScore)
     level = noted.level
     if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
   }
 
   function queueWave(): void {
-    const base = 6 + wave * 2 + stage
+    // Longer waves so each of the 25 stages takes more time.
+    const base = 12 + Math.min(wave, GYEOKPA_MAX_LEVEL) * 3 + stage * 2
     spawnLeft = base
-    spawnCd = 0.35
+    spawnCd = 0.4
     betweenWaves = 0
     if (wave % 5 === 0) {
       spawnLeft = 0
       spawnBoss()
     } else {
-      toast(`웨이브 ${wave}`)
+      toast(`스테이지 ${wave}/${GYEOKPA_MAX_LEVEL}`)
     }
   }
 
   function spawnBoss(): void {
     bossActive = true
-    const hp = 80 + stage * 40 + wave * 12
+    const hp = 80 + stage * 40 + Math.min(wave, GYEOKPA_MAX_LEVEL) * 12
     enemies.push({
       x: w / 2,
       y: -60,
@@ -1664,7 +1692,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       shootCd: 0.8,
       phase: 0,
     })
-    toast('보스 출현!')
+    toast(wave >= GYEOKPA_MAX_LEVEL ? '최종 보스!' : '보스 출현!')
   }
 
   function spawnEnemy(): void {
@@ -1673,7 +1701,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     if (roll > 0.78) kind = 'tank'
     else if (roll > 0.52) kind = 'zig'
     const x = 28 + Math.random() * (w - 56)
-    const speed = 50 + wave * 8 + stage * 10
+    const speed = gyeokpaEnemyFallSpeed(wave, stage)
     if (kind === 'scout') {
       enemies.push({
         x,
@@ -1757,7 +1785,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     fireCd = 0
     wave = 1
     stage = 1
-    betweenWaves = 1.2
+    betweenWaves = 1.5
     spawnLeft = 0
     spawnCd = 0
     bossActive = false
@@ -1786,9 +1814,9 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     over = true
     cleared = win
     bumpBest('gyeokpa', score)
-    bumpBestLevel('gyeokpa', Math.max(level, wave))
+    bumpBestLevel('gyeokpa', Math.max(level, Math.min(wave, GYEOKPA_MAX_LEVEL)))
     onScore?.(score, level)
-    toast(win ? '스테이지 클리어!' : 'GAME OVER')
+    toast(win ? `스페이스2 클리어! (Lv${GYEOKPA_MAX_LEVEL})` : 'GAME OVER')
   }
 
   function hurt(): void {
@@ -1916,17 +1944,17 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       if (spawnCd <= 0) {
         spawnEnemy()
         spawnLeft -= 1
-        spawnCd = Math.max(0.22, 0.55 - wave * 0.02 - stage * 0.03)
+        spawnCd = gyeokpaSpawnInterval(wave, stage)
       }
     } else if (!bossActive && spawnLeft <= 0 && enemies.length === 0 && !cleared) {
-      if (wave >= 10 + stage * 2) {
+      if (wave >= GYEOKPA_MAX_LEVEL) {
         finish(true)
         return
       }
       wave += 1
-      betweenWaves = 1.1
+      betweenWaves = 1.5
       syncLevel()
-      toast('다음 웨이브 준비')
+      toast(`다음 스테이지 ${wave}/${GYEOKPA_MAX_LEVEL}`)
     }
 
     for (let i = enemies.length - 1; i >= 0; i--) {

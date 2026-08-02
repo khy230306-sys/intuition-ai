@@ -1,5 +1,19 @@
 # AI Engine changelog
 
+## 1.12.2
+
+- Slow arcade level-up pacing across all 7 games (roughly 2×+ units per level)
+- Breakout: 2 stage clears / level; denser brick rows
+- Slide: 2 puzzle clears / level
+- Space2: more enemies per stage so each of 25 levels lasts longer
+
+## 1.12.1
+
+- Arcade **격파** renamed to **스페이스2** (storage id `gyeokpa` unchanged)
+- 스페이스2 stages extended to **25** (boss every 5th stage; final boss at Lv25)
+- Late-wave enemy speed / spawn soft-capped for playability
+- Voice: 「스페이스2」/「격파」→ Space2; plain 「스페이스」 still opens original Space
+
 ## 1.12.0
 
 - **AIZIO Relationship Memory** (`src/relationship/`): conversation family links → `jarvis_relationships_v1`

@@ -1,4 +1,4 @@
-name: Deploy PICK AI GitHub Pages
+name: Deploy PICK AI (gh-pages)
 
 on:
   push:
@@ -10,17 +10,13 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-  actions: write
-  deployments: write
 
 concurrency:
   group: pages-pick-ai
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,74 +32,7 @@ jobs:
           npm run build
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
-
-      - name: Resolve Pages token
-        id: tok
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PAGES_TOKEN: ${{ secrets.PAGES_TOKEN }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-          PAT: ${{ secrets.PAT }}
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          GH_TOKEN_SECRET: ${{ secrets.GH_TOKEN }}
-        run: |
-          for candidate in "$PAGES_TOKEN" "$GH_PAT" "$PAT" "$PERSONAL_ACCESS_TOKEN" "$GH_TOKEN_SECRET" "$GITHUB_TOKEN"; do
-            if [ -n "$candidate" ]; then
-              echo "token=$candidate" >> "$GITHUB_OUTPUT"
-              break
-            fi
-          done
-
-      - name: Enable Pages site
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.tok.outputs.token }}
-        run: |
-          set +e
-          echo "Trying workflow source..."
-          gh api -X POST "repos/${{ github.repository }}/pages" \
-            -H "Accept: application/vnd.github+json" \
-            -f build_type=workflow
-          echo "Trying legacy gh-pages source..."
-          gh api -X POST "repos/${{ github.repository }}/pages" \
-            -H "Accept: application/vnd.github+json" \
-            --input - <<'EOF'
-          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
-          EOF
-          echo "Trying PUT legacy..."
-          gh api -X PUT "repos/${{ github.repository }}/pages" \
-            -H "Accept: application/vnd.github+json" \
-            --input - <<'EOF'
-          {"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}
-          EOF
-          echo "Current pages config:"
-          gh api "repos/${{ github.repository }}/pages" || true
-          set -e
-
-      - name: Relax github-pages environment rules
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.tok.outputs.token }}
-        run: |
-          set +e
-          # Prefer open deployment policy (no custom branch allowlist)
-          gh api -X PUT "repos/${{ github.repository }}/environments/github-pages" \
-            --input - <<'EOF'
-          {"deployment_branch_policy":null}
-          EOF
-          gh api -X PUT "repos/${{ github.repository }}/environments/github-pages" \
-            --input - <<'EOF'
-          {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":false}}
-          EOF
-          # If custom policies remain, try adding main + gh-pages
-          gh api -X POST "repos/${{ github.repository }}/environments/github-pages/deployment-branch-policies" \
-            -f name=main -f type=branch || true
-          gh api -X POST "repos/${{ github.repository }}/environments/github-pages/deployment-branch-policies" \
-            -f name=gh-pages -f type=branch || true
-          gh api "repos/${{ github.repository }}/environments/github-pages" || true
-          set -e
-
-      - name: Publish gh-pages branch
+      - name: Publish gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ github.token }}
@@ -111,28 +40,3 @@ jobs:
           force_orphan: true
           enable_jekyll: false
           commit_message: Deploy PICK AI static site
-
-      - name: Setup Pages
-        continue-on-error: true
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-          token: ${{ steps.tok.outputs.token }}
-
-      - name: Upload artifact
-        continue-on-error: true
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: DoriJitGoTtaeng-PICK-AI/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        continue-on-error: true
-        uses: actions/deploy-pages@v4

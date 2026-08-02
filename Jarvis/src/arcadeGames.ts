@@ -1510,8 +1510,11 @@ export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'laser'
 
 export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'laser']
 
-/** Drawn / hit length of the final laser bolt (was 18; 3× longer). */
-export const GYEOKPA_LASER_BEAM_LEN = 54
+/**
+ * Final laser reach (px upward from ship tip).
+ * Short bolts felt weak; this is a long-range beam (~screen height).
+ */
+export const GYEOKPA_LASER_BEAM_LEN = 280
 
 export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
   if (w === 'pulse') return '펄스'
@@ -1557,6 +1560,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     dmg: number
     friendly: boolean
     laser?: boolean
+    /** Upward beam length for laser weapon (px). */
+    laserLen?: number
     life?: number
   }
   type Enemy = {
@@ -1858,17 +1863,20 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       mk(-4, -8, -160, -560, 1)
       mk(4, -8, 160, -560, 1)
     } else {
-      // first-version laser: fast piercing bolt (not timed fullscreen)
+      // Long-range piercing beam anchored to the ship tip (사정거리).
+      const reach = Math.max(GYEOKPA_LASER_BEAM_LEN, Math.floor(h * 0.72))
+      bullets = bullets.filter((b) => !(b.friendly && b.laser))
       bullets.push({
         x: shipX,
-        y: shipY - 16,
+        y: shipY - 14,
         vx: 0,
-        vy: -900,
-        r: 4,
-        dmg: 0.55,
+        vy: 0,
+        r: 5,
+        dmg: 0.6,
         friendly: true,
         laser: true,
-        life: 0.08,
+        laserLen: reach,
+        life: 0.07,
       })
     }
   }
@@ -2011,8 +2019,15 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i]!
-      b.x += b.vx * dt
-      b.y += b.vy * dt
+      if (b.laser && b.friendly) {
+        // Keep beam locked to the ship so range stays constant while firing.
+        b.x = shipX
+        b.y = shipY - 14
+        b.laserLen = Math.max(GYEOKPA_LASER_BEAM_LEN, Math.floor(h * 0.72))
+      } else {
+        b.x += b.vx * dt
+        b.y += b.vy * dt
+      }
       if (b.life != null) {
         b.life -= dt
         if (b.life <= 0) {
@@ -2020,7 +2035,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
           continue
         }
       }
-      if (b.y < -40 || b.y > h + 40 || b.x < -40 || b.x > w + 40) {
+      if (!b.laser && (b.y < -40 || b.y > h + 40 || b.x < -40 || b.x > w + 40)) {
         bullets.splice(i, 1)
         continue
       }
@@ -2029,7 +2044,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
           const e = enemies[ei]!
           let hit = false
           if (b.laser) {
-            const beamTop = b.y - GYEOKPA_LASER_BEAM_LEN
+            const len = b.laserLen ?? GYEOKPA_LASER_BEAM_LEN
+            const beamTop = b.y - len
             const beamBot = b.y + 4
             hit =
               Math.abs(e.x - b.x) <= e.r + b.r &&
@@ -2120,15 +2136,15 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
     for (const b of bullets) {
       if (b.friendly) {
-        ctx.fillStyle = b.laser ? '#7cffef' : '#ffd1c8'
         if (b.laser) {
-          // Tip at bullet position; beam extends upward 3× the original length.
-          ctx.fillStyle = 'rgba(124,255,239,0.28)'
-          ctx.fillRect(b.x - 3.5, b.y - GYEOKPA_LASER_BEAM_LEN, 7, GYEOKPA_LASER_BEAM_LEN)
+          const len = b.laserLen ?? GYEOKPA_LASER_BEAM_LEN
+          const top = b.y - len
+          ctx.fillStyle = 'rgba(124,255,239,0.22)'
+          ctx.fillRect(b.x - 4.5, top, 9, len)
           ctx.fillStyle = '#7cffef'
-          ctx.fillRect(b.x - 2, b.y - GYEOKPA_LASER_BEAM_LEN, 4, GYEOKPA_LASER_BEAM_LEN)
-        }
-        else {
+          ctx.fillRect(b.x - 2, top, 4, len)
+        } else {
+          ctx.fillStyle = '#ffd1c8'
           ctx.beginPath()
           ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2)
           ctx.fill()

@@ -191,7 +191,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.11.3'
+const APP_VERSION = '1.12.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -4962,7 +4962,18 @@ function bootAppCore(): void {
   })
   startAlarmScheduler()
   setAlarmUiHandler((alarm) => {
-    pushMsg('assistant', `⏰ 알림: ${alarm.body}`)
+    void import('./smartReminder/storage').then(({ loadSmartReminders, updateSmartReminder }) => {
+      const hit = loadSmartReminders().find(
+        (r) => r.mainAlarmId === alarm.id || r.advanceAlarmIds.includes(alarm.id),
+      )
+      if (hit && (hit.status === 'scheduled' || hit.status === 'snoozed')) {
+        updateSmartReminder(hit.id, {
+          status: hit.mainAlarmId === alarm.id ? 'triggered' : hit.status,
+          notificationStatus: 'fired',
+        })
+      }
+    })
+    pushMsg('assistant', `⏰ AIZIO 알림: ${alarm.body}`)
     if (state.settings.speakReplies) {
       void speakAsync(`알림. ${alarm.body}`.slice(0, 160), 'ko-KR')
     }

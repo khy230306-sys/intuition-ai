@@ -16,6 +16,17 @@ const SKILL_OWNED: CoreIntent[] = [
   'project_planning',
   'app_navigation',
   'change_setting',
+  'remember_relationship',
+  'update_relationship',
+  'forget_relationship',
+  'list_relationships',
+  'create_reminder',
+  'update_reminder',
+  'cancel_reminder',
+  'list_reminders',
+  'snooze_reminder',
+  'mark_reminder_complete',
+  'ask_person_schedule',
   // `help` → legacy think (full helpText with 투자/생활/…)
 ]
 

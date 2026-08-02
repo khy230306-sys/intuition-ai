@@ -90,8 +90,9 @@ describe('AIZIO Core Brain', () => {
       text: '내일 오후 3시에 병원 일정 추가해줘',
       allowDuplicate: true,
     })
-    expect(create.intent).toBe('create_calendar_event')
-    expect(create.responseText).toMatch(/연결|없습니다/)
+    // Natural hospital appointments route to Smart Reminder (not unavailable personal calendar)
+    expect(create.intent).toBe('create_reminder')
+    expect(create.responseText).toMatch(/저장|알려|지난 시간|날짜와 시간/)
     expect(create.responseText).not.toMatch(/추가했습니다/)
   })
 

@@ -20,6 +20,11 @@
 | `app_navigation` | 가족 화면 가줘 | navigation | `BrainReply.view` |
 | `change_setting` | 설정 열어줘 | settings | view=settings |
 | `help` | 도움말 | → **legacy** `helpText` | Skill adapter kept for direct use |
+| `remember_relationship` | 엄마 이름은 … | relationship | |
+| `list_relationships` | 가족 관계 목록 | relationship | |
+| `create_reminder` | 오후 2시 엄마 병원 예약 | smartReminder | local alarm |
+| `ask_person_schedule` | 엄마 오늘 일정 | smartReminder | |
+| `update_reminder` / `cancel_reminder` / `snooze_reminder` | 후속 명령 | smartReminder | context 15분 |
 | `unknown` | — | → general_chat | |
 
 Classifier: local rules first (`intentClassifier` + music classifier). Ambiguous → `general_chat`.

@@ -39,6 +39,8 @@ import {
 import { answerFx } from './fx'
 import { parseExpenseLine } from './expenseParse'
 import { buildAlarmFromText, formatWhenAt, wantsLocalAlarm } from './notify'
+import { getAppLocale } from './i18n'
+import { tryHandleMusicSkill } from './music'
 import {
   addExpense,
   addHabit,
@@ -764,6 +766,22 @@ export async function think(
         speak: true,
       }
     }
+  }
+
+  // AIZIO Music Skill — independent module; ambiguous intents fall through to AI
+  try {
+    const music = await tryHandleMusicSkill(text, getAppLocale())
+    if (music) {
+      return {
+        text: music.text,
+        speak: music.speak !== false,
+        musicNeedsGesture: music.needsGesture,
+        musicPlayUrl: music.playUrl,
+        musicShowMiniPlayer: true,
+      }
+    }
+  } catch {
+    /* never block normal AI on music classifier errors */
   }
 
   // App update (home-screen PWA)

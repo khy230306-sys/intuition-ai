@@ -172,8 +172,19 @@ import {
   translateChatMessage,
   translationSourceLabel,
 } from './globalChat'
+import {
+  controlMusic,
+  loadMusicPreferences,
+  loadPersistedMusicSession,
+  playWithUserGesture,
+  renderMusicMiniPlayer,
+  renderMusicPlayChip,
+  sessionSnapshot,
+  updateMusicPreferences,
+  type MusicSession,
+} from './music'
 
-const APP_VERSION = '1.9.22'
+const APP_VERSION = '1.10.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -317,9 +328,9 @@ async function refreshRemoteVersionBadge(opts?: { announce?: boolean }): Promise
 
 const SUGGESTIONS = [
   '오늘 날씨 알려줘',
+  '조용한 음악 틀어줘',
   '브리핑',
   '지금 몇 시야',
-  '대화 초기화',
   '삼성전자 시세',
   '도움말',
 ]
@@ -377,6 +388,9 @@ const state = {
   arcadeLevel: 1,
   weather: null as WeatherSnap | null,
   shareModal: null as null | 'app' | 'backup' | 'arcade' | 'invite',
+  /** AIZIO Music Skill mini player visibility */
+  musicPlayerOpen: false,
+  musicSession: null as MusicSession | null,
   shareQrSvg: '',
   shareHint: '',
   shareArcadePayload: '',
@@ -928,11 +942,53 @@ async function refreshWeather(): Promise<void> {
   }
 }
 
-function pushMsg(role: ChatMessage['role'], text: string): ChatMessage {
-  const msg: ChatMessage = { id: uid(), role, text, createdAt: Date.now() }
+function pushMsg(
+  role: ChatMessage['role'],
+  text: string,
+  extra?: Partial<Pick<ChatMessage, 'musicNeedsGesture' | 'musicPlayUrl' | 'actionHint'>>,
+): ChatMessage {
+  const msg: ChatMessage = { id: uid(), role, text, createdAt: Date.now(), ...extra }
   state.messages.push(msg)
   saveChat(state.messages)
   return msg
+}
+
+function syncMusicUiFromSession(): void {
+  state.musicSession = sessionSnapshot()
+  const st = state.musicSession.status
+  if (st === 'ready' || st === 'opened_external' || st === 'paused' || st === 'unknown' || st === 'searching') {
+    state.musicPlayerOpen = true
+  }
+}
+
+async function handleMusicAction(action: string): Promise<void> {
+  if (action === 'close') {
+    state.musicPlayerOpen = false
+    render()
+    return
+  }
+  const locale = getAppLocale()
+  let reply
+  if (action === 'play' || action === 'open') {
+    reply = await playWithUserGesture(locale)
+  } else if (action === 'pause') {
+    reply = await controlMusic('pause', locale)
+  } else if (action === 'stop') {
+    reply = await controlMusic('stop', locale)
+  } else if (action === 'next') {
+    reply = await controlMusic('next', locale)
+  } else {
+    return
+  }
+  syncMusicUiFromSession()
+  if (reply.text) {
+    pushMsg('assistant', reply.text, {
+      musicNeedsGesture: reply.needsGesture,
+      musicPlayUrl: reply.playUrl,
+    })
+  }
+  render()
+  scrollChat()
 }
 
 /** Prefer translated body / skip lock instructions for TTS. */
@@ -1008,13 +1064,26 @@ async function handleUserText(raw: string): Promise<void> {
       ])
       if (gen !== thinkGen) return
       if (result && 'message' in result && result.message && result.message !== reply.text) {
-        pushMsg('assistant', `${reply.text}\n(${result.message})`)
+        pushMsg('assistant', `${reply.text}\n(${result.message})`, {
+          musicNeedsGesture: reply.musicNeedsGesture,
+          musicPlayUrl: reply.musicPlayUrl,
+        })
       } else {
-        pushMsg('assistant', reply.text)
+        pushMsg('assistant', reply.text, {
+          musicNeedsGesture: reply.musicNeedsGesture,
+          musicPlayUrl: reply.musicPlayUrl,
+        })
       }
       if (result && 'view' in result && result.view) state.view = result.view
     } else {
-      pushMsg('assistant', reply.text)
+      pushMsg('assistant', reply.text, {
+        musicNeedsGesture: reply.musicNeedsGesture,
+        musicPlayUrl: reply.musicPlayUrl,
+      })
+    }
+    if (reply.musicShowMiniPlayer) {
+      syncMusicUiFromSession()
+      state.musicPlayerOpen = true
     }
     if (reply.view) state.view = reply.view
     if (reply.arcadeId) state.arcadeId = reply.arcadeId
@@ -2066,7 +2135,11 @@ function renderChat(): string {
                 <span class="msg-name">${escapeHtml(name)}</span>
                 ${clock ? `<time class="msg-time">${clock}</time>` : ''}
               </div>
-              <div class="msg-bubble ${mine ? 'user' : 'assistant'}">${escapeHtml(m.text)}</div>
+              <div class="msg-bubble ${mine ? 'user' : 'assistant'}">${escapeHtml(m.text)}${
+                !mine && m.musicNeedsGesture
+                  ? renderMusicPlayChip(m.musicPlayUrl, true)
+                  : ''
+              }</div>
             </div>
           </div>`
         })
@@ -2110,6 +2183,7 @@ function renderChat(): string {
       )}</div>
       <div class="composer-dock">
         ${lockBar}
+        ${renderMusicMiniPlayer(state.musicSession || sessionSnapshot(), state.musicPlayerOpen)}
         <form class="composer chat-composer" id="composer">
           <button type="button" class="icon-btn ${state.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${state.listening ? 'true' : 'false'}">${state.listening ? 'STOP' : 'MIC'}</button>
           <input id="draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
@@ -2906,6 +2980,26 @@ function renderSettings(): string {
           <span>답변 읽어주기</span>
           <input type="checkbox" name="speakReplies" ${s.speakReplies ? 'checked' : ''} />
         </div>
+        <h3 class="subsection-title">${escapeHtml(t('music.settingsTitle'))}</h3>
+        <p class="hint">대화·음성으로 음악을 요청하면 YouTube 검색으로 연결합니다. API 키 없이 안전한 검색 링크를 엽니다.</p>
+        ${(() => {
+          const mp = loadMusicPreferences()
+          return `
+        <label>${escapeHtml(t('music.preferredProvider'))}
+          <select name="musicProvider">
+            <option value="youtube" ${mp.preferredMusicProvider === 'youtube' ? 'selected' : ''}>YouTube</option>
+            <option value="youtube_music" ${mp.preferredMusicProvider === 'youtube_music' ? 'selected' : ''}>YouTube Music</option>
+            <option value="spotify" ${mp.preferredMusicProvider === 'spotify' ? 'selected' : ''}>Spotify (검색 링크)</option>
+            <option value="apple_music" ${mp.preferredMusicProvider === 'apple_music' ? 'selected' : ''}>Apple Music (검색 링크)</option>
+          </select>
+        </label>
+        <div class="toggle-row"><span>${escapeHtml(t('music.openExternal'))}</span>
+          <input type="checkbox" name="musicOpenExternal" ${mp.openInExternalApp ? 'checked' : ''} /></div>
+        <div class="toggle-row"><span>${escapeHtml(t('music.rememberSearches'))}</span>
+          <input type="checkbox" name="musicRememberSearches" ${mp.rememberRecentMusicSearches !== false ? 'checked' : ''} /></div>
+        <div class="toggle-row"><span>${escapeHtml(t('music.preferInstrumental'))}</span>
+          <input type="checkbox" name="musicPreferInstrumental" ${mp.preferInstrumental ? 'checked' : ''} /></div>`
+        })()}
         <h3 class="subsection-title">채팅 알림</h3>
         <div class="toggle-row">
           <span>가족 대화 알림</span>
@@ -3210,6 +3304,15 @@ async function refreshQuotes(): Promise<void> {
 }
 
 function bind(): void {
+  document.querySelectorAll<HTMLButtonElement>('[data-music-action]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const action = btn.dataset.musicAction || ''
+      void handleMusicAction(action)
+    })
+  })
+
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((btn) => {
     btn.addEventListener('click', (ev) => {
       if (isNavGuarded()) {
@@ -4174,6 +4277,18 @@ function bind(): void {
     state.settings = next
     saveSettings(next)
     setAppLocale(appLocale)
+    const musicProvider = String(fd.get('musicProvider') || 'youtube') as
+      | 'youtube'
+      | 'youtube_music'
+      | 'spotify'
+      | 'apple_music'
+    updateMusicPreferences({
+      preferredMusicProvider: musicProvider,
+      preferredMusicLanguage: appLocale,
+      openInExternalApp: Boolean(fd.get('musicOpenExternal')),
+      rememberRecentMusicSearches: Boolean(fd.get('musicRememberSearches')),
+      preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
+    })
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
         if (sub) {
@@ -4448,6 +4563,12 @@ function boot(): void {
 
   state.messages = loadChat()
   state.settings = loadSettings()
+  state.musicSession = loadPersistedMusicSession()
+  state.musicPlayerOpen = Boolean(
+    state.musicSession.query &&
+      state.musicSession.status !== 'idle' &&
+      state.musicSession.status !== 'stopped',
+  )
   initAppLocale(state.settings.appLocale)
   if (!state.settings.appLocale) {
     state.settings = { ...state.settings, appLocale: getAppLocale() }

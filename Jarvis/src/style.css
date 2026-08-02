@@ -2295,3 +2295,71 @@ body[data-jarvis-view='friends'] .orb::after {
 .profile-sheet-actions .ghost-btn {
   width: 100%;
 }
+
+/* AIZIO Music Skill — compact mini player above composer */
+.music-mini {
+  margin: 0 8px 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(12, 22, 34, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: max(8px, calc(var(--safe-bottom) * 0.15));
+}
+
+.music-mini-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.music-mini-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-mini-title {
+  display: block;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-mini-sub {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.music-mini-close {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  line-height: 1;
+}
+
+.music-mini-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.music-mini-actions .tiny,
+.music-play-chip .tiny {
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.music-play-chip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.msg-bubble .music-play-chip {
+  white-space: normal;
+}

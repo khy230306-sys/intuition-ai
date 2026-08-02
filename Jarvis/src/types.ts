@@ -6,6 +6,9 @@ export interface ChatMessage {
   text: string
   createdAt: number
   actionHint?: string
+  /** AIZIO Music Skill — gesture play chip on this bubble */
+  musicNeedsGesture?: boolean
+  musicPlayUrl?: string | null
 }
 
 export interface MemoryItem {
@@ -173,4 +176,8 @@ export interface BrainReply {
   /** Wipe main chat history after this reply is applied. */
   clearChat?: boolean
   action?: () => Promise<ActionResult | void> | ActionResult | void
+  /** AIZIO Music Skill — show gesture play control (never claim autoplay). */
+  musicNeedsGesture?: boolean
+  musicPlayUrl?: string | null
+  musicShowMiniPlayer?: boolean
 }

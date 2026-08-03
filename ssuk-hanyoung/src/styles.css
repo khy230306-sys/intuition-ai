@@ -743,10 +743,13 @@ img {
   font-family: var(--font-display);
   background: var(--card);
   font-size: 0.85rem;
+  box-shadow: none;
 }
 
 .chip.on {
   background: var(--sunny);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .explore-item {

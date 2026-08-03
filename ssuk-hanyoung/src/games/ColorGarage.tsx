@@ -66,7 +66,7 @@ export function ColorGarage() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big">자동차를 골라 차고에 넣어요</div>
+        <div className="prompt-big">{selected ? '같은 색 차고를 눌러요!' : '자동차를 먼저 눌러요!'}</div>
         <div className="prompt-sub">
           {round.score}/{round.total} 라운드
         </div>
@@ -78,7 +78,7 @@ export function ColorGarage() {
               key={car.id}
               type="button"
               className={`car-chip${selected === car.id ? ' selected' : ''}`}
-              style={{ background: car.hex }}
+              style={{ background: car.hex, animation: selected ? undefined : 'float-y 2s ease-in-out infinite' }}
               onClick={() => {
                 setSelected(car.id)
                 speak('이 자동차를 어디로 넣을까요?')

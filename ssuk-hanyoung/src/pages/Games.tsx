@@ -20,7 +20,7 @@ export function Games() {
       <p className="section-sub" style={{ marginTop: '-0.4rem' }}>
         자동차랑 색깔 놀이를 골라 보아요
       </p>
-      <div className="filter-row">
+      <div className="filter-row" role="tablist" aria-label="게임 필터">
         {(
           [
             ['all', '전체'],
@@ -32,6 +32,8 @@ export function Games() {
           <button
             key={id}
             type="button"
+            role="tab"
+            aria-selected={filter === id}
             className={`chip${filter === id ? ' on' : ''}`}
             onClick={() => setFilter(id)}
           >
@@ -39,6 +41,7 @@ export function Games() {
           </button>
         ))}
       </div>
+      <p className="section-sub">{list.length}개 놀이</p>
       <div className="grid-2">
         {list.map((g) => (
           <Link key={g.id} to={`/games/${g.id}`} className="card">

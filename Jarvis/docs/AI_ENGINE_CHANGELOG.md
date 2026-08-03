@@ -1,5 +1,12 @@
 # AI Engine changelog
 
+## 1.15.1
+
+- **실기기 검증**: ShipStatic preview 배포(`deploy:preview`, 프로덕션 도메인 미변경) · 실기기 테스트 모드/진단 JSON
+- **스마트 리마인더 ↔ 푸시 API**: schedule/update/cancel 연결 · pushScheduleStatus 필드 · 개인정보 표시 모드
+- **push-server 템플릿**: 로컬 실행 가능한 최소 서버 (`Jarvis/push-server/`) — 운영 계정 생성은 사용자 승인 필요
+- 종료 상태 푸시는 서버 URL 연결·실기기 확인 전까지 **미완성**으로 표시
+
 ## 1.15.0
 
 - **전체 검증 + 출시 준비 기반**: 푸시/계정·데이터 분리/백업·복구/스토어 문서 (서버·실기기 항목은 미완성으로 명시)

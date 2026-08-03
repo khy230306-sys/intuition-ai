@@ -34,7 +34,7 @@ describe('reminder push foundation', () => {
 
   it('exposes API contract constants', () => {
     expect(REMINDER_PUSH_API.schedule).toMatch(/reminders\/schedule/)
-    expect(REMINDER_PUSH_API.upsertSubscription).toMatch(/push\/subscriptions/)
+    expect(REMINDER_PUSH_API.subscribe).toMatch(/push\/subscribe/)
   })
 
   it('stores local subscription records without server sync flag', () => {

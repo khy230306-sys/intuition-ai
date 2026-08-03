@@ -45,6 +45,8 @@ const defaultSettings: JarvisSettings = {
   notifyFamilyChat: true,
   notifyFriendsChat: true,
   notifyWhileOpen: false,
+  notifyPrivacyMode: 'simple',
+  pushServerBaseUrl: '',
   appLocale: undefined,
   translationLocale: 'ko',
   autoTranslateMessages: true,

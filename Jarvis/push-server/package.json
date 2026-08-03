@@ -1,0 +1,14 @@
+{
+  "name": "aizio-push-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Minimal AIZIO reminder Web Push server template — run locally or on your host",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

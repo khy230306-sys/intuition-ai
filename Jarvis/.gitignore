@@ -8,3 +8,5 @@ dist
 .env
 .env.*
 *.zip
+push-server/data
+push-server/node_modules

@@ -1,134 +1,82 @@
-# AIZIO Real Device Master Test
+# AIZIO Real Device Master Test (v1.15.1)
 
-**App:** AIZIO (아이지오) v1.15.0  
-**URL:** https://jarvis-app.shipstatic.com  
-**Devices:** iPhone Safari (홈 화면 추가) · Android Chrome (홈 화면 추가)
+**검증 URL:** ShipStatic **preview** snapshot (`npm run deploy:preview`) — 프로덕션 `https://jarvis-app.shipstatic.com` 과 분리.  
+**프로덕션 덮어쓰기:** 이 문서의 검증은 preview URL만 사용. `deploy:web`은 사용자 승인 후에만.
 
-> Cloud Agent cannot fill **Actual**. Leave blank until hardware QA.  
-> Closed-app **personal** push is expected to **fail / not fire** without a push server — mark honestly.  
-> TestFlight / Play internal builds are **User-only** (Apple / Google developer accounts) and are **out of scope** until packaging exists. This matrix is for the **live PWA**.
+진단: 설정 → **실기기 테스트 모드** → 진단 새로고침 / JSON 내보내기 (API 키 제외).
 
-**Tester:** _______________ **Date:** _______________ **Build/version seen:** _______________
+범례: 실제 결과·통과는 사용자가 기입. Cloud Agent는 **미확인**.
 
 ---
 
-## How to use
+## 공통 사전 준비
 
-1. Install/open from the fixed URL only.  
-2. For each row: run **Method**, compare to **Expected**, write **Actual**, mark **Pass/Fail**.  
-3. Log **Errors** (console / OS dialog). Check **Screenshot?** when visual proof helps.  
-4. P0 fails block release; P2 can defer with notes.
+1. preview URL을 문자/메모로 복사
+2. 설정에서 푸시 서버 URL이 비어 있으면 종료 상태 개인 알림은 **실패가 정상**(서버 미연결)
+3. API 키는 설정에서만 입력 (채팅에 붙여넣지 말 것)
 
-**Pass/Fail values:** `P` · `F` · `N/A` · `Blocked`
-
----
-
-## A. iPhone Safari / Home Screen PWA
-
-| ID | Area | Method | Expected | Actual | Pass/Fail | Errors | Screenshot? |
-|----|------|--------|----------|--------|-----------|--------|-------------|
-| i-01 | Install | Safari → Share → 홈 화면에 추가 → open icon | Standalone AIZIO; name AIZIO | | | | [ ] |
-| i-02 | Version | Open Settings / badge / about | Shows **1.15.0** (or deployed target) | | | | [ ] |
-| i-03 | Mic allow | Tap MIC → Allow | STT listening; transcript → chat funnel | | | | [ ] |
-| i-04 | Mic deny | Deny mic | Text chat still works; clear deny hint | | | | [ ] |
-| i-05 | STT chat | Say 「고마워」 (or local hello) | Reply via local/AI path; no crash | | | | [ ] |
-| i-06 | STT reminder | 「오늘 10분 뒤 알려줘」 | Reminder saved; open-app timer path | | | | [ ] |
-| i-07 | TTS on | Enable speak → get reply | Audible TTS (or honest unsupported) | | | | [ ] |
-| i-08 | TTS off | Disable speak | No unexpected speech | | | | [ ] |
-| i-09 | Notif permission | Settings → 알림 권한 | System prompt; Allow/Deny handled | | | | [ ] |
-| i-10 | Chat push — app **open** | Peer sends family/friends chat; AIZIO foreground | In-app or banner per design | | | | [ ] |
-| i-11 | Chat push — **background** | Home screen; another device sends chat | May notify if subscribed; OS-dependent | | | | [ ] |
-| i-12 | Chat push — **closed** | Force-quit PWA; peer sends chat | May or may not deliver on iOS; record truth | | | | [ ] |
-| i-13 | Personal rem — **open** | Reminder due while app open | Notification / flash near time | | | | [ ] |
-| i-14 | Personal rem — **closed** | Reminder due after force-quit | **Expect miss** without push server | | | | [ ] |
-| i-15 | Music external | 「조용한 음악 틀어줘」 + gesture | Opens external app/site; no fake “재생됨” | | | | [ ] |
-| i-16 | Keyboard | Focus composer | Input not covered; scroll OK | | | | [ ] |
-| i-17 | Safe area | Notch / home indicator | UI not clipped; bottom tabs clear | | | | [ ] |
-| i-18 | PWA update | Deployed newer build → Update / 캐시 새로고침 | New version badge after refresh path | | | | [ ] |
-| i-19 | Offline | Airplane mode | Notes/todos/games/local OK; AI may fail honestly | | | | [ ] |
-| i-20 | Persistence | Add note + reminder + relationship → kill → relaunch | Data still present | | | | [ ] |
-| i-21 | API keys | Settings → paste test key → save → test → clear | Masked display; test OK; delete works; **not** in chat | | | | [ ] |
-| i-22 | Guest userId | Inspect that app runs without login | Works offline-account-free; **no** cross-device sync | | | | [ ] |
+| 항목 | 방법 | 예상 | 실제 | 통과 | 오류 | 캡처 |
+|------|------|------|------|------|------|------|
+| 진단 JSON | 설정→실기기 테스트→내보내기 | 버전·커밋·권한 포함, sk- 없음 | | | | 선택 |
 
 ---
 
-## B. Android Chrome / Home Screen PWA
+## A. iPhone (Safari → 홈 화면)
 
-| ID | Area | Method | Expected | Actual | Pass/Fail | Errors | Screenshot? |
-|----|------|--------|----------|--------|-----------|--------|-------------|
-| a-01 | Install | Chrome → Install app / 홈 화면 추가 | Launches standalone AIZIO | | | | [ ] |
-| a-02 | Version | Badge / settings | Matches deploy (e.g. 1.15.0) | | | | [ ] |
-| a-03 | Mic allow | MIC → Allow | STT works | | | | [ ] |
-| a-04 | Mic deny | Deny | Text path OK | | | | [ ] |
-| a-05 | STT chat | Voice short chat | Reply; no crash | | | | [ ] |
-| a-06 | STT reminder | Voice create reminder | Saved; open-app fire path | | | | [ ] |
-| a-07 | TTS on/off | Toggle speak | Matches setting | | | | [ ] |
-| a-08 | Notif permission | Android 13+ runtime prompt | Allow/Deny handled | | | | [ ] |
-| a-09 | Chat push — **open** | Foreground chat from peer | Shown | | | | [ ] |
-| a-10 | Chat push — **background** | App backgrounded | Web Push often works if subscribed | | | | [ ] |
-| a-11 | Chat push — **closed** | Swipe away task; peer chat | Record delivery truth | | | | [ ] |
-| a-12 | Personal rem — **open** | Due while open | Fires | | | | [ ] |
-| a-13 | Personal rem — **closed** | Due while killed | **Expect miss** without server | | | | [ ] |
-| a-14 | Music external | Play music command + gesture | External YouTube/app; no fake playing | | | | [ ] |
-| a-15 | Keyboard | Composer focus | Not covered by keyboard / nav bar | | | | [ ] |
-| a-16 | Safe area | Cutout / gesture bar | No clipped CTAs | | | | [ ] |
-| a-17 | PWA update | New SW → update UI / relaunch | Version advances | | | | [ ] |
-| a-18 | Offline | Airplane | Local features OK | | | | [ ] |
-| a-19 | Persistence | Relaunch after kill | Data persists | | | | [ ] |
-| a-20 | API keys | Hybrid settings test | Keys on device; masked; delete OK | | | | [ ] |
-| a-21 | Battery / OEM | Optional: aggressive OEM battery saver | Note if push/timers delayed | | | | [ ] |
+| # | 단계 | 누를 위치 / 입력 | 예상 결과 | 실패 시 캡처 | 진단 |
+|---|------|------------------|-----------|--------------|------|
+| 1 | Safari에서 검증 URL | 주소창에 REVIEW_URL | HTTPS 로드, 흰 화면 없음 | 전체 화면 | SW/버전 |
+| 2 | 홈 화면에 추가 | 공유→홈 화면에 추가 | 아이콘 AIZIO | 공유 시트 | standalone |
+| 3 | 홈 화면 앱 실행 | 홈 아이콘 | standalone, 하단 탭 | 상단 Safari UI 잔존 | PWA=true |
+| 4 | 기존 데이터 | 채팅·생활 탭 | 이전 기기 데이터는 **이 URL 원본과 별개 origin**일 수 있음(안내) | — | — |
+| 5 | 일반 대화 | `안녕` | 자연 응답, STT 오류 문구 없음 | 채팅 | — |
+| 6 | 칭찬 | `넌 정말 최고의 비서야.` | 일반 대화, 음악 오인 없음 | 채팅 | — |
+| 7 | 마이크 권한 | MIC 버튼 | 시스템 권한 시트 | 권한 거부 화면 | mic |
+| 8 | 음성 대화 | 「고마워」 | 텍스트+선택 TTS | — | — |
+| 9 | 음성 음악 | 「조용한 음악 틀어줘」 | 재생 준비 카드, 자동「재생됨」거짓 없음 | 카드 | — |
+| 10 | 음악 버튼 | 카드의 열기/재생 | 외부 앱/탭 | — | — |
+| 11 | 가족관계 | `우리 엄마 이름은 김영희야` → `엄마 이름 뭐였지?` | 저장·조회 | — | — |
+| 12 | 2분 알림 | `2분 뒤에 테스트 알림이라고 알려줘` | 저장 + 앱 내부 알림 등록 문구 | 응답 전문 | push 상태 |
+| 13 | 앱 열린 알림 | 앱 유지 2분 | 배너/진동 (권한 허용 시) | 알림 | notification |
+| 14 | 홈으로 | 홈 버튼 후 대기 | (채팅 푸시만 해당 시) | — | — |
+| 15 | **완전 종료** | 앱 전환기에서 AIZIO 위로 스와이프 | 서버 없으면 개인 알림 **안 옴 = 예상**. 서버 연결 후 재시험 | — | push server |
+| 16 | 재실행 데이터 | 홈 아이콘 | 일정·관계 유지 | — | — |
+| 17 | 오프라인 | 항공모드 | 로컬 기능 동작 | — | online=false |
+| 18 | Provider 오류 | 잘못된 키로 질문 | 한도/키 오류 구분 (과장 없음) | 응답 | providers |
+| 19 | 백업 내보내기 | 설정→파일 저장 | JSON 저장, apiKey 빈 값 | — | — |
+| 20 | 복원 미리보기 | 설정→복원 | 손상 파일 거부 / 미리보기 경고 | — | — |
 
----
+### iPhone 특이사항
 
-## C. Cross-cutting (either device)
-
-| ID | Area | Method | Expected | Actual | Pass/Fail | Errors | Screenshot? |
-|----|------|--------|----------|--------|-----------|--------|-------------|
-| x-01 | Fixed URL | Open only jarvis-app.shipstatic.com | Not a random shipstatic snapshot | | | | [ ] |
-| x-02 | No key chat | Local skills without AI key | Works; free chat guides to Settings | | | | [ ] |
-| x-03 | Bad AI key | Wrong key → test | Invalid key message (not silent paid) | | | | [ ] |
-| x-04 | Backup export | Export/share backup | JSON shares; **no raw API keys** | | | | [ ] |
-| x-05 | Games offline | Play 지오대시 offline | Runs; scores local | | | | [ ] |
-| x-06 | Invest online | Open invest quotes online | Snapshot/Yahoo path; disclaimer OK | | | | [ ] |
+- 백그라운드 Web Push: **홈 화면 추가 PWA** + 알림 허용 필수
+- Safari 탭만으로는 종료 푸시 불가에 가깝음
+- Safe Area: 하단 입력·미니플레이어 겹침 확인
 
 ---
 
-## Severity guide
+## B. Android (Chrome)
 
-| Level | Example | Release impact |
-|-------|---------|----------------|
-| P0 | Crash on launch, data loss, key shown in chat | Block deploy |
-| P1 | Mic broken both platforms, composer covered | Block or waiver |
-| P2 | TTS missing on one browser | Document |
-| Expected fail | Closed personal push without server | **Not a regression** — document |
-
----
-
-## Summary
-
-| Platform | Total run | P | F | Blocked | P0 open |
-|----------|-----------|---|---|---------|---------|
-| iPhone | | | | | |
-| Android | | | | | |
-
-**Ship decision:** [ ] Go (PWA) · [ ] Hold · [ ] Go with known limitations listed below
-
-**Known limitations accepted for this release:**
-
-1. Closed-app personal reminder push — **not done**  
-2. Cloud account sync — **does not exist**  
-3. Store IPA/AAB — **packaging NOT done**  
-4. ________________________________
-
-**Prod deploy approved by owner?** [ ] Yes (required) · [ ] No
+| # | 단계 | 예상 | iPhone과 차이 | 실제 | 통과 |
+|---|------|------|---------------|------|------|
+| 1 | 설치 배너/메뉴→앱 설치 | 런처 아이콘 | beforeinstallprompt 가능 | | |
+| 2 | 알림 권한 | 시스템 다이얼로그 | 채널/중요도 UI 다름 | | |
+| 3 | 마이크 | 권한 후 STT | Chrome STT 엔진 | | |
+| 4 | 백그라운드 | 채팅 푸시(구독 시) | OEM 배터리 최적화에 막힐 수 있음 | | |
+| 5 | 완전 종료 | 최근 앱에서 종료 후 개인 푸시 | **서버 필요** — 없으면 미수신 정상 | | |
+| 6 | 음악 | 외부 YouTube/Chrome 커스텀탭 | 앱 복귀 제스처 다름 | | |
+| 7 | 키보드 | 입력창 가림 없음 | viewport resize | | |
+| 8 | Safe Area | 노치/제스처 바 | 기기별 | | |
+| 9 | 백업·복원 | 동일 | 파일 앱 선택 UI | | |
+| 10 | 오프라인 | 동일 | — | | |
 
 ---
 
-## Out of scope until packaging
+## 종료 상태 푸시 합격 기준 (서버 연결 후만)
 
-| Track | Requirement | Status |
-|-------|-------------|--------|
-| TestFlight | Apple Developer account + IPA | **User-only** / **NOT done** |
-| Play internal testing | Play Console + AAB | **User-only** / **NOT done** |
+1. 푸시 서버 URL 저장 + subscribe 성공 (`푸시 예약 완료`)
+2. 앱 완전 종료
+3. 예약 시각에 알림 수신
+4. 탭 시 AIZIO focus + 일정/채팅 뷰
+5. 개인정보 모드(simple/hidden) 반영
 
-When binaries exist, clone this matrix and add wrapper-specific rows (Deep links, back button, notification channels).
+**서버 없이 15번 실패를 “앱 버그”로 보고하지 말 것.**

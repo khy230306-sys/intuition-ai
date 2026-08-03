@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.7'
+const APP_VERSION = '1.14.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2641,6 +2641,18 @@ function renderLife(): string {
 
   return `
     <section class="panel view-scroll">
+      <details class="life-os-panel" open>
+        <summary><strong>내 생활 · AIZIO Life OS</strong></summary>
+        <p class="hint">대화로 DNA·목표·아이디어·프로젝트를 관리합니다. 예: 「나는 짧은 답변이 좋아」「내 목표는 …」「아이디어 저장」</p>
+        <div class="chips left">
+          <button type="button" data-suggest="내가 무엇을 좋아한다고 기억하고 있어?">DNA</button>
+          <button type="button" data-suggest="목표 목록 보여줘">목표</button>
+          <button type="button" data-suggest="아이디어 목록">아이디어</button>
+          <button type="button" data-suggest="AIZIO 프로젝트 어디까지 됐어?">프로젝트</button>
+          <button type="button" data-suggest="오늘 뭐 해야 해?">오늘</button>
+          <button type="button" data-suggest="스킬 목록">Skill</button>
+        </div>
+      </details>
       <h2 class="section-title">STATS</h2>
       <p class="hint">아래에 숫자를 직접 입력하세요. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
       <form id="life-stats-form" class="settings-form life-input-form">

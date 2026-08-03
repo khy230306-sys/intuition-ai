@@ -1,5 +1,14 @@
 # AI Engine changelog
 
+## 1.14.0
+
+- **AIZIO Life OS** foundation (`src/life-os/`): DNA, Goals, Projects, Ideas, AI Meeting, Timeline, Routines, Family local profiles, Emergency mode, Health/Finance/Travel/Learning shells, Skill Store manifests
+- Core Brain skill `lifeOS` (lazy-loaded chunk)
+- Feature flags + consent + privacy guards
+- Life tab entry: 「내 생활」 chips
+- Docs: `AIZIO_LIFE_OS_*.md`
+
+
 ## 1.13.7
 
 - **스페이스2**: 레이저 무기 제거 — 강화는 펄스→트윈→스프레드만

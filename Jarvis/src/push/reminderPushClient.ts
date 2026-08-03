@@ -9,37 +9,17 @@ import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '../vapid'
 import type {
   CancelReminderPushRequest,
   PushSubscribeRequest,
-  PushServerStatus,
   ReminderPushChannel,
   ReminderPushSubscriptionRecord,
   ReminderPushStatusResponse,
   ScheduleReminderPushRequest,
   UpdateReminderPushRequest,
 } from './reminderPushTypes'
+import { getPushServerStatus, setPushServerBaseUrl } from './serverUrl'
+
+export { getPushServerStatus, setPushServerBaseUrl }
 
 const REMINDER_SUB_KEY = 'aizio.push.reminderSubscription.v1'
-const PUSH_SERVER_URL_KEY = 'aizio.push.serverBaseUrl.v1'
-
-export function getPushServerStatus(): PushServerStatus {
-  try {
-    const base = localStorage.getItem(PUSH_SERVER_URL_KEY)?.trim() || null
-    if (!base) {
-      return {
-        configured: false,
-        baseUrl: null,
-        reason: '푸시 서버 URL 미설정 — 앱 종료 개인 알림 예약 불가',
-      }
-    }
-    return { configured: true, baseUrl: base, reason: '서버 URL 설정됨' }
-  } catch {
-    return { configured: false, baseUrl: null, reason: 'storage 오류' }
-  }
-}
-
-export function setPushServerBaseUrl(url: string | null): void {
-  if (!url) localStorage.removeItem(PUSH_SERVER_URL_KEY)
-  else localStorage.setItem(PUSH_SERVER_URL_KEY, url.replace(/\/$/, ''))
-}
 
 export function loadReminderPushSubscription(): ReminderPushSubscriptionRecord | null {
   try {
@@ -252,11 +232,20 @@ export async function cancelReminderOnServer(
   return { ok: true, message: '서버 취소 완료' }
 }
 
-export async function fetchReminderPushStatus(reminderId: string): Promise<ReminderPushStatusResponse | null> {
+export async function fetchReminderPushStatus(
+  reminderId: string,
+  userId?: string,
+): Promise<ReminderPushStatusResponse | null> {
   const server = getPushServerStatus()
   if (!server.configured || !server.baseUrl) return null
+  const uid = (userId || ensureGuestIdentity().userId || '').trim()
+  if (!uid) return null
   try {
-    const res = await fetch(`${server.baseUrl}/v1/reminders/status/${encodeURIComponent(reminderId)}`)
+    const qs = new URLSearchParams({ userId: uid })
+    const res = await fetch(
+      `${server.baseUrl}/v1/reminders/status/${encodeURIComponent(reminderId)}?${qs}`,
+      { cache: 'no-store' },
+    )
     if (!res.ok) return null
     return (await res.json()) as ReminderPushStatusResponse
   } catch {

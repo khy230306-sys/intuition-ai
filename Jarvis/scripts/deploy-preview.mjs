@@ -75,6 +75,21 @@ function writeBuildMeta() {
     note: 'Preview snapshot — not production domain',
   }
   writeFileSync(join(root, 'public', 'build-meta.json'), JSON.stringify(meta, null, 2))
+  const pushUrl = (process.env.PUSH_SERVER_URL || '').trim().replace(/\/$/, '')
+  writeFileSync(
+    join(root, 'public', 'preview-config.json'),
+    JSON.stringify(
+      {
+        channel: 'preview',
+        defaultPushServerUrl: pushUrl,
+        note: pushUrl
+          ? 'Preview default push server (user can override in Settings)'
+          : 'Set PUSH_SERVER_URL when running deploy:preview to bake default server',
+      },
+      null,
+      2,
+    ),
+  )
   return meta
 }
 

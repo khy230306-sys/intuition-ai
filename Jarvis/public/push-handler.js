@@ -63,14 +63,24 @@ self.addEventListener('push', (event) => {
   }
   const parsed = parsePush(raw)
   event.waitUntil(
-    self.registration.showNotification(parsed.title, {
-      body: parsed.body,
-      tag: parsed.tag,
-      renotify: true,
-      data: parsed.data,
-      icon: './icons/icon-192.png',
-      badge: './icons/icon-192.png',
-    }),
+    (async () => {
+      try {
+        const all = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+        for (const client of all) {
+          client.postMessage({ type: 'aizio-push-received', at: new Date().toISOString(), kind: parsed.data?.kind })
+        }
+      } catch {
+        /* ignore */
+      }
+      await self.registration.showNotification(parsed.title, {
+        body: parsed.body,
+        tag: parsed.tag,
+        renotify: true,
+        data: parsed.data,
+        icon: './icons/icon-192.png',
+        badge: './icons/icon-192.png',
+      })
+    })(),
   )
 })
 

@@ -1,0 +1,5 @@
+{
+  "channel": "preview",
+  "defaultPushServerUrl": "",
+  "note": "Filled at deploy:preview when PUSH_SERVER_URL env is set. Production builds ignore empty default."
+}

@@ -1,11 +1,12 @@
-/** Shared VAPID keys for AIZIO family/friends Web Push (client-side send). */
+/**
+ * VAPID **public** key only — used for PushManager.subscribe.
+ * Private key lives exclusively on push-server env (never ship in the client bundle).
+ */
 
 export const VAPID_PUBLIC_KEY =
-  'BKupo7Y_efhJskLSk_xdJwyviAfqjjnFUPdlRVnSvWd6AXQJCELFn-T01U7BOCpOvU9DDUUk-xLhjfjv8Lozis8'
+  'BCYhU9UX42gHsf8RiRlXztfpFZqPyLfXxNrrXbRRNSs-7_qkL6t9-mMUQ4AIGETwDxBJFPdIXniMk6ckbDifF8c'
 
-export const VAPID_PRIVATE_KEY = 'Ng488Bab1APMQZ4kQscyp6v3MAs_AdqTLmKfObgRgMw'
-
-export const VAPID_SUBJECT = 'mailto:jarvis-app@shipstatic.com'
+export const VAPID_SUBJECT = 'mailto:aizio-push@shipstatic.com'
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)

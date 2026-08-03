@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.15.1'
+const APP_VERSION = '1.15.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -3361,14 +3361,32 @@ function renderSettings(): string {
         </label>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
-        <details class="device-test-panel">
-          <summary><strong>실기기 테스트 모드</strong></summary>
-          <p class="hint">버전·권한·푸시·스토리지 진단. API 키는 표시·내보내기하지 않습니다.</p>
+        <details class="device-test-panel" open>
+          <summary><strong>실기기 테스트 모드 · 푸시</strong></summary>
+          <p class="hint">버전·권한·푸시·스토리지 진단. API 키·VAPID 비밀키·endpoint 전체값은 표시하지 않습니다. 완전 종료 수신은 사용자가 확인하기 전까지 <strong>실기기 검증 대기</strong>입니다.</p>
           <pre class="device-diag-out hint" data-device-diag-out>진단을 불러오려면 아래 버튼을 누르세요.</pre>
           <div class="row-btns">
             <button type="button" class="primary-btn" data-action="device-diag-refresh">진단 새로고침</button>
             <button type="button" class="ghost-btn" data-action="device-diag-export">진단 JSON 내보내기</button>
           </div>
+          <h3 class="subsection-title">푸시 실기기 테스트</h3>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-health">서버 연결 확인</button>
+            <button type="button" class="ghost-btn" data-action="push-test-subscribe">권한·구독</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" data-action="push-test-1m">1분 후 테스트 알림</button>
+            <button type="button" class="ghost-btn" data-action="push-test-5m">5분 후 테스트 알림</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-update">예약 변경(+3분)</button>
+            <button type="button" class="ghost-btn" data-action="push-test-cancel">예약 취소</button>
+            <button type="button" class="ghost-btn" data-action="push-test-unsub">구독 해제</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-copy">테스트 결과 복사</button>
+          </div>
+          <pre class="device-diag-out hint" data-push-test-out>푸시 테스트 결과가 여기에 표시됩니다.</pre>
         </details>
         ${renderHybridAiSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
@@ -4773,7 +4791,15 @@ function bind(): void {
       preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
     })
     void import('./push').then((m) => {
-      m.setPushServerBaseUrl(next.pushServerBaseUrl || null)
+      const url = (next.pushServerBaseUrl || '').trim()
+      if (!url) {
+        m.setPushServerBaseUrl(null)
+        return
+      }
+      const r = m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+      if (!r.ok) {
+        showFlash(r.error === 'https_required' ? '푸시 서버는 HTTPS URL만 저장됩니다.' : '푸시 서버 URL이 올바르지 않습니다.')
+      }
     })
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
@@ -4960,6 +4986,70 @@ function bind(): void {
       m.downloadDiagnosticsJson(diag)
       showFlash('진단 JSON을 저장했습니다. (API 키 제외)')
     })
+  })
+
+  const pushOut = () => document.querySelector('[data-push-test-out]')
+  const writePushOut = (text: string) => {
+    const el = pushOut()
+    if (el) el.textContent = text
+  }
+  document.querySelector('[data-action="push-test-health"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const meta = await fetch(`./build-meta.json?_=${Date.now()}`).then((r) => r.json()).catch(() => ({}))
+      const r = await m.runPushConnectionCheck(APP_VERSION, String(meta.commit || 'local'))
+      writePushOut(JSON.stringify(r, null, 2))
+      showFlash(r.serverHealthOk ? '서버 health OK' : '서버 연결 실패 — URL·네트워크 확인')
+      ;(window as unknown as { __aizioPushTest?: unknown }).__aizioPushTest = r
+    })
+  })
+  document.querySelector('[data-action="push-test-subscribe"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.requestPermissionAndSubscribe(APP_VERSION)
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-1m"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.scheduleTestReminder(1)
+      writePushOut(`1분 예약: ${r.ok ? 'OK' : 'FAIL'} · id ${m.maskScheduleId(r.reminderId)} · ${r.message}\n상태: 실기기 검증 대기 (앱 완전 종료 후 수신 확인)`)
+      showFlash(r.ok ? '1분 후 테스트 알림을 서버에 예약했습니다.' : r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-5m"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.scheduleTestReminder(5)
+      writePushOut(`5분 예약: ${r.ok ? 'OK' : 'FAIL'} · ${r.message}`)
+      showFlash(r.ok ? '5분 후 테스트 알림 예약' : r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-update"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.updateLastTestReminder(3)
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-cancel"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.cancelLastTestReminder()
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-unsub"]')?.addEventListener('click', () => {
+    void import('./push').then(async (m) => {
+      const r = await m.unsubscribeReminderPush()
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-copy"]')?.addEventListener('click', () => {
+    const text = pushOut()?.textContent || ''
+    void navigator.clipboard?.writeText(text).then(
+      () => showFlash('테스트 결과를 복사했습니다.'),
+      () => showFlash('복사에 실패했습니다.'),
+    )
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
@@ -5198,10 +5288,19 @@ function bootAppCore(): void {
   void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
   state.messages = loadChat()
   state.settings = loadSettings()
-  void import('./push').then((m) => {
-    const url = state.settings.pushServerBaseUrl || null
-    m.setPushServerBaseUrl(url)
+  void import('./push').then(async (m) => {
+    const url = (state.settings.pushServerBaseUrl || '').trim()
+    if (url) m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+    else await m.applyPreviewPushServerDefault({ allowHttpLocalhost: true })
   })
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      const data = ev.data as { type?: string } | null
+      if (data?.type === 'aizio-push-received') {
+        void import('./push/devicePushTest').then((m) => m.markPushReceived())
+      }
+    })
+  }
   // Restore last query for sticky intent, but never auto-open the panel on launch.
   // Mini player appears only after the user asks for music in this session.
   state.musicSession = loadPersistedMusicSession()

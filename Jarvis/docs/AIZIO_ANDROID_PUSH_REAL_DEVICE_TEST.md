@@ -1,6 +1,7 @@
 # Android Push Real Device Test (AIZIO)
 
-**상태:** 실기기 검증 대기
+**상태:** 실기기 검증 대기  
+**Preview URL:** https://keen-drifter-97nqfnk.shipstatic.com
 
 ## 순서
 

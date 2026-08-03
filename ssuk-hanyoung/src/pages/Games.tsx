@@ -41,7 +41,9 @@ export function Games() {
           </button>
         ))}
       </div>
-      <p className="section-sub">{list.length}개 놀이</p>
+      <p className="filter-count" aria-live="polite">
+        {list.length}개 놀이
+      </p>
       <div className="grid-2">
         {list.map((g) => (
           <Link key={g.id} to={`/games/${g.id}`} className="card">

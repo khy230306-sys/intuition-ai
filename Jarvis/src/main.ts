@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.9'
+const APP_VERSION = '1.15.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2641,6 +2641,18 @@ function renderLife(): string {
 
   return `
     <section class="panel view-scroll">
+      <details class="life-os-panel" open>
+        <summary><strong>내 생활 · AIZIO Life OS</strong></summary>
+        <p class="hint">대화로 DNA·목표·아이디어·프로젝트를 관리합니다. 예: 「나는 짧은 답변이 좋아」「내 목표는 …」「아이디어 저장」</p>
+        <div class="chips left">
+          <button type="button" data-suggest="내가 무엇을 좋아한다고 기억하고 있어?">DNA</button>
+          <button type="button" data-suggest="목표 목록 보여줘">목표</button>
+          <button type="button" data-suggest="아이디어 목록">아이디어</button>
+          <button type="button" data-suggest="AIZIO 프로젝트 어디까지 됐어?">프로젝트</button>
+          <button type="button" data-suggest="오늘 뭐 해야 해?">오늘</button>
+          <button type="button" data-suggest="스킬 목록">Skill</button>
+        </div>
+      </details>
       <h2 class="section-title">STATS</h2>
       <p class="hint">아래에 숫자를 직접 입력하세요. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
       <form id="life-stats-form" class="settings-form life-input-form">
@@ -3335,8 +3347,29 @@ function renderSettings(): string {
           <span>해당 탭을 보고 있을 때도 알림</span>
           <input type="checkbox" name="notifyWhileOpen" ${s.notifyWhileOpen ? 'checked' : ''} />
         </div>
-        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 앱을 쓰지 않을 때(백그라운드) 알림은 iPhone에서 <strong>홈 화면에 추가</strong>한 PWA + 아래 버튼으로 푸시를 켜야 합니다.</p>
+        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 가족·친구 채팅 백그라운드 푸시는 홈 화면 PWA + 아래 버튼으로 켤 수 있습니다. 개인 일정(스마트 리마인더)의 앱 종료 알림은 푸시 서버가 필요하며, 서버 없이는 완성되지 않습니다.</p>
+        <label>일정 알림 내용 표시
+          <select name="notifyPrivacyMode">
+            <option value="simple" ${(s.notifyPrivacyMode || 'simple') === 'simple' ? 'selected' : ''}>간단히 (예약된 일정 시간입니다)</option>
+            <option value="hidden" ${s.notifyPrivacyMode === 'hidden' ? 'selected' : ''}>숨기기 (AIZIO 알림이 있습니다)</option>
+            <option value="full" ${s.notifyPrivacyMode === 'full' ? 'selected' : ''}>전체 내용</option>
+          </select>
+        </label>
+        <p class="hint">기본은 간단 표시입니다. 가족·건강 관련 일정은 「전체」를 고르지 않으면 잠금 화면에 세부 내용을 넣지 않습니다.</p>
+        <label>푸시 서버 URL (선택 · 종료 상태 개인 알림)
+          <input name="pushServerBaseUrl" value="${escapeAttr(s.pushServerBaseUrl || '')}" placeholder="https://your-push-server.example" autocomplete="off" />
+        </label>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
+        <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
+        <details class="device-test-panel">
+          <summary><strong>실기기 테스트 모드</strong></summary>
+          <p class="hint">버전·권한·푸시·스토리지 진단. API 키는 표시·내보내기하지 않습니다.</p>
+          <pre class="device-diag-out hint" data-device-diag-out>진단을 불러오려면 아래 버튼을 누르세요.</pre>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" data-action="device-diag-refresh">진단 새로고침</button>
+            <button type="button" class="ghost-btn" data-action="device-diag-export">진단 JSON 내보내기</button>
+          </div>
+        </details>
         ${renderHybridAiSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
@@ -3359,7 +3392,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
+      <p class="hint">백업 v7: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
@@ -4706,6 +4739,12 @@ function bind(): void {
       notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
       notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
       notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
+      notifyPrivacyMode: (['full', 'simple', 'hidden'] as const).includes(
+        String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden',
+      )
+        ? (String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden')
+        : 'simple',
+      pushServerBaseUrl: String(fd.get('pushServerBaseUrl') || '').trim(),
       appLocale,
       translationLocale: String(fd.get('translationLocale') || appLocale),
       autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
@@ -4732,6 +4771,9 @@ function bind(): void {
       openInExternalApp: Boolean(fd.get('musicOpenExternal')),
       rememberRecentMusicSearches: Boolean(fd.get('musicRememberSearches')),
       preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
+    })
+    void import('./push').then((m) => {
+      m.setPushServerBaseUrl(next.pushServerBaseUrl || null)
     })
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
@@ -4871,6 +4913,8 @@ function bind(): void {
         render()
         return
       }
+      const push = await import('./push')
+      await push.ensureReminderPushSubscription(['smart_reminder', 'chat_family', 'chat_friends'])
       state.settings = {
         ...state.settings,
         notifyFamilyChat: state.settings.notifyFamilyChat !== false,
@@ -4878,9 +4922,44 @@ function bind(): void {
       }
       saveSettings(state.settings)
       await bootSpaceSyncAndPush()
-      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다.')
+      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다. (개인 종료 알림은 서버 필요)')
       render()
     })()
+  })
+
+  document.querySelector('[data-action="reminder-push-status"]')?.addEventListener('click', () => {
+    void import('./push').then((m) => {
+      const summary = m.reminderPushReadinessSummary()
+      showFlash('개인 종료 알림 준비 상태를 대화에 표시했습니다.')
+      pushMsg('assistant', summary)
+      state.view = 'chat'
+      render()
+    })
+  })
+
+  document.querySelector('[data-action="device-diag-refresh"]')?.addEventListener('click', () => {
+    void import('./diagnostics/deviceDiagnostics').then(async (m) => {
+      const diag = await m.collectDeviceDiagnostics(APP_VERSION)
+      const el = document.querySelector('[data-device-diag-out]')
+      if (el) {
+        el.textContent = [
+          `v${diag.version} · build ${diag.buildId} · ${diag.commit} · ${diag.channel}`,
+          `${diag.osHint} / ${diag.browser} · PWA ${diag.standalonePwa ? '설치됨' : '브라우저'} · net ${diag.online ? 'on' : 'off'}`,
+          `알림 ${diag.notificationPermission} · mic ${diag.microphoneHint} · SW ${diag.serviceWorker.ready ? 'ready' : 'no'}`,
+          `push chat=${diag.push.chatSubscription} rem=${diag.push.reminderSubscription} server=${diag.push.pushServerConfigured}`,
+          `user ${diag.user.userId.slice(0, 8)}… · providers ${diag.providers.configured.join(',') || 'none'}`,
+        ].join('\n')
+      }
+      showFlash('진단을 갱신했습니다.')
+    })
+  })
+
+  document.querySelector('[data-action="device-diag-export"]')?.addEventListener('click', () => {
+    void import('./diagnostics/deviceDiagnostics').then(async (m) => {
+      const diag = await m.collectDeviceDiagnostics(APP_VERSION)
+      m.downloadDiagnosticsJson(diag)
+      showFlash('진단 JSON을 저장했습니다. (API 키 제외)')
+    })
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
@@ -5114,8 +5193,15 @@ function continueBootAfterRefresh(): void {
 }
 
 function bootAppCore(): void {
+  // Guest local userId/deviceId — does not change legacy jarvis_* keys.
+  void import('./account').then((m) => m.ensureGuestIdentity())
+  void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
   state.messages = loadChat()
   state.settings = loadSettings()
+  void import('./push').then((m) => {
+    const url = state.settings.pushServerBaseUrl || null
+    m.setPushServerBaseUrl(url)
+  })
   // Restore last query for sticky intent, but never auto-open the panel on launch.
   // Mini player appears only after the user asks for music in this session.
   state.musicSession = loadPersistedMusicSession()

@@ -7,3 +7,8 @@ dist
 .shiprc
 .env
 .env.*
+!.env.example
+!push-server/.env.example
+*.zip
+push-server/data
+push-server/node_modules

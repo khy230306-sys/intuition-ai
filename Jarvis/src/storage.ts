@@ -1,7 +1,4 @@
-import { loadFamilyRoom, saveFamilyRoom } from './familyStore'
-import type { FamilyRoom } from './familyTypes'
-import { loadFriendsRoom, saveFriendsRoom } from './friendsStore'
-import type { FriendsRoom } from './friendsTypes'
+import { exportBackupJson, importBackupJson } from './backup'
 import type {
   ChatMessage,
   DataSeries,
@@ -48,6 +45,8 @@ const defaultSettings: JarvisSettings = {
   notifyFamilyChat: true,
   notifyFriendsChat: true,
   notifyWhileOpen: false,
+  notifyPrivacyMode: 'simple',
+  pushServerBaseUrl: '',
   appLocale: undefined,
   translationLocale: 'ko',
   autoTranslateMessages: true,
@@ -582,114 +581,14 @@ export function saveSettings(settings: JarvisSettings): void {
   writeJson(KEYS.settings, settings)
 }
 
+/** Backup v7 — relationships / smart reminders / Life OS included; API keys excluded. */
 export function exportBackup(): string {
-  return JSON.stringify(
-    {
-      version: 6,
-      exportedAt: new Date().toISOString(),
-      chat: loadChat(),
-      memory: loadMemory(),
-      reminders: loadReminders(),
-      shopping: loadShopping(),
-      expenses: loadExpenses(),
-      habits: loadHabits(),
-      journal: loadJournal(),
-      profile: loadProfile(),
-      watchlist: loadWatchlist(),
-      holdings: loadHoldings(),
-      trades: loadTrades(),
-      series: loadSeriesList(),
-      activeSeries: getActiveSeriesName(),
-      family: loadFamilyRoom(),
-      friends: loadFriendsRoom(),
-      settings: { ...loadSettings(), apiKey: '' },
-      // Hybrid AI keys never leave the device via backup (metadata only).
-      hybridAi: exportHybridAiMetaSafe(),
-    },
-    null,
-    2,
-  )
-}
-
-/** Strip secrets from hybrid AI config for backups — no import cycle with ai-providers. */
-function exportHybridAiMetaSafe(): unknown {
-  try {
-    const raw = localStorage.getItem('jarvis_hybrid_ai_v1')
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as {
-      mode?: string
-      fixedProvider?: string
-      allowPaidFallback?: boolean
-      wizardDismissed?: boolean
-      providers?: Record<string, { apiKey?: string; apiKeyEnc?: string; model?: string; enabled?: boolean }>
-    }
-    const providers: Record<string, { hasKey: boolean; model?: string; enabled?: boolean }> = {}
-    for (const [id, slot] of Object.entries(parsed.providers || {})) {
-      providers[id] = {
-        hasKey: Boolean(slot.apiKeyEnc || slot.apiKey),
-        model: slot.model,
-        enabled: slot.enabled,
-      }
-    }
-    return {
-      mode: parsed.mode,
-      fixedProvider: parsed.fixedProvider,
-      allowPaidFallback: parsed.allowPaidFallback === true,
-      wizardDismissed: parsed.wizardDismissed === true,
-      providers,
-    }
-  } catch {
-    return null
-  }
+  return exportBackupJson()
 }
 
 export function importBackup(json: string): { ok: boolean; message: string } {
-  try {
-    const data = JSON.parse(json) as {
-      chat?: ChatMessage[]
-      memory?: MemoryItem[]
-      reminders?: ReminderItem[]
-      shopping?: ShoppingItem[]
-      expenses?: ExpenseItem[]
-      habits?: HabitItem[]
-      journal?: JournalEntry[]
-      profile?: Partial<UserProfile>
-      watchlist?: WatchItem[]
-      holdings?: Holding[]
-      trades?: TradeNote[]
-      series?: DataSeries[]
-      activeSeries?: string
-      family?: FamilyRoom | null
-      friends?: FriendsRoom | null
-      settings?: Partial<JarvisSettings>
-    }
-    if (data.chat) saveChat(data.chat)
-    if (data.memory) saveMemory(data.memory)
-    if (data.reminders) saveReminders(data.reminders)
-    if (data.shopping) saveShopping(data.shopping)
-    if (data.expenses) saveExpenses(data.expenses)
-    if (data.habits) saveHabits(data.habits)
-    if (data.journal) saveJournal(data.journal)
-    if (data.profile) saveProfile({ ...loadProfile(), ...data.profile })
-    if (data.watchlist) saveWatchlist(data.watchlist)
-    if (data.holdings) saveHoldings(data.holdings)
-    if (data.trades) saveTrades(data.trades)
-    if (data.series) saveSeriesList(data.series)
-    if (data.activeSeries) setActiveSeriesName(data.activeSeries)
-    if (data.family) saveFamilyRoom(data.family)
-    if (data.friends) saveFriendsRoom(data.friends)
-    if (data.settings) {
-      const current = loadSettings()
-      saveSettings({
-        ...current,
-        ...data.settings,
-        apiKey: current.apiKey,
-      })
-    }
-    return { ok: true, message: '백업을 가져왔습니다.' }
-  } catch {
-    return { ok: false, message: '백업 파일이 올바르지 않습니다.' }
-  }
+  const result = importBackupJson(json)
+  return { ok: result.ok, message: result.message }
 }
 
 export function lifeContextBlock(): string {

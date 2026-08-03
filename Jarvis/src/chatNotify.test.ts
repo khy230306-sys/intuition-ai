@@ -13,7 +13,7 @@ vi.stubGlobal('localStorage', {
 describe('vapid helpers', () => {
   it('decodes url-safe base64 applicationServerKey', () => {
     const bytes = urlBase64ToUint8Array(
-      'BKupo7Y_efhJskLSk_xdJwyviAfqjjnFUPdlRVnSvWd6AXQJCELFn-T01U7BOCpOvU9DDUUk-xLhjfjv8Lozis8',
+      'BCYhU9UX42gHsf8RiRlXztfpFZqPyLfXxNrrXbRRNSs-7_qkL6t9-mMUQ4AIGETwDxBJFPdIXniMk6ckbDifF8c',
     )
     expect(bytes.length).toBeGreaterThan(60)
     expect(bytes[0]).toBe(4)

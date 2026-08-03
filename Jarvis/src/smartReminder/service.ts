@@ -1,8 +1,11 @@
 import { findByRelationCode, findRelationship, upsertRelationship } from '../relationship/storage'
 import type { RelationCode } from '../relationship/types'
 import { cancelAlarm, ensureNotificationPermission, scheduleAlarm } from '../notify'
+import { loadSettings } from '../storage'
 import { formatFriendly, parseAdvanceMinutes, parseScheduleDateTime } from './datetime'
 import { parseReminderUtterance } from './parse'
+import { resolveReminderPrivacyMode } from './privacy'
+import { syncReminderPushCancel, syncReminderPushSchedule } from './pushSync'
 import {
   createSmartReminderId,
   findDuplicate,
@@ -14,7 +17,7 @@ import {
   setLastReminderContext,
   updateSmartReminder,
 } from './storage'
-import type { SmartReminder } from './types'
+import { formatPushScheduleLabel, type SmartReminder } from './types'
 
 export type SmartReminderReply = {
   text: string
@@ -25,8 +28,9 @@ export type SmartReminderReply = {
 }
 
 function previewBody(r: SmartReminder): string {
-  if (r.previewMode === 'hidden') return 'AIZIO 알림이 있습니다.'
-  if (r.previewMode === 'simple') return '예약된 일정 시간입니다.'
+  const mode = resolveReminderPrivacyMode(r, loadSettings())
+  if (mode === 'hidden') return 'AIZIO 알림이 있습니다.'
+  if (mode === 'simple') return '예약된 일정 시간입니다.'
   return `${r.title} 시간입니다.`
 }
 
@@ -88,18 +92,34 @@ async function armAlarms(reminder: SmartReminder): Promise<SmartReminder> {
   }
   reminder.advanceAlarmIds = advanceIds
   reminder.status = 'scheduled'
+  reminder.previewMode = resolveReminderPrivacyMode(reminder, loadSettings())
   saveSmartReminder(reminder)
+  // Closed-app push sync — never blocks local alarm success
+  try {
+    reminder = await syncReminderPushSchedule(reminder)
+  } catch {
+    reminder.pushScheduleStatus = 'failed'
+    reminder.pushSyncErrorCode = 'sync_exception'
+    saveSmartReminder(reminder)
+  }
   return reminder
 }
 
 function permissionNote(r: SmartReminder): string {
+  const pushLine = `\n${formatPushScheduleLabel(r)}`
   if (r.notificationStatus === 'permission_denied') {
-    return '\n(시스템 알림은 권한이 거부되어 꺼져 있어요. 일정은 저장됐고, 앱이 열려 있으면 화면으로 알려 드릴 수 있어요.)'
+    return `\n(시스템 알림은 권한이 거부되어 꺼져 있어요. 일정은 저장됐고, 앱이 열려 있으면 화면으로 알려 드릴 수 있어요.)${pushLine}`
   }
   if (r.notificationStatus === 'unsupported') {
-    return '\n(이 환경은 시스템 알림을 지원하지 않아요. 일정은 저장됐어요.)'
+    return `\n(이 환경은 시스템 알림을 지원하지 않아요. 일정은 저장됐어요.)${pushLine}`
   }
-  return '\n시간에 맞춰 알려드릴게요. (앱이 열려 있을 때 가장 확실합니다.)'
+  if (r.pushScheduleStatus === 'synced') {
+    return `\n앱이 열려 있을 때와 종료 상태(푸시 서버 예약) 모두 준비됐어요.${pushLine}`
+  }
+  if (r.pushScheduleStatus === 'server_unconfigured' || r.pushScheduleStatus === 'failed') {
+    return `\n시간에 맞춰 알려드릴게요. 앱이 열려 있을 때 가장 확실합니다. (종료 상태 푸시는 아직 서버 미연결·미동기화)${pushLine}`
+  }
+  return `\n시간에 맞춰 알려드릴게요. (앱이 열려 있을 때 가장 확실합니다.)${pushLine}`
 }
 
 export async function handleSmartReminderText(raw: string): Promise<SmartReminderReply | null> {
@@ -160,8 +180,18 @@ export async function handleSmartReminderText(raw: string): Promise<SmartReminde
     }
     if (r.mainAlarmId) cancelAlarm(r.mainAlarmId)
     for (const a of r.advanceAlarmIds) cancelAlarm(a)
-    const updated = updateSmartReminder(r.id, { status: 'cancelled', mainAlarmId: null, advanceAlarmIds: [] })!
-    return { handled: true, text: `「${updated.title}」 일정을 취소했어요.`, speakText: '취소했어요.', reminder: updated }
+    let updated = updateSmartReminder(r.id, { status: 'cancelled', mainAlarmId: null, advanceAlarmIds: [] })!
+    try {
+      updated = await syncReminderPushCancel(updated)
+    } catch {
+      /* local cancel kept */
+    }
+    return {
+      handled: true,
+      text: `「${updated.title}」 일정을 취소했어요.\n${formatPushScheduleLabel(updated)}`,
+      speakText: '취소했어요.',
+      reminder: updated,
+    }
   }
 
   if (parsed.kind === 'complete') {
@@ -278,7 +308,14 @@ export async function handleSmartReminderText(raw: string): Promise<SmartReminde
       originalText: raw,
       createdAt: nowIso,
       updatedAt: nowIso,
-      previewMode: 'full',
+      previewMode: resolveReminderPrivacyMode(
+        { category: parsed.category || null, personDisplay: parsed.personDisplay || null, personRelation: (parsed.personRelation as RelationCode) || null, previewMode: 'simple' },
+        loadSettings(),
+      ),
+      pushScheduleStatus: 'not_applicable',
+      serverScheduleId: null,
+      lastPushSyncAt: null,
+      pushSyncErrorCode: null,
     }
     saveSmartReminder(reminder)
     setLastReminderContext(reminder.id)
@@ -328,8 +365,13 @@ export async function handleSmartReminderText(raw: string): Promise<SmartReminde
     originalText: raw,
     createdAt: nowIso,
     updatedAt: nowIso,
-    previewMode: 'full',
+    previewMode: 'simple',
+    pushScheduleStatus: 'pending',
+    serverScheduleId: null,
+    lastPushSyncAt: null,
+    pushSyncErrorCode: null,
   }
+  reminder.previewMode = resolveReminderPrivacyMode(reminder, loadSettings())
 
   reminder = await armAlarms(reminder)
   setLastReminderContext(reminder.id)

@@ -1,5 +1,6 @@
 import { classifyMusicIntent } from '../music/musicIntent'
 import type { AppLocale } from '../i18n'
+import { parseLifeOsIntent } from '../life-os/intentParse'
 import { parseRelationshipUtterance } from '../relationship'
 import { isCasualChatText } from '../spokenCommand'
 import { parseReminderUtterance } from '../smartReminder'
@@ -179,8 +180,55 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
     }
   }
 
+  // Life OS (DNA / goals / ideas / …) — before casual so routines like 「잘 자」 win
+  const life = parseLifeOsIntent(t)
+  if (life) {
+    const map: Record<string, CoreIntent> = {
+      remember_preference: 'remember_preference',
+      show_dna: 'show_dna',
+      forget_preference: 'forget_preference',
+      create_goal: 'create_goal',
+      list_goals: 'list_goals',
+      complete_goal: 'complete_goal',
+      pause_goal: 'update_goal',
+      plan_goal: 'update_goal',
+      goal_progress: 'list_goals',
+      goal_next: 'update_goal',
+      save_idea: 'save_idea',
+      search_ideas: 'search_ideas',
+      project_status: 'project_status',
+      project_bug: 'create_project_item',
+      project_done: 'create_project_item',
+      project_urgent: 'project_planning',
+      run_ai_meeting: 'run_ai_meeting',
+      show_timeline: 'show_timeline',
+      add_timeline: 'add_timeline_event',
+      run_routine: 'run_routine',
+      family_overview: 'family_overview',
+      family_add: 'family_overview',
+      emergency_help: 'emergency_help',
+      health_log: 'health_log',
+      finance_log: 'finance_log',
+      create_travel_plan: 'create_travel_plan',
+      create_learning_plan: 'create_learning_plan',
+      list_skills: 'list_skills',
+      enable_skill: 'enable_skill',
+      disable_skill: 'disable_skill',
+      today_brief: 'life_today_brief',
+    }
+    const intent = map[life.intent] || 'unknown'
+    if (intent !== 'unknown') {
+      return {
+        intent,
+        confidence: life.intent === 'emergency_help' ? 0.9 : 0.91,
+        source: 'local',
+        entities: { lifeIntent: life.intent, ...(life as unknown as Record<string, unknown>) },
+      }
+    }
+  }
+
   // Social / casual chat → general_chat (never skill / never STT-error)
-  if (isCasualChatText(t) && !/(음악|노래|틀어|재생|멈춰|번역|통역|일정|할\s*일|설정|엄마|아빠|예약|병원)/i.test(t)) {
+  if (isCasualChatText(t) && !/(음악|노래|틀어|재생|멈춰|번역|통역|일정|할\s*일|설정|엄마|아빠|예약|병원|목표|아이디어|dna)/i.test(t)) {
     return {
       intent: 'general_chat',
       confidence: 0.86,

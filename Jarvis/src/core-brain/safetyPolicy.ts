@@ -24,6 +24,12 @@ const INTENT_LEVEL: Partial<Record<CoreIntent, SafetyLevel>> = {
   create_calendar_event: 2,
   change_setting: 2,
   project_planning: 2,
+  remember_preference: 2,
+  create_goal: 2,
+  save_idea: 2,
+  emergency_help: 2,
+  health_log: 2,
+  finance_log: 2,
   unknown: 1,
 }
 

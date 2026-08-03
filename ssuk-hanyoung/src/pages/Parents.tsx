@@ -42,14 +42,12 @@ export function Parents() {
 
       <div className="card">
         <div className="card-title">모아둔 별 ⭐ {profile.stars}</div>
-        <div className="card-sub" style={{ marginTop: '0.5rem' }}>
-          이번 업데이트는 자동차·색깔 놀이를 중심으로 새 게임을 많이 넣었어요.
+        <div className="card-sub" style={{ marginTop: '0.35rem' }}>
+          스티커 {profile.stickers?.length ?? 0}개 · 오늘 미션으로 다시 들어오게 유도해요
         </div>
-        <ul style={{ margin: '0.8rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)' }}>
-          <li>색깔 차고 / 부릉부릉 레이스 / 주차 놀이</li>
-          <li>자동차 색칠공장 / 조립 / 색깔 섞기</li>
-          <li>자동차 기억카드 · 소리 맞추기</li>
-        </ul>
+        <div className="card-sub" style={{ marginTop: '0.5rem' }}>
+          이번 강화: 사운드보드, 자동차 동화, 퍼레이드, 퍼즐, 스티커 차고, 오늘의 미션
+        </div>
       </div>
 
       {played.length > 0 && (

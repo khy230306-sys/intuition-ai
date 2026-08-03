@@ -1153,6 +1153,82 @@ img {
   opacity: 0.7;
 }
 
+.sound-btn {
+  border: 3px solid var(--fg);
+  border-radius: 1.2rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: 0.75rem 0.4rem;
+  min-height: 5.8rem;
+  display: grid;
+  place-items: center;
+  gap: 0.2rem;
+  transition: transform 0.12s ease;
+}
+
+.sound-btn.on {
+  transform: scale(1.06);
+  background: var(--sunny);
+}
+
+.parade-line {
+  min-height: 4.5rem;
+  border: 3px dashed var(--fg);
+  border-radius: 1.2rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  background: #fffaf0;
+}
+
+.parade-car {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 0.9rem;
+  border: 3px solid var(--fg);
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+}
+
+.story-card {
+  text-align: center;
+  min-height: 18rem;
+}
+
+.story-emoji {
+  font-size: 4.5rem;
+  line-height: 1;
+  animation: float-y 2.4s ease-in-out infinite;
+}
+
+.story-text {
+  margin: 0.9rem auto 0;
+  max-width: 26rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.45;
+}
+
+.sticker-slot {
+  border: 3px solid var(--fg);
+  border-radius: 1.2rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: 0.7rem 0.4rem;
+  display: grid;
+  place-items: center;
+  gap: 0.25rem;
+  min-height: 5.5rem;
+}
+
+.sticker-slot.has {
+  background: #fff3c4;
+}
+
 @media (min-width: 640px) {
   .hero {
     min-height: 17rem;

@@ -9,6 +9,46 @@ export type GameMeta = {
 
 export const GAMES: GameMeta[] = [
   {
+    id: 'sound-board',
+    title: '사운드보드',
+    subtitle: '빵빵·삐뽀 소리를 마음대로!',
+    emoji: '🔊',
+    tags: ['car', 'new', 'touch'],
+    accent: 'sunny',
+  },
+  {
+    id: 'story-tap',
+    title: '자동차 동화',
+    subtitle: '선택을 눌러 이야기를 진행해요',
+    emoji: '📖',
+    tags: ['car', 'new', 'touch'],
+    accent: 'berry',
+  },
+  {
+    id: 'car-parade',
+    title: '자동차 퍼레이드',
+    subtitle: '색깔 자리에 줄을 세워요',
+    emoji: '🎪',
+    tags: ['car', 'color', 'new', 'focus', 'touch'],
+    accent: 'sky',
+  },
+  {
+    id: 'car-puzzle',
+    title: '자동차 퍼즐',
+    subtitle: '조각을 순서대로 맞춰요',
+    emoji: '🧩',
+    tags: ['car', 'new', 'focus', 'touch'],
+    accent: 'grape',
+  },
+  {
+    id: 'sticker-book',
+    title: '스티커 차고',
+    subtitle: '모은 자동차 스티커를 구경해요',
+    emoji: '🖼️',
+    tags: ['car', 'new', 'touch'],
+    accent: 'leaf',
+  },
+  {
     id: 'color-follow',
     title: '부릉 따라하기',
     subtitle: '색깔 순서를 보고 따라 눌러요',

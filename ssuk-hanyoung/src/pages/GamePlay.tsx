@@ -26,6 +26,11 @@ import { MazeDrive } from '../games/MazeDrive'
 import { HiddenCars } from '../games/HiddenCars'
 import { WaitGo } from '../games/WaitGo'
 import { RhythmTap } from '../games/RhythmTap'
+import { SoundBoard } from '../games/SoundBoard'
+import { CarParade } from '../games/CarParade'
+import { CarPuzzle } from '../games/CarPuzzle'
+import { StoryTap } from '../games/StoryTap'
+import { StickerBook } from '../games/StickerBook'
 
 const MAP: Record<string, ComponentType> = {
   'color-garage': ColorGarage,
@@ -53,6 +58,11 @@ const MAP: Record<string, ComponentType> = {
   'hidden-cars': HiddenCars,
   'wait-go': WaitGo,
   'rhythm-tap': RhythmTap,
+  'sound-board': SoundBoard,
+  'car-parade': CarParade,
+  'car-puzzle': CarPuzzle,
+  'story-tap': StoryTap,
+  'sticker-book': StickerBook,
 }
 
 export function GamePlay() {

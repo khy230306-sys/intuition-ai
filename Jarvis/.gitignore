@@ -7,3 +7,4 @@ dist
 .shiprc
 .env
 .env.*
+*.zip

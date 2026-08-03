@@ -2292,6 +2292,24 @@ body[data-jarvis-view='friends'] .orb::after {
   gap: 8px;
 }
 
+.life-os-panel {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.25);
+  background: rgba(0, 210, 190, 0.06);
+}
+
+.life-os-panel summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.life-os-panel .hint {
+  margin: 8px 0;
+}
+
 .life-input-form .primary-btn {
   width: 100%;
 }

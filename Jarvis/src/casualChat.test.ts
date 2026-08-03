@@ -70,6 +70,31 @@ describe('casual chat vs STT garbage', () => {
     }
   })
 
+  it('required social / mood phrases stay general chat (no music/STT/quota false positives)', async () => {
+    const { think } = await import('./brain')
+    const phrases = [
+      '넌 정말 최고의 비서야.',
+      '고마워.',
+      '안녕.',
+      '오늘 너무 피곤하다.',
+      '대박ㅋㅋ.',
+      '사랑해.',
+      '오늘 기분 좋아.',
+      '잠을 잘 자려면 어떻게 해야 할까?',
+      '심심해.',
+      '너 진짜 똑똑하다.',
+    ]
+    for (const s of phrases) {
+      clearBrainStateForTests()
+      const intent = classifyIntent(s, 'ko').intent
+      expect(['general_chat', 'ask_information', 'help'], s).toContain(intent)
+      expect(intent, s).not.toBe('play_music')
+      const r = await think(s)
+      expect(r.text.length, s).toBeGreaterThan(2)
+      expect(r.text, s).not.toMatch(/음성을 잘 듣지 못|사용량|한도 초과|지원하지 않는 기능/)
+    }
+  })
+
   it('music context does not steal compliments; follow-ups still work', async () => {
     const { think } = await import('./brain')
     rememberTurn('play_music', { mood: 'calm' }, '조용한 음악 틀어줘')

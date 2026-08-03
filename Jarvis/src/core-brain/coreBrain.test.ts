@@ -96,11 +96,11 @@ describe('AIZIO Core Brain', () => {
     expect(create.responseText).not.toMatch(/추가했습니다/)
   })
 
-  it('project skill reports unavailable (not fake success)', async () => {
+  it('project skill returns local Life OS status (not fake github sync)', async () => {
     const r = await processCoreBrain({ text: 'NEXUS 프로젝트 어디까지 됐어?', allowDuplicate: true })
     expect(r.intent).toBe('project_status')
-    expect(r.responseText).toMatch(/연결되지/)
-    expect(r.responseText).not.toMatch(/완료했습니다/)
+    expect(r.responseText).toMatch(/프로젝트|NEXUS|내부 기록/)
+    expect(r.responseText).not.toMatch(/GitHub에 푸시|원격 동기화 완료/)
   })
 
   it('opens settings', async () => {

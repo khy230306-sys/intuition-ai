@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.9'
+const APP_VERSION = '1.15.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2641,6 +2641,18 @@ function renderLife(): string {
 
   return `
     <section class="panel view-scroll">
+      <details class="life-os-panel" open>
+        <summary><strong>내 생활 · AIZIO Life OS</strong></summary>
+        <p class="hint">대화로 DNA·목표·아이디어·프로젝트를 관리합니다. 예: 「나는 짧은 답변이 좋아」「내 목표는 …」「아이디어 저장」</p>
+        <div class="chips left">
+          <button type="button" data-suggest="내가 무엇을 좋아한다고 기억하고 있어?">DNA</button>
+          <button type="button" data-suggest="목표 목록 보여줘">목표</button>
+          <button type="button" data-suggest="아이디어 목록">아이디어</button>
+          <button type="button" data-suggest="AIZIO 프로젝트 어디까지 됐어?">프로젝트</button>
+          <button type="button" data-suggest="오늘 뭐 해야 해?">오늘</button>
+          <button type="button" data-suggest="스킬 목록">Skill</button>
+        </div>
+      </details>
       <h2 class="section-title">STATS</h2>
       <p class="hint">아래에 숫자를 직접 입력하세요. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
       <form id="life-stats-form" class="settings-form life-input-form">
@@ -3335,8 +3347,9 @@ function renderSettings(): string {
           <span>해당 탭을 보고 있을 때도 알림</span>
           <input type="checkbox" name="notifyWhileOpen" ${s.notifyWhileOpen ? 'checked' : ''} />
         </div>
-        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 앱을 쓰지 않을 때(백그라운드) 알림은 iPhone에서 <strong>홈 화면에 추가</strong>한 PWA + 아래 버튼으로 푸시를 켜야 합니다.</p>
+        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 가족·친구 채팅 백그라운드 푸시는 홈 화면 PWA + 아래 버튼으로 켤 수 있습니다. 개인 일정(스마트 리마인더)의 앱 종료 알림은 푸시 서버가 필요하며, 서버 없이는 완성되지 않습니다.</p>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
+        <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
         ${renderHybridAiSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
@@ -3359,7 +3372,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
+      <p class="hint">백업 v7: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
@@ -4871,6 +4884,8 @@ function bind(): void {
         render()
         return
       }
+      const push = await import('./push')
+      await push.ensureReminderPushSubscription(['smart_reminder', 'chat_family', 'chat_friends'])
       state.settings = {
         ...state.settings,
         notifyFamilyChat: state.settings.notifyFamilyChat !== false,
@@ -4878,9 +4893,19 @@ function bind(): void {
       }
       saveSettings(state.settings)
       await bootSpaceSyncAndPush()
-      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다.')
+      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다. (개인 종료 알림은 서버 필요)')
       render()
     })()
+  })
+
+  document.querySelector('[data-action="reminder-push-status"]')?.addEventListener('click', () => {
+    void import('./push').then((m) => {
+      const summary = m.reminderPushReadinessSummary()
+      showFlash('개인 종료 알림 준비 상태를 대화에 표시했습니다.')
+      pushMsg('assistant', summary)
+      state.view = 'chat'
+      render()
+    })
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
@@ -5114,6 +5139,8 @@ function continueBootAfterRefresh(): void {
 }
 
 function bootAppCore(): void {
+  // Guest local userId/deviceId — does not change legacy jarvis_* keys.
+  void import('./account').then((m) => m.ensureGuestIdentity())
   state.messages = loadChat()
   state.settings = loadSettings()
   // Restore last query for sticky intent, but never auto-open the panel on launch.

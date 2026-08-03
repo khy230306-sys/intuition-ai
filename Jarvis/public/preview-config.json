@@ -1,5 +1,5 @@
 {
   "channel": "preview",
-  "defaultPushServerUrl": "",
-  "note": "Filled at deploy:preview when PUSH_SERVER_URL env is set. Production builds ignore empty default."
+  "defaultPushServerUrl": "https://medal-kansas-attachment-gilbert.trycloudflare.com",
+  "note": "Preview default push server (user can override in Settings)"
 }

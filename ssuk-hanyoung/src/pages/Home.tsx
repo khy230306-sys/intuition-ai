@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games'
 import { getProfile } from '../lib/store'
 
-const FEATURED = ['car-paint', 'sand-play', 'bubble-pop', 'stamp-pad', 'finger-paint', 'pop-it']
+const FEATURED = ['color-follow', 'maze-drive', 'hidden-cars', 'wait-go', 'rhythm-tap', 'sand-play']
 
 export function Home() {
   const profile = getProfile()
@@ -28,8 +28,8 @@ export function Home() {
         </div>
       </section>
 
-      <h2 className="section-title">한영이 추천 🚗🎨</h2>
-      <p className="section-sub">자동차랑 색깔을 좋아하는 친구를 위한 오늘의 놀이</p>
+      <h2 className="section-title">한영이 추천 🧠🚗</h2>
+      <p className="section-sub">어렵지 않게, 집중하면서 재미있게 놀아요</p>
       <div className="grid-2">
         {featured.map((g, i) => (
           <Link

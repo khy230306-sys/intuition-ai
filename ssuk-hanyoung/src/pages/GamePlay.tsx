@@ -21,6 +21,11 @@ import { StampPad } from '../games/StampPad'
 import { ShapeTouch } from '../games/ShapeTouch'
 import { FingerPaint } from '../games/FingerPaint'
 import { PopIt } from '../games/PopIt'
+import { ColorFollow } from '../games/ColorFollow'
+import { MazeDrive } from '../games/MazeDrive'
+import { HiddenCars } from '../games/HiddenCars'
+import { WaitGo } from '../games/WaitGo'
+import { RhythmTap } from '../games/RhythmTap'
 
 const MAP: Record<string, ComponentType> = {
   'color-garage': ColorGarage,
@@ -43,6 +48,11 @@ const MAP: Record<string, ComponentType> = {
   'shape-touch': ShapeTouch,
   'finger-paint': FingerPaint,
   'pop-it': PopIt,
+  'color-follow': ColorFollow,
+  'maze-drive': MazeDrive,
+  'hidden-cars': HiddenCars,
+  'wait-go': WaitGo,
+  'rhythm-tap': RhythmTap,
 }
 
 export function GamePlay() {

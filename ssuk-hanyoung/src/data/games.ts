@@ -3,11 +3,51 @@ export type GameMeta = {
   title: string
   subtitle: string
   emoji: string
-  tags: Array<'car' | 'color' | 'new' | 'classic' | 'touch'>
+  tags: Array<'car' | 'color' | 'new' | 'classic' | 'touch' | 'focus'>
   accent: string
 }
 
 export const GAMES: GameMeta[] = [
+  {
+    id: 'color-follow',
+    title: '부릉 따라하기',
+    subtitle: '색깔 순서를 보고 따라 눌러요',
+    emoji: '🧠',
+    tags: ['color', 'car', 'new', 'focus', 'touch'],
+    accent: 'grape',
+  },
+  {
+    id: 'maze-drive',
+    title: '미로 운전',
+    subtitle: '손가락으로 길을 따라 운전해요',
+    emoji: '🛤️',
+    tags: ['car', 'new', 'focus', 'touch'],
+    accent: 'sky',
+  },
+  {
+    id: 'hidden-cars',
+    title: '숨은 자동차',
+    subtitle: '그림 속에서 자동차만 찾아요',
+    emoji: '🔍',
+    tags: ['car', 'new', 'focus', 'touch'],
+    accent: 'sunny',
+  },
+  {
+    id: 'wait-go',
+    title: '참았다가 출발',
+    subtitle: '초록불까지 기다리는 집중 놀이',
+    emoji: '⏳',
+    tags: ['car', 'color', 'new', 'focus', 'touch'],
+    accent: 'leaf',
+  },
+  {
+    id: 'rhythm-tap',
+    title: '톡톡 리듬',
+    subtitle: '박자를 듣고 똑같이 쳐요',
+    emoji: '🥁',
+    tags: ['new', 'focus', 'touch'],
+    accent: 'berry',
+  },
   {
     id: 'car-paint',
     title: '색칠놀이',

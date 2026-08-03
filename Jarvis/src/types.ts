@@ -172,7 +172,7 @@ export interface BrainReply {
   speakLang?: string
   listenLang?: string
   view?: View
-  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa'
+  arcadeId?: 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa' | 'dash'
   /** Wipe main chat history after this reply is applied. */
   clearChat?: boolean
   action?: () => Promise<ActionResult | void> | ActionResult | void

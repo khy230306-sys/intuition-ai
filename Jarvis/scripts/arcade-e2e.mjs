@@ -133,7 +133,7 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   )
   await page.waitForFunction(() => (document.body.textContent || '').includes('미사일 진화'))
 
-  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong', 'slide', 'gyeokpa']
+  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong', 'slide', 'gyeokpa', 'dash']
   for (const id of ids) {
     await page.click(`[data-arcade="${id}"]`)
     await page.waitForFunction(
@@ -150,9 +150,10 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   }
 
   const titles = await page.$$eval('.game-tab', (els) => els.map((e) => e.textContent || ''))
-  if (titles.length !== 7) throw new Error(`expected 7 games, got ${titles.join(',')}`)
+  if (titles.length !== 8) throw new Error(`expected 8 games, got ${titles.join(',')}`)
   if (!titles.some((t) => t.includes('스윽'))) throw new Error('slide (스윽) missing from tabs')
   if (!titles.some((t) => t.includes('스페이스2'))) throw new Error('gyeokpa (스페이스2) missing from tabs')
+  if (!titles.some((t) => t.includes('지오대시'))) throw new Error('dash (지오대시) missing from tabs')
   if (titles.some((t) => t.includes('스네이크'))) throw new Error('snake should be removed')
   for (const goneTitle of ['과일받기', '두더지', '차피하기']) {
     if (titles.some((t) => t.includes(goneTitle))) throw new Error(`removed game still present: ${goneTitle}`)

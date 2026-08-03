@@ -1,6 +1,16 @@
 /** Offline arcade games — canvas, no network. Level-up progression. */
 
-export type ArcadeId = 'breakout' | 'shooter' | 'flappy' | 'dodge' | 'pong' | 'slide' | 'gyeokpa'
+import { sfxDeath, sfxJump, sfxLand, sfxLevel, sfxScore, sfxUnlock, sfxWhoosh } from './arcadeSfx'
+
+export type ArcadeId =
+  | 'breakout'
+  | 'shooter'
+  | 'flappy'
+  | 'dodge'
+  | 'pong'
+  | 'slide'
+  | 'gyeokpa'
+  | 'dash'
 
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
@@ -12,6 +22,10 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   gyeokpa: {
     title: '스페이스2',
     blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드) · 라이프·실드·폭탄',
+  },
+  dash: {
+    title: '지오대시',
+    blurb: '자동 스크롤 · 탭 점프 · 가시·블록 피하기 · 효과음',
   },
 }
 
@@ -26,6 +40,7 @@ export type ArcadeBest = {
   pong: number | null
   slide: number | null
   gyeokpa: number | null
+  dash: number | null
 }
 
 export type ArcadeBestLevel = ArcadeBest
@@ -38,6 +53,7 @@ const EMPTY_BEST: ArcadeBest = {
   pong: null,
   slide: null,
   gyeokpa: null,
+  dash: null,
 }
 
 export function loadArcadeBest(): ArcadeBest {
@@ -105,6 +121,8 @@ export function unitsPerLevel(id: ArcadeId): number {
       return 1
     case 'gyeokpa':
       return 6
+    case 'dash':
+      return 8
   }
 }
 
@@ -878,12 +896,14 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcad
       const inX = Math.abs(p.x + 14 - w * 0.28) < 14 + birdR * 0.7
       if (inX && (birdY - birdR < p.gapY || birdY + birdR > p.gapY + gap)) {
         over = true
+        sfxDeath()
         bumpBest('flappy', score)
         bumpBestLevel('flappy', level)
       }
     }
     if (birdY - birdR < 0 || birdY + birdR > h) {
       over = true
+      sfxDeath()
       bumpBest('flappy', score)
       bumpBestLevel('flappy', level)
     }
@@ -935,6 +955,8 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcad
       }
       if (over || type !== 'down') return
       birdV = flap
+      sfxUnlock()
+      sfxJump()
     },
     restart: () => reset(),
     getScore: () => score,
@@ -2222,6 +2244,266 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 }
 
 
+/** —— 지오대시 (Geometry Dash–like auto-scroll jump) —— */
+type DashObs = {
+  x: number
+  kind: 'spike' | 'block'
+  w: number
+  h: number
+  scored: boolean
+}
+
+export function mountDash(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
+  let w = 320
+  let h = 400
+  const cube = 28
+  let ground = 340
+  let py = 0
+  let pvy = 0
+  let grounded = true
+  let rot = 0
+  let scroll = 0
+  let score = 0
+  let level = 1
+  let levelUpUntil = 0
+  let over = false
+  let spawnAcc = 0
+  let obstacles: DashObs[] = []
+  const loop: Loop = { running: true, raf: 0, last: 0 }
+  const gravity = 2100
+  const jumpV = -620
+  const px = () => w * 0.22
+
+  function scrollSpeed(): number {
+    return 210 + level * 22
+  }
+
+  function spawnGap(): number {
+    return Math.max(150, 260 - level * 8)
+  }
+
+  function pushObstacle(x: number): void {
+    const roll = Math.random()
+    if (roll < 0.55) {
+      obstacles.push({ x, kind: 'spike', w: 26, h: 26, scored: false })
+    } else if (roll < 0.85) {
+      obstacles.push({ x, kind: 'block', w: 30, h: 30 + Math.floor(Math.random() * 18), scored: false })
+    } else {
+      obstacles.push({ x, kind: 'spike', w: 24, h: 24, scored: false })
+      obstacles.push({ x: x + 36, kind: 'spike', w: 24, h: 24, scored: false })
+    }
+  }
+
+  function reset(): void {
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    ground = h - 56
+    py = ground - cube
+    pvy = 0
+    grounded = true
+    rot = 0
+    scroll = 0
+    score = 0
+    level = 1
+    levelUpUntil = 0
+    over = false
+    spawnAcc = 0
+    obstacles = []
+    pushObstacle(w + 100)
+    onScore?.(0, level)
+  }
+
+  function die(): void {
+    if (over) return
+    over = true
+    sfxDeath()
+    bumpBest('dash', score)
+    bumpBestLevel('dash', level)
+  }
+
+  function hitTest(o: DashObs, playerLeft: number, playerTop: number): boolean {
+    const ox = o.x
+    const oy = ground - o.h
+    if (o.kind === 'spike') {
+      const pad = 4
+      return (
+        playerLeft + cube > ox + pad &&
+        playerLeft < ox + o.w - pad &&
+        playerTop + cube > oy + pad &&
+        playerTop < ground
+      )
+    }
+    return (
+      playerLeft + cube > ox &&
+      playerLeft < ox + o.w &&
+      playerTop + cube > oy &&
+      playerTop < ground
+    )
+  }
+
+  function step(dt: number): void {
+    if (over) return
+    const spd = scrollSpeed()
+    const dx = spd * dt
+    scroll += dx
+    for (const o of obstacles) o.x -= dx
+
+    spawnAcc += dx
+    if (spawnAcc >= spawnGap()) {
+      spawnAcc = 0
+      pushObstacle(w + 40)
+    }
+    obstacles = obstacles.filter((o) => o.x > -80)
+
+    const wasGrounded = grounded
+    pvy += gravity * dt
+    py += pvy * dt
+    if (py >= ground - cube) {
+      py = ground - cube
+      pvy = 0
+      grounded = true
+      if (!wasGrounded) {
+        sfxLand()
+        rot = Math.round(rot / (Math.PI / 2)) * (Math.PI / 2)
+      }
+    } else {
+      grounded = false
+      rot += spd * dt * 0.012
+    }
+
+    const pl = px()
+    for (const o of obstacles) {
+      if (!o.scored && o.x + o.w < pl) {
+        o.scored = true
+        score += 1
+        sfxScore()
+        const next = levelFromUnits('dash', score)
+        const noted = noteLevel('dash', level, next, score, onScore)
+        if (noted.level > level) sfxLevel()
+        level = noted.level
+        if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
+        bumpBest('dash', score)
+      }
+      if (hitTest(o, pl, py)) die()
+    }
+  }
+
+  function draw(): void {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const s = sizeCanvas(canvas)
+    w = s.w
+    h = s.h
+    ground = h - 56
+
+    // sky gradient
+    const g = ctx.createLinearGradient(0, 0, 0, h)
+    g.addColorStop(0, '#0b1a2e')
+    g.addColorStop(1, '#132a44')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+
+    // parallax dashes
+    ctx.strokeStyle = 'rgba(90,255,232,0.12)'
+    ctx.lineWidth = 2
+    const stripe = ((scroll * 0.35) % 48)
+    for (let x = -48 + stripe; x < w + 48; x += 48) {
+      ctx.beginPath()
+      ctx.moveTo(x, h * 0.28)
+      ctx.lineTo(x + 28, h * 0.28)
+      ctx.stroke()
+    }
+
+    // ground
+    ctx.fillStyle = '#1a3348'
+    ctx.fillRect(0, ground, w, h - ground)
+    ctx.fillStyle = '#00d2be'
+    ctx.fillRect(0, ground, w, 3)
+    const tick = scroll % 40
+    ctx.fillStyle = 'rgba(0,210,190,0.35)'
+    for (let x = -40 + (40 - tick); x < w; x += 40) {
+      ctx.fillRect(x, ground + 8, 18, 4)
+    }
+
+    // obstacles
+    for (const o of obstacles) {
+      const oy = ground - o.h
+      if (o.kind === 'spike') {
+        ctx.fillStyle = '#f87171'
+        ctx.beginPath()
+        ctx.moveTo(o.x, ground)
+        ctx.lineTo(o.x + o.w / 2, oy)
+        ctx.lineTo(o.x + o.w, ground)
+        ctx.closePath()
+        ctx.fill()
+        ctx.strokeStyle = '#fecaca'
+        ctx.lineWidth = 1.5
+        ctx.stroke()
+      } else {
+        ctx.fillStyle = '#38bdf8'
+        ctx.fillRect(o.x, oy, o.w, o.h)
+        ctx.strokeStyle = '#7dd3fc'
+        ctx.lineWidth = 2
+        ctx.strokeRect(o.x + 1, oy + 1, o.w - 2, o.h - 2)
+      }
+    }
+
+    // cube
+    const cx = px() + cube / 2
+    const cy = py + cube / 2
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(rot)
+    ctx.fillStyle = '#fbbf24'
+    ctx.fillRect(-cube / 2, -cube / 2, cube, cube)
+    ctx.fillStyle = '#041018'
+    ctx.fillRect(-6, -6, 5, 5)
+    ctx.fillRect(2, -6, 5, 5)
+    ctx.restore()
+
+    drawHud(ctx, w, h, score, level, over, 'DASH', { levelUpUntil })
+  }
+
+  function frame(t: number): void {
+    if (!loop.running) return
+    if (!loop.last) loop.last = t
+    const dt = Math.min(0.033, (t - loop.last) / 1000)
+    loop.last = t
+    step(dt)
+    draw()
+    loop.raf = requestAnimationFrame(frame)
+  }
+
+  reset()
+  loop.raf = requestAnimationFrame(frame)
+
+  return {
+    stop: () => {
+      loop.running = false
+      cancelAnimationFrame(loop.raf)
+    },
+    pointer: (_x, _y, type) => {
+      if (over && type === 'down') {
+        reset()
+        return
+      }
+      if (over || type !== 'down') return
+      sfxUnlock()
+      if (grounded) {
+        grounded = false
+        pvy = jumpV
+        sfxJump()
+        sfxWhoosh()
+      }
+    },
+    restart: () => reset(),
+    getScore: () => score,
+    getLevel: () => level,
+    isOver: () => over,
+  }
+}
+
 export function mountArcade(
   id: ArcadeId,
   canvas: HTMLCanvasElement,
@@ -2233,6 +2515,7 @@ export function mountArcade(
   if (id === 'dodge') return mountDodge(canvas, onScore)
   if (id === 'slide') return mountSlide(canvas, onScore)
   if (id === 'gyeokpa') return mountGyeokpa(canvas, onScore)
+  if (id === 'dash') return mountDash(canvas, onScore)
   return mountPong(canvas, onScore)
 }
 
@@ -2250,4 +2533,10 @@ export function pongPaddleBounce(ballX: number, paddleX: number, paddleW: number
 export function flappyPipeCleared(birdX: number, pipeX: number, pipeW: number, already: boolean): boolean {
   if (already) return false
   return pipeX + pipeW < birdX
+}
+
+/** Obstacle passed the cube (left edge) — used by unit tests. */
+export function dashObstacleCleared(cubeX: number, obsX: number, obsW: number, already: boolean): boolean {
+  if (already) return false
+  return obsX + obsW < cubeX
 }

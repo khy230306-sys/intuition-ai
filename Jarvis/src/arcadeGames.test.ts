@@ -4,6 +4,7 @@ import {
   ARCADE_META,
   breakoutPaddleBounce,
   flappyPipeCleared,
+  dashObstacleCleared,
   levelFromUnits,
   loadArcadeBest,
   loadArcadeBestLevel,
@@ -45,21 +46,26 @@ describe('arcade helpers', () => {
     expect(pongPaddleBounce(80, 20, 60)).toBeGreaterThan(0)
     expect(flappyPipeCleared(90, 40, 28, false)).toBe(true)
     expect(flappyPipeCleared(90, 40, 28, true)).toBe(false)
+    expect(dashObstacleCleared(70, 20, 26, false)).toBe(true)
+    expect(dashObstacleCleared(70, 50, 26, false)).toBe(false)
     expect(loadArcadeBest().flappy).toBeNull()
     expect(loadArcadeBest().dodge).toBeNull()
     expect(loadArcadeBest().pong).toBeNull()
+    expect(loadArcadeBest().dash).toBeNull()
   })
 
   it('levels up one step at a time from progress units', () => {
     expect(unitsPerLevel('dodge')).toBe(8)
     expect(unitsPerLevel('slide')).toBe(1)
     expect(unitsPerLevel('gyeokpa')).toBe(6)
+    expect(unitsPerLevel('dash')).toBe(8)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('pong', 4)).toBe(1)
     expect(levelFromUnits('breakout', 0)).toBe(1)
     expect(levelFromUnits('breakout', 2)).toBe(3)
     expect(levelFromUnits('gyeokpa', 6)).toBe(2)
+    expect(levelFromUnits('dash', 8)).toBe(2)
   })
 
   it('loads empty best levels by default', () => {
@@ -69,6 +75,12 @@ describe('arcade helpers', () => {
     expect(loadArcadeBestLevel().slide).toBeNull()
     expect(loadArcadeBest().gyeokpa).toBeNull()
     expect(loadArcadeBestLevel().gyeokpa).toBeNull()
+    expect(loadArcadeBestLevel().dash).toBeNull()
+  })
+
+  it('configures 지오대시 meta', () => {
+    expect(ARCADE_META.dash.title).toBe('지오대시')
+    expect(ARCADE_META.dash.blurb).toMatch(/점프/)
   })
 
   it('configures 스페이스2 weapon cycle without laser', () => {

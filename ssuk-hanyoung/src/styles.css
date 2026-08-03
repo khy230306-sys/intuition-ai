@@ -860,6 +860,190 @@ img {
   }
 }
 
+.subject-row {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.7rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.subject-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 3px solid var(--fg);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: var(--card);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  box-shadow: var(--shadow);
+}
+
+.subject-chip.on {
+  background: var(--sunny);
+}
+
+.color-stage {
+  position: relative;
+  min-height: 11rem;
+  border-radius: 1.4rem;
+  border: 3px solid var(--fg);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.color-stage-emoji {
+  font-size: 5rem;
+  line-height: 1;
+  z-index: 2;
+  animation: float-y 2.2s ease-in-out infinite;
+}
+
+.color-stage-blob {
+  position: absolute;
+  width: 55%;
+  height: 40%;
+  border-radius: 50%;
+  bottom: 12%;
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.paint-car.mini {
+  position: absolute;
+  width: 55%;
+  bottom: 8%;
+  opacity: 0.95;
+  z-index: 1;
+}
+
+.sand-box {
+  background: linear-gradient(#ffe8a8, #f0c56d);
+}
+
+.sand-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+}
+
+.sand-cell {
+  aspect-ratio: 1;
+  border-radius: 1rem;
+  border: 3px solid var(--fg);
+  background: #e7c46a;
+  box-shadow: var(--shadow);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.sand-cell.dug {
+  background: #c9a24a;
+}
+
+.castle-area {
+  min-height: 16rem;
+  display: grid;
+  place-items: end center;
+  cursor: pointer;
+}
+
+.castle-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 12rem;
+  justify-content: flex-start;
+  padding-bottom: 0.5rem;
+}
+
+.castle-block {
+  height: 2.2rem;
+  background: linear-gradient(#f6d98b, #d9a84a);
+  border: 3px solid var(--fg);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+}
+
+.bubble-stage {
+  position: relative;
+  min-height: 20rem;
+  background: linear-gradient(#dff3ff, #fff8e7);
+  touch-action: manipulation;
+}
+
+.bubble-ball {
+  position: absolute;
+  border-radius: 999px;
+  border: 3px solid var(--fg);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  transform: translate(-50%, -50%);
+  animation: float-y 2s ease-in-out infinite;
+}
+
+.stamp-canvas {
+  position: relative;
+  min-height: 18rem;
+  background: repeating-linear-gradient(0deg, #fffaf0, #fffaf0 28px, #f3e7c8 28px, #f3e7c8 29px);
+  touch-action: manipulation;
+}
+
+.stamp-mark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--fg);
+  pointer-events: none;
+}
+
+.finger-canvas {
+  width: 100%;
+  height: 20rem;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.popit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.7rem;
+}
+
+.popit-dot {
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 3px solid var(--fg);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.12), var(--shadow);
+}
+
+.popit-dot.on {
+  box-shadow: inset 0 4px 0 rgba(0, 0, 0, 0.15);
+  transform: scale(0.92);
+}
+
+.big-touch {
+  min-height: 7rem;
+}
+
 @media (min-width: 640px) {
   .hero {
     min-height: 17rem;

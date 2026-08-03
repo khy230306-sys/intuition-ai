@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games'
 import { getProfile } from '../lib/store'
 
-const FEATURED = ['color-garage', 'vroom-race', 'parking', 'car-paint', 'traffic-light', 'balloons']
+const FEATURED = ['car-paint', 'sand-play', 'bubble-pop', 'stamp-pad', 'finger-paint', 'pop-it']
 
 export function Home() {
   const profile = getProfile()
@@ -21,7 +21,7 @@ export function Home() {
           <h1>
             오늘도 <span className="hi">부릉부릉</span> 달려요!
           </h1>
-          <p>자동차랑 색깔 게임을 잔뜩 준비했어요. 차고에 주차하고, 레이스하고, 색칠해 보아요!</p>
+          <p>색칠·모래놀이·방울 팡팡까지! 터치만 해도 신나게 놀 수 있어요.</p>
           <Link to="/games" className="btn btn-sunny btn-lg" style={{ marginTop: '1.1rem' }}>
             지금 출발하기 🚗💨
           </Link>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games'
 
-type Filter = 'all' | 'car' | 'color' | 'new'
+type Filter = 'all' | 'car' | 'color' | 'touch' | 'new'
 
 export function Games() {
   const [filter, setFilter] = useState<Filter>('all')
@@ -24,6 +24,7 @@ export function Games() {
         {(
           [
             ['all', '전체'],
+            ['touch', '👆 터치'],
             ['car', '🚗 자동차'],
             ['color', '🎨 색깔'],
             ['new', '✨ 새 게임'],

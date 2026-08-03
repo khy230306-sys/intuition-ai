@@ -3,11 +3,67 @@ export type GameMeta = {
   title: string
   subtitle: string
   emoji: string
-  tags: Array<'car' | 'color' | 'new' | 'classic'>
+  tags: Array<'car' | 'color' | 'new' | 'classic' | 'touch'>
   accent: string
 }
 
 export const GAMES: GameMeta[] = [
+  {
+    id: 'car-paint',
+    title: '색칠놀이',
+    subtitle: '자동차·동물·꽃 등 16가지 색칠',
+    emoji: '🎨',
+    tags: ['car', 'color', 'new', 'touch'],
+    accent: 'grape',
+  },
+  {
+    id: 'sand-play',
+    title: '모래놀이',
+    subtitle: '모래 속 보물 찾기·모래성 쌓기',
+    emoji: '🏖️',
+    tags: ['new', 'touch'],
+    accent: 'sunny',
+  },
+  {
+    id: 'bubble-pop',
+    title: '방울 팡팡',
+    subtitle: '나타나는 방울을 터치해요',
+    emoji: '🫧',
+    tags: ['color', 'new', 'touch'],
+    accent: 'sky',
+  },
+  {
+    id: 'stamp-pad',
+    title: '스탬프 놀이',
+    subtitle: '도장을 콕콕 찍어요',
+    emoji: '📒',
+    tags: ['car', 'color', 'new', 'touch'],
+    accent: 'berry',
+  },
+  {
+    id: 'finger-paint',
+    title: '손가락 그림',
+    subtitle: '손가락으로 마음껏 그려요',
+    emoji: '🖐️',
+    tags: ['color', 'new', 'touch'],
+    accent: 'grape',
+  },
+  {
+    id: 'pop-it',
+    title: '톡톡 팝잇',
+    subtitle: '동그라미를 하나씩 눌러요',
+    emoji: '🟣',
+    tags: ['color', 'new', 'touch'],
+    accent: 'leaf',
+  },
+  {
+    id: 'shape-touch',
+    title: '모양 만지기',
+    subtitle: '동그라미·세모·별을 찾아요',
+    emoji: '🔷',
+    tags: ['new', 'touch'],
+    accent: 'sky',
+  },
   {
     id: 'color-garage',
     title: '색깔 차고',
@@ -21,7 +77,7 @@ export const GAMES: GameMeta[] = [
     title: '부릉부릉 레이스',
     subtitle: '말한 색깔 자동차를 탭해요',
     emoji: '🏁',
-    tags: ['car', 'color', 'new'],
+    tags: ['car', 'color', 'new', 'touch'],
     accent: 'sunny',
   },
   {
@@ -31,14 +87,6 @@ export const GAMES: GameMeta[] = [
     emoji: '🅿️',
     tags: ['car', 'color', 'new'],
     accent: 'sky',
-  },
-  {
-    id: 'car-paint',
-    title: '자동차 색칠공장',
-    subtitle: '원하는 색으로 자동차를 칠해요',
-    emoji: '🎨',
-    tags: ['car', 'color', 'new'],
-    accent: 'grape',
   },
   {
     id: 'car-builder',
@@ -53,7 +101,7 @@ export const GAMES: GameMeta[] = [
     title: '색깔 자동차 찾기',
     subtitle: '같은 색 자동차를 모두 찾아요',
     emoji: '🔎',
-    tags: ['car', 'color', 'new'],
+    tags: ['car', 'color', 'new', 'touch'],
     accent: 'berry',
   },
   {
@@ -69,7 +117,7 @@ export const GAMES: GameMeta[] = [
     title: '자동차 기억카드',
     subtitle: '같은 자동차 짝을 맞춰요',
     emoji: '🃏',
-    tags: ['car', 'new'],
+    tags: ['car', 'new', 'touch'],
     accent: 'sky',
   },
   {
@@ -85,7 +133,7 @@ export const GAMES: GameMeta[] = [
     title: '신호등 놀이',
     subtitle: '초록불에만 부릉부릉!',
     emoji: '🚦',
-    tags: ['car', 'color', 'classic'],
+    tags: ['car', 'color', 'classic', 'touch'],
     accent: 'leaf',
   },
   {
@@ -93,7 +141,7 @@ export const GAMES: GameMeta[] = [
     title: '자동차 세차',
     subtitle: '더러운 차를 깨끗이 닦아요',
     emoji: '🚿',
-    tags: ['car', 'classic'],
+    tags: ['car', 'classic', 'touch'],
     accent: 'sky',
   },
   {
@@ -101,7 +149,7 @@ export const GAMES: GameMeta[] = [
     title: '색깔 풍선 팡!',
     subtitle: '말한 색깔 풍선을 터뜨려요',
     emoji: '🎈',
-    tags: ['color', 'classic'],
+    tags: ['color', 'classic', 'touch'],
     accent: 'berry',
   },
   {
@@ -117,7 +165,7 @@ export const GAMES: GameMeta[] = [
     title: '색깔 퀴즈',
     subtitle: '색깔 이름을 듣고 골라요',
     emoji: '⭐',
-    tags: ['color', 'classic'],
+    tags: ['color', 'classic', 'touch'],
     accent: 'grape',
   },
 ]

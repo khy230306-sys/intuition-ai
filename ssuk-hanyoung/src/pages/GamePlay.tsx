@@ -15,6 +15,12 @@ import { CarWash } from '../games/CarWash'
 import { Balloons } from '../games/Balloons'
 import { BusCount } from '../games/BusCount'
 import { ColorQuiz } from '../games/ColorQuiz'
+import { SandPlay } from '../games/SandPlay'
+import { BubblePop } from '../games/BubblePop'
+import { StampPad } from '../games/StampPad'
+import { ShapeTouch } from '../games/ShapeTouch'
+import { FingerPaint } from '../games/FingerPaint'
+import { PopIt } from '../games/PopIt'
 
 const MAP: Record<string, ComponentType> = {
   'color-garage': ColorGarage,
@@ -31,6 +37,12 @@ const MAP: Record<string, ComponentType> = {
   balloons: Balloons,
   'bus-count': BusCount,
   'color-quiz': ColorQuiz,
+  'sand-play': SandPlay,
+  'bubble-pop': BubblePop,
+  'stamp-pad': StampPad,
+  'shape-touch': ShapeTouch,
+  'finger-paint': FingerPaint,
+  'pop-it': PopIt,
 }
 
 export function GamePlay() {

@@ -9,6 +9,7 @@ export function wantsUserGuide(raw: string): boolean {
   return (
     /사용\s*설명서|시작\s*가이드|간단\s*가이드|앱\s*소개|소개서/i.test(t) ||
     /이\s*앱(?:이|은)?\s*뭐|이게\s*뭐(?:야|예요|에요)|아이지오\s*(?:뭐|소개)|아이디어\s*사용/i.test(t) ||
+    /api\s*키|에이피아이\s*키|키\s*발급|키\s*입력|ai\s*연결\s*(방법|안내)|무료\s*ai\s*(연결|설정)/i.test(t) ||
     /^(가이드|guide)$/i.test(t)
   )
 }
@@ -39,9 +40,21 @@ export function userGuideText(displayName?: string): string {
     '• 게임 — 오프라인 미니게임',
     '• 설정 — 이름·AI 연결·앱 캐시',
     '',
+    'API 키 · 자유 대화(선택)',
+    '날씨·시세·할 일·알림은 키 없이 됩니다. 잡담·긴 질문은 AI 키가 있으면 더 자연스럽습니다.',
+    '1) 하단 「설정」→ AI 연결(Hybrid Provider)',
+    '2) OpenRouter / Gemini / Groq(무료 시작) 또는 OpenAI 중 하나 선택',
+    '3) 아래 사이트에서 키 발급 → 복사',
+    '   · OpenRouter openrouter.ai/keys',
+    '   · Gemini aistudio.google.com/apikey',
+    '   · Groq console.groq.com/keys',
+    '   · OpenAI platform.openai.com/api-keys',
+    '4) 설정에 붙여넣고 「설정 저장」→ 필요하면 「연결 테스트」',
+    '키는 이 기기에만 저장됩니다. 채팅에 키를 붙여넣지 마세요.',
+    'ChatGPT Plus ≠ API 결제입니다. 무료 한도는 제공사 정책에 따라 달라집니다.',
+    '',
     '알아 두면 좋아요',
-    '• 날씨·시세·할 일·알림 등은 API 키 없이도 됩니다.',
-    '• 자유 대화(잡담·긴 질문)는 설정에서 무료 AI를 연결하면 더 편합니다.',
-    '• 명령어를 더 보고 싶으면 「도움말」이라고 말해 주세요.',
+    '• 명령어를 더 보려면 「도움말」',
+    '• 투자 정보는 참고용이며 투자 조언이 아닙니다.',
   ].join('\n')
 }

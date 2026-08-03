@@ -82,7 +82,7 @@ const DATE_SEEDS = ['오늘며칠이야', '오늘날짜', '며칠이야', '날�
 const BRIEF_SEEDS = ['브리핑', '오늘브리핑', '아침브리핑', '오늘일정', '오늘뭐하지']
 const LOC_SEEDS = ['내위치', '현재위치', '지금어디야', '위치알려줘']
 const HELP_SEEDS = ['도움말', '헬프', '사용법', '뭐할수있어', '기능알려줘']
-const GUIDE_SEEDS = ['사용설명서', '시작가이드', '간단가이드', '앱소개', '이앱이뭐야']
+const GUIDE_SEEDS = ['사용설명서', '시작가이드', '간단가이드', '앱소개', '이앱이뭐야', 'api키', '키발급']
 const CLEAR_SEEDS = [
   '대화삭제해줘',
   '대화삭제',
@@ -178,7 +178,7 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
   }
 
   if (
-    /사용\s*설명서|시작\s*가이드|간단\s*가이드|앱\s*소개|이\s*앱(?:이|은)?\s*뭐|아이디어\s*사용/i.test(
+    /사용\s*설명서|시작\s*가이드|간단\s*가이드|앱\s*소개|이\s*앱(?:이|은)?\s*뭐|아이디어\s*사용|api\s*키|키\s*발급/i.test(
       text,
     ) ||
     bestSeedScore(c, GUIDE_SEEDS) >= 0.72

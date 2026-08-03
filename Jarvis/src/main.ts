@@ -213,7 +213,7 @@ import {
   type MusicSession,
 } from './music'
 
-const APP_VERSION = '1.13.7'
+const APP_VERSION = '1.13.8'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -395,11 +395,11 @@ async function refreshRemoteVersionBadge(opts?: { announce?: boolean }): Promise
 
 const SUGGESTIONS = [
   '사용설명서',
+  'API 키',
   '오늘 날씨 알려줘',
   '조용한 음악 틀어줘',
   '브리핑',
   '지금 몇 시야',
-  '삼성전자 시세',
 ]
 
 /** Clear main chat history (settings button, chat toolbar, or voice). */

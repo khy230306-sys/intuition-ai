@@ -1332,6 +1332,39 @@ img {
   filter: drop-shadow(0 10px 0 rgba(26, 21, 16, 0.12));
 }
 
+.paint-subject {
+  display: block;
+  overflow: visible;
+}
+
+.stage-paint {
+  filter: drop-shadow(0 12px 0 rgba(26, 21, 16, 0.14));
+}
+
+.paint-live {
+  background-image: none !important;
+}
+
+.paint-pop {
+  animation: paint-pop 0.35s ease;
+}
+
+@keyframes paint-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.subject-chip .paint-subject {
+  flex-shrink: 0;
+}
+
 .color-ribbon {
   position: absolute;
   left: 50%;

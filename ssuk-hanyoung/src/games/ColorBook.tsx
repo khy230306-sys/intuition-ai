@@ -4,30 +4,31 @@ import { speak } from '../lib/speech'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { CHAR_IMG, CharImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 
-type Subject = { id: string; ko: string; src: string }
+type Subject = { id: string; ko: string }
 
 const SUBJECTS: Subject[] = [
-  { id: 'car', ko: '자동차', src: CHAR_IMG.car },
-  { id: 'bus', ko: '버스', src: CHAR_IMG.bus },
-  { id: 'fire', ko: '소방차', src: CHAR_IMG.fire },
-  { id: 'police', ko: '경찰차', src: CHAR_IMG.police },
-  { id: 'ambulance', ko: '구급차', src: CHAR_IMG.ambulance },
-  { id: 'truck', ko: '트럭', src: CHAR_IMG.dump },
-  { id: 'tractor', ko: '트랙터', src: CHAR_IMG.tractor },
-  { id: 'paint', ko: '팔레트', src: CHAR_IMG.paint },
-  { id: 'sand', ko: '모래성', src: CHAR_IMG.sand },
-  { id: 'star', ko: '별', src: CHAR_IMG.star },
-  { id: 'drum', ko: '북', src: CHAR_IMG.drum },
+  { id: 'car', ko: '자동차' },
+  { id: 'bus', ko: '버스' },
+  { id: 'fire', ko: '소방차' },
+  { id: 'police', ko: '경찰차' },
+  { id: 'ambulance', ko: '구급차' },
+  { id: 'truck', ko: '트럭' },
+  { id: 'tractor', ko: '트랙터' },
+  { id: 'star', ko: '별' },
+  { id: 'paint', ko: '팔레트' },
+  { id: 'sand', ko: '모래성' },
+  { id: 'drum', ko: '북' },
 ]
 
 export function ColorBook() {
   const [subject, setSubject] = useState(SUBJECTS[0]!)
-  const [color, setColor] = useState(PLAY_COLORS[0]!)
+  const [color, setColor] = useState(PLAY_COLORS.find((c) => c.id === 'pink') ?? PLAY_COLORS[0]!)
   const [painted, setPainted] = useState(0)
   const [confetti, setConfetti] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [pop, setPop] = useState(0)
 
   function pickSubject(s: Subject) {
     setSubject(s)
@@ -36,6 +37,7 @@ export function ColorBook() {
 
   function paint(c: (typeof PLAY_COLORS)[number]) {
     setColor(c)
+    setPop((n) => n + 1)
     speak(`${c.ko} ${subject.ko}!`)
     const next = painted + 1
     setPainted(next)
@@ -51,14 +53,14 @@ export function ColorBook() {
   }
 
   return (
-    <GameShell title="색칠놀이" subtitle="캐릭터를 고르고 색깔 무대를 바꿔요">
+    <GameShell title="색칠놀이" subtitle="원하는 색으로 자동차를 칠해요">
       <Confetti show={confetti} />
       {toast && <div className="toast">{toast}</div>}
       <div className="prompt">
         <div className="prompt-big">
           {color.ko} {subject.ko}
         </div>
-        <div className="prompt-sub">아래 색깔을 누르면 무대가 바뀌어요</div>
+        <div className="prompt-sub">아래 색깔을 누르면 자동차 색이 바뀌어요</div>
       </div>
       <div className="play-area">
         <div className="subject-row">
@@ -69,21 +71,23 @@ export function ColorBook() {
               className={`subject-chip photo${subject.id === s.id ? ' on' : ''}`}
               onClick={() => pickSubject(s)}
             >
-              <CharImg src={s.src} size={48} />
+              <PaintSubject kind={s.id} color={subject.id === s.id ? color.hex : '#FFD60A'} size={48} />
               <span>{s.ko}</span>
             </button>
           ))}
         </div>
 
         <div
-          className="color-stage photo-stage"
+          className="color-stage photo-stage paint-live"
           style={{
-            background: `radial-gradient(circle at 50% 70%, #fff 0 26%, ${color.hex} 27% 100%)`,
+            background: `radial-gradient(circle at 50% 78%, #fff 0 24%, ${color.hex}33 25% 100%)`,
             boxShadow: `0 0 0 6px ${color.hex}`,
           }}
         >
-          <CharImg src={subject.src} size={210} className="stage-photo" />
-          <div className="color-ribbon" style={{ background: color.hex }}>
+          <div key={pop} className="paint-pop">
+            <PaintSubject kind={subject.id} color={color.hex} size={230} className="stage-paint" />
+          </div>
+          <div className="color-ribbon" style={{ background: color.hex, color: color.id === 'yellow' ? '#1a1510' : '#fff' }}>
             {color.ko}
           </div>
         </div>

@@ -91,7 +91,7 @@ export const GAMES: GameMeta[] = [
   {
     id: 'car-paint',
     title: '색칠놀이',
-    subtitle: '자동차·동물·꽃 등 16가지 색칠',
+    subtitle: '원하는 색으로 자동차를 칠해요',
     emoji: '🎨',
     tags: ['car', 'color', 'new', 'touch'],
     accent: 'grape',

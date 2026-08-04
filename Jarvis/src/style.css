@@ -3102,3 +3102,146 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 .customer-today-list{margin:0;padding-left:1.1rem;color:var(--ink)}
 .customer-today-list li{margin:4px 0}
 .customer-item .body p{word-break:break-word}
+
+/* AIZIO Navigation v2 */
+.navv2-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: calc(100dvh - 120px);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.navv2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+}
+.navv2-search {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+}
+.navv2-search input {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  background: rgba(8, 14, 22, 0.95);
+  color: var(--ink);
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+.navv2-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.navv2-map {
+  width: 100%;
+  height: min(42vh, 360px);
+  min-height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 210, 190, 0.2);
+  background: #0a121a;
+}
+.navv2-attr { font-size: 0.7rem; opacity: 0.75; margin: 0; }
+.navv2-catalog-note { color: #fbbf24; }
+.navv2-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 38vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.navv2-cands { display: flex; flex-direction: column; gap: 6px; }
+.navv2-cand {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  text-align: left;
+  min-height: 56px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.2);
+  background: rgba(8, 14, 22, 0.92);
+  color: var(--ink);
+}
+.navv2-cand.active { border-color: rgba(0, 210, 190, 0.7); background: rgba(0, 210, 190, 0.1); }
+.navv2-cand-n {
+  width: 28px; height: 28px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: rgba(0, 210, 190, 0.2); font-weight: 700;
+}
+.navv2-cand-body { display: flex; flex-direction: column; gap: 2px; }
+.navv2-cand-body small { color: var(--muted); font-size: 0.78rem; }
+.navv2-route, .navv2-guide, .navv2-detail {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 210, 190, 0.25);
+  background: rgba(0, 210, 190, 0.06);
+}
+.navv2-recent { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.navv2-chat-cards {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(8, 22, 28, 0.92);
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.navv2-chat-cards-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.navv2-chat-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.navv2-chat-card {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.navv2-chat-n {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 210, 190, 0.2);
+  color: #7ff5e8;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.navv2-chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.navv2-chat-body strong {
+  font-size: 0.92rem;
+}
+.navv2-chat-body small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.maplibregl-map { font: inherit; }

@@ -49,6 +49,7 @@ describe('device diagnostics', () => {
       featureFlags: { dnaEnabled: true },
       navigation: { hasHome: false, hasWork: false, favoriteCount: 0 },
       customers: { count: 0, withBirthday: 0, withPhone: 0 },
+      navigationV2: { travelMode: 'driving', recentCount: 0 },
       recentErrorCodes: ['leak sk-abcdefghijklmnopqrstuvwxyz1234'],
       href: 'https://example.com/',
     }

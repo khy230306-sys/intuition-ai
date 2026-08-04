@@ -248,13 +248,23 @@ import {
   setSavedPlace,
   clearSavedPlace,
   removeFavorite,
-  startNavigationFromSheet,
   updateNavigationSettings,
   buildMapTestSearchUrl,
   isSafeMapUrl,
   type MapProviderId,
   type TravelMode,
 } from './navigation'
+import {
+  bindNavigationScreen,
+  clearAllNavV2LocalData,
+  clearRecentSearches,
+  destroyNavigationScreen,
+  getNavV2Context,
+  loadNavV2Settings,
+  renderNavigationScreen,
+  saveNavV2Settings,
+  type NavScreenState,
+} from './navigationV2'
 import {
   customersWithBirthdayToday,
   deleteCustomer,
@@ -265,7 +275,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.15.6'
+const APP_VERSION = '1.16.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -532,8 +542,18 @@ const state = {
   homeV2Pane: 'home' as HomeV2Pane,
   /** HOME v2 "전체" sheet */
   homeV2MoreOpen: false,
-  /** AI 길안내 bottom sheet */
+  /** AI 길안내 bottom sheet (legacy helper; v2 uses full Navigation view) */
   homeV2NavSheetOpen: false,
+  /** Navigation v2 UI state */
+  navV2: {
+    phase: 'idle',
+    query: '',
+    candidates: [],
+    selected: null,
+    catalogOnly: true,
+    status: '목적지를 검색해 주세요.',
+    showAll: false,
+  } as NavScreenState,
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -586,39 +606,32 @@ async function refreshNavPermStatus(): Promise<void> {
 
 function openNavigationSheet(): void {
   state.homeV2MoreOpen = false
-  state.homeV2NavSheetOpen = true
-  state.view = 'chat'
+  state.homeV2NavSheetOpen = false
+  state.view = 'navigation'
   state.homeV2Pane = 'home'
+  const ctx = getNavV2Context()
+  state.navV2 = {
+    ...state.navV2,
+    query: ctx.lastQuery || state.navV2.query,
+    candidates: ctx.candidates.length ? ctx.candidates : state.navV2.candidates,
+    selected: ctx.selected,
+    status: ctx.candidates.length ? `${ctx.candidates.length}곳 후보` : '목적지를 검색해 주세요.',
+    phase: ctx.candidates.length ? 'candidates' : 'idle',
+  }
   render()
 }
 
-async function runNavigationFromUi(dest: string, nearby = false): Promise<void> {
-  const travel = (document.getElementById('nav-travel-select') as HTMLSelectElement | null)?.value as
-    | TravelMode
-    | undefined
-  const map = (document.getElementById('nav-map-select') as HTMLSelectElement | null)?.value as
-    | MapProviderId
-    | undefined
-  const res = await startNavigationFromSheet({
-    destinationText: dest,
-    travelMode: travel || loadNavigationSettings().defaultTravelMode,
-    preferredMap: map || loadNavigationSettings().defaultMap,
-    nearby,
-  })
+async function runNavigationFromUi(dest: string, _nearby = false): Promise<void> {
   state.homeV2NavSheetOpen = false
-  pushMsg('assistant', res.text)
-  state.view = 'chat'
-  state.homeV2Pane = 'thread'
-  render()
-  scrollChat()
-  if (res.action) {
-    try {
-      await res.action()
-    } catch {
-      showFlash('지도 앱을 열지 못했습니다. 웹 지도로 다시 시도해 주세요.')
-    }
+  state.view = 'navigation'
+  state.navV2 = {
+    ...state.navV2,
+    query: dest,
+    phase: 'searching',
+    status: '관련 장소를 찾고 있어요.',
   }
-  if (res.openSettings) goToView('settings')
+  render()
+  void handleUserText(dest)
 }
 
 let arcade: ArcadeHandle | null = null
@@ -821,7 +834,8 @@ function captureViewFromUrl(): void {
       v === 'global' ||
       v === 'life' ||
       v === 'invest' ||
-      v === 'customers'
+      v === 'customers' ||
+      v === 'navigation'
     ) {
       state.view = v
       u.searchParams.delete('view')
@@ -839,13 +853,17 @@ function captureViewFromUrl(): void {
       writeStoredHomeVariant(resolved)
       if (resolved === 'v2') state.homeV2Pane = 'home'
     }
-    if (u.searchParams.get('nav') === '1' || u.searchParams.get('navigation') === '1') {
-      state.homeV2NavSheetOpen = true
-      state.view = 'chat'
-      state.homeV2Pane = 'home'
-    }
     if (u.searchParams.get('customers') === '1' || u.searchParams.get('crm') === '1') {
       state.view = 'customers'
+    }
+    if (
+      u.searchParams.get('nav') === '1' ||
+      u.searchParams.get('navigation') === '1' ||
+      u.searchParams.get('navv2') === '1'
+    ) {
+      state.view = 'navigation'
+      state.homeV2NavSheetOpen = false
+      state.homeV2Pane = 'home'
     }
   } catch {
     /* ignore */
@@ -1455,6 +1473,36 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       }
     }
     if (reply.view) state.view = reply.view
+    // Place-search replies keep chat visible — switch HOME v2 to conversation pane for cards
+    if (
+      state.view === 'chat' &&
+      activeHomeVariant() === 'v2' &&
+      /장소|후보|찾았|선택했|길안내/.test(reply.text || '')
+    ) {
+      state.homeV2Pane = 'thread'
+    }
+    if (reply.view === 'navigation') {
+      const ctx = getNavV2Context()
+      state.navV2 = {
+        ...state.navV2,
+        query: ctx.lastQuery || state.navV2.query,
+        candidates: ctx.candidates.length ? ctx.candidates : state.navV2.candidates,
+        selected: ctx.selected,
+        catalogOnly: true,
+        phase: ctx.guiding
+          ? 'guiding'
+          : ctx.routes.length
+            ? 'route_preview'
+            : ctx.selected
+              ? 'place_detail'
+              : ctx.candidates.length
+                ? 'candidates'
+                : 'idle',
+        status: ctx.candidates.length
+          ? `${ctx.candidates.length}곳 후보`
+          : state.navV2.status || '목적지를 검색해 주세요.',
+      }
+    }
     if (reply.arcadeId) state.arcadeId = reply.arcadeId
     if (reply.listenLang) state.listenLang = reply.listenLang
     if (reply.speak !== false && state.settings.speakReplies) {
@@ -2637,7 +2685,18 @@ function renderNavSettingsSection(): string {
   return `
     <details class="device-test-panel" data-nav-settings="1" open>
       <summary><strong>길안내 및 지도</strong></summary>
-      <p class="hint">목적지를 이해해 지도 앱·웹으로 연결합니다. 위치·주소는 서버에 저장하지 않습니다.</p>
+      <p class="hint">기본은 <strong>AIZIO 내부 지도</strong>입니다. 외부 앱(카카오·T맵 등)은 보조 「다른 지도에서 열기」로만 사용합니다. 좌표·경로는 서버에 저장하지 않습니다.</p>
+      <div class="row-btns">
+        <button type="button" class="primary-btn" data-view="navigation">내부 길안내 열기</button>
+      </div>
+      <p class="hint">음성 안내: ${loadNavV2Settings().voiceEnabled ? '켜짐' : '꺼짐'} · 기본 이동수단: ${loadNavV2Settings().travelMode}</p>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="navv2-toggle-voice">음성 안내 켜기/끄기</button>
+        <button type="button" class="ghost-btn" data-action="navv2-clear-recent">최근 검색 초기화</button>
+        <button type="button" class="ghost-btn danger-btn" data-action="navv2-clear-all">길안내 데이터 전체 삭제</button>
+      </div>
+      <p class="hint">지도 타일: OpenFreeMap(또는 VITE_AIZIO_MAP_STYLE_URL) · 장소검색: 로컬 카탈로그(+선택 원격) · 경로: OSRM/대략 · 실시간 교통 미반영</p>
+      <h3 class="subsection-title">보조 · 다른 지도에서 열기 기본값</h3>
       <label>기본 지도 앱
         <select name="navDefaultMap" data-nav-field="defaultMap">
           <option value="kakao" ${nav.defaultMap === 'kakao' ? 'selected' : ''}>카카오맵 (추천)</option>
@@ -2703,9 +2762,62 @@ function renderChatOrHomeV2(): string {
   return renderHomeV2View()
 }
 
+function renderNavChatCardsHtml(): string {
+  try {
+    const raw = sessionStorage.getItem('aizio.navV2.chatCards.v1')
+    if (!raw) return ''
+    const data = JSON.parse(raw) as {
+      query?: string
+      candidates?: Array<{ id: string; name: string; address: string; distanceM?: number | null; category?: string }>
+      catalogOnly?: boolean
+      showAll?: boolean
+    }
+    const all = Array.isArray(data.candidates) ? data.candidates : []
+    if (!all.length) return ''
+    const showAll = Boolean(data.showAll)
+    const list = showAll ? all.slice(0, 10) : all.slice(0, 3)
+    const cards = list
+      .map((c, i) => {
+        const dist =
+          c.distanceM != null && Number.isFinite(c.distanceM)
+            ? `${(c.distanceM / 1000).toFixed(1)}km`
+            : '거리 미확인'
+        return `<article class="navv2-chat-card" data-navv2-chat-pick="${i + 1}">
+          <span class="navv2-chat-n">${i + 1}</span>
+          <div class="navv2-chat-body">
+            <strong>${escapeHtml(c.name)}</strong>
+            <small>${escapeHtml(c.category || '장소')} · ${escapeHtml(c.address)}</small>
+            <small>${escapeHtml(dist)}</small>
+          </div>
+          <button type="button" class="ghost-btn tiny" data-navv2-chat-select="${i + 1}">선택</button>
+        </article>`
+      })
+      .join('')
+    const more =
+      !showAll && all.length > 3
+        ? `<button type="button" class="ghost-btn tiny" data-navv2-chat-more="1">나머지 ${all.length - 3}곳 보기</button>`
+        : ''
+    return `<div class="navv2-chat-cards" data-navv2-chat-cards="1">
+      <div class="navv2-chat-cards-head">
+        <strong>「${escapeHtml(data.query || '검색')}」 후보 ${all.length}곳</strong>
+        ${data.catalogOnly ? '<span class="navv2-catalog-note">로컬 카탈로그</span>' : ''}
+      </div>
+      <div class="navv2-chat-cards-list">${cards}</div>
+      <div class="row-btns">
+        ${more}
+        <button type="button" class="primary-btn tiny" data-navv2-chat-map="1">지도에서 보기</button>
+        <button type="button" class="ghost-btn tiny" data-navv2-chat-dismiss="1">닫기</button>
+      </div>
+    </div>`
+  } catch {
+    return ''
+  }
+}
+
 function renderChat(): string {
   const mode = loadInterpretMode()
   const empty = state.messages.length === 0
+  const navCards = empty ? '' : renderNavChatCardsHtml()
   const body = empty
     ? `
         <div class="hero-empty">
@@ -2719,7 +2831,7 @@ function renderChat(): string {
         </div>
       `
     : state.messages
-        .map((m) => {
+        .map((m, idx, arr) => {
           const mine = m.role === 'user'
           const name = mine ? state.settings.displayName || 'YOU' : 'AIZIO'
           const clock = formatChatClock(m.createdAt)
@@ -2732,6 +2844,10 @@ function renderChat(): string {
             : `<button type="button" class="msg-avatar-btn aizio" data-profile-open="1" data-profile-name="AIZIO" data-profile-src="" data-profile-mine="0" aria-label="AIZIO">
                 <span class="msg-avatar-letter">A</span>
               </button>`
+          const attachCards =
+            !mine && idx === arr.length - 1 && navCards && /장소|후보|찾았|검색/.test(m.text)
+              ? navCards
+              : ''
           return `
           <div class="msg-row ${mine ? 'user' : 'assistant'}">
             ${avatar}
@@ -2745,6 +2861,7 @@ function renderChat(): string {
                   ? renderMusicPlayChip(m.musicPlayUrl, true)
                   : ''
               }</div>
+              ${attachCards}
             </div>
           </div>`
         })
@@ -3931,7 +4048,9 @@ function render(opts: RenderOpts = {}): void {
                     ? renderActions()
                     : state.view === 'customers'
                       ? renderCustomers()
-                      : renderSettings()
+                      : state.view === 'navigation'
+                        ? renderNavigationScreen(state.navV2)
+                        : renderSettings()
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
@@ -3959,6 +4078,17 @@ function render(opts: RenderOpts = {}): void {
   }
   bind()
   void refreshNavPermStatus()
+  if (state.view === 'navigation') {
+    const panel = document.querySelector('[data-navv2="1"]') as HTMLElement | null
+    if (panel) {
+      void bindNavigationScreen(panel, state.navV2, (next) => {
+        state.navV2 = { ...state.navV2, ...next }
+        render({ guardNav: false })
+      })
+    }
+  } else {
+    destroyNavigationScreen()
+  }
   if (state.view === 'games') {
     // remount after DOM ready
     requestAnimationFrame(() => mountActiveArcade())
@@ -4881,6 +5011,58 @@ function bind(): void {
       const r = await m.requestCurrentPosition()
       showFlash(r.ok ? '위치를 확인했습니다. (좌표는 저장하지 않습니다)' : `위치 확인 실패 · ${r.errorCode || 'denied'}`)
       void refreshNavPermStatus()
+    })
+  })
+  document.querySelector('[data-action="navv2-toggle-voice"]')?.addEventListener('click', () => {
+    const cur = loadNavV2Settings()
+    saveNavV2Settings({ voiceEnabled: !cur.voiceEnabled })
+    showFlash(`음성 안내 ${!cur.voiceEnabled ? '켜짐' : '꺼짐'}`)
+    render()
+  })
+  document.querySelector('[data-action="navv2-clear-recent"]')?.addEventListener('click', () => {
+    clearRecentSearches()
+    showFlash('최근 검색을 초기화했습니다.')
+    render()
+  })
+  document.querySelector('[data-action="navv2-clear-all"]')?.addEventListener('click', () => {
+    clearAllNavV2LocalData()
+    try {
+      sessionStorage.removeItem('aizio.navV2.chatCards.v1')
+      sessionStorage.removeItem('aizio.navV2.context.v1')
+    } catch {
+      /* ignore */
+    }
+    showFlash('길안내 로컬 데이터를 삭제했습니다.')
+    render()
+  })
+  document.querySelector('[data-navv2-chat-map="1"]')?.addEventListener('click', () => {
+    openNavigationSheet()
+  })
+  document.querySelector('[data-navv2-chat-dismiss="1"]')?.addEventListener('click', () => {
+    try {
+      sessionStorage.removeItem('aizio.navV2.chatCards.v1')
+    } catch {
+      /* ignore */
+    }
+    render()
+  })
+  document.querySelector('[data-navv2-chat-more="1"]')?.addEventListener('click', () => {
+    try {
+      const raw = sessionStorage.getItem('aizio.navV2.chatCards.v1')
+      if (!raw) return
+      const data = JSON.parse(raw) as Record<string, unknown>
+      data.showAll = true
+      sessionStorage.setItem('aizio.navV2.chatCards.v1', JSON.stringify(data))
+    } catch {
+      /* ignore */
+    }
+    render()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-navv2-chat-select]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const n = btn.dataset.navv2ChatSelect || ''
+      if (!n) return
+      void handleUserText(`${n}번`)
     })
   })
   document.querySelector('[data-action="nav-clear-session"]')?.addEventListener('click', () => {

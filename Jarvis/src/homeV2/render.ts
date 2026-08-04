@@ -223,7 +223,7 @@ export function renderHomeV2MoreSheet(): string {
         <div class="home-v2-more-group">
           <h4>생활</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('길안내', 'data-action="home-v2-open-nav"')}
+            ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}
             ${moreItem('일정 · 할 일', 'data-view="life"')}
@@ -290,15 +290,18 @@ export function renderNavigationSheet(opts?: {
     ['Google', 'google'],
   ]
   return `
-    <div class="home-v2-nav-sheet" data-nav-sheet="1" role="dialog" aria-label="길안내">
+    <div class="home-v2-nav-sheet" data-nav-sheet="1" role="dialog" aria-label="길안내 보조">
       <div class="home-v2-nav-sheet-panel">
         <div class="home-v2-more-head">
-          <strong>길안내</strong>
+          <strong>다른 지도에서 열기</strong>
           <button type="button" class="ghost-btn tiny" data-action="nav-sheet-close">닫기</button>
         </div>
-        <p class="hint">목적지를 말하면 <strong>카카오맵 · T맵 · 네이버지도</strong> 앱으로 바로 길찾기를 엽니다. (AIZIO 자체 내비 아님)</p>
-        <label class="home-v2-nav-label">목적지
-          <input type="text" id="nav-dest-input" class="home-v2-nav-input" placeholder="예: 사천백천사, 울산역, 가까운 약국" autocomplete="off" />
+        <p class="hint">기본 길안내는 <strong>AIZIO 내부 지도</strong>입니다. 이 시트는 카카오·T맵 등 외부 앱으로 여는 <strong>보조 기능</strong>입니다.</p>
+        <div class="row-btns">
+          <button type="button" class="primary-btn" data-view="navigation" data-action="nav-sheet-close">AIZIO 내부 길안내 열기</button>
+        </div>
+        <label class="home-v2-nav-label">목적지 (외부 앱)
+          <input type="text" id="nav-dest-input" class="home-v2-nav-input" placeholder="예: 울산역, 가까운 약국" autocomplete="off" />
         </label>
         <div class="home-v2-nav-chips" aria-label="빠른 선택">
           ${chips
@@ -317,7 +320,7 @@ export function renderNavigationSheet(opts?: {
             <option value="unspecified" ${travel === 'unspecified' ? 'selected' : ''}>지정 없음</option>
           </select>
         </label>
-        <p class="home-v2-nav-label">지도 앱 선택</p>
+        <p class="home-v2-nav-label">외부 지도 앱</p>
         <div class="home-v2-nav-maps" role="group" aria-label="지도 앱">
           ${maps
             .map(
@@ -334,8 +337,8 @@ export function renderNavigationSheet(opts?: {
           <option value="google" ${map === 'google' ? 'selected' : ''}>Google 지도</option>
           <option value="system" ${map === 'system' ? 'selected' : ''}>자동</option>
         </select>
-        <button type="button" class="primary-btn" data-action="nav-sheet-start">선택한 지도로 길찾기</button>
-        <p class="hint">운전 중에는 화면을 조작하지 마세요. 실시간 경로·교통은 지도 앱이 담당합니다.</p>
+        <button type="button" class="ghost-btn" data-action="nav-sheet-start">선택한 외부 지도로 열기</button>
+        <p class="hint">외부 앱의 실시간 교통·안내는 해당 앱이 담당합니다.</p>
       </div>
     </div>
   `

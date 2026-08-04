@@ -189,7 +189,8 @@ describe('HOME v2 render', () => {
 
   it('navigation sheet and design lab', () => {
     expect(renderNavigationSheet()).toContain('data-nav-sheet')
-    expect(renderNavigationSheet()).toContain('선택한 지도로 길찾기')
+    expect(renderNavigationSheet()).toContain('AIZIO 내부 길안내')
+    expect(renderNavigationSheet()).toContain('선택한 외부 지도로 열기')
     expect(renderNavigationSheet()).toContain('data-nav-map="tmap"')
     expect(renderNavigationSheet()).toContain('카카오맵')
     expect(renderDesignLabSection({ active: 'v2', bootDefault: 'v2', visible: true })).toContain(

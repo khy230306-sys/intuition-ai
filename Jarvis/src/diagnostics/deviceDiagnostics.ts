@@ -9,6 +9,7 @@ import { loadHybridAiConfig } from '../ai-providers'
 import { loadLifeFlags } from '../life-os/featureFlags'
 import { navigationDiagSnapshot } from '../navigation'
 import { customersDiagSnapshot } from '../customers'
+import { navV2DiagSnapshot } from '../navigationV2'
 
 export type DeviceDiagnostics = {
   app: 'AIZIO'
@@ -59,6 +60,7 @@ export type DeviceDiagnostics = {
   /** No full addresses / coordinates */
   navigation: Record<string, unknown>
   customers: Record<string, unknown>
+  navigationV2: Record<string, unknown>
   recentErrorCodes: string[]
   href: string
 }
@@ -245,6 +247,7 @@ export async function collectDeviceDiagnostics(appVersionFallback: string): Prom
     featureFlags: loadLifeFlags() as unknown as Record<string, boolean>,
     navigation: navigationDiagSnapshot(),
     customers: customersDiagSnapshot(),
+    navigationV2: navV2DiagSnapshot(),
     recentErrorCodes: recentErrors(),
     href: typeof location !== 'undefined' ? location.href.split('#')[0]! : '',
   }

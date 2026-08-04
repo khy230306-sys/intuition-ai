@@ -12,6 +12,7 @@ import {
   shareText,
 } from './actions'
 import { tryHandleNavigation } from './navigation'
+import { tryHandleNavigationV2 } from './navigationV2'
 import { tryHandleCustomers } from './customers'
 import {
   analyzeHolding,
@@ -761,23 +762,45 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
-  // AI 길안내 v1 — maps app/web handoff (before generic chat / legacy mapMatch)
+  // AI 길안내 v2 — internal map / candidates (never auto-open external apps)
   try {
-    const nav = await tryHandleNavigation(text)
-    if (nav?.handled) {
-      if (typeof sessionStorage !== 'undefined') {
-        if (nav.openSheet) sessionStorage.setItem('aizio.nav.openSheet.v1', '1')
-        if (nav.openSettings) sessionStorage.setItem('aizio.nav.focusSettings.v1', '1')
+    const nav2 = await tryHandleNavigationV2(text)
+    if (nav2?.handled) {
+      if (typeof sessionStorage !== 'undefined' && nav2.candidates?.length) {
+        sessionStorage.setItem(
+          'aizio.navV2.chatCards.v1',
+          JSON.stringify({
+            query: nav2.query || text,
+            candidates: nav2.candidates.slice(0, 5),
+            catalogOnly: Boolean(nav2.catalogOnly),
+          }),
+        )
       }
       return {
-        text: nav.text,
-        speak: nav.speak !== false,
-        action: nav.action,
-        view: nav.openSettings ? 'settings' : undefined,
+        text: nav2.text,
+        speak: nav2.speak !== false,
+        view: nav2.view || (nav2.openNav ? 'navigation' : undefined),
       }
     }
   } catch {
-    /* navigation must never block other skills */
+    /* nav v2 must never block other skills */
+  }
+
+  // External map apps — only when user explicitly names Kakao/TMAP/Naver/Apple/Google
+  try {
+    if (/(카카오\s*맵|티\s*맵|티맵|T\s*맵|네이버\s*지도|애플\s*지도|구글\s*지도)\s*(으로|로)?/.test(text)) {
+      const nav = await tryHandleNavigation(text)
+      if (nav?.handled) {
+        return {
+          text: `${nav.text} (보조: 외부 지도 앱)`,
+          speak: nav.speak !== false,
+          action: nav.action,
+          view: nav.openSettings ? 'settings' : undefined,
+        }
+      }
+    }
+  } catch {
+    /* external handoff optional */
   }
 
   // 손님관리 — local CRM (name / birthday lookup)
@@ -1155,19 +1178,19 @@ export async function think(
     return { text: appIntent.message, speak: true, action: () => appIntent }
   }
 
-  // Legacy short map patterns — prefer navigation module when possible
+  // Legacy short map patterns → internal Navigation v2 (no auto external open)
   const mapMatch = text.match(/^(?:지도|길찾기)\s*(.+)$/i) || text.match(/^(.+?)\s*(?:지도|길찾기)$/i)
   if (mapMatch) {
     const q = mapMatch[1].trim()
     try {
-      const nav = await tryHandleNavigation(`${q} 길찾기`)
-      if (nav?.handled) {
-        return { text: nav.text, speak: true, action: nav.action }
+      const nav2 = await tryHandleNavigationV2(`${q} 안내해 줘`)
+      if (nav2?.handled) {
+        return { text: nav2.text, speak: true, view: nav2.view || 'navigation' }
       }
     } catch {
       /* fall through */
     }
-    return { text: `"${q}" 지도를 엽니다.`, speak: true, action: () => openMaps(q) }
+    return { text: `「${q}」장소를 AIZIO 길안내에서 검색해 보세요.`, speak: true, view: 'navigation' }
   }
 
   if (wantsWeatherCommand(text)) {

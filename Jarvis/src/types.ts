@@ -165,6 +165,7 @@ export type View =
   | 'settings'
   | 'global'
   | 'customers'
+  | 'navigation'
 
 export interface ActionResult {
   ok: boolean

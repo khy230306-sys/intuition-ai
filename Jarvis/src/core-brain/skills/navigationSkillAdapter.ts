@@ -12,6 +12,7 @@ const VIEWS: View[] = [
   'settings',
   'global',
   'customers',
+  'navigation',
 ]
 
 export function isAvailable(): boolean {
@@ -45,6 +46,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     settings: '설정',
     global: '글로벌',
     customers: '손님관리',
+    navigation: '길안내',
   }
   return {
     success: true,

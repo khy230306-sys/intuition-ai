@@ -40,10 +40,10 @@ If HOME v2 render throws:
 
 | URL | Purpose |
 |-----|---------|
-| https://laced-prism-88ovu7m.shipstatic.com | Default HOME v2 |
-| https://laced-prism-88ovu7m.shipstatic.com/?home=v2 | HOME v2 direct |
-| https://laced-prism-88ovu7m.shipstatic.com/?home=legacy | Legacy recovery |
-| https://laced-prism-88ovu7m.shipstatic.com/?nav=1 | Open 길안내 sheet |
+| https://infused-whirl-dpn0rm4.shipstatic.com | Default HOME v2 |
+| https://infused-whirl-dpn0rm4.shipstatic.com/?home=v2 | HOME v2 direct |
+| https://infused-whirl-dpn0rm4.shipstatic.com/?home=legacy | Legacy recovery |
+| https://infused-whirl-dpn0rm4.shipstatic.com/?nav=1 | Open 길안내 sheet |
 
 ## Production
 

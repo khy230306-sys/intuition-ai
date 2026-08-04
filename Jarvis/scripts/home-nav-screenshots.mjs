@@ -116,25 +116,24 @@ async function main() {
     await page.waitForSelector('[data-home-v2-more="1"]')
     await shot(page, '08-more-menu.png')
 
-    // 8 settings nav section
+    // 8–9 settings + location-denied label
+    // Native Puppeteer clicks can hit the post-render nav ghost-guard; use bubbled MouseEvent.
     await page.goto(`${base}?home=v2`, { waitUntil: 'networkidle0' })
     await skipLocation(page)
+    await page.waitForSelector('[data-home-v2="1"]', { timeout: 12000 })
+    await new Promise((r) => setTimeout(r, 400))
     await page.evaluate(() => {
-      document.querySelector('[data-view="settings"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      const btn =
+        document.querySelector('.home-v2-settings[data-view="settings"]') ||
+        document.querySelector('[data-view="settings"]')
+      btn?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
     })
-    // use nav
-    await page.click('button[data-view="settings"]').catch(() => {})
-    await page.waitForSelector('[data-nav-settings="1"]', { timeout: 8000 }).catch(() => {})
-    // force settings via evaluate state isn't available — click bottom more
-    await page.goto(`${base}`, { waitUntil: 'networkidle0' })
-    await skipLocation(page)
-    await page.click('[data-action="home-v2-nav-more"]')
-    await page.waitForSelector('[data-home-v2-more="1"]')
-    await page.click('button[data-view="settings"]')
-    await page.waitForSelector('[data-nav-settings="1"]', { timeout: 8000 })
+    await page.waitForSelector('[data-nav-settings="1"]', { timeout: 10000 })
+    await page.evaluate(() => {
+      document.querySelector('[data-nav-settings="1"]')?.scrollIntoView({ block: 'center' })
+    })
     await shot(page, '09-settings-navigation.png')
 
-    // permission denied label simulate
     await page.evaluate(() => {
       const el = document.querySelector('[data-nav-perm-status]')
       if (el) el.textContent = '위치 권한: 거부됨'

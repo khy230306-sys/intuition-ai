@@ -230,7 +230,6 @@ import {
   readBootDefaultHome,
   readStoredHomeVariant,
   renderDesignLabSection,
-  renderHomeV2Chrome,
   renderHomeV2MoreSheet,
   renderHomeV2NavWithPane,
   renderHomeV2Shell,
@@ -248,6 +247,7 @@ import {
   resetNavigationLocalState,
   setSavedPlace,
   clearSavedPlace,
+  removeFavorite,
   startNavigationFromSheet,
   updateNavigationSettings,
   buildMapTestSearchUrl,
@@ -2607,6 +2607,19 @@ function renderNavSettingsSection(): string {
   const nav = loadNavigationSettings()
   const homeAddr = nav.home?.addressText || ''
   const workAddr = nav.work?.addressText || ''
+  const favList =
+    nav.favorites.length === 0
+      ? '<p class="hint">저장된 즐겨찾기가 없습니다.</p>'
+      : `<ul class="home-v2-card-list" data-nav-fav-list>
+          ${nav.favorites
+            .map(
+              (f) => `<li>
+                <span>${escapeHtml(f.label || f.placeName || '즐겨찾기')}</span>
+                <button type="button" class="ghost-btn tiny" data-action="nav-remove-fav" data-fav-id="${escapeAttr(f.id)}" aria-label="즐겨찾기 삭제">삭제</button>
+              </li>`,
+            )
+            .join('')}
+        </ul>`
   return `
     <details class="device-test-panel" data-nav-settings="1" open>
       <summary><strong>길안내 및 지도</strong></summary>
@@ -2643,6 +2656,17 @@ function renderNavSettingsSection(): string {
         <button type="button" class="ghost-btn" data-action="nav-save-work">회사 저장</button>
         <button type="button" class="ghost-btn" data-action="nav-clear-work">회사 지우기</button>
       </div>
+      <h3 class="subsection-title">즐겨찾는 장소</h3>
+      ${favList}
+      <label>이름
+        <input type="text" data-nav-fav-label placeholder="예: 헬스장" autocomplete="off" />
+      </label>
+      <label>주소 · 장소
+        <input type="text" data-nav-fav-addr placeholder="예: 울산역" autocomplete="off" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-add-fav">즐겨찾기 추가</button>
+      </div>
       <p class="hint" data-nav-perm-status>위치 권한: 확인 중…</p>
       <div class="row-btns">
         <button type="button" class="ghost-btn" data-action="nav-request-location">위치 권한 요청</button>
@@ -2655,11 +2679,11 @@ function renderNavSettingsSection(): string {
 
 function renderChatOrHomeV2(): string {
   if (activeHomeVariant() !== 'v2') {
-    const chrome = designLabVisibleNow() ? renderHomeV2Chrome('legacy') : ''
-    return `${chrome}${renderChat()}`
+    // Legacy recovery: chrome only when Design Lab is explicitly surfaced (settings).
+    return renderChat()
   }
   if (state.homeV2Pane === 'thread') {
-    return `${renderHomeV2Chrome('v2')}${renderChat()}`
+    return renderChat()
   }
   return renderHomeV2View()
 }
@@ -4584,7 +4608,7 @@ function bind(): void {
       } catch {
         /* ignore */
       }
-      showFlash(v === 'v2' ? 'HOME v2 미리보기' : '기존 홈으로 전환')
+      showFlash(v === 'v2' ? 'HOME v2로 전환했습니다' : '기존 홈으로 전환했습니다')
       render()
     })
   })
@@ -4730,6 +4754,26 @@ function bind(): void {
     clearSavedPlace('work')
     showFlash('회사 주소를 지웠습니다.')
     render()
+  })
+  document.querySelector('[data-action="nav-add-fav"]')?.addEventListener('click', () => {
+    const label = (document.querySelector('[data-nav-fav-label]') as HTMLInputElement | null)?.value || ''
+    const addr = (document.querySelector('[data-nav-fav-addr]') as HTMLInputElement | null)?.value || ''
+    if (!addr.trim()) {
+      showFlash('즐겨찾기 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('favorite', { label: label.trim() || '즐겨찾기', addressText: addr.trim() })
+    showFlash('즐겨찾기를 추가했습니다.')
+    render()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="nav-remove-fav"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.favId || ''
+      if (!id) return
+      removeFavorite(id)
+      showFlash('즐겨찾기를 삭제했습니다.')
+      render()
+    })
   })
   document.querySelector('[data-action="nav-request-location"]')?.addEventListener('click', () => {
     void import('./navigation').then(async (m) => {

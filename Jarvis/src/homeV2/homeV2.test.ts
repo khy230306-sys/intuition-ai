@@ -170,6 +170,8 @@ describe('HOME v2 render', () => {
     expect(html).toContain('길안내')
     expect(html).not.toContain('data-quick-id="music"')
     expect(html).toContain('is-empty')
+    expect(html).not.toContain('data-home-v2-chrome')
+    expect(html).not.toContain('HOME v2 미리보기')
   })
 
   it('nav has five items; more sheet groups life/comms/tools', () => {

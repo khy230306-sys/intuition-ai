@@ -20,10 +20,11 @@ function escAttr(s: string): string {
   return esc(s).replace(/'/g, '&#39;')
 }
 
+/** Optional recovery chrome (settings / explicit lab). Not shown on default HOME. */
 export function renderHomeV2Chrome(active: HomeVariant): string {
   return `
     <div class="home-v2-chrome" data-home-v2-chrome="1">
-      <span class="home-v2-badge">HOME v2 미리보기</span>
+      <span class="home-v2-badge">HOME 전환</span>
       <div class="home-v2-chrome-btns">
         <button type="button" class="ghost-btn tiny ${active === 'legacy' ? 'active' : ''}" data-action="home-v2-set" data-home-variant="legacy">기존 홈으로</button>
         <button type="button" class="ghost-btn tiny ${active === 'v2' ? 'active' : ''}" data-action="home-v2-set" data-home-variant="v2">HOME v2</button>
@@ -54,7 +55,6 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
 
   return `
     <section class="panel home-v2-panel" data-home-v2="1">
-      ${renderHomeV2Chrome('v2')}
       <header class="home-v2-header">
         <div class="home-v2-header-text">
           <h1 class="home-v2-greet">${esc(model.header.greeting)}</h1>

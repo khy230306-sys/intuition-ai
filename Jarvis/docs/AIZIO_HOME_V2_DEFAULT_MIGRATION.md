@@ -18,7 +18,8 @@
 ## Preservation
 
 - `renderChat()` and the classic home widget remain in the codebase.
-- Users can switch anytime: Settings → **홈 화면 · 디자인 전환**, or chrome buttons, or `?home=legacy`.
+- Users can switch anytime: Settings → **홈 화면 · 디자인 전환**, or 전체 메뉴 → **디자인 전환 · 기존 홈**, or `?home=legacy`.
+- Preview chrome is **not** shown on the default HOME surface (reduces vertical clutter). Recovery lives in Settings / 전체 메뉴.
 
 ## Fallback
 
@@ -32,8 +33,19 @@ If HOME v2 render throws:
 
 1. Open `/?home=legacy`  
 2. Or Settings → 기존 홈 보기  
-3. Or reset home prefs (초기화) then set boot default  
+3. Or 전체 → 디자인 전환 · 기존 홈  
+4. Or reset home prefs then set boot default  
+
+## Preview (this run)
+
+| URL | Purpose |
+|-----|---------|
+| https://laced-prism-88ovu7m.shipstatic.com | Default HOME v2 |
+| https://laced-prism-88ovu7m.shipstatic.com/?home=v2 | HOME v2 direct |
+| https://laced-prism-88ovu7m.shipstatic.com/?home=legacy | Legacy recovery |
+| https://laced-prism-88ovu7m.shipstatic.com/?nav=1 | Open 길안내 sheet |
 
 ## Production
 
-Code defaults to v2, but this agent run does **not** execute `deploy:web`. Production domain remains unchanged until the user explicitly promotes a Preview.
+Code defaults to v2, but this agent run does **not** execute `deploy:web`.  
+Production `https://jarvis-app.shipstatic.com` remains `adaptive-echo-t118nxm` until the user explicitly promotes a Preview.

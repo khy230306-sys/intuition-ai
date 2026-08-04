@@ -5,6 +5,7 @@ import {
   clearNavSession,
   loadNavigationSettings,
   navigationDiagSnapshot,
+  removeFavorite,
   setSavedPlace,
   updateNavigationSettings,
 } from './navigationStorage'
@@ -134,5 +135,17 @@ describe('navigation storage', () => {
     expect(diag).not.toContain('세종대로')
     expect(navigationDiagSnapshot().hasHome).toBe(true)
     clearNavSession()
+  })
+
+  it('adds and removes favorites without address in diag', () => {
+    setSavedPlace('favorite', { label: '헬스장', addressText: '울산광역시 북구 비밀로 9' })
+    const s = loadNavigationSettings()
+    expect(s.favorites).toHaveLength(1)
+    expect(s.favorites[0]?.label).toBe('헬스장')
+    const diag = JSON.stringify(navigationDiagSnapshot())
+    expect(diag).not.toContain('비밀로')
+    expect(navigationDiagSnapshot().favoriteCount).toBe(1)
+    removeFavorite(s.favorites[0]!.id)
+    expect(loadNavigationSettings().favorites).toHaveLength(0)
   })
 })

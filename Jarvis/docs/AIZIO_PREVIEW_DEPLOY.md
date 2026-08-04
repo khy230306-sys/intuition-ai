@@ -7,15 +7,17 @@
 
 | Field | Value |
 |-------|--------|
-| REVIEW_URL | https://airy-dome-rpkmd84.shipstatic.com |
-| Version | 1.15.3 |
-| Commit | 48e7b1a |
-| HOME v2 | https://airy-dome-rpkmd84.shipstatic.com/?home=v2 |
-| Legacy home | https://airy-dome-rpkmd84.shipstatic.com/?home=legacy |
+| REVIEW_URL | https://laced-prism-88ovu7m.shipstatic.com |
+| Version | 1.15.4 |
+| Commit | (see git: cursor/aizio-home-v2-navigation-v1-6b16) |
+| HOME v2 (default) | https://laced-prism-88ovu7m.shipstatic.com |
+| HOME v2 direct | https://laced-prism-88ovu7m.shipstatic.com/?home=v2 |
+| Legacy home | https://laced-prism-88ovu7m.shipstatic.com/?home=legacy |
+| 길안내 sheet | https://laced-prism-88ovu7m.shipstatic.com/?nav=1 |
 | Default PUSH_SERVER_URL (baked) | _(empty — set in Settings; tunnel optional)_ |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
-Previous previews: https://keen-drifter-97nqfnk.shipstatic.com · https://harmonic-rift-5oo4f3w.shipstatic.com
+Previous previews: https://airy-dome-rpkmd84.shipstatic.com · https://keen-drifter-97nqfnk.shipstatic.com · https://harmonic-rift-5oo4f3w.shipstatic.com
 
 ## Status
 

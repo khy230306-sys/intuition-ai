@@ -1,7 +1,11 @@
-# AIZIO 길안내 · 한국 지도 강화 (Maps Korea v2)
+# AIZIO 길안내 · 한국 지도 강화 (Maps Korea v2) — legacy external handoff
 
-**Version:** 1.15.6  
-**원칙:** AIZIO는 자체 턴바이턴 내비 엔진을 만들지 않습니다. **카카오맵 · T맵 · 네이버지도** 앱/웹으로 안전하게 연결합니다.
+**Status (1.16+):** Default navigation is **AIZIO Navigation v2 (in-app)**.  
+This document describes the **secondary** 「다른 지도에서 열기」 handoff (Kakao / TMAP / Naver).  
+See `AIZIO_NAVIGATION_V2_ARCHITECTURE.md` for the current default.
+
+**Version:** 1.15.6 (external-map era)  
+**Preview (historical):** https://hyper-cluster-i63ofol.shipstatic.com/?nav=1
 
 ## 왜 Apple 기본이 약했나
 

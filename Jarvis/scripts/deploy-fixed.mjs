@@ -163,8 +163,12 @@ function buildFreshDist() {
     throw new Error('dist/index.html missing after build')
   }
   const assetsDir = join(dist, 'assets')
-  const jsName = readdirSync(assetsDir).find((f) => /^index-.*\.js$/.test(f))
-  if (!jsName) throw new Error('dist assets index-*.js missing after build')
+  const indexFiles = readdirSync(assetsDir).filter((f) => /^index-.*\.js$/.test(f))
+  if (!indexFiles.length) throw new Error('dist assets index-*.js missing after build')
+  // Main app chunk is the largest index-*.js (smaller ones are lazy route chunks).
+  const jsName = indexFiles
+    .map((f) => ({ f, n: readFileSync(join(assetsDir, f), 'utf8').length }))
+    .sort((a, b) => b.n - a.n)[0].f
   const js = readFileSync(join(assetsDir, jsName), 'utf8')
   const html = readFileSync(join(dist, 'index.html'), 'utf8')
   if (!js.includes(pkg.version)) {

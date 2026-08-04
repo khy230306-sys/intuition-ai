@@ -1,5 +1,5 @@
 {
-  "channel": "preview",
+  "channel": "production",
   "defaultPushServerUrl": "",
-  "note": "Set PUSH_SERVER_URL when running deploy:preview to bake default server"
+  "note": "Production build — configure push server in Settings if needed"
 }

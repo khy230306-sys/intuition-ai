@@ -540,7 +540,7 @@ const state = {
   homeRoomsOpen: null as boolean | null,
   /** HOME v2 preview pane (home dashboard vs conversation thread). */
   homeV2Pane: 'home' as HomeV2Pane,
-  /** HOME v2 "전체" sheet */
+  /** App menu sheet (HOME v2 + legacy) */
   homeV2MoreOpen: false,
   /** AI 길안내 bottom sheet (legacy helper; v2 uses full Navigation view) */
   homeV2NavSheetOpen: false,
@@ -2238,23 +2238,22 @@ function renderLocationGate(): string {
 
 function renderNav(): string {
   const inbox = getHomeSpaceInbox()
+  /** Primary tabs only — secondary screens live in the 메뉴 sheet. */
   const items: Array<{ id: View; label: string; ico: string; badge?: number }> = [
     { id: 'chat', label: t('nav.chat'), ico: 'CHAT', badge: inbox.unreadTotal || undefined },
-    { id: 'invest', label: t('nav.invest'), ico: 'INV' },
     { id: 'life', label: t('nav.life'), ico: 'LIFE' },
     { id: 'family', label: t('nav.family'), ico: 'FAM', badge: inbox.family.unread || undefined },
-    { id: 'friends', label: t('nav.friends'), ico: 'FRD', badge: inbox.friends.unread || undefined },
-    { id: 'global', label: t('nav.global'), ico: 'TR' },
-    { id: 'games', label: t('nav.games'), ico: 'PLAY' },
-    { id: 'actions', label: t('nav.actions'), ico: 'RUN' },
-    { id: 'settings', label: t('nav.settings'), ico: 'SET' },
   ]
+  const menuBadge = inbox.friends.unread || 0
+  const menuActive =
+    state.homeV2MoreOpen ||
+    ['invest', 'friends', 'global', 'games', 'actions', 'settings', 'customers', 'navigation'].includes(state.view)
   return `
-    <nav class="nav nav-8">
+    <nav class="nav nav-compact" data-legacy-nav="1">
       ${items
         .map(
           (i) => `
-        <button type="button" data-view="${i.id}" class="${state.view === i.id ? 'active' : ''}">
+        <button type="button" data-view="${i.id}" class="${!state.homeV2MoreOpen && state.view === i.id ? 'active' : ''}">
           <span class="nav-ico">${i.ico}${
             i.badge
               ? `<span class="nav-badge">${i.badge > 99 ? '99+' : i.badge}</span>`
@@ -2265,6 +2264,12 @@ function renderNav(): string {
       `,
         )
         .join('')}
+      <button type="button" data-action="home-v2-nav-more" class="home-v2-menu-btn ${menuActive ? 'active' : ''}" aria-label="메뉴" aria-haspopup="dialog">
+        <span class="nav-ico"><span class="menu-burger" aria-hidden="true"><i></i><i></i><i></i></span>${
+          menuBadge > 0 ? `<span class="nav-badge">${menuBadge > 99 ? '99+' : menuBadge}</span>` : ''
+        }</span>
+        <span>메뉴</span>
+      </button>
     </nav>
   `
 }
@@ -4051,7 +4056,7 @@ function render(opts: RenderOpts = {}): void {
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
-  const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const more = state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
   const navSheet =
     state.homeV2NavSheetOpen
       ? renderNavigationSheet({

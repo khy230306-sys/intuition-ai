@@ -1902,29 +1902,58 @@ body[data-jarvis-view='friends'] .orb::after {
   letter-spacing: 0.02em;
 }
 
-.nav.nav-8 {
+.nav.nav-8,
+.nav.nav-compact {
   display: flex;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   gap: 2px;
   grid-template-columns: none;
+  justify-content: space-around;
 }
 
-.nav.nav-8::-webkit-scrollbar {
+.nav.nav-8::-webkit-scrollbar,
+.nav.nav-compact::-webkit-scrollbar {
   display: none;
 }
 
-.nav.nav-8 button {
-  flex: 1 0 auto;
-  min-width: 3.2rem;
+.nav.nav-8 button,
+.nav.nav-compact button {
+  flex: 1 1 0;
+  min-width: 0;
   padding: 8px 4px 6px;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
 }
 
-.nav.nav-8 .nav-ico {
-  font-size: 0.52rem;
+.nav.nav-8 .nav-ico,
+.nav.nav-compact .nav-ico {
+  font-size: 0.72rem;
   letter-spacing: 0.01em;
+}
+
+.home-v2-menu-btn .nav-ico {
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  line-height: 1;
+  position: relative;
+}
+
+.menu-burger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 16px;
+  height: 14px;
+}
+.menu-burger i {
+  display: block;
+  height: 2px;
+  width: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.92;
 }
 
 .qr-scan-overlay {

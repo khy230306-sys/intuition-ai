@@ -68,7 +68,7 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
               : ''
           }
         </div>
-        <button type="button" class="ghost-btn tiny home-v2-settings" data-view="settings" aria-label="설정">설정</button>
+        <button type="button" class="ghost-btn tiny home-v2-settings" data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog">메뉴</button>
       </header>
 
       <div class="home-v2-summary" role="group" aria-label="오늘 요약">
@@ -151,6 +151,7 @@ export function renderHomeV2NavWithPane(
 ): string {
   const inbox = getHomeSpaceInbox()
   const famBadge = inbox.family.unread || 0
+  const friendsBadge = inbox.friends.unread || 0
   const rows: Array<{ key: string; label: string; ico: string; badge?: number; attrs: string; active: boolean }> = [
     {
       key: 'home',
@@ -183,10 +184,12 @@ export function renderHomeV2NavWithPane(
     },
     {
       key: 'more',
-      label: '전체',
-      ico: '전체',
-      attrs: 'data-action="home-v2-nav-more"',
+      label: '메뉴',
+      ico: '',
+      attrs: 'data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog"',
       active: moreOpen,
+      // Family has its own tab; menu badge shows friends unread.
+      badge: friendsBadge || undefined,
     },
   ]
   return `
@@ -197,9 +200,13 @@ export function renderHomeV2NavWithPane(
             i.badge && i.badge > 0
               ? `<span class="nav-badge">${i.badge > 99 ? '99+' : i.badge}</span>`
               : ''
+          const ico =
+            i.key === 'more'
+              ? `<span class="menu-burger" aria-hidden="true"><i></i><i></i><i></i></span>${badge}`
+              : `${i.ico}${badge}`
           return `
-          <button type="button" ${i.attrs} class="${i.active ? 'active' : ''}">
-            <span class="nav-ico">${i.ico}${badge}</span>
+          <button type="button" ${i.attrs} class="${i.active ? 'active' : ''}${i.key === 'more' ? ' home-v2-menu-btn' : ''}">
+            <span class="nav-ico">${ico}</span>
             <span>${i.label}</span>
           </button>`
         })
@@ -214,16 +221,17 @@ function moreItem(label: string, attrs: string): string {
 
 export function renderHomeV2MoreSheet(): string {
   return `
-    <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="전체 메뉴">
+    <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="메뉴">
       <div class="home-v2-more-sheet">
         <div class="home-v2-more-head">
-          <strong>전체</strong>
+          <strong>메뉴</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
         <div class="home-v2-more-group">
           <h4>생활</h4>
           <ul class="home-v2-more-list">
             ${moreItem('길안내', 'data-view="navigation"')}
+            ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}
             ${moreItem('일정 · 할 일', 'data-view="life"')}
@@ -261,6 +269,7 @@ export function renderHomeV2MoreSheet(): string {
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}
             ${moreItem('푸시 실기기 테스트', 'data-action="home-v2-goto-push"')}
             ${moreItem('디자인 전환 · 기존 홈', 'data-action="home-v2-set" data-home-variant="legacy"')}
+            ${moreItem('HOME v2로', 'data-action="home-v2-set" data-home-variant="v2"')}
           </ul>
         </div>
       </div>

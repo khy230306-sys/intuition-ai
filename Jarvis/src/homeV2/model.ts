@@ -193,5 +193,5 @@ export const HOME_V2_QUICK_COMMANDS = {
 
 export type HomeV2QuickId = keyof typeof HOME_V2_QUICK_COMMANDS
 
-/** Music remains available via 전체 메뉴 / 음성 — not removed from the product. */
+/** Music remains available via 메뉴 / 음성 — not removed from the product. */
 export const HOME_V2_MUSIC_COMMAND = '조용한 음악 틀어줘'

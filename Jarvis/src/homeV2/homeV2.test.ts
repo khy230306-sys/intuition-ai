@@ -174,17 +174,21 @@ describe('HOME v2 render', () => {
     expect(html).not.toContain('HOME v2 미리보기')
   })
 
-  it('nav has five items; more sheet groups life/comms/tools', () => {
+  it('nav has five items; menu sheet groups life/comms/tools', () => {
     const nav = renderHomeV2NavWithPane('chat', 'home', false)
     expect(nav).toContain('홈')
-    expect(nav).toContain('전체')
+    expect(nav).toContain('메뉴')
+    expect(nav).toContain('home-v2-menu-btn')
+    expect(nav).not.toContain('>전체<')
     const more = renderHomeV2MoreSheet()
+    expect(more).toContain('aria-label="메뉴"')
     expect(more).toContain('길안내')
     expect(more).toContain('음악')
     expect(more).toContain('손님관리')
     expect(more).toContain('data-view="customers"')
     expect(more).toContain('data-view="invest"')
     expect(more).toContain('디자인 전환')
+    expect(more).toContain('브리핑')
   })
 
   it('navigation sheet and design lab', () => {

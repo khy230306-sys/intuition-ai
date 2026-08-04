@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GAMES, getGame } from '../data/games'
 import { getDailyMissions, getProfile, useProfileSubscribe } from '../lib/store'
+import { GameArt } from '../components/GameArt'
+import { CartoonArt } from '../components/CartoonArt'
 
 const FEATURED = ['sound-board', 'story-tap', 'car-parade', 'car-puzzle', 'sticker-book', 'color-follow']
 
@@ -50,29 +52,35 @@ export function Home() {
             <Link
               key={m.id}
               to={`/games/${m.id}`}
-              className="card"
-              style={{ opacity: m.done ? 0.7 : 1, background: m.done ? '#e8f8ee' : undefined }}
+              className="card art-card"
+              style={{ opacity: m.done ? 0.75 : 1, background: m.done ? '#d9fbe5' : '#FFFDF5' }}
             >
-              <div className="card-emoji">{g.emoji}</div>
+              <div className="art-wrap">
+                <GameArt id={m.id} size={72} />
+              </div>
               <div className="card-title">{g.title}</div>
               <div className="card-sub">{m.done ? '완료!' : g.subtitle}</div>
               {m.done && <span className="tag">완료</span>}
             </Link>
           )
         })}
-        <Link to="/games/sticker-book" className="card" style={{ background: '#fff3c4' }}>
-          <div className="card-emoji">🖼️</div>
+        <Link to="/games/sticker-book" className="card art-card" style={{ background: '#FFF3C4' }}>
+          <div className="art-wrap">
+            <CartoonArt kind="star" color="#FFD400" size={72} />
+          </div>
           <div className="card-title">스티커 차고</div>
           <div className="card-sub">{profile.stickers.length}개 보유</div>
         </Link>
       </div>
 
-      <h2 className="section-title">새로 강화된 놀이 ✨</h2>
-      <p className="section-sub">사운드·동화·퍼레이드·퍼즐로 더 오래 놀아요</p>
+      <h2 className="section-title">새로 강화된 놀이</h2>
+      <p className="section-sub">더 선명한 자동차 그림으로 놀아요</p>
       <div className="grid-2">
         {featured.map((g, i) => (
-          <Link key={g.id} to={`/games/${g.id}`} className="card" style={{ animationDelay: `${i * 0.05}s` }}>
-            <div className="card-emoji">{g.emoji}</div>
+          <Link key={g.id} to={`/games/${g.id}`} className="card art-card" style={{ animationDelay: `${i * 0.05}s` }}>
+            <div className="art-wrap">
+              <GameArt id={g.id} size={72} />
+            </div>
             <div className="card-title">{g.title}</div>
             <div className="card-sub">{g.subtitle}</div>
             <span className="tag new">NEW</span>
@@ -82,15 +90,19 @@ export function Home() {
 
       <h2 className="section-title">탐험도 해 볼까요?</h2>
       <div className="grid-2">
-        <Link to="/explore/colors" className="card" style={{ background: '#ffe3ea' }}>
-          <div className="card-emoji">🎨</div>
+        <Link to="/explore/colors" className="card art-card" style={{ background: '#FFD6E4' }}>
+          <div className="art-wrap">
+            <CartoonArt kind="flower" color="#FF2D55" size={72} />
+          </div>
           <div className="card-title">색깔 탐험</div>
-          <div className="card-sub">빨간색, 파란색… 이름을 배워요</div>
+          <div className="card-sub">선명한 색깔을 만져요</div>
         </Link>
-        <Link to="/explore/vehicles" className="card" style={{ background: '#dde8ff' }}>
-          <div className="card-emoji">🚒</div>
+        <Link to="/explore/vehicles" className="card art-card" style={{ background: '#D6E4FF' }}>
+          <div className="art-wrap">
+            <CartoonArt kind="fire" color="#FF2D55" size={72} />
+          </div>
           <div className="card-title">탈것 탐험</div>
-          <div className="card-sub">소방차, 버스, 경찰차를 만나요</div>
+          <div className="card-sub">뚜렷한 자동차 친구들</div>
         </Link>
       </div>
     </div>

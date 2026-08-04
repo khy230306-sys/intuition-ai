@@ -1,21 +1,21 @@
 :root {
-  --bg: #fff4d6;
-  --bg-2: #ffe8a3;
+  --bg: #ffe9a8;
+  --bg-2: #ffd36b;
   --card: #fffdf5;
   --fg: #1a1510;
-  --muted: #6b5e4e;
-  --sunny: #ffd60a;
+  --muted: #5a4a38;
+  --sunny: #ffd400;
   --sunny-fg: #1a1510;
-  --berry: #ff4d6d;
+  --berry: #ff2d55;
   --berry-fg: #fff;
-  --sky: #5b8cff;
+  --sky: #2f6bff;
   --sky-fg: #fff;
-  --leaf: #3ddc84;
-  --leaf-fg: #10301c;
-  --grape: #a78bfa;
-  --grape-fg: #1a1030;
-  --shadow: 3px 3px 0 0 #1a1510;
-  --shadow-lg: 5px 5px 0 0 #1a1510;
+  --leaf: #22c55e;
+  --leaf-fg: #062816;
+  --grape: #8b5cf6;
+  --grape-fg: #12082a;
+  --shadow: 4px 4px 0 0 #1a1510;
+  --shadow-lg: 6px 6px 0 0 #1a1510;
   --radius: 1.5rem;
   --font-display: 'Jua', 'Noto Sans KR', sans-serif;
   --font-body: 'Noto Sans KR', system-ui, sans-serif;
@@ -1227,6 +1227,134 @@ img {
 
 .sticker-slot.has {
   background: #fff3c4;
+}
+
+/* Bold cartoon art system */
+.art-card {
+  text-align: center;
+  padding: 1rem 0.75rem 1.05rem;
+}
+
+.art-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 5.2rem;
+  margin-bottom: 0.25rem;
+  filter: drop-shadow(2px 3px 0 rgba(26, 21, 16, 0.18));
+}
+
+.toy-btn {
+  border: 4px solid var(--fg);
+  border-radius: 1.35rem;
+  box-shadow: var(--shadow);
+  padding: 0.55rem;
+  display: grid;
+  place-items: center;
+  gap: 0.25rem;
+  min-height: 6.5rem;
+}
+
+.toy-btn.on {
+  outline: 4px solid var(--sunny);
+  transform: scale(1.04);
+}
+
+.toy-label {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--fg);
+}
+
+.subject-chip.art {
+  padding: 0.35rem 0.7rem 0.35rem 0.35rem;
+  gap: 0.35rem;
+  border-width: 3px;
+}
+
+.color-stage.bold {
+  min-height: 14rem;
+  border-width: 4px;
+  background-image: radial-gradient(circle at 50% 80%, #fff 0 28%, transparent 29%);
+}
+
+.stage-art {
+  animation: float-y 2.2s ease-in-out infinite;
+  filter: drop-shadow(3px 4px 0 rgba(26, 21, 16, 0.25));
+}
+
+.swatch.bold {
+  border-width: 4px;
+  font-size: 1rem;
+  min-height: 3.6rem;
+}
+
+.swatch.bold.on,
+.swatch.on {
+  outline: 4px solid #1a1510;
+  transform: scale(1.05);
+}
+
+.car-chip.art {
+  background: #fff;
+  min-height: 6.8rem;
+  border-width: 4px;
+}
+
+.follow-pad.art {
+  display: grid;
+  place-items: center;
+  gap: 0.2rem;
+  min-height: 7.2rem;
+  border-width: 4px;
+}
+
+.racer.art {
+  font-size: inherit;
+  line-height: 0;
+}
+
+.nav-item .ico.art {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.brand-badge {
+  background: #fff;
+  padding: 0.1rem;
+}
+
+.bold-color {
+  border-width: 4px !important;
+  min-height: 6.5rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.bold-color .ko {
+  font-size: 1.05rem;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.color-blob {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  border: 3px solid #1a1510;
+  margin: 0 auto 0.35rem;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+}
+
+.card {
+  border-width: 4px;
+}
+
+.btn {
+  border-width: 4px;
+}
+
+.prompt-big {
+  font-size: 1.65rem;
 }
 
 @media (min-width: 640px) {

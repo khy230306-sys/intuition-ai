@@ -4,6 +4,7 @@ import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
+import { CartoonArt } from '../components/CartoonArt'
 
 const COLORS = PLAY_COLORS.slice(0, 4)
 
@@ -74,12 +75,13 @@ export function ColorFollow() {
             <button
               key={c.id}
               type="button"
-              className={`follow-pad${flash === c.id ? ' lit' : ''}`}
-              style={{ background: c.hex }}
+              className={`follow-pad art${flash === c.id ? ' lit' : ''}`}
+              style={{ background: `${c.hex}33` }}
               onClick={() => tap(c.id)}
               disabled={phase !== 'play'}
             >
-              🚗 {c.ko.replace('색', '')}
+              <CartoonArt kind="car" color={c.hex} size={78} />
+              <span className="toy-label">{c.ko.replace('색', '')}</span>
             </button>
           ))}
         </div>

@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getProfile, useProfileSubscribe } from '../lib/store'
 import { unlockSpeech } from '../lib/speech'
+import { CartoonArt } from './CartoonArt'
 
 const NAV = [
-  { to: '/', label: '홈', ico: '🚌', end: true },
-  { to: '/games', label: '게임', ico: '🎮' },
-  { to: '/explore', label: '탐험', ico: '🧭' },
-  { to: '/parents', label: '부모님', ico: '💚' },
+  { to: '/', label: '홈', art: 'bus' as const, color: '#FFD400', end: true },
+  { to: '/games', label: '게임', art: 'car' as const, color: '#FF2D55' },
+  { to: '/explore', label: '탐험', art: 'star' as const, color: '#2F6BFF' },
+  { to: '/parents', label: '부모님', art: 'house' as const, color: '#22C55E' },
 ]
 
 export function Layout() {
@@ -30,7 +31,7 @@ export function Layout() {
       <header className="topbar">
         <Link to="/" className="brand" aria-label="쑥쑥놀이터 홈">
           <span className="brand-badge">
-            <img src="/assets/car-bus.png" alt="" width={36} height={36} />
+            <CartoonArt kind="bus" color="#FFD400" size={40} />
           </span>
           <span className="brand-name">쑥쑥놀이터</span>
         </Link>
@@ -52,8 +53,8 @@ export function Layout() {
                 end={n.end}
                 className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
               >
-                <span className="ico" aria-hidden>
-                  {n.ico}
+                <span className="ico art" aria-hidden>
+                  <CartoonArt kind={n.art} color={n.color} size={28} />
                 </span>
                 {n.label}
               </NavLink>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { PLAY_COLORS, pick, shuffle } from '../data/colors'
-import { CAR_EMOJIS } from '../data/vehicles'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
+import { CartoonArt } from '../components/CartoonArt'
 
-type Racer = { id: string; colorId: string; hex: string; emoji: string; left: number }
+type Racer = { id: string; colorId: string; hex: string; left: number }
 
 function makeRacers(targetId: string): Racer[] {
   const others = shuffle(PLAY_COLORS.filter((c) => c.id !== targetId)).slice(0, 3)
@@ -15,7 +15,6 @@ function makeRacers(targetId: string): Racer[] {
     id: `${c.id}-${i}`,
     colorId: c.id,
     hex: c.hex,
-    emoji: pick(CAR_EMOJIS),
     left: 8 + i * 2,
   }))
 }
@@ -53,7 +52,7 @@ export function VroomRace() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big" style={{ color: target.hex, textShadow: '1px 1px 0 #0003' }}>
+        <div className="prompt-big" style={{ color: target.hex }}>
           {target.ko} 자동차!
         </div>
         <div className="prompt-sub">같은 색을 찾아 출발시켜요</div>
@@ -64,18 +63,18 @@ export function VroomRace() {
             <button
               key={r.id}
               type="button"
-              className={`car-chip${wrong === r.id ? ' wrong' : ''}`}
-              style={{ background: r.hex }}
+              className={`car-chip art${wrong === r.id ? ' wrong' : ''}`}
+              style={{ background: `${r.hex}44` }}
               onClick={() => tap(r)}
             >
-              <span className="emoji">{r.emoji}</span>
+              <CartoonArt kind="car" color={r.hex} size={86} />
             </button>
           ))}
         </div>
         <div className="road" aria-hidden>
           {racers.map((r, i) => (
-            <span key={r.id} className="racer" style={{ left: `${r.left}%`, bottom: `${0.5 + i * 1.4}rem` }}>
-              {r.emoji}
+            <span key={r.id} className="racer art" style={{ left: `${r.left}%`, bottom: `${0.2 + i * 1.55}rem` }}>
+              <CartoonArt kind="car" color={r.hex} size={42} />
             </span>
           ))}
         </div>

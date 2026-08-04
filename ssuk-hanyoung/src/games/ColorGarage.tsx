@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { PLAY_COLORS, pick, shuffle } from '../data/colors'
-import { CAR_EMOJIS } from '../data/vehicles'
+import { PLAY_COLORS, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
+import { CartoonArt } from '../components/CartoonArt'
 
-type Car = { id: string; colorId: string; hex: string; emoji: string }
+type Car = { id: string; colorId: string; hex: string }
 
 function makeCars(colorIds: string[]): Car[] {
   return shuffle(
@@ -16,7 +16,6 @@ function makeCars(colorIds: string[]): Car[] {
         id: `${cid}-${i}-${j}-${Math.random().toString(36).slice(2, 6)}`,
         colorId: cid,
         hex: c.hex,
-        emoji: pick(CAR_EMOJIS),
       }))
     }),
   )
@@ -77,14 +76,14 @@ export function ColorGarage() {
             <button
               key={car.id}
               type="button"
-              className={`car-chip${selected === car.id ? ' selected' : ''}`}
-              style={{ background: car.hex, animation: selected ? undefined : 'float-y 2s ease-in-out infinite' }}
+              className={`car-chip art${selected === car.id ? ' selected' : ''}`}
+              style={{ background: `${car.hex}33` }}
               onClick={() => {
                 setSelected(car.id)
                 speak('이 자동차를 어디로 넣을까요?')
               }}
             >
-              <span className="emoji">{car.emoji}</span>
+              <CartoonArt kind="car" color={car.hex} size={72} />
             </button>
           ))}
         </div>
@@ -92,14 +91,10 @@ export function ColorGarage() {
           {palette.map((g) => (
             <button key={g.id} type="button" onClick={() => place(g.id)} style={{ textAlign: 'left' }}>
               <div style={{ fontFamily: 'var(--font-display)', marginBottom: 4 }}>{g.ko} 차고</div>
-              <div className={`garage${garages[g.id]!.length ? ' ok' : ''}`} style={{ background: `${g.hex}55` }}>
+              <div className={`garage${garages[g.id]!.length ? ' ok' : ''}`} style={{ background: `${g.hex}55`, borderColor: g.hex }}>
                 {garages[g.id]!.map((id) => {
                   const car = cars.find((c) => c.id === id)!
-                  return (
-                    <span key={id} style={{ fontSize: '1.6rem' }}>
-                      {car.emoji}
-                    </span>
-                  )
+                  return <CartoonArt key={id} kind="car" color={car.hex} size={36} />
                 })}
                 {!garages[g.id]!.length && <span style={{ color: 'var(--muted)' }}>비어 있어요</span>}
               </div>
@@ -108,7 +103,7 @@ export function ColorGarage() {
         </div>
         {round.done && (
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.8rem' }} onClick={round.reset}>
-            한 판 더! 🚗
+            한 판 더!
           </button>
         )}
       </div>

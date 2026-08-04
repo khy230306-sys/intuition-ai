@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GAMES } from '../data/games'
+import { GameArt } from '../components/GameArt'
 
 type Filter = 'all' | 'car' | 'color' | 'touch' | 'focus' | 'new'
 
@@ -15,20 +16,20 @@ export function Games() {
   return (
     <div>
       <div className="page-head">
-        <h1>게임 🎮</h1>
+        <h1>게임</h1>
       </div>
       <p className="section-sub" style={{ marginTop: '-0.4rem' }}>
-        자동차랑 색깔 놀이를 골라 보아요
+        선명한 그림으로 골라 보아요
       </p>
       <div className="filter-row" role="tablist" aria-label="게임 필터">
         {(
           [
             ['all', '전체'],
-            ['focus', '🧠 집중'],
-            ['touch', '👆 터치'],
-            ['car', '🚗 자동차'],
-            ['color', '🎨 색깔'],
-            ['new', '✨ 새 게임'],
+            ['focus', '집중'],
+            ['touch', '터치'],
+            ['car', '자동차'],
+            ['color', '색깔'],
+            ['new', '새 게임'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -48,8 +49,10 @@ export function Games() {
       </p>
       <div className="grid-2">
         {list.map((g) => (
-          <Link key={g.id} to={`/games/${g.id}`} className="card">
-            <div className="card-emoji">{g.emoji}</div>
+          <Link key={g.id} to={`/games/${g.id}`} className="card art-card">
+            <div className="art-wrap">
+              <GameArt id={g.id} size={72} />
+            </div>
             <div className="card-title">{g.title}</div>
             <div className="card-sub">{g.subtitle}</div>
             {g.tags.includes('new') && <span className="tag new">NEW</span>}

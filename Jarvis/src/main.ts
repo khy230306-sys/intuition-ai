@@ -265,7 +265,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.15.5'
+const APP_VERSION = '1.15.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -2640,11 +2640,12 @@ function renderNavSettingsSection(): string {
       <p class="hint">목적지를 이해해 지도 앱·웹으로 연결합니다. 위치·주소는 서버에 저장하지 않습니다.</p>
       <label>기본 지도 앱
         <select name="navDefaultMap" data-nav-field="defaultMap">
-          <option value="system" ${nav.defaultMap === 'system' ? 'selected' : ''}>자동</option>
+          <option value="kakao" ${nav.defaultMap === 'kakao' ? 'selected' : ''}>카카오맵 (추천)</option>
+          <option value="tmap" ${nav.defaultMap === 'tmap' ? 'selected' : ''}>T맵</option>
+          <option value="naver" ${nav.defaultMap === 'naver' ? 'selected' : ''}>네이버지도</option>
           <option value="apple" ${nav.defaultMap === 'apple' ? 'selected' : ''}>Apple 지도</option>
           <option value="google" ${nav.defaultMap === 'google' ? 'selected' : ''}>Google 지도</option>
-          <option value="kakao" ${nav.defaultMap === 'kakao' ? 'selected' : ''}>카카오맵</option>
-          <option value="naver" ${nav.defaultMap === 'naver' ? 'selected' : ''}>네이버지도</option>
+          <option value="system" ${nav.defaultMap === 'system' ? 'selected' : ''}>자동 (한국어→카카오)</option>
         </select>
       </label>
       <label>기본 이동수단
@@ -4804,6 +4805,17 @@ function bind(): void {
       if (!hit) return
       if (input) input.value = hit.nearby ? `가까운 ${hit.text}` : hit.text
       void runNavigationFromUi(hit.nearby ? hit.text : hit.text, Boolean(hit.nearby))
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="nav-map-pick"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.navMap || 'kakao'
+      const sel = document.getElementById('nav-map-select') as HTMLSelectElement | null
+      if (sel) sel.value = key
+      document.querySelectorAll<HTMLButtonElement>('[data-action="nav-map-pick"]').forEach((b) => {
+        b.classList.toggle('active', b === btn)
+      })
+      updateNavigationSettings({ defaultMap: key as MapProviderId })
     })
   })
   document.querySelector('[data-action="nav-sheet-start"]')?.addEventListener('click', () => {

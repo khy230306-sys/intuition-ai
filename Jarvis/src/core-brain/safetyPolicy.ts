@@ -66,6 +66,8 @@ export function isAllowedExternalUrl(url: string): boolean {
       'm.map.kakao.com',
       'map.naver.com',
       'm.map.naver.com',
+      'www.tmap.co.kr',
+      'tmap.co.kr',
       'translate.google.com',
       'jarvis-app.shipstatic.com',
     ]

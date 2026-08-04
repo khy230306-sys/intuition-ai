@@ -2,7 +2,7 @@
 
 export type TravelMode = 'driving' | 'walking' | 'transit' | 'bicycling' | 'unspecified'
 
-export type MapProviderId = 'system' | 'apple' | 'google' | 'kakao' | 'naver'
+export type MapProviderId = 'system' | 'apple' | 'google' | 'kakao' | 'naver' | 'tmap'
 
 export type DestinationType = 'address' | 'place' | 'category' | 'saved_place' | 'unknown'
 

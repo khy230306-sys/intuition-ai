@@ -13,7 +13,7 @@ import {
 } from './navigationTypes'
 
 const NAV_VERB =
-  /(?:안내|길\s*찾|길찾|길\s*안내|내비|내비게이션|네비|지도\s*열|지도로\s*열|맵으로\s*열|(?:카카오|구글|애플|네이버).{0,8}(?:지도|맵).{0,8}열|경로|루트|가자|데려다|모셔다|데려가|가\s*줘|까지\s*가|로\s*가\s*줘)/i
+  /(?:안내|길\s*찾|길찾|길\s*안내|내비|내비게이션|네비|지도\s*열|지도로\s*열|맵으로\s*열|(?:카카오|구글|애플|네이버|티\s*맵|T\s*맵|티맵).{0,8}(?:지도|맵)?\s*열|경로|루트|가자|데려다|모셔다|데려가|가\s*줘|까지\s*가|로\s*가\s*줘)/i
 
 const TALK_NOT_NAV =
   /이야기|얘기|말해|알려\s*줘(?!\s*길)|설명|뭐야|어때|생각|기억|일정\s*이야기|회사\s*생활|회사\s*이야기|집\s*이야기/i
@@ -27,6 +27,7 @@ function detectTravelMode(text: string): TravelMode {
 }
 
 function detectMap(text: string): MapProviderId {
+  if (/티\s*맵|티맵|T\s*맵|티맵으로|tmap/i.test(text)) return 'tmap'
   if (/카카오\s*맵|카맵|kakao/.test(text)) return 'kakao'
   if (/네이버\s*지도|네이버맵|naver/.test(text)) return 'naver'
   if (/구글\s*지도|구글맵|google\s*maps?/.test(text)) return 'google'
@@ -62,7 +63,10 @@ function stripDecor(text: string): string {
       ' ',
     )
     .replace(/(?:지도|맵)(?:으로|로)?\s*(?:열어|열어줘|열어\s*줘|열어주세요)/gi, ' ')
-    .replace(/(?:카카오\s*맵|네이버\s*지도|구글\s*지도|애플\s*지도|구글맵|카맵)/gi, ' ')
+    .replace(
+      /(?:카카오\s*맵|네이버\s*지도|구글\s*지도|애플\s*지도|구글맵|카맵|티\s*맵|티맵|T\s*맵|tmap)/gi,
+      ' ',
+    )
     .replace(/(?:차로|자동차로|운전해서|걸어서|도보로|대중교통으로|지하철로|버스로|자전거로)/gi, ' ')
     .replace(/(?:까지|으로|로|에)\s*$/g, '')
     .replace(/^(?:가장\s*)?가까운\s*/g, '')

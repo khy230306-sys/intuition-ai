@@ -12,7 +12,12 @@ import {
   saveNavSession,
 } from './navigationStorage'
 import { queryGeoPermission, requestCurrentPosition } from './navigationPermissions'
-import { buildMapLinks, buildMapTestSearchUrl, isSafeMapUrl } from './navigationUrlBuilder'
+import {
+  buildAllMapLinks,
+  buildMapLinks,
+  buildMapTestSearchUrl,
+  isSafeMapUrl,
+} from './navigationUrlBuilder'
 import type {
   MapProviderId,
   NavigationIntent,
@@ -57,7 +62,7 @@ function applySessionOverrides(intent: NavigationIntent): NavigationIntent {
   // 「도보로 바꿔줘」 style — reuse last destination
   if ((!next.destinationText || next.missingFields.includes('destinationText')) && session) {
     const onlyModeOrMap =
-      /바꿔|다시|그곳|거기|방금|같은\s*곳|도보로|차로|대중교통|카카오|네이버|구글|애플/.test(
+      /바꿔|다시|그곳|거기|방금|같은\s*곳|도보로|차로|대중교통|카카오|네이버|구글|애플|티\s*맵|티맵|T\s*맵/.test(
         next.originalText,
       )
     if (onlyModeOrMap || !next.destinationText) {
@@ -83,10 +88,35 @@ function openBuiltLinks(links: ReturnType<typeof buildMapLinks>): ActionResult {
   if (!isSafeMapUrl(links.webUrl)) {
     return { ok: false, message: '허용되지 않은 지도 링크입니다.' }
   }
+  // Prefer native app (Kakao / TMAP / Naver) then HTTPS web fallback so the UI never stalls.
   if (links.appUrl && isSafeMapUrl(links.appUrl)) {
     navigateHref(links.appUrl, { newTab: false })
   }
-  return openUrl(links.webUrl, links.label)
+  const web = openUrl(links.webUrl, links.label)
+  if (links.provider === 'tmap') {
+    return {
+      ...web,
+      message: `${links.label} 앱으로 연결했습니다. 앱이 없으면 카카오맵 웹으로 이어서 열어요.`,
+    }
+  }
+  return web
+}
+
+/** Open a specific Korea map provider for the last / given destination. */
+export function openWithProvider(
+  provider: Exclude<MapProviderId, 'system'>,
+  query: string,
+  travelMode: TravelMode = 'driving',
+  nearby = false,
+): ActionResult {
+  const links = buildMapLinks({
+    query,
+    travelMode,
+    preferredMap: provider,
+    nearby,
+  })
+  saveNavSession({ destinationText: query, travelMode, preferredMap: provider })
+  return openBuiltLinks(links)
 }
 
 export async function executeNavigationIntent(
@@ -134,19 +164,25 @@ export async function executeNavigationIntent(
 
   let origin: { lat: number; lng: number } | null = null
   let locationNote = ''
-  if (dest.nearby || opts?.requestLocation) {
+  // Nearby always; Korean apps get optional GPS for better in-app route handoff (denied still OK).
+  const wantLoc =
+    dest.nearby ||
+    opts?.requestLocation ||
+    intent.preferredMap === 'kakao' ||
+    intent.preferredMap === 'tmap' ||
+    intent.preferredMap === 'naver' ||
+    intent.preferredMap === 'system'
+  if (wantLoc) {
     const perm = await queryGeoPermission()
     if (perm === 'granted' || perm === 'prompt' || perm === 'unknown') {
-      if (opts?.requestLocation !== false) {
-        const loc = await requestCurrentPosition({ timeoutMs: 10_000 })
-        if (loc.ok && loc.coords) {
-          origin = loc.coords
-        } else if (dest.nearby) {
-          locationNote =
-            loc.errorCode === 'denied' || loc.permission === 'denied'
-              ? '현재 위치 권한이 없어 주변 검색 화면을 열게요.'
-              : '현재 위치를 확인하지 못해 지도 검색 화면을 열게요.'
-        }
+      const loc = await requestCurrentPosition({ timeoutMs: dest.nearby ? 10_000 : 6_000 })
+      if (loc.ok && loc.coords) {
+        origin = loc.coords
+      } else if (dest.nearby) {
+        locationNote =
+          loc.errorCode === 'denied' || loc.permission === 'denied'
+            ? '현재 위치 권한이 없어 주변 검색 화면을 열게요.'
+            : '현재 위치를 확인하지 못해 지도 검색 화면을 열게요.'
       }
     } else if (dest.nearby) {
       locationNote = '현재 위치 권한이 없어 주변 검색 화면을 열게요.'
@@ -183,11 +219,25 @@ export async function executeNavigationIntent(
   const destLabel =
     intent.savedPlaceId === 'home' ? '집' : intent.savedPlaceId === 'work' ? '회사' : intent.destinationText
 
+  const alts = buildAllMapLinks({
+    query: dest.query,
+    travelMode: travelMode === 'unspecified' ? 'driving' : travelMode,
+    nearby: dest.nearby,
+    origin,
+  })
+    .filter((l) => l.provider !== links.provider)
+    .slice(0, 3)
+    .map((l) => l.label)
+    .join(' · ')
+
   let text = locationNote
     ? `${locationNote} ${links.label}에서 「${destLabel}」을(를) 열게요.`
     : modeLabel
       ? `${destLabel}까지 ${modeLabel} 경로를 ${links.label}에서 열게요.`
       : `${destLabel} 길찾기를 ${links.label}에서 열게요.`
+
+  text += ` 한국 길안내는 카카오맵·T맵·네이버지도 앱 연결을 우선합니다.`
+  if (alts) text += ` 다른 지도: ${alts} — 「티맵으로」「네이버로」라고 말해 주세요.`
 
   if (/긴급|응급|화재|경찰/.test(intent.originalText)) {
     text += ' 긴급 상황이라면 지도보다 현지 긴급전화(112·119)를 이용해 주세요.'

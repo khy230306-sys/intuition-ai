@@ -3065,6 +3065,37 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 .home-v2-nav-chips .ghost-btn {
   min-height: 36px;
 }
+.home-v2-nav-maps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.home-v2-nav-map-btn {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  background: rgba(8, 14, 22, 0.92);
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 6px;
+}
+.home-v2-nav-map-btn.active {
+  border-color: rgba(0, 210, 190, 0.75);
+  background: rgba(0, 210, 190, 0.14);
+  color: #7ff5e8;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Customers (손님관리) */
 .customers-panel .customer-today{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(0,210,190,0.04)}

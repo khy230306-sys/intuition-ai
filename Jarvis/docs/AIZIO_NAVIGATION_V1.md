@@ -1,7 +1,8 @@
 # AIZIO AI 길안내 v1
 
-**Scope:** Understand destination + travel mode → open Apple / Google / Kakao / Naver maps (app or safe HTTPS web).  
-**Not in v1:** Turn-by-turn navigation engine, live traffic ETA, background route tracking.
+**Scope:** Understand destination + travel mode → open **Kakao / TMAP / Naver** (Korea-first) plus Apple / Google (app or safe HTTPS web).  
+**Not in v1:** Built-in turn-by-turn engine, live traffic ETA, background route tracking.  
+**See also:** `AIZIO_MAPS_KOREA_V2.md` (default Kakao, TMAP deep links, chooser UI).
 
 ## Supported commands (examples)
 

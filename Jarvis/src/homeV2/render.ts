@@ -272,7 +272,7 @@ export function renderNavigationSheet(opts?: {
   defaultMap?: string
   defaultTravel?: string
 }): string {
-  const map = opts?.defaultMap || 'system'
+  const map = opts?.defaultMap || 'kakao'
   const travel = opts?.defaultTravel || 'driving'
   const chips = [
     ['집', 'home'],
@@ -282,6 +282,13 @@ export function renderNavigationSheet(opts?: {
     ['가까운 병원', 'hospital'],
     ['가까운 약국', 'pharmacy'],
   ]
+  const maps: Array<[string, string]> = [
+    ['카카오맵', 'kakao'],
+    ['T맵', 'tmap'],
+    ['네이버', 'naver'],
+    ['Apple', 'apple'],
+    ['Google', 'google'],
+  ]
   return `
     <div class="home-v2-nav-sheet" data-nav-sheet="1" role="dialog" aria-label="길안내">
       <div class="home-v2-nav-sheet-panel">
@@ -289,9 +296,9 @@ export function renderNavigationSheet(opts?: {
           <strong>길안내</strong>
           <button type="button" class="ghost-btn tiny" data-action="nav-sheet-close">닫기</button>
         </div>
-        <p class="hint">어디로 안내할까요? 외부 지도 앱·웹으로 안전하게 연결합니다.</p>
+        <p class="hint">목적지를 말하면 <strong>카카오맵 · T맵 · 네이버지도</strong> 앱으로 바로 길찾기를 엽니다. (AIZIO 자체 내비 아님)</p>
         <label class="home-v2-nav-label">목적지
-          <input type="text" id="nav-dest-input" class="home-v2-nav-input" placeholder="예: 울산역, 집, 가까운 약국" autocomplete="off" />
+          <input type="text" id="nav-dest-input" class="home-v2-nav-input" placeholder="예: 사천백천사, 울산역, 가까운 약국" autocomplete="off" />
         </label>
         <div class="home-v2-nav-chips" aria-label="빠른 선택">
           ${chips
@@ -310,17 +317,25 @@ export function renderNavigationSheet(opts?: {
             <option value="unspecified" ${travel === 'unspecified' ? 'selected' : ''}>지정 없음</option>
           </select>
         </label>
-        <label class="home-v2-nav-label">지도 앱
-          <select id="nav-map-select">
-            <option value="system" ${map === 'system' ? 'selected' : ''}>자동</option>
-            <option value="apple" ${map === 'apple' ? 'selected' : ''}>Apple 지도</option>
-            <option value="google" ${map === 'google' ? 'selected' : ''}>Google 지도</option>
-            <option value="kakao" ${map === 'kakao' ? 'selected' : ''}>카카오맵</option>
-            <option value="naver" ${map === 'naver' ? 'selected' : ''}>네이버지도</option>
-          </select>
-        </label>
-        <button type="button" class="primary-btn" data-action="nav-sheet-start">길찾기 시작</button>
-        <p class="hint">운전 중에는 화면을 조작하지 마세요. 경로 정확도는 지도 앱을 따릅니다.</p>
+        <p class="home-v2-nav-label">지도 앱 선택</p>
+        <div class="home-v2-nav-maps" role="group" aria-label="지도 앱">
+          ${maps
+            .map(
+              ([label, key]) =>
+                `<button type="button" class="home-v2-nav-map-btn ${map === key ? 'active' : ''}" data-action="nav-map-pick" data-nav-map="${key}">${esc(label)}</button>`,
+            )
+            .join('')}
+        </div>
+        <select id="nav-map-select" class="sr-only" aria-hidden="true" tabindex="-1">
+          <option value="kakao" ${map === 'kakao' ? 'selected' : ''}>카카오맵</option>
+          <option value="tmap" ${map === 'tmap' ? 'selected' : ''}>T맵</option>
+          <option value="naver" ${map === 'naver' ? 'selected' : ''}>네이버지도</option>
+          <option value="apple" ${map === 'apple' ? 'selected' : ''}>Apple 지도</option>
+          <option value="google" ${map === 'google' ? 'selected' : ''}>Google 지도</option>
+          <option value="system" ${map === 'system' ? 'selected' : ''}>자동</option>
+        </select>
+        <button type="button" class="primary-btn" data-action="nav-sheet-start">선택한 지도로 길찾기</button>
+        <p class="hint">운전 중에는 화면을 조작하지 마세요. 실시간 경로·교통은 지도 앱이 담당합니다.</p>
       </div>
     </div>
   `

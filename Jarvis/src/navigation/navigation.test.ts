@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseNavigationIntent, wantsNavigation } from './navigationParser'
-import { buildMapLinks, isSafeMapUrl, resolveEffectiveProvider } from './navigationUrlBuilder'
+import {
+  buildAllMapLinks,
+  buildMapLinks,
+  isSafeMapUrl,
+  resolveEffectiveProvider,
+} from './navigationUrlBuilder'
 import {
   clearNavSession,
   loadNavigationSettings,
@@ -32,6 +37,7 @@ describe('navigation intent', () => {
     expect(wantsNavigation('회사까지 길 찾아줘')).toBe(true)
     expect(wantsNavigation('가까운 약국')).toBe(true)
     expect(wantsNavigation('카카오맵으로 열어줘')).toBe(true)
+    expect(wantsNavigation('티맵으로 안내해 줘')).toBe(true)
   })
 
   it('does not treat casual talk as navigation', () => {
@@ -40,7 +46,7 @@ describe('navigation intent', () => {
     expect(wantsNavigation('오늘 날씨 알려줘')).toBe(false)
   })
 
-  it('extracts destination, mode, map', () => {
+  it('extracts destination, mode, map including tmap', () => {
     const a = parseNavigationIntent('울산역까지 자동차로 안내해 줘')
     expect(a?.destinationText).toMatch(/울산역/)
     expect(a?.travelMode).toBe('driving')
@@ -55,6 +61,10 @@ describe('navigation intent', () => {
     const d = parseNavigationIntent('카카오맵으로 열어줘')
     expect(d?.preferredMap).toBe('kakao')
 
+    const t = parseNavigationIntent('사천백천사 T맵으로 안내해 줘')
+    expect(t?.preferredMap).toBe('tmap')
+    expect(t?.destinationText).toMatch(/사천백천사/)
+
     const e = parseNavigationIntent('가까운 약국 찾아줘')
     expect(e?.intent).toBe('navigation.search_nearby')
     expect(e?.categoryKey).toBe('pharmacy')
@@ -68,15 +78,38 @@ describe('navigation intent', () => {
   })
 })
 
-describe('map URLs', () => {
-  it('builds apple/google/kakao/naver safely', () => {
+describe('map URLs korea-first', () => {
+  it('builds kakao/tmap/naver/apple/google safely', () => {
+    const kakao = buildMapLinks({
+      query: '사천백천사',
+      travelMode: 'driving',
+      preferredMap: 'kakao',
+    })
+    expect(kakao.webUrl).toContain('map.kakao.com/link/to/')
+    expect(kakao.appUrl).toMatch(/^kakaomap:/)
+    expect(isSafeMapUrl(kakao.webUrl)).toBe(true)
+    expect(isSafeMapUrl(kakao.appUrl || '')).toBe(true)
+
+    const tmap = buildMapLinks({
+      query: '울산역',
+      travelMode: 'driving',
+      preferredMap: 'tmap',
+    })
+    expect(tmap.appUrl).toMatch(/^tmap:/)
+    expect(tmap.label).toBe('T맵')
+    expect(isSafeMapUrl(tmap.appUrl || '')).toBe(true)
+    expect(isSafeMapUrl(tmap.webUrl)).toBe(true)
+
+    const naver = buildMapLinks({ query: '부산역', travelMode: 'walking', preferredMap: 'naver' })
+    expect(naver.webUrl).toContain('map.naver.com')
+    expect(naver.appUrl).toMatch(/^nmap:/)
+
     const apple = buildMapLinks({
       query: '울산역',
       travelMode: 'driving',
       preferredMap: 'apple',
     })
     expect(apple.webUrl).toContain('maps.apple.com')
-    expect(isSafeMapUrl(apple.webUrl)).toBe(true)
 
     const google = buildMapLinks({
       query: '서울역',
@@ -85,13 +118,11 @@ describe('map URLs', () => {
     })
     expect(google.webUrl).toContain('google.com/maps')
     expect(google.webUrl).toContain('transit')
+  })
 
-    const kakao = buildMapLinks({ query: '약국', travelMode: 'unspecified', preferredMap: 'kakao', nearby: true })
-    expect(kakao.webUrl).toContain('map.kakao.com')
-    expect(isSafeMapUrl(kakao.appUrl || '')).toBe(true)
-
-    const naver = buildMapLinks({ query: '부산역', travelMode: 'walking', preferredMap: 'naver' })
-    expect(naver.webUrl).toContain('map.naver.com')
+  it('builds all chooser providers', () => {
+    const all = buildAllMapLinks({ query: '울산역', travelMode: 'driving' })
+    expect(all.map((x) => x.provider)).toEqual(['kakao', 'tmap', 'naver', 'apple', 'google'])
   })
 
   it('encodes destination and rejects bad schemes', () => {
@@ -106,9 +137,12 @@ describe('map URLs', () => {
     expect(isSafeMapUrl('https://evil.example/maps')).toBe(false)
   })
 
-  it('auto provider by UA', () => {
-    expect(resolveEffectiveProvider('system', 'iPhone')).toBe('apple')
-    expect(resolveEffectiveProvider('system', 'Android')).toBe('google')
+  it('auto provider prefers kakao for Korean locale', () => {
+    expect(resolveEffectiveProvider('system', 'iPhone', { language: 'ko-KR' })).toBe('kakao')
+    expect(resolveEffectiveProvider('system', 'Android', { language: 'ko' })).toBe('kakao')
+    expect(resolveEffectiveProvider('system', 'iPhone', { language: 'en-US' })).toBe('apple')
+    expect(resolveEffectiveProvider('system', 'Android', { language: 'en-US' })).toBe('google')
+    expect(resolveEffectiveProvider('tmap', 'iPhone', { language: 'en' })).toBe('tmap')
   })
 
   it('blocks empty destination build misuse via sanitize', () => {
@@ -123,12 +157,18 @@ describe('navigation storage', () => {
     session.clear()
   })
 
+  it('defaults to kakao / driving for new users', () => {
+    const s = loadNavigationSettings()
+    expect(s.defaultMap).toBe('kakao')
+    expect(s.defaultTravelMode).toBe('driving')
+  })
+
   it('stores map/travel prefs and home/work without leaking to diag', () => {
-    updateNavigationSettings({ defaultMap: 'kakao', defaultTravelMode: 'walking' })
+    updateNavigationSettings({ defaultMap: 'tmap', defaultTravelMode: 'walking' })
     setSavedPlace('home', { addressText: '울산광역시 남구 테스트로 1' })
     setSavedPlace('work', { addressText: '서울특별시 중구 세종대로 1' })
     const s = loadNavigationSettings()
-    expect(s.defaultMap).toBe('kakao')
+    expect(s.defaultMap).toBe('tmap')
     expect(s.home?.addressText).toContain('울산')
     const diag = JSON.stringify(navigationDiagSnapshot())
     expect(diag).not.toContain('울산광역시')

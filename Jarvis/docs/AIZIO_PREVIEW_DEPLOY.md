@@ -18,7 +18,7 @@
 | Default PUSH_SERVER_URL (baked) | _(empty — set in Settings; tunnel optional)_ |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
-Previous previews: https://laced-prism-88ovu7m.shipstatic.com · https://airy-dome-rpkmd84.shipstatic.com · https://keen-drifter-97nqfnk.shipstatic.com
+Previous previews: https://infused-whirl-dpn0rm4.shipstatic.com · https://laced-prism-88ovu7m.shipstatic.com · https://airy-dome-rpkmd84.shipstatic.com
 
 ## Status
 

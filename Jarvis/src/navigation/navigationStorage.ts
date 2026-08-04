@@ -9,8 +9,9 @@ function nowIso(): string {
 
 function emptySettings(): NavigationSettings {
   return {
-    defaultMap: 'system',
-    defaultTravelMode: 'unspecified',
+    // Korea-first: Kakao handles Korean POI names better than Apple/Google.
+    defaultMap: 'kakao',
+    defaultTravelMode: 'driving',
     home: null,
     work: null,
     favorites: [],
@@ -24,8 +25,8 @@ export function loadNavigationSettings(): NavigationSettings {
     if (!raw) return emptySettings()
     const parsed = JSON.parse(raw) as Partial<NavigationSettings>
     return {
-      defaultMap: (parsed.defaultMap as MapProviderId) || 'system',
-      defaultTravelMode: (parsed.defaultTravelMode as TravelMode) || 'unspecified',
+      defaultMap: (parsed.defaultMap as MapProviderId) || 'kakao',
+      defaultTravelMode: (parsed.defaultTravelMode as TravelMode) || 'driving',
       home: parsed.home && typeof parsed.home === 'object' ? (parsed.home as SavedPlace) : null,
       work: parsed.work && typeof parsed.work === 'object' ? (parsed.work as SavedPlace) : null,
       favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],

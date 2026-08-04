@@ -55,7 +55,8 @@ export function buildHomeV2Header(
   now = new Date(),
 ): HomeV2Header {
   const name = String(displayName || '').trim()
-  const greeting = name ? `안녕하세요, ${name}님` : '안녕하세요'
+  const greetName = !name ? '' : /님\s*$/.test(name) ? name : `${name}님`
+  const greeting = greetName ? `안녕하세요, ${greetName}` : '안녕하세요'
   const w = weather === undefined ? loadCachedWeather() : weather
   let weatherLine: string | null = null
   if (w && Number.isFinite(w.tempC)) {

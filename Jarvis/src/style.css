@@ -2930,18 +2930,31 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .home-v2-orb {
-    width: 78px;
-    height: 78px;
+    width: 72px;
+    height: 72px;
+  }
+  .home-v2-orb-core {
+    font-size: 1.35rem;
+  }
+  .home-v2-voice {
+    padding: 2px 0;
   }
   .home-v2-sum-item {
-    min-height: 50px;
+    min-height: 48px;
     padding: 6px 4px;
   }
   .home-v2-quick-btn {
-    min-height: 44px;
+    min-height: 42px;
     font-size: 0.84rem;
+  }
+  .home-v2-panel {
+    gap: 6px;
+    padding-top: 4px;
+  }
+  .home-v2-chrome {
+    margin-bottom: 0;
   }
 }
 

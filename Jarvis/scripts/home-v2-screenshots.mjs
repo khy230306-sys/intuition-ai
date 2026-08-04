@@ -37,24 +37,32 @@ async function seedData(page) {
   await page.evaluate(() => {
     const now = Date.now()
     localStorage.setItem(
-      'jarvis.reminders',
+      'jarvis_reminders_v1',
       JSON.stringify([
-        { id: 'r1', text: '병원 예약', done: false, whenAt: now + 3600_000 },
-        { id: 'r2', text: '엄마에게 전화', done: false, whenAt: now + 7200_000 },
-        { id: 'r3', text: '오후 3시 회의', done: false, whenAt: now + 10800_000 },
+        { id: 'r1', text: '병원 예약', done: false, createdAt: now, whenAt: now + 3600_000 },
+        { id: 'r2', text: '엄마에게 전화', done: false, createdAt: now, whenAt: now + 7200_000 },
+        { id: 'r3', text: '오후 3시 회의', done: false, createdAt: now, whenAt: now + 10800_000 },
       ]),
     )
     localStorage.setItem(
-      'jarvis.alarms',
+      'jarvis_local_alarms_v1',
       JSON.stringify([
-        { id: 'a1', body: '오후 회의', whenAt: now + 5400_000, fired: false },
+        {
+          id: 'a1',
+          title: 'AIZIO',
+          body: '오후 회의',
+          whenAt: now + 5400_000,
+          fired: false,
+          createdAt: now,
+        },
       ]),
     )
     localStorage.setItem('aizio.home.variant.v1', 'v2')
+    const prev = JSON.parse(localStorage.getItem('jarvis_settings_v1') || '{}')
     localStorage.setItem(
-      'jarvis.settings',
+      'jarvis_settings_v1',
       JSON.stringify({
-        ...JSON.parse(localStorage.getItem('jarvis.settings') || '{}'),
+        ...prev,
         displayName: '성규',
         city: '서울',
       }),

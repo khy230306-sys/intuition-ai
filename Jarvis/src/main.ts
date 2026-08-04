@@ -3678,7 +3678,9 @@ function render(opts: RenderOpts = {}): void {
     : renderNav()
   const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
   const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
-  app.innerHTML = `${hideBrand ? '' : renderBrand()}${renderInstall()}${main}${nav}${more}${renderShareModal()}${renderInstallGuideModal()}`
+  // Keep HOME v2 first viewport dense — install banner stays available on legacy / thread / other tabs.
+  const installHtml = hideBrand ? '' : renderInstall()
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
   document.body.classList.toggle('home-v2-active', homeV2On)

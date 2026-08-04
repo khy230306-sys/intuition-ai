@@ -149,10 +149,11 @@ describe('voice + quick commands', () => {
     expect(HOME_V2_QUICK_COMMANDS.music).toMatch(/음악/)
   })
 
-  it('hides weather when missing', () => {
+  it('hides weather when missing and avoids double 님', () => {
     const h = buildHomeV2Header('성규', null)
-    expect(h.greeting).toContain('성규')
+    expect(h.greeting).toBe('안녕하세요, 성규님')
     expect(h.weatherLine).toBeNull()
+    expect(buildHomeV2Header('주인님', null).greeting).toBe('안녕하세요, 주인님')
     const anon = buildHomeV2Header('', null)
     expect(anon.greeting).toBe('안녕하세요')
   })

@@ -227,29 +227,26 @@ export function renderHomeV2MoreSheet(): string {
           <strong>메뉴</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
+        <p class="hint home-v2-more-hint">하나의 앱 주소에서 메뉴로 모든 기능을 엽니다.</p>
+        <div class="home-v2-more-group">
+          <h4>주요 기능</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('길안내', 'data-view="navigation"')}
+            ${moreItem('손님관리', 'data-view="customers"')}
+            ${moreItem('일정 · 할 일', 'data-view="life"')}
+            ${moreItem('가족', 'data-view="family"')}
+            ${moreItem('친구', 'data-view="friends"')}
+            ${moreItem('번역', 'data-view="global"')}
+            ${moreItem('설정', 'data-view="settings"')}
+          </ul>
+        </div>
         <div class="home-v2-more-group">
           <h4>생활</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}
-            ${moreItem('일정 · 할 일', 'data-view="life"')}
             ${moreItem('알림', 'data-view="life"')}
-          </ul>
-        </div>
-        <div class="home-v2-more-group">
-          <h4>소통</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('친구', 'data-view="friends"')}
-            ${moreItem('가족', 'data-view="family"')}
-            ${moreItem('번역', 'data-view="global"')}
-          </ul>
-        </div>
-        <div class="home-v2-more-group">
-          <h4>비즈니스</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('손님관리', 'data-view="customers"')}
           </ul>
         </div>
         <div class="home-v2-more-group">
@@ -258,7 +255,6 @@ export function renderHomeV2MoreSheet(): string {
             ${moreItem('투자', 'data-view="invest"')}
             ${moreItem('게임', 'data-view="games"')}
             ${moreItem('실행(액션)', 'data-view="actions"')}
-            ${moreItem('설정', 'data-view="settings"')}
           </ul>
         </div>
         <div class="home-v2-more-group">

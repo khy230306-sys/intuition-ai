@@ -2907,6 +2907,11 @@ body[data-jarvis-view='friends'] .orb::after {
   align-items: center;
   margin-bottom: 8px;
 }
+.home-v2-more-hint {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
 
 .home-v2-more-list {
   list-style: none;

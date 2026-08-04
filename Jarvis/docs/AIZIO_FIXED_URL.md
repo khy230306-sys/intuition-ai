@@ -1,28 +1,27 @@
-# AIZIO 고정 주소 (Production)
+# AIZIO 고정 주소
 
-**고정 공개 URL (이 주소만 공유하세요):**
+**공유·사용 주소는 이것 하나뿐입니다.**
 
-# https://jarvis-app.shipstatic.com
+## https://jarvis-app.shipstatic.com
 
-| 항목 | 값 |
+별도의 `?nav=1` / `?customers=1` 주소를 나누어 쓰지 않습니다.  
+앱을 연 뒤 **메뉴**에서 기능을 선택합니다.
+
+### 사용 방법
+
+1. https://jarvis-app.shipstatic.com 접속  
+2. 하단 또는 상단 **메뉴** 탭  
+3. 원하는 기능 선택  
+
+| 메뉴 | 기능 |
 | --- | --- |
-| Fixed URL | https://jarvis-app.shipstatic.com |
-| Version | 1.16.0 |
-| Snapshot (internal) | `primed-aura-q71ut6x` |
-| Channel | production |
-| Includes | HOME v2 · Navigation v2 · 메뉴 버튼 · 손님관리 · 푸시 설정 |
+| 길안내 | AIZIO 내부 지도 · 경로 |
+| 손님관리 | 로컬 CRM |
+| 일정 · 할 일 | 생활 |
+| 가족 / 친구 | 소통 |
+| 번역 | 글로벌 번역 |
+| 설정 | API 키 · 푸시 · 진단 등 |
 
-## Deep links
-
-| 화면 | URL |
-| --- | --- |
-| 홈 (HOME v2) | https://jarvis-app.shipstatic.com/ |
-| 길안내 | https://jarvis-app.shipstatic.com/?nav=1 |
-| 손님관리 | https://jarvis-app.shipstatic.com/?customers=1 |
-| 기존 홈 | https://jarvis-app.shipstatic.com/?home=legacy |
-
-## Notes
-
-- Snapshot ID는 배포마다 바뀌어도 **공개 주소는 항상** `jarvis-app.shipstatic.com` 입니다.
-- Preview용 랜덤 `*.shipstatic.com` URL은 공유하지 마세요.
+- 버전: 1.16.0+
+- Preview 랜덤 URL은 공유하지 마세요.
 - 재배포: `cd Jarvis && npm run deploy:web`

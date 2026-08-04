@@ -135,6 +135,13 @@ export interface JarvisSettings {
   notifyFriendsChat?: boolean
   /** Also banner while the matching tab is open/focused (default off). */
   notifyWhileOpen?: boolean
+  /**
+   * Lock-screen / push body privacy for smart reminders.
+   * Default simple. Health/family stay hidden unless full.
+   */
+  notifyPrivacyMode?: 'full' | 'simple' | 'hidden'
+  /** Optional push server base URL (also stored in aizio.push.serverBaseUrl.v1). */
+  pushServerBaseUrl?: string
   /** App UI locale: ko | en | ja | vi */
   appLocale?: string
   /** Target language for room message translation */

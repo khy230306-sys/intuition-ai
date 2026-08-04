@@ -1,0 +1,30 @@
+# Render Blueprint — Free web service for AIZIO push-server.
+# Deploy: connect this repo in Render Dashboard → Blueprint, or
+#   render blueprints apply
+#
+# After create, set env vars in Dashboard (never commit secrets):
+#   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, ALLOWED_ORIGINS, CRON_SECRET
+services:
+  - type: web
+    name: aizio-push-server
+    runtime: node
+    plan: free
+    rootDir: Jarvis/push-server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /opt/render/project/src/Jarvis/push-server/data
+      - key: ALLOWED_ORIGINS
+        value: https://harmonic-rift-5oo4f3w.shipstatic.com,https://jarvis-app.shipstatic.com
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: CRON_SECRET
+        sync: false

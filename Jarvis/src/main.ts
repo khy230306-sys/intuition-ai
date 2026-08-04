@@ -14,7 +14,14 @@ import {
   type HybridProviderId,
 } from './ai-providers'
 import { renderAiWizardHtml, renderHybridAiSettingsHtml } from './ai-providers/settingsUi'
-import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
+import {
+  copyTextNow,
+  navigateHref,
+  openUrl,
+  quickActions,
+  selectVisibleInviteText,
+  shareText,
+} from './actions'
 import {
   buildSpaceInviteUrl,
   detectInviteKind,
@@ -212,8 +219,45 @@ import {
   updateMusicPreferences,
   type MusicSession,
 } from './music'
+import {
+  HOME_V2_MUSIC_COMMAND,
+  HOME_V2_QUICK_COMMANDS,
+  buildHomeV2Model,
+  clearHomeV2Prefs,
+  getCachedBuildChannel,
+  isDesignLabVisible,
+  loadBuildMetaLite,
+  readBootDefaultHome,
+  readStoredHomeVariant,
+  renderDesignLabSection,
+  renderHomeV2MoreSheet,
+  renderHomeV2NavWithPane,
+  renderHomeV2Shell,
+  renderNavigationSheet,
+  resolveHomeVariant,
+  writeBootDefaultHome,
+  writeStoredHomeVariant,
+  type HomeVariant,
+  type HomeV2Pane,
+  type HomeV2QuickId,
+} from './homeV2'
+import {
+  loadNavigationSettings,
+  queryGeoPermission,
+  resetNavigationLocalState,
+  setSavedPlace,
+  clearSavedPlace,
+  removeFavorite,
+  startNavigationFromSheet,
+  updateNavigationSettings,
+  buildMapTestSearchUrl,
+  isSafeMapUrl,
+  type MapProviderId,
+  type TravelMode,
+} from './navigation'
+import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.13.9'
+const APP_VERSION = '1.15.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -476,9 +520,95 @@ const state = {
   friendsSyncStatus: '대기',
   /** Persist home "대화방" panel open/closed across remounts (null = auto). */
   homeRoomsOpen: null as boolean | null,
+  /** HOME v2 preview pane (home dashboard vs conversation thread). */
+  homeV2Pane: 'home' as HomeV2Pane,
+  /** HOME v2 "전체" sheet */
+  homeV2MoreOpen: false,
+  /** AI 길안내 bottom sheet */
+  homeV2NavSheetOpen: false,
   /** Deep-link / QR invite waiting for location gate */
   pendingInvite: null as null | { kind: SpaceKind; code: string },
   prefillJoinCode: '',
+}
+
+function activeHomeVariant(): HomeVariant {
+  let queryHome: string | null = null
+  try {
+    queryHome = new URL(window.location.href).searchParams.get('home')
+  } catch {
+    queryHome = null
+  }
+  const host = typeof location !== 'undefined' ? location.hostname : ''
+  return resolveHomeVariant({
+    queryHome,
+    channel: getCachedBuildChannel(),
+    hostname: host,
+    stored: readStoredHomeVariant(),
+    bootDefault: readBootDefaultHome(),
+  })
+}
+
+function designLabVisibleNow(): boolean {
+  const host = typeof location !== 'undefined' ? location.hostname : ''
+  return isDesignLabVisible(getCachedBuildChannel(), host)
+}
+
+async function refreshNavPermStatus(): Promise<void> {
+  const el = document.querySelector('[data-nav-perm-status]')
+  if (!el) return
+  try {
+    const p = await queryGeoPermission()
+    const label =
+      p === 'granted'
+        ? '허용됨'
+        : p === 'denied'
+          ? '거부됨'
+          : p === 'prompt'
+            ? '미요청'
+            : p === 'unsupported'
+              ? '미지원'
+              : '확인 불가'
+    el.textContent = `위치 권한: ${label}`
+  } catch {
+    el.textContent = '위치 권한: 확인 불가'
+  }
+}
+
+function openNavigationSheet(): void {
+  state.homeV2MoreOpen = false
+  state.homeV2NavSheetOpen = true
+  state.view = 'chat'
+  state.homeV2Pane = 'home'
+  render()
+}
+
+async function runNavigationFromUi(dest: string, nearby = false): Promise<void> {
+  const travel = (document.getElementById('nav-travel-select') as HTMLSelectElement | null)?.value as
+    | TravelMode
+    | undefined
+  const map = (document.getElementById('nav-map-select') as HTMLSelectElement | null)?.value as
+    | MapProviderId
+    | undefined
+  const res = await startNavigationFromSheet({
+    destinationText: dest,
+    travelMode: travel || loadNavigationSettings().defaultTravelMode,
+    preferredMap: map || loadNavigationSettings().defaultMap,
+    nearby,
+  })
+  state.homeV2NavSheetOpen = false
+  pushMsg('assistant', res.text)
+  state.view = 'chat'
+  state.homeV2Pane = 'thread'
+  render()
+  scrollChat()
+  if (res.action) {
+    try {
+      await res.action()
+    } catch {
+      showFlash('지도 앱을 열지 못했습니다. 웹 지도로 다시 시도해 주세요.')
+    }
+  }
+  if (res.openSettings) goToView('settings')
 }
 
 let arcade: ArcadeHandle | null = null
@@ -686,6 +816,22 @@ function captureViewFromUrl(): void {
       u.searchParams.delete('view')
       const q = u.searchParams.toString()
       window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+    }
+    // Keep ?home= for shareable compare URLs; sync stored preference when present.
+    const homeQ = u.searchParams.get('home')
+    if (homeQ) {
+      const resolved = resolveHomeVariant({
+        queryHome: homeQ,
+        channel: getCachedBuildChannel(),
+        hostname: location.hostname,
+      })
+      writeStoredHomeVariant(resolved)
+      if (resolved === 'v2') state.homeV2Pane = 'home'
+    }
+    if (u.searchParams.get('nav') === '1' || u.searchParams.get('navigation') === '1') {
+      state.homeV2NavSheetOpen = true
+      state.view = 'chat'
+      state.homeV2Pane = 'home'
     }
   } catch {
     /* ignore */
@@ -1329,16 +1475,26 @@ function patchVoiceUi(): void {
   const mic = document.querySelector<HTMLButtonElement>(micSel)
   if (mic) {
     mic.classList.toggle('listening', state.listening)
-    mic.textContent = state.listening ? 'STOP' : 'MIC'
+    if (!mic.hasAttribute('data-home-v2-orb')) {
+      mic.textContent = state.listening ? 'STOP' : 'MIC'
+    }
     mic.setAttribute('aria-pressed', state.listening ? 'true' : 'false')
   }
   // Keep other mic buttons idle-looking while dictating elsewhere
   document.querySelectorAll<HTMLButtonElement>('[data-action="mic"], [data-action="space-mic"]').forEach((btn) => {
     if (btn === mic) return
     btn.classList.remove('listening')
-    btn.textContent = 'MIC'
+    if (!btn.hasAttribute('data-home-v2-orb')) btn.textContent = 'MIC'
     btn.setAttribute('aria-pressed', 'false')
   })
+  document.querySelectorAll<HTMLElement>('[data-home-v2-orb]').forEach((orb) => {
+    orb.classList.toggle('listening', state.listening && target === 'jarvis')
+    orb.classList.toggle('busy', state.busy && !state.listening)
+  })
+  const voiceWrap = document.querySelector<HTMLElement>('.home-v2-voice')
+  if (voiceWrap) {
+    voiceWrap.dataset.voiceState = state.listening ? 'listening' : state.busy ? 'busy' : 'idle'
+  }
   const status = document.querySelector('.status-pill')
   if (status) {
     status.textContent = state.listening
@@ -1353,10 +1509,11 @@ function patchVoiceUi(): void {
     target === 'family' ? 'family-voice-caption' : target === 'friends' ? 'friends-voice-caption' : 'voice-caption'
   const caption = document.getElementById(captionId)
   if (caption) {
-    caption.hidden = !state.listening && !state.voiceHint
+    const onHomeV2 = caption.hasAttribute('data-home-v2-prompt')
+    if (!onHomeV2) caption.hidden = !state.listening && !state.voiceHint
     caption.textContent = state.listening
       ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
-      : state.voiceHint
+      : state.voiceHint || (onHomeV2 ? '무엇을 도와드릴까요?' : state.voiceHint)
     caption.classList.toggle('live', state.listening)
   }
   const inputId = target === 'family' ? 'family-draft' : target === 'friends' ? 'friends-draft' : 'draft'
@@ -2418,6 +2575,119 @@ function renderShareModal(): string {
   `
 }
 
+/** HOME v2 dashboard — default home; does not delete renderChat(). */
+function renderHomeV2View(): string {
+  try {
+    const model = buildHomeV2Model({
+      weather: state.weather,
+      listening: state.listening,
+      busy: state.busy,
+      draft: state.draft,
+    })
+    return renderHomeV2Shell(model, {
+      draft: state.draft,
+      busy: state.busy,
+      listening: state.listening,
+      appVersion: APP_VERSION,
+      composerExtraHtml: renderMusicMiniPlayer(
+        state.musicSession || sessionSnapshot(),
+        state.musicPlayerOpen,
+      ),
+    })
+  } catch (err) {
+    const code = err instanceof Error ? err.name || 'HomeV2Error' : 'HomeV2Error'
+    recordDiagError(`home_v2_fallback:${code}`)
+    writeStoredHomeVariant('legacy')
+    showFlash('새 홈 화면을 불러오지 못해 기존 홈으로 전환했습니다.')
+    return renderChat()
+  }
+}
+
+function renderNavSettingsSection(): string {
+  const nav = loadNavigationSettings()
+  const homeAddr = nav.home?.addressText || ''
+  const workAddr = nav.work?.addressText || ''
+  const favList =
+    nav.favorites.length === 0
+      ? '<p class="hint">저장된 즐겨찾기가 없습니다.</p>'
+      : `<ul class="home-v2-card-list" data-nav-fav-list>
+          ${nav.favorites
+            .map(
+              (f) => `<li>
+                <span>${escapeHtml(f.label || f.placeName || '즐겨찾기')}</span>
+                <button type="button" class="ghost-btn tiny" data-action="nav-remove-fav" data-fav-id="${escapeAttr(f.id)}" aria-label="즐겨찾기 삭제">삭제</button>
+              </li>`,
+            )
+            .join('')}
+        </ul>`
+  return `
+    <details class="device-test-panel" data-nav-settings="1" open>
+      <summary><strong>길안내 및 지도</strong></summary>
+      <p class="hint">목적지를 이해해 지도 앱·웹으로 연결합니다. 위치·주소는 서버에 저장하지 않습니다.</p>
+      <label>기본 지도 앱
+        <select name="navDefaultMap" data-nav-field="defaultMap">
+          <option value="system" ${nav.defaultMap === 'system' ? 'selected' : ''}>자동</option>
+          <option value="apple" ${nav.defaultMap === 'apple' ? 'selected' : ''}>Apple 지도</option>
+          <option value="google" ${nav.defaultMap === 'google' ? 'selected' : ''}>Google 지도</option>
+          <option value="kakao" ${nav.defaultMap === 'kakao' ? 'selected' : ''}>카카오맵</option>
+          <option value="naver" ${nav.defaultMap === 'naver' ? 'selected' : ''}>네이버지도</option>
+        </select>
+      </label>
+      <label>기본 이동수단
+        <select name="navDefaultTravel" data-nav-field="defaultTravel">
+          <option value="unspecified" ${nav.defaultTravelMode === 'unspecified' ? 'selected' : ''}>지정 없음</option>
+          <option value="driving" ${nav.defaultTravelMode === 'driving' ? 'selected' : ''}>자동차</option>
+          <option value="walking" ${nav.defaultTravelMode === 'walking' ? 'selected' : ''}>도보</option>
+          <option value="transit" ${nav.defaultTravelMode === 'transit' ? 'selected' : ''}>대중교통</option>
+          <option value="bicycling" ${nav.defaultTravelMode === 'bicycling' ? 'selected' : ''}>자전거</option>
+        </select>
+      </label>
+      <label>집 주소
+        <input type="text" data-nav-home-addr value="${escapeAttr(homeAddr)}" placeholder="예: 울산광역시 …" autocomplete="street-address" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-save-home">집 저장</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-home">집 지우기</button>
+      </div>
+      <label>회사 주소
+        <input type="text" data-nav-work-addr value="${escapeAttr(workAddr)}" placeholder="예: 서울특별시 …" autocomplete="street-address" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-save-work">회사 저장</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-work">회사 지우기</button>
+      </div>
+      <h3 class="subsection-title">즐겨찾는 장소</h3>
+      ${favList}
+      <label>이름
+        <input type="text" data-nav-fav-label placeholder="예: 헬스장" autocomplete="off" />
+      </label>
+      <label>주소 · 장소
+        <input type="text" data-nav-fav-addr placeholder="예: 울산역" autocomplete="off" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-add-fav">즐겨찾기 추가</button>
+      </div>
+      <p class="hint" data-nav-perm-status>위치 권한: 확인 중…</p>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-request-location">위치 권한 요청</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-session">최근 길안내 상태 초기화</button>
+        <button type="button" class="ghost-btn" data-action="nav-test-map">지도 연결 테스트</button>
+      </div>
+    </details>
+  `
+}
+
+function renderChatOrHomeV2(): string {
+  if (activeHomeVariant() !== 'v2') {
+    // Legacy recovery: chrome only when Design Lab is explicitly surfaced (settings).
+    return renderChat()
+  }
+  if (state.homeV2Pane === 'thread') {
+    return renderChat()
+  }
+  return renderHomeV2View()
+}
+
 function renderChat(): string {
   const mode = loadInterpretMode()
   const empty = state.messages.length === 0
@@ -2641,6 +2911,18 @@ function renderLife(): string {
 
   return `
     <section class="panel view-scroll">
+      <details class="life-os-panel" open>
+        <summary><strong>내 생활 · AIZIO Life OS</strong></summary>
+        <p class="hint">대화로 DNA·목표·아이디어·프로젝트를 관리합니다. 예: 「나는 짧은 답변이 좋아」「내 목표는 …」「아이디어 저장」</p>
+        <div class="chips left">
+          <button type="button" data-suggest="내가 무엇을 좋아한다고 기억하고 있어?">DNA</button>
+          <button type="button" data-suggest="목표 목록 보여줘">목표</button>
+          <button type="button" data-suggest="아이디어 목록">아이디어</button>
+          <button type="button" data-suggest="AIZIO 프로젝트 어디까지 됐어?">프로젝트</button>
+          <button type="button" data-suggest="오늘 뭐 해야 해?">오늘</button>
+          <button type="button" data-suggest="스킬 목록">Skill</button>
+        </div>
+      </details>
       <h2 class="section-title">STATS</h2>
       <p class="hint">아래에 숫자를 직접 입력하세요. 활성: <strong>${escapeHtml(activeName)}</strong> (n=${active?.values.length ?? 0})</p>
       <form id="life-stats-form" class="settings-form life-input-form">
@@ -3335,8 +3617,53 @@ function renderSettings(): string {
           <span>해당 탭을 보고 있을 때도 알림</span>
           <input type="checkbox" name="notifyWhileOpen" ${s.notifyWhileOpen ? 'checked' : ''} />
         </div>
-        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 앱을 쓰지 않을 때(백그라운드) 알림은 iPhone에서 <strong>홈 화면에 추가</strong>한 PWA + 아래 버튼으로 푸시를 켜야 합니다.</p>
+        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 가족·친구 채팅 백그라운드 푸시는 홈 화면 PWA + 아래 버튼으로 켤 수 있습니다. 개인 일정(스마트 리마인더)의 앱 종료 알림은 푸시 서버가 필요하며, 서버 없이는 완성되지 않습니다.</p>
+        <label>일정 알림 내용 표시
+          <select name="notifyPrivacyMode">
+            <option value="simple" ${(s.notifyPrivacyMode || 'simple') === 'simple' ? 'selected' : ''}>간단히 (예약된 일정 시간입니다)</option>
+            <option value="hidden" ${s.notifyPrivacyMode === 'hidden' ? 'selected' : ''}>숨기기 (AIZIO 알림이 있습니다)</option>
+            <option value="full" ${s.notifyPrivacyMode === 'full' ? 'selected' : ''}>전체 내용</option>
+          </select>
+        </label>
+        <p class="hint">기본은 간단 표시입니다. 가족·건강 관련 일정은 「전체」를 고르지 않으면 잠금 화면에 세부 내용을 넣지 않습니다.</p>
+        <label>푸시 서버 URL (선택 · 종료 상태 개인 알림)
+          <input name="pushServerBaseUrl" value="${escapeAttr(s.pushServerBaseUrl || '')}" placeholder="https://your-push-server.example" autocomplete="off" />
+        </label>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
+        <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
+        <details class="device-test-panel" open>
+          <summary><strong>실기기 테스트 모드 · 푸시</strong></summary>
+          <p class="hint">버전·권한·푸시·스토리지 진단. API 키·VAPID 비밀키·endpoint 전체값은 표시하지 않습니다. 완전 종료 수신은 사용자가 확인하기 전까지 <strong>실기기 검증 대기</strong>입니다.</p>
+          <pre class="device-diag-out hint" data-device-diag-out>진단을 불러오려면 아래 버튼을 누르세요.</pre>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" data-action="device-diag-refresh">진단 새로고침</button>
+            <button type="button" class="ghost-btn" data-action="device-diag-export">진단 JSON 내보내기</button>
+          </div>
+          <h3 class="subsection-title">푸시 실기기 테스트</h3>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-health">서버 연결 확인</button>
+            <button type="button" class="ghost-btn" data-action="push-test-subscribe">권한·구독</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="primary-btn" data-action="push-test-1m">1분 후 테스트 알림</button>
+            <button type="button" class="ghost-btn" data-action="push-test-5m">5분 후 테스트 알림</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-update">예약 변경(+3분)</button>
+            <button type="button" class="ghost-btn" data-action="push-test-cancel">예약 취소</button>
+            <button type="button" class="ghost-btn" data-action="push-test-unsub">구독 해제</button>
+          </div>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-action="push-test-copy">테스트 결과 복사</button>
+          </div>
+          <pre class="device-diag-out hint" data-push-test-out>푸시 테스트 결과가 여기에 표시됩니다.</pre>
+        </details>
+        ${renderNavSettingsSection()}
+        ${renderDesignLabSection({
+          active: activeHomeVariant(),
+          bootDefault: readBootDefaultHome(),
+          visible: designLabVisibleNow(),
+        })}
         ${renderHybridAiSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
@@ -3359,7 +3686,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <p class="hint">백업 공유보내기: iPhone 공유 시트로 파일·iCloud·Drive·메일·메모에 저장할 수 있습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
+      <p class="hint">백업 v7: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>
@@ -3443,17 +3770,28 @@ function goToView(next: View, ev?: MouseEvent): void {
     // Re-tapping FAM/FRD jumps to chat tab (faster than hunting sub-tabs)
     if (next === 'family' && state.familyTab !== 'chat') {
       state.familyTab = 'chat'
+      state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
     if (next === 'friends' && state.friendsTab !== 'chat') {
       state.friendsTab = 'chat'
+      state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
+    }
+    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen) {
+      state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
+      render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
     }
     return
   }
   stopArcade()
+  state.homeV2MoreOpen = false
+  state.homeV2NavSheetOpen = false
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
@@ -3485,9 +3823,10 @@ function render(opts: RenderOpts = {}): void {
     return
   }
   invalidateSpaceInboxCache()
+  const homeV2On = activeHomeVariant() === 'v2'
   const main =
     state.view === 'chat'
-      ? renderChat()
+      ? renderChatOrHomeV2()
       : state.view === 'invest'
         ? renderInvest()
         : state.view === 'life'
@@ -3503,8 +3842,24 @@ function render(opts: RenderOpts = {}): void {
                   : state.view === 'actions'
                     ? renderActions()
                     : renderSettings()
-  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}${renderInstallGuideModal()}`
+  const nav = homeV2On
+    ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
+    : renderNav()
+  const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const navSheet =
+    state.homeV2NavSheetOpen
+      ? renderNavigationSheet({
+          defaultMap: loadNavigationSettings().defaultMap,
+          defaultTravel: loadNavigationSettings().defaultTravelMode,
+        })
+      : ''
+  const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
+  // Keep HOME v2 first viewport dense — install banner stays available on legacy / thread / other tabs.
+  const installHtml = hideBrand ? '' : renderInstall()
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
+  document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
+  document.body.classList.toggle('home-v2-active', homeV2On)
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
       armNavGuard({ mode: 'async', ms: 260 })
@@ -3513,6 +3868,7 @@ function render(opts: RenderOpts = {}): void {
     }
   }
   bind()
+  void refreshNavPermStatus()
   if (state.view === 'games') {
     // remount after DOM ready
     requestAnimationFrame(() => mountActiveArcade())
@@ -4238,6 +4594,276 @@ function bind(): void {
     void handleUserText(state.draft)
   })
 
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-set"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.homeVariant === 'v2' ? 'v2' : 'legacy'
+      writeStoredHomeVariant(v)
+      state.homeV2MoreOpen = false
+      state.homeV2Pane = 'home'
+      state.view = 'chat'
+      try {
+        const u = new URL(window.location.href)
+        u.searchParams.set('home', v)
+        window.history.replaceState({}, '', `${u.pathname}?${u.searchParams.toString()}${u.hash}`)
+      } catch {
+        /* ignore */
+      }
+      showFlash(v === 'v2' ? 'HOME v2로 전환했습니다' : '기존 홈으로 전환했습니다')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-boot-default"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.homeVariant === 'v2' ? 'v2' : 'legacy'
+      writeBootDefaultHome(v)
+      showFlash(v === 'v2' ? '실행 시 기본: HOME v2 (Preview)' : '실행 시 기본: 기존 홈')
+      render()
+    })
+  })
+  document.querySelector('[data-action="home-v2-reset-prefs"]')?.addEventListener('click', () => {
+    clearHomeV2Prefs()
+    state.homeV2Pane = 'home'
+    state.homeV2MoreOpen = false
+    try {
+      const u = new URL(window.location.href)
+      u.searchParams.delete('home')
+      const q = u.searchParams.toString()
+      window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+    } catch {
+      /* ignore */
+    }
+    showFlash('HOME v2 설정을 초기화했습니다.')
+    render()
+  })
+  document.querySelector('[data-action="home-v2-feedback"]')?.addEventListener('click', () => {
+    showFlash('검토 메모: 디자인·배치 의견을 알려 주세요. (기능은 기존과 동일)')
+  })
+  document.querySelector('[data-action="home-v2-nav-home"]')?.addEventListener('click', () => {
+    state.view = 'chat'
+    state.homeV2Pane = 'home'
+    state.homeV2MoreOpen = false
+    render()
+  })
+  document.querySelector('[data-action="home-v2-nav-thread"]')?.addEventListener('click', () => {
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    state.homeV2MoreOpen = false
+    render()
+    scrollChat()
+  })
+  document.querySelector('[data-action="home-v2-nav-more"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = !state.homeV2MoreOpen
+    render()
+  })
+  document.querySelector('[data-action="home-v2-more-close"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    render()
+  })
+  document.querySelector('[data-home-v2-more="1"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.homeV2MoreOpen = false
+      render()
+    }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-quick"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.quickId as HomeV2QuickId | undefined
+      if (id === 'navigate') {
+        openNavigationSheet()
+        return
+      }
+      const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
+      if (!cmd || cmd.startsWith('__')) return
+      state.view = 'chat'
+      state.homeV2Pane = 'thread'
+      state.homeV2MoreOpen = false
+      void handleUserText(cmd)
+    })
+  })
+  document.querySelector('[data-action="home-v2-open-nav"]')?.addEventListener('click', () => {
+    openNavigationSheet()
+  })
+  document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    void handleUserText(HOME_V2_MUSIC_COMMAND)
+  })
+  document.querySelector('[data-action="nav-sheet-close"]')?.addEventListener('click', () => {
+    state.homeV2NavSheetOpen = false
+    render()
+  })
+  document.querySelector('[data-nav-sheet="1"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.homeV2NavSheetOpen = false
+      render()
+    }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="nav-chip"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.navChip || ''
+      const input = document.getElementById('nav-dest-input') as HTMLInputElement | null
+      const map: Record<string, { text: string; nearby?: boolean }> = {
+        home: { text: '집' },
+        work: { text: '회사' },
+        parking: { text: '주차장', nearby: true },
+        gas: { text: '주유소', nearby: true },
+        hospital: { text: '병원', nearby: true },
+        pharmacy: { text: '약국', nearby: true },
+      }
+      const hit = map[key]
+      if (!hit) return
+      if (input) input.value = hit.nearby ? `가까운 ${hit.text}` : hit.text
+      void runNavigationFromUi(hit.nearby ? hit.text : hit.text, Boolean(hit.nearby))
+    })
+  })
+  document.querySelector('[data-action="nav-sheet-start"]')?.addEventListener('click', () => {
+    const input = document.getElementById('nav-dest-input') as HTMLInputElement | null
+    const dest = (input?.value || '').trim()
+    if (!dest) {
+      showFlash('목적지를 입력해 주세요.')
+      return
+    }
+    const nearby = /가까운|근처|주변/.test(dest)
+    void runNavigationFromUi(dest.replace(/^(?:가장\s*)?(?:가까운|근처|주변)\s*/, ''), nearby)
+  })
+  document.querySelector('[data-action="nav-save-home"]')?.addEventListener('click', () => {
+    const v = (document.querySelector('[data-nav-home-addr]') as HTMLInputElement | null)?.value || ''
+    if (!v.trim()) {
+      showFlash('집 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('home', { addressText: v.trim() })
+    showFlash('집 주소를 저장했습니다.')
+  })
+  document.querySelector('[data-action="nav-save-work"]')?.addEventListener('click', () => {
+    const v = (document.querySelector('[data-nav-work-addr]') as HTMLInputElement | null)?.value || ''
+    if (!v.trim()) {
+      showFlash('회사 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('work', { addressText: v.trim() })
+    showFlash('회사 주소를 저장했습니다.')
+  })
+  document.querySelector('[data-action="nav-clear-home"]')?.addEventListener('click', () => {
+    clearSavedPlace('home')
+    showFlash('집 주소를 지웠습니다.')
+    render()
+  })
+  document.querySelector('[data-action="nav-clear-work"]')?.addEventListener('click', () => {
+    clearSavedPlace('work')
+    showFlash('회사 주소를 지웠습니다.')
+    render()
+  })
+  document.querySelector('[data-action="nav-add-fav"]')?.addEventListener('click', () => {
+    const label = (document.querySelector('[data-nav-fav-label]') as HTMLInputElement | null)?.value || ''
+    const addr = (document.querySelector('[data-nav-fav-addr]') as HTMLInputElement | null)?.value || ''
+    if (!addr.trim()) {
+      showFlash('즐겨찾기 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('favorite', { label: label.trim() || '즐겨찾기', addressText: addr.trim() })
+    showFlash('즐겨찾기를 추가했습니다.')
+    render()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="nav-remove-fav"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.favId || ''
+      if (!id) return
+      removeFavorite(id)
+      showFlash('즐겨찾기를 삭제했습니다.')
+      render()
+    })
+  })
+  document.querySelector('[data-action="nav-request-location"]')?.addEventListener('click', () => {
+    void import('./navigation').then(async (m) => {
+      const r = await m.requestCurrentPosition()
+      showFlash(r.ok ? '위치를 확인했습니다. (좌표는 저장하지 않습니다)' : `위치 확인 실패 · ${r.errorCode || 'denied'}`)
+      void refreshNavPermStatus()
+    })
+  })
+  document.querySelector('[data-action="nav-clear-session"]')?.addEventListener('click', () => {
+    resetNavigationLocalState()
+    showFlash('최근 길안내 상태를 초기화했습니다.')
+  })
+  document.querySelector('[data-action="nav-test-map"]')?.addEventListener('click', () => {
+    const sel = document.querySelector('[data-nav-field="defaultMap"]') as HTMLSelectElement | null
+    const provider = (sel?.value || loadNavigationSettings().defaultMap) as MapProviderId
+    const links = buildMapTestSearchUrl(provider)
+    if (!isSafeMapUrl(links.webUrl)) {
+      showFlash('허용되지 않은 지도 링크입니다.')
+      return
+    }
+    if (links.appUrl && isSafeMapUrl(links.appUrl)) navigateHref(links.appUrl, { newTab: false })
+    openUrl(links.webUrl, links.label)
+    showFlash(`${links.label} 검색 화면을 엽니다. (테스트용 · 서울역)`)
+  })
+  document.querySelectorAll<HTMLSelectElement>('[data-nav-field]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const field = sel.dataset.navField
+      if (field === 'defaultMap') {
+        updateNavigationSettings({ defaultMap: sel.value as MapProviderId })
+        showFlash('기본 지도 앱을 저장했습니다.')
+      }
+      if (field === 'defaultTravel') {
+        updateNavigationSettings({ defaultTravelMode: sel.value as TravelMode })
+        showFlash('기본 이동수단을 저장했습니다.')
+      }
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-go"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const go = btn.dataset.homeGo
+      state.homeV2MoreOpen = false
+      if (go === 'todos' || go === 'alarms') {
+        goToView('life')
+        return
+      }
+      if (go === 'messages') {
+        const inbox = getHomeSpaceInbox()
+        if (inbox.family.unread > 0) goToView('family')
+        else if (inbox.friends.unread > 0) goToView('friends')
+        else {
+          state.view = 'chat'
+          state.homeV2Pane = 'thread'
+          render()
+        }
+      }
+    })
+  })
+  document.querySelector('[data-action="home-v2-smart"]')?.addEventListener('click', () => {
+    const btn = document.querySelector<HTMLButtonElement>('[data-action="home-v2-smart"]')
+    const v = (btn?.dataset.smartView || 'life') as View
+    state.homeV2MoreOpen = false
+    if (v === 'chat') {
+      state.view = 'chat'
+      state.homeV2Pane = 'thread'
+      render()
+      return
+    }
+    goToView(v)
+  })
+  document.querySelector('[data-action="home-v2-translate"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('global')
+  })
+  document.querySelector('[data-action="home-v2-guide"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    void handleUserText('사용설명서')
+  })
+  document.querySelector('[data-action="home-v2-goto-push"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('settings')
+    showFlash('설정 → 실기기 테스트 모드 · 푸시')
+  })
+  document.querySelector('[data-action="home-v2-goto-diag"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('settings')
+    showFlash('설정 → 진단 새로고침 / JSON 내보내기')
+  })
+
   document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.view = 'chat'
@@ -4706,6 +5332,12 @@ function bind(): void {
       notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
       notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
       notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
+      notifyPrivacyMode: (['full', 'simple', 'hidden'] as const).includes(
+        String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden',
+      )
+        ? (String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden')
+        : 'simple',
+      pushServerBaseUrl: String(fd.get('pushServerBaseUrl') || '').trim(),
       appLocale,
       translationLocale: String(fd.get('translationLocale') || appLocale),
       autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
@@ -4732,6 +5364,17 @@ function bind(): void {
       openInExternalApp: Boolean(fd.get('musicOpenExternal')),
       rememberRecentMusicSearches: Boolean(fd.get('musicRememberSearches')),
       preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
+    })
+    void import('./push').then((m) => {
+      const url = (next.pushServerBaseUrl || '').trim()
+      if (!url) {
+        m.setPushServerBaseUrl(null)
+        return
+      }
+      const r = m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+      if (!r.ok) {
+        showFlash(r.error === 'https_required' ? '푸시 서버는 HTTPS URL만 저장됩니다.' : '푸시 서버 URL이 올바르지 않습니다.')
+      }
     })
     if (next.notifyFamilyChat || next.notifyFriendsChat) {
       void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
@@ -4871,6 +5514,8 @@ function bind(): void {
         render()
         return
       }
+      const push = await import('./push')
+      await push.ensureReminderPushSubscription(['smart_reminder', 'chat_family', 'chat_friends'])
       state.settings = {
         ...state.settings,
         notifyFamilyChat: state.settings.notifyFamilyChat !== false,
@@ -4878,9 +5523,108 @@ function bind(): void {
       }
       saveSettings(state.settings)
       await bootSpaceSyncAndPush()
-      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다.')
+      showFlash('채팅 알림·백그라운드 푸시가 켜졌습니다. (개인 종료 알림은 서버 필요)')
       render()
     })()
+  })
+
+  document.querySelector('[data-action="reminder-push-status"]')?.addEventListener('click', () => {
+    void import('./push').then((m) => {
+      const summary = m.reminderPushReadinessSummary()
+      showFlash('개인 종료 알림 준비 상태를 대화에 표시했습니다.')
+      pushMsg('assistant', summary)
+      state.view = 'chat'
+      render()
+    })
+  })
+
+  document.querySelector('[data-action="device-diag-refresh"]')?.addEventListener('click', () => {
+    void import('./diagnostics/deviceDiagnostics').then(async (m) => {
+      const diag = await m.collectDeviceDiagnostics(APP_VERSION)
+      const el = document.querySelector('[data-device-diag-out]')
+      if (el) {
+        el.textContent = [
+          `v${diag.version} · build ${diag.buildId} · ${diag.commit} · ${diag.channel}`,
+          `${diag.osHint} / ${diag.browser} · PWA ${diag.standalonePwa ? '설치됨' : '브라우저'} · net ${diag.online ? 'on' : 'off'}`,
+          `알림 ${diag.notificationPermission} · mic ${diag.microphoneHint} · SW ${diag.serviceWorker.ready ? 'ready' : 'no'}`,
+          `push chat=${diag.push.chatSubscription} rem=${diag.push.reminderSubscription} server=${diag.push.pushServerConfigured}`,
+          `user ${diag.user.userId.slice(0, 8)}… · providers ${diag.providers.configured.join(',') || 'none'}`,
+        ].join('\n')
+      }
+      showFlash('진단을 갱신했습니다.')
+    })
+  })
+
+  document.querySelector('[data-action="device-diag-export"]')?.addEventListener('click', () => {
+    void import('./diagnostics/deviceDiagnostics').then(async (m) => {
+      const diag = await m.collectDeviceDiagnostics(APP_VERSION)
+      m.downloadDiagnosticsJson(diag)
+      showFlash('진단 JSON을 저장했습니다. (API 키 제외)')
+    })
+  })
+
+  const pushOut = () => document.querySelector('[data-push-test-out]')
+  const writePushOut = (text: string) => {
+    const el = pushOut()
+    if (el) el.textContent = text
+  }
+  document.querySelector('[data-action="push-test-health"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const meta = await fetch(`./build-meta.json?_=${Date.now()}`).then((r) => r.json()).catch(() => ({}))
+      const r = await m.runPushConnectionCheck(APP_VERSION, String(meta.commit || 'local'))
+      writePushOut(JSON.stringify(r, null, 2))
+      showFlash(r.serverHealthOk ? '서버 health OK' : '서버 연결 실패 — URL·네트워크 확인')
+      ;(window as unknown as { __aizioPushTest?: unknown }).__aizioPushTest = r
+    })
+  })
+  document.querySelector('[data-action="push-test-subscribe"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.requestPermissionAndSubscribe(APP_VERSION)
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-1m"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.scheduleTestReminder(1)
+      writePushOut(`1분 예약: ${r.ok ? 'OK' : 'FAIL'} · id ${m.maskScheduleId(r.reminderId)} · ${r.message}\n상태: 실기기 검증 대기 (앱 완전 종료 후 수신 확인)`)
+      showFlash(r.ok ? '1분 후 테스트 알림을 서버에 예약했습니다.' : r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-5m"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.scheduleTestReminder(5)
+      writePushOut(`5분 예약: ${r.ok ? 'OK' : 'FAIL'} · ${r.message}`)
+      showFlash(r.ok ? '5분 후 테스트 알림 예약' : r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-update"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.updateLastTestReminder(3)
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-cancel"]')?.addEventListener('click', () => {
+    void import('./push/devicePushTest').then(async (m) => {
+      const r = await m.cancelLastTestReminder()
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-unsub"]')?.addEventListener('click', () => {
+    void import('./push').then(async (m) => {
+      const r = await m.unsubscribeReminderPush()
+      writePushOut(r.message)
+      showFlash(r.message)
+    })
+  })
+  document.querySelector('[data-action="push-test-copy"]')?.addEventListener('click', () => {
+    const text = pushOut()?.textContent || ''
+    void navigator.clipboard?.writeText(text).then(
+      () => showFlash('테스트 결과를 복사했습니다.'),
+      () => showFlash('복사에 실패했습니다.'),
+    )
   })
 
   document.querySelector('[data-action="export"]')?.addEventListener('click', () => {
@@ -5114,8 +5858,40 @@ function continueBootAfterRefresh(): void {
 }
 
 function bootAppCore(): void {
+  // Guest local userId/deviceId — does not change legacy jarvis_* keys.
+  void import('./account').then((m) => m.ensureGuestIdentity())
+  void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
   state.messages = loadChat()
   state.settings = loadSettings()
+  void loadBuildMetaLite().then(() => {
+    // Refresh once channel is known so HOME v2 / design-lab resolve correctly.
+    if (state.locationReady) render({ guardNav: false })
+  })
+  try {
+    if (sessionStorage.getItem('aizio.nav.openSheet.v1') === '1') {
+      sessionStorage.removeItem('aizio.nav.openSheet.v1')
+      state.homeV2NavSheetOpen = true
+    }
+  } catch {
+    /* ignore */
+  }
+  void import('./push').then(async (m) => {
+    try {
+      const url = (state.settings.pushServerBaseUrl || '').trim()
+      if (url) m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+      else await m.applyPreviewPushServerDefault({ allowHttpLocalhost: true })
+    } catch {
+      /* push default is optional — HOME design preview must not fail */
+    }
+  })
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      const data = ev.data as { type?: string } | null
+      if (data?.type === 'aizio-push-received') {
+        void import('./push/devicePushTest').then((m) => m.markPushReceived())
+      }
+    })
+  }
   // Restore last query for sticky intent, but never auto-open the panel on launch.
   // Mini player appears only after the user asks for music in this session.
   state.musicSession = loadPersistedMusicSession()

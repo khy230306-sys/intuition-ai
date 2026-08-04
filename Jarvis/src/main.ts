@@ -255,9 +255,17 @@ import {
   type MapProviderId,
   type TravelMode,
 } from './navigation'
+import {
+  customersWithBirthdayToday,
+  deleteCustomer,
+  findCustomers,
+  formatBirthdayDisplay,
+  loadCustomers,
+  upsertCustomer,
+} from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.15.4'
+const APP_VERSION = '1.15.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -526,6 +534,8 @@ const state = {
   homeV2MoreOpen: false,
   /** AI 길안내 bottom sheet */
   homeV2NavSheetOpen: false,
+  /** 손님관리 search filter */
+  customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
   pendingInvite: null as null | { kind: SpaceKind; code: string },
   prefillJoinCode: '',
@@ -810,7 +820,8 @@ function captureViewFromUrl(): void {
       v === 'settings' ||
       v === 'global' ||
       v === 'life' ||
-      v === 'invest'
+      v === 'invest' ||
+      v === 'customers'
     ) {
       state.view = v
       u.searchParams.delete('view')
@@ -832,6 +843,9 @@ function captureViewFromUrl(): void {
       state.homeV2NavSheetOpen = true
       state.view = 'chat'
       state.homeV2Pane = 'home'
+    }
+    if (u.searchParams.get('customers') === '1' || u.searchParams.get('crm') === '1') {
+      state.view = 'customers'
     }
   } catch {
     /* ignore */
@@ -3120,6 +3134,75 @@ function renderLife(): string {
   `
 }
 
+function renderCustomers(): string {
+  const q = state.customerQuery.trim()
+  const all = loadCustomers()
+  const items = q ? findCustomers(q) : all
+  const today = customersWithBirthdayToday()
+  const list =
+    items.length === 0
+      ? `<div class="empty">${q ? '검색 결과가 없습니다.' : '아직 손님이 없습니다. 이름과 생일을 추가해 보세요.'}</div>`
+      : items
+          .map((c) => {
+            const bday = formatBirthdayDisplay(c.birthday)
+            const meta = [bday, c.phone, c.memo].filter(Boolean).join(' · ')
+            return `
+          <div class="list-item customer-item" data-customer-id="${escapeAttr(c.id)}">
+            <div class="body">
+              <strong>${escapeHtml(c.name)}</strong>
+              <p>${escapeHtml(meta || '메모 없음')}</p>
+            </div>
+            <button type="button" class="ghost-btn tiny" data-action="customer-delete" data-customer-id="${escapeAttr(c.id)}">삭제</button>
+          </div>`
+          })
+          .join('')
+  const todayBlock =
+    today.length === 0
+      ? '<p class="hint">오늘 생일인 손님은 없습니다.</p>'
+      : `<ul class="customer-today-list">${today
+          .map((c) => `<li><strong>${escapeHtml(c.name)}</strong> · ${escapeHtml(formatBirthdayDisplay(c.birthday))}</li>`)
+          .join('')}</ul>`
+
+  return `
+    <section class="panel view-scroll customers-panel" data-customers="1">
+      <h2 class="section-title">손님관리</h2>
+      <p class="hint">비즈니스용 손님 명단입니다. 이름·생년월일로 바로 찾을 수 있어요. 이 기기 로컬에만 저장되며 서버로 보내지 않습니다.</p>
+      <div class="customer-today">
+        <h3 class="subsection-title">오늘 생일</h3>
+        ${todayBlock}
+      </div>
+      <form id="customer-search-form" class="settings-form life-input-form">
+        <label>바로 찾기
+          <input name="q" value="${escapeAttr(state.customerQuery)}" placeholder="이름 · 메모 · 전화" autocomplete="off" />
+        </label>
+        <div class="row-btns">
+          <button class="primary-btn" type="submit">검색</button>
+          <button type="button" class="ghost-btn" data-action="customer-clear-search">전체</button>
+        </div>
+      </form>
+      <h3 class="subsection-title">손님 추가</h3>
+      <form id="customer-add-form" class="settings-form life-input-form">
+        <label>이름
+          <input name="name" required maxlength="40" placeholder="예: 김철수" autocomplete="name" />
+        </label>
+        <label>생년월일
+          <input name="birthday" inputmode="numeric" placeholder="예: 1990-05-15 또는 05-15" autocomplete="bday" />
+        </label>
+        <label>전화 (선택)
+          <input name="phone" inputmode="tel" maxlength="40" placeholder="010-…" autocomplete="tel" />
+        </label>
+        <label>메모 (선택)
+          <input name="memo" maxlength="200" placeholder="단골 · 선호 메뉴 등" autocomplete="off" />
+        </label>
+        <button class="primary-btn" type="submit">저장</button>
+      </form>
+      <h3 class="subsection-title">목록 ${q ? `· 검색 ${items.length}명` : `· ${all.length}명`}</h3>
+      ${list}
+      <p class="hint">대화로도 가능: 「손님 추가 김철수 1990-05-15」「손님 김철수 찾아줘」「오늘 생일인 손님」</p>
+    </section>
+  `
+}
+
 function todayIso(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -3493,6 +3576,10 @@ function renderActions(): string {
       <h2 class="section-title">QUICK RUN</h2>
       <p class="hint">버튼을 누르면 앱·웹·카메라·AIZIO 설정으로 바로 연결됩니다. 카카오톡·메모·캘린더는 iPhone에 해당 앱이 있어야 열립니다.</p>
       <div class="action-grid">
+        <button type="button" class="action-card" data-view="customers">
+          <span>CRM</span>
+          <span>손님관리</span>
+        </button>
         <button type="button" class="action-card" data-action="open-share-app">
           <span>QR</span>
           <span>앱 공유</span>
@@ -3841,7 +3928,9 @@ function render(opts: RenderOpts = {}): void {
                   ? renderGames()
                   : state.view === 'actions'
                     ? renderActions()
-                    : renderSettings()
+                    : state.view === 'customers'
+                      ? renderCustomers()
+                      : renderSettings()
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
@@ -5092,6 +5181,45 @@ function bind(): void {
     addReminder(text)
     showFlash('할 일을 추가했습니다.')
     render()
+  })
+  document.getElementById('customer-search-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    state.customerQuery = String(fd.get('q') || '').trim()
+    render()
+  })
+  document.querySelector('[data-action="customer-clear-search"]')?.addEventListener('click', () => {
+    state.customerQuery = ''
+    render()
+  })
+  document.getElementById('customer-add-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.target as HTMLFormElement)
+    const name = String(fd.get('name') || '').trim()
+    if (!name) return
+    try {
+      upsertCustomer({
+        name,
+        birthday: String(fd.get('birthday') || '').trim() || null,
+        phone: String(fd.get('phone') || '').trim() || null,
+        memo: String(fd.get('memo') || '').trim(),
+      })
+      state.customerQuery = ''
+      showFlash(`${name} 님을 손님 목록에 저장했습니다.`)
+      render()
+    } catch {
+      showFlash('이름을 확인해 주세요.')
+    }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="customer-delete"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.customerId || ''
+      if (!id) return
+      const hit = loadCustomers().find((c) => c.id === id)
+      if (!deleteCustomer(id)) return
+      showFlash(hit ? `${hit.name} 님을 삭제했습니다.` : '삭제했습니다.')
+      render()
+    })
   })
   document.getElementById('life-shop-form')?.addEventListener('submit', (e) => {
     e.preventDefault()

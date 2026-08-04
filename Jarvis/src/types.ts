@@ -164,6 +164,7 @@ export type View =
   | 'actions'
   | 'settings'
   | 'global'
+  | 'customers'
 
 export interface ActionResult {
   ok: boolean

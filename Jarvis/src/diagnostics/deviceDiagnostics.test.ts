@@ -48,6 +48,7 @@ describe('device diagnostics', () => {
       providers: { mode: 'auto', configured: ['openrouter'], hasAnyKey: true },
       featureFlags: { dnaEnabled: true },
       navigation: { hasHome: false, hasWork: false, favoriteCount: 0 },
+      customers: { count: 0, withBirthday: 0, withPhone: 0 },
       recentErrorCodes: ['leak sk-abcdefghijklmnopqrstuvwxyz1234'],
       href: 'https://example.com/',
     }

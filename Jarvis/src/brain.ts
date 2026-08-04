@@ -12,6 +12,7 @@ import {
   shareText,
 } from './actions'
 import { tryHandleNavigation } from './navigation'
+import { tryHandleCustomers } from './customers'
 import {
   analyzeHolding,
   compound,
@@ -777,6 +778,20 @@ export async function think(
     }
   } catch {
     /* navigation must never block other skills */
+  }
+
+  // 손님관리 — local CRM (name / birthday lookup)
+  try {
+    const cust = await tryHandleCustomers(text)
+    if (cust?.handled) {
+      return {
+        text: cust.text,
+        speak: cust.speak !== false,
+        view: cust.view,
+      }
+    }
+  } catch {
+    /* customers must never block other skills */
   }
 
   // Bare stop always handled (even if lock was cleared / old session)

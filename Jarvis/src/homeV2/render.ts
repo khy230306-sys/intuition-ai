@@ -239,6 +239,12 @@ export function renderHomeV2MoreSheet(): string {
           </ul>
         </div>
         <div class="home-v2-more-group">
+          <h4>비즈니스</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('손님관리', 'data-view="customers"')}
+          </ul>
+        </div>
+        <div class="home-v2-more-group">
           <h4>도구</h4>
           <ul class="home-v2-more-list">
             ${moreItem('투자', 'data-view="invest"')}

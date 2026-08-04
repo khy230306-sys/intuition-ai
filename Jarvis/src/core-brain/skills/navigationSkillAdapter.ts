@@ -1,7 +1,18 @@
 import type { View } from '../../types'
 import type { SkillContext, SkillResult } from '../types'
 
-const VIEWS: View[] = ['chat', 'invest', 'life', 'family', 'friends', 'games', 'actions', 'settings', 'global']
+const VIEWS: View[] = [
+  'chat',
+  'invest',
+  'life',
+  'family',
+  'friends',
+  'games',
+  'actions',
+  'settings',
+  'global',
+  'customers',
+]
 
 export function isAvailable(): boolean {
   return true
@@ -33,6 +44,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     actions: '액션',
     settings: '설정',
     global: '글로벌',
+    customers: '손님관리',
   }
   return {
     success: true,

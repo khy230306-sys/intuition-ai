@@ -17,7 +17,11 @@ const RULES: Rule[] = [
     confidence: 0.92,
   },
   { intent: 'change_setting', re: /설정\s*(열어|보여|가|켜)|settings?\s*open|언어\s*바꿔|tts\s*설정/i, confidence: 0.9 },
-  { intent: 'app_navigation', re: /(투자|생활|가족|친구|게임|액션|설정|채팅)\s*(탭|화면|메뉴)?\s*(열어|보여|가|이동)/i, confidence: 0.88 },
+  {
+    intent: 'app_navigation',
+    re: /(투자|생활|가족|친구|게임|액션|설정|채팅|손님관리|고객관리|손님|고객)\s*(탭|화면|메뉴)?\s*(열어|보여|가|이동)/i,
+    confidence: 0.88,
+  },
   {
     intent: 'translate',
     re: /번역|통역|translate|interpreting?|(?:로|으로)\s*번역|일본어로|영어로|베트남어로|중국어로/i,

@@ -33,6 +33,7 @@ const K = {
   family: 'jarvis_family_room_v1',
   friends: 'jarvis_friends_room_v1',
   relationships: 'jarvis_relationships_v1',
+  customers: 'jarvis_customers_v1',
   smartReminders: 'jarvis_smart_reminders_v1',
   smartReminderCtx: 'jarvis_smart_reminder_ctx_v1',
   localAlarms: 'jarvis_local_alarms_v1',
@@ -155,6 +156,7 @@ export function buildBackupObject(opts: BackupBuildOptions = {}): Record<string,
     body.friends = readRaw(K.friends)
   }
   if (cats.has('relationships')) body.relationships = readRaw(K.relationships)
+  if (cats.has('customers')) body.customers = readRaw(K.customers) ?? []
   if (cats.has('smartReminders')) {
     body.smartReminders = readRaw(K.smartReminders)
     body.smartReminderCtx = readRaw(K.smartReminderCtx)
@@ -213,6 +215,7 @@ export function previewBackup(json: string): BackupPreview {
     memory: countArray(data.memory),
     reminders: countArray(data.reminders),
     relationships: countArray(data.relationships),
+    customers: countArray(data.customers),
     smartReminders: countArray(data.smartReminders),
     lifeOsKeys: data.lifeOs && typeof data.lifeOs === 'object' ? Object.keys(data.lifeOs as object).length : 0,
   }
@@ -295,6 +298,10 @@ export function importBackupJson(
       writeRaw(K.relationships, data.relationships)
       imported.push('relationships')
     } else if (want.has('relationships')) skipped.push('relationships')
+    if (want.has('customers') && data.customers != null) {
+      writeRaw(K.customers, data.customers)
+      imported.push('customers')
+    } else if (want.has('customers')) skipped.push('customers')
     if (want.has('smartReminders')) {
       if (data.smartReminders != null) writeRaw(K.smartReminders, data.smartReminders)
       if (data.smartReminderCtx != null) writeRaw(K.smartReminderCtx, data.smartReminderCtx)

@@ -181,6 +181,8 @@ describe('HOME v2 render', () => {
     const more = renderHomeV2MoreSheet()
     expect(more).toContain('길안내')
     expect(more).toContain('음악')
+    expect(more).toContain('손님관리')
+    expect(more).toContain('data-view="customers"')
     expect(more).toContain('data-view="invest"')
     expect(more).toContain('디자인 전환')
   })

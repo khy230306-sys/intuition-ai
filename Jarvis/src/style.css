@@ -3065,3 +3065,9 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 .home-v2-nav-chips .ghost-btn {
   min-height: 36px;
 }
+
+/* Customers (손님관리) */
+.customers-panel .customer-today{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(0,210,190,0.04)}
+.customer-today-list{margin:0;padding-left:1.1rem;color:var(--ink)}
+.customer-today-list li{margin:4px 0}
+.customer-item .body p{word-break:break-word}

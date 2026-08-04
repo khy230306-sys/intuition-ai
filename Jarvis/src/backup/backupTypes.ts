@@ -6,6 +6,7 @@ export type BackupCategory =
   | 'invest'
   | 'familyFriends'
   | 'relationships'
+  | 'customers'
   | 'smartReminders'
   | 'lifeOs'
   | 'account'
@@ -18,6 +19,7 @@ export const ALL_BACKUP_CATEGORIES: BackupCategory[] = [
   'invest',
   'familyFriends',
   'relationships',
+  'customers',
   'smartReminders',
   'lifeOs',
   'account',

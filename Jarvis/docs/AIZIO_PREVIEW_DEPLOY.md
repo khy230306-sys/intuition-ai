@@ -6,11 +6,11 @@
 
 | Field | Value |
 | --- | --- |
-| REVIEW_URL | *(filled after `npm run deploy:preview`)* |
-| HOME v2 (default) | `{REVIEW_URL}` |
-| Navigation direct | `{REVIEW_URL}/?nav=1` |
-| Legacy home | `{REVIEW_URL}/?home=legacy` |
-| 손님관리 | `{REVIEW_URL}/?customers=1` |
+| REVIEW_URL | https://spatial-pulse-m3o6tgj.shipstatic.com |
+| HOME v2 (default) | https://spatial-pulse-m3o6tgj.shipstatic.com |
+| Navigation direct | https://spatial-pulse-m3o6tgj.shipstatic.com/?nav=1 |
+| Legacy home | https://spatial-pulse-m3o6tgj.shipstatic.com/?home=legacy |
+| 손님관리 | https://spatial-pulse-m3o6tgj.shipstatic.com/?customers=1 |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
 Previous previews: https://hyper-cluster-i63ofol.shipstatic.com · https://encoded-mesh-r5a5fkf.shipstatic.com · https://infused-whirl-dpn0rm4.shipstatic.com

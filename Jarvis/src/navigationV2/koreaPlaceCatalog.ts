@@ -1,0 +1,184 @@
+/**
+ * Preview seed catalog for Korean place QA.
+ * MUST be labeled in UI as local catalog — not live national search.
+ */
+
+export type CatalogPlace = {
+  id: string
+  name: string
+  aliases: string[]
+  category: string
+  address: string
+  lat: number
+  lng: number
+  tags: string[]
+}
+
+/** Curated points for Navigation v2 Preview audits. */
+export const KOREA_PLACE_CATALOG: CatalogPlace[] = [
+  {
+    id: 'yeoksam1-community',
+    name: '역삼1동 주민센터',
+    aliases: ['역삼동 주민센터', '역삼1동', '역삼동 주', '역삼 주민센터'],
+    category: '행정기관',
+    address: '서울 강남구 역삼로7길 8',
+    lat: 37.49548,
+    lng: 127.0332,
+    tags: ['역삼동', '주민센터'],
+  },
+  {
+    id: 'yeoksam2-community',
+    name: '역삼2동 주민센터',
+    aliases: ['역삼2동', '역삼2동 주민센터'],
+    category: '행정기관',
+    address: '서울 강남구 역삼로25길 34',
+    lat: 37.49595,
+    lng: 127.0431,
+    tags: ['역삼동', '주민센터'],
+  },
+  {
+    id: 'yeoksam-station',
+    name: '역삼역',
+    aliases: ['역삼', '역삼역 2호선'],
+    category: '지하철역',
+    address: '서울 강남구 테헤란로 156',
+    lat: 37.50062,
+    lng: 127.03646,
+    tags: ['역삼동', '역'],
+  },
+  {
+    id: 'gangnam-station',
+    name: '강남역',
+    aliases: ['강남', '강남역 2호선'],
+    category: '지하철역',
+    address: '서울 강남구 강남대로 396',
+    lat: 37.49794,
+    lng: 127.02762,
+    tags: ['강남', '역'],
+  },
+  {
+    id: 'seoul-station',
+    name: '서울역',
+    aliases: ['서울역', '서울역 3번 출구', '서울'],
+    category: '기차역',
+    address: '서울 중구 한강대로 405',
+    lat: 37.55465,
+    lng: 126.97061,
+    tags: ['서울', '역', 'KTX'],
+  },
+  {
+    id: 'ulsan-station',
+    name: '울산역',
+    aliases: ['울산역', '울산 케이티엑스역', '울산KTX', '울산 ktx'],
+    category: '기차역',
+    address: '울산 울주군 삼남읍 울산역로 177',
+    lat: 35.55148,
+    lng: 129.1386,
+    tags: ['울산', '역', 'KTX'],
+  },
+  {
+    id: 'busan-station',
+    name: '부산역',
+    aliases: ['부산역', '부산'],
+    category: '기차역',
+    address: '부산 동구 중앙대로 206',
+    lat: 35.11509,
+    lng: 129.04147,
+    tags: ['부산', '역'],
+  },
+  {
+    id: 'mangyang-50',
+    name: '망양길 50',
+    aliases: ['망양길50', '망양길 50'],
+    category: '주소',
+    address: '울산 동구 망양길 50 인근',
+    lat: 35.5221,
+    lng: 129.4285,
+    tags: ['주소', '울산'],
+  },
+  {
+    id: 'ulsan-univ-hospital',
+    name: '울산대학교병원',
+    aliases: ['울산대병원', '울산대학병원', '울산대학교 병원'],
+    category: '병원',
+    address: '울산 동구 대학병원로 25',
+    lat: 35.5432,
+    lng: 129.4289,
+    tags: ['병원', '울산'],
+  },
+  {
+    id: 'gangnam-sbux',
+    name: '스타벅스 강남역점',
+    aliases: ['강남 스벅', '스타벅스 강남', '스벅 강남'],
+    category: '카페',
+    address: '서울 강남구 강남대로 390 인근',
+    lat: 37.4975,
+    lng: 127.0284,
+    tags: ['카페', '스타벅스', '강남'],
+  },
+  {
+    id: 'yeoksam-pharmacy',
+    name: '역삼온누리약국',
+    aliases: ['역삼 약국', '근처 약국 역삼'],
+    category: '약국',
+    address: '서울 강남구 테헤란로 134 인근',
+    lat: 37.5011,
+    lng: 127.0352,
+    tags: ['약국', '역삼동'],
+  },
+  {
+    id: 'yeoksam-parking',
+    name: '역삼공영주차장',
+    aliases: ['역삼 주차장', '근처 주차장 역삼'],
+    category: '주차장',
+    address: '서울 강남구 역삼동 인근',
+    lat: 37.4992,
+    lng: 127.0378,
+    tags: ['주차장', '역삼동'],
+  },
+  {
+    id: 'yeoksam-gas',
+    name: 'SK에너지 역삼주유소',
+    aliases: ['역삼 주유소', '근처 주유소 역삼'],
+    category: '주유소',
+    address: '서울 강남구 테헤란로 인근',
+    lat: 37.5024,
+    lng: 127.0395,
+    tags: ['주유소', '역삼동'],
+  },
+  {
+    id: 'yeoksam-convenience',
+    name: 'GS25 역삼중앙점',
+    aliases: ['역삼 편의점', '가까운 편의점'],
+    category: '편의점',
+    address: '서울 강남구 역삼동 인근',
+    lat: 37.5001,
+    lng: 127.0348,
+    tags: ['편의점', '역삼동'],
+  },
+  {
+    id: 'gangnam-hospital',
+    name: '강남세브란스병원',
+    aliases: ['가까운 응급실', '근처 병원 강남', '주변 병원'],
+    category: '병원',
+    address: '서울 강남구 언주로 211',
+    lat: 37.4927,
+    lng: 127.0463,
+    tags: ['병원', '응급실', '강남'],
+  },
+]
+
+export const NEARBY_CATEGORY_KEYS: Record<string, string[]> = {
+  pharmacy: ['약국'],
+  hospital: ['병원', '응급실'],
+  parking: ['주차장'],
+  gas: ['주유소'],
+  cafe: ['카페', '스타벅스'],
+  convenience: ['편의점'],
+  restaurant: ['식당', '음식점'],
+  restroom: ['화장실'],
+  bank: ['은행'],
+  atm: ['ATM'],
+  police: ['경찰서'],
+  fire: ['소방서'],
+}

@@ -7,13 +7,14 @@
 
 | Field | Value |
 |-------|--------|
-| REVIEW_URL | https://infused-whirl-dpn0rm4.shipstatic.com |
-| Version | 1.15.4 |
-| Commit | 5e1d5a4 |
-| HOME v2 (default) | https://infused-whirl-dpn0rm4.shipstatic.com |
-| HOME v2 direct | https://infused-whirl-dpn0rm4.shipstatic.com/?home=v2 |
-| Legacy home | https://infused-whirl-dpn0rm4.shipstatic.com/?home=legacy |
-| 길안내 sheet | https://infused-whirl-dpn0rm4.shipstatic.com/?nav=1 |
+| REVIEW_URL | https://encoded-mesh-r5a5fkf.shipstatic.com |
+| Version | 1.15.5 |
+| Commit | cc44c4b |
+| HOME v2 (default) | https://encoded-mesh-r5a5fkf.shipstatic.com |
+| HOME v2 direct | https://encoded-mesh-r5a5fkf.shipstatic.com/?home=v2 |
+| Legacy home | https://encoded-mesh-r5a5fkf.shipstatic.com/?home=legacy |
+| 길안내 sheet | https://encoded-mesh-r5a5fkf.shipstatic.com/?nav=1 |
+| 손님관리 | https://encoded-mesh-r5a5fkf.shipstatic.com/?customers=1 |
 | Default PUSH_SERVER_URL (baked) | _(empty — set in Settings; tunnel optional)_ |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 

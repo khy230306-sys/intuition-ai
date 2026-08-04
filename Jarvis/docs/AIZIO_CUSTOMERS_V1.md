@@ -19,6 +19,7 @@
 | HOME v2 전체 → 비즈니스 → 손님관리 | `data-view="customers"` |
 | URL | `?view=customers` 또는 `?customers=1` |
 | Chat | 「손님관리」「손님 추가 …」「손님 ○○ 찾아줘」 |
+| Preview | https://encoded-mesh-r5a5fkf.shipstatic.com/?customers=1 |
 
 ## Chat examples
 

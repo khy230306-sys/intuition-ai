@@ -6,11 +6,11 @@
 
 | Field | Value |
 | --- | --- |
-| REVIEW_URL | https://spatial-pulse-m3o6tgj.shipstatic.com |
-| HOME v2 (default) | https://spatial-pulse-m3o6tgj.shipstatic.com |
-| Navigation direct | https://spatial-pulse-m3o6tgj.shipstatic.com/?nav=1 |
-| Legacy home | https://spatial-pulse-m3o6tgj.shipstatic.com/?home=legacy |
-| 손님관리 | https://spatial-pulse-m3o6tgj.shipstatic.com/?customers=1 |
+| REVIEW_URL | https://tuned-spectra-l0b6f5n.shipstatic.com |
+| HOME v2 (default) | https://tuned-spectra-l0b6f5n.shipstatic.com |
+| Navigation direct | https://tuned-spectra-l0b6f5n.shipstatic.com/?nav=1 |
+| Legacy home | https://tuned-spectra-l0b6f5n.shipstatic.com/?home=legacy |
+| 손님관리 | https://tuned-spectra-l0b6f5n.shipstatic.com/?customers=1 |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
 Previous previews: https://hyper-cluster-i63ofol.shipstatic.com · https://encoded-mesh-r5a5fkf.shipstatic.com · https://infused-whirl-dpn0rm4.shipstatic.com

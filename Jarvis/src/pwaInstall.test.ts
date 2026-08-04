@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  copyAppUrl,
   detectInstallPlatform,
   installGuideSteps,
+  isIosNonSafari,
   isMobileInstallTarget,
   isRunningAsInstalledPwa,
   setDeferredInstallPromptForTests,
@@ -54,9 +56,19 @@ describe('pwaInstall', () => {
 
   it('detects platforms and guide copy', () => {
     expect(detectInstallPlatform('iPhone')).toBe('ios')
+    expect(detectInstallPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1')).toBe(
+      'ios-chrome',
+    )
+    expect(isIosNonSafari('CriOS/120 iPhone')).toBe(true)
     expect(detectInstallPlatform('Android 14')).toBe('android')
     expect(isMobileInstallTarget('iPad')).toBe(true)
     expect(installGuideSteps('ios').steps.length).toBeGreaterThan(2)
+    expect(installGuideSteps('ios-chrome').title).toMatch(/Safari/)
     expect(installGuideSteps('android').title).toMatch(/안드로이드/)
+  })
+
+  it('copyAppUrl returns boolean without throwing', async () => {
+    const ok = await copyAppUrl()
+    expect(typeof ok).toBe('boolean')
   })
 })

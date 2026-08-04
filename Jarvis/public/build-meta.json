@@ -1,10 +1,10 @@
 {
   "app": "AIZIO",
   "version": "1.16.0",
-  "buildId": "prod-1785882991211",
-  "commit": "42a3662",
+  "buildId": "prod-1785883352378",
+  "commit": "ef76733",
   "channel": "production",
-  "builtAt": "2026-08-04T22:36:31.211Z",
+  "builtAt": "2026-08-04T22:42:32.383Z",
   "productionUrl": "https://jarvis-app.shipstatic.com",
-  "note": "Fixed production — one URL, features via 메뉴"
+  "note": "Fixed production — PWA install + menu fixes"
 }

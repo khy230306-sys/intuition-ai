@@ -35,6 +35,8 @@ import { think } from './brain'
 import {
   attemptPwaInstall,
   bindPwaInstallEvents,
+  copyAppUrl,
+  hasNativeInstallPrompt,
   detectInstallPlatform,
   installGuideSteps,
   onPwaInstallChange,
@@ -665,6 +667,7 @@ function renderHomeInstallButton(opts?: { compact?: boolean }): string {
 }
 
 async function handleInstallHomeClick(): Promise<void> {
+  state.homeV2MoreOpen = false
   const result = await attemptPwaInstall()
   if (result.kind === 'accepted') {
     state.showInstall = false
@@ -2151,10 +2154,14 @@ function renderInstall(): string {
   const platform = detectInstallPlatform()
   const tip =
     platform === 'ios'
-      ? '아이폰: 버튼 → 공유 → 홈 화면에 추가'
-      : platform === 'android'
-        ? '안드로이드: 버튼으로 설치하거나 브라우저 메뉴에서 추가'
-        : '브라우저 설치 메뉴로 홈 화면에 추가'
+      ? '아이폰 Safari: 공유 → 홈 화면에 추가'
+      : platform === 'ios-chrome'
+        ? 'Safari로 열어 홈 화면에 추가하세요'
+        : platform === 'android'
+          ? hasNativeInstallPrompt()
+            ? '버튼을 누르면 설치 창이 열립니다'
+            : '버튼 또는 Chrome 메뉴에서 홈 화면에 추가'
+          : '브라우저 설치 메뉴로 홈 화면에 추가'
   return `
     <div class="install-banner" data-install-banner="1">
       <div class="install-banner-copy">
@@ -2170,6 +2177,7 @@ function renderInstallGuideModal(): string {
   if (!state.installGuideOpen) return ''
   const guide = installGuideSteps(state.installGuideOpen)
   const steps = guide.steps.map((s, i) => `<li><span class="step-n">${i + 1}</span>${escapeHtml(s)}</li>`).join('')
+  const native = hasNativeInstallPrompt()
   return `
     <div class="share-modal install-guide-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(guide.title)}" data-action="close-install-guide-backdrop">
       <div class="share-sheet" data-install-guide-sheet="1">
@@ -2178,13 +2186,50 @@ function renderInstallGuideModal(): string {
           <button type="button" class="ghost-btn tiny" data-action="close-install-guide">닫기</button>
         </div>
         <ol class="install-guide-steps">${steps}</ol>
-        <p class="hint">이미 홈 화면 아이콘으로 실행 중이면 이 버튼은 자동으로 숨겨집니다.</p>
-        <div class="row-btns">
+        <p class="hint">이미 홈 화면 아이콘으로 실행 중이면 설치 버튼은 자동으로 숨겨집니다.</p>
+        <div class="row-btns install-guide-actions">
+          ${native ? `<button type="button" class="primary-btn" data-action="install-home">설치 창 열기</button>` : ''}
+          <button type="button" class="ghost-btn" data-action="install-copy-url">주소 복사</button>
           <button type="button" class="primary-btn" data-action="close-install-guide">확인</button>
         </div>
       </div>
     </div>
   `
+}
+
+function bindInstallUi(): void {
+  document.querySelectorAll('[data-action="install-home"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void handleInstallHomeClick()
+    })
+  })
+  document.querySelectorAll('[data-action="close-install-guide"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      state.installGuideOpen = false
+      render()
+    })
+  })
+  document.querySelectorAll('[data-action="close-install-guide-backdrop"]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        state.installGuideOpen = false
+        render()
+      }
+    })
+  })
+  document.querySelectorAll('[data-action="install-copy-url"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void copyAppUrl().then((ok) => {
+        showFlash(ok ? '주소를 복사했습니다. Safari 주소창에 붙여넣으세요.' : '복사에 실패했습니다. 주소창의 링크를 길게 누르세요.')
+      })
+    })
+  })
 }
 
 function renderLocationGate(): string {
@@ -4065,8 +4110,9 @@ function render(opts: RenderOpts = {}): void {
         })
       : ''
   const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
-  // Keep HOME v2 first viewport dense — install banner stays available on legacy / thread / other tabs.
-  const installHtml = hideBrand ? '' : renderInstall()
+  // Install CTA stays visible on HOME v2 — users must be able to add to home screen.
+  refreshInstallHint()
+  const installHtml = renderInstall()
   app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
@@ -4249,23 +4295,7 @@ function bindLocationGate(): void {
     render()
     void bootSpaceSyncAndPush()
   })
-  document.querySelectorAll('[data-action="install-home"]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      void handleInstallHomeClick()
-    })
-  })
-  document.querySelector('[data-action="close-install-guide"]')?.addEventListener('click', () => {
-    state.installGuideOpen = false
-    render()
-  })
-  document.querySelector('[data-action="close-install-guide-backdrop"]')?.addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-      state.installGuideOpen = false
-      render()
-    }
-  })
+  bindInstallUi()
 }
 
 async function ensureLocation(interactive: boolean): Promise<boolean> {
@@ -4788,23 +4818,7 @@ function bind(): void {
     })
   })
 
-  document.querySelectorAll('[data-action="install-home"]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      void handleInstallHomeClick()
-    })
-  })
-  document.querySelector('[data-action="close-install-guide"]')?.addEventListener('click', () => {
-    state.installGuideOpen = false
-    render()
-  })
-  document.querySelector('[data-action="close-install-guide-backdrop"]')?.addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-      state.installGuideOpen = false
-      render()
-    }
-  })
+  bindInstallUi()
 
   const composer = document.getElementById('composer') as HTMLFormElement | null
   const draft = document.getElementById('draft') as HTMLInputElement | null
@@ -4873,9 +4887,11 @@ function bind(): void {
     render()
     scrollChat()
   })
-  document.querySelector('[data-action="home-v2-nav-more"]')?.addEventListener('click', () => {
-    state.homeV2MoreOpen = !state.homeV2MoreOpen
-    render()
+  document.querySelectorAll('[data-action="home-v2-nav-more"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.homeV2MoreOpen = !state.homeV2MoreOpen
+      render()
+    })
   })
   document.querySelector('[data-action="home-v2-more-close"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false

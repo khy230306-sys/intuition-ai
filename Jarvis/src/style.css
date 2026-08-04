@@ -215,6 +215,16 @@ body {
   color: var(--text);
 }
 
+.install-guide-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.install-guide-actions .primary-btn,
+.install-guide-actions .ghost-btn {
+  flex: 1 1 auto;
+  min-width: 7rem;
+}
+
 .install-guide-steps .step-n {
   flex-shrink: 0;
   width: 22px;

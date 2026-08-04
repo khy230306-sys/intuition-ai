@@ -183,6 +183,7 @@ describe('HOME v2 render', () => {
     const more = renderHomeV2MoreSheet()
     expect(more).toContain('aria-label="메뉴"')
     expect(more).toContain('주요 기능')
+    expect(more).toContain('data-action="install-home"')
     expect(more).toContain('길안내')
     expect(more).toContain('음악')
     expect(more).toContain('손님관리')

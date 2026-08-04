@@ -231,6 +231,7 @@ export function renderHomeV2MoreSheet(): string {
         <div class="home-v2-more-group">
           <h4>주요 기능</h4>
           <ul class="home-v2-more-list">
+            ${moreItem('홈 화면에 설치', 'data-action="install-home"')}
             ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('손님관리', 'data-view="customers"')}
             ${moreItem('일정 · 할 일', 'data-view="life"')}

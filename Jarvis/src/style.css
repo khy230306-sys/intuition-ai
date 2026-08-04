@@ -2570,15 +2570,43 @@ body[data-jarvis-view='friends'] .orb::after {
   white-space: normal;
 }
 
-/* ── HOME v2 preview (parallel to legacy home; does not replace it) ── */
+/* ── HOME v2 unified (dashboard + chat, one screen) ── */
 .home-v2-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 12px calc(12px + var(--safe-bottom));
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+}
+.home-v2-panel.home-v2-unified {
+  height: 100%;
+  max-height: 100%;
+}
+.home-v2-thread {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 0 8px;
+}
+.home-v2-chat-tools {
+  margin: 0;
+  justify-content: flex-end;
+}
+.home-v2-unified .home-v2-smart-card {
+  flex-shrink: 0;
+}
+.home-v2-unified .home-v2-composer-wrap {
+  flex-shrink: 0;
+  margin-top: auto;
+}
+.home-v2-unified .home-v2-summary,
+.home-v2-unified .home-v2-quick,
+.home-v2-unified .home-v2-header {
+  flex-shrink: 0;
 }
 
 .home-v2-chrome {
@@ -2948,6 +2976,7 @@ body[data-jarvis-view='friends'] .orb::after {
   color: var(--cyan-bright);
 }
 
+body.home-v2-active[data-jarvis-view='chat'] .brand-bar,
 body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-bar {
   display: none;
 }

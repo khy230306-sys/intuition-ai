@@ -1476,14 +1476,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       }
     }
     if (reply.view) state.view = reply.view
-    // Place-search replies keep chat visible — switch HOME v2 to conversation pane for cards
-    if (
-      state.view === 'chat' &&
-      activeHomeVariant() === 'v2' &&
-      /장소|후보|찾았|선택했|길안내/.test(reply.text || '')
-    ) {
-      state.homeV2Pane = 'thread'
-    }
+    // Unified HOME already shows chat — keep pane on home.
     if (reply.view === 'navigation') {
       const ctx = getNavV2Context()
       state.navV2 = {
@@ -2687,7 +2680,64 @@ function renderShareModal(): string {
   `
 }
 
-/** HOME v2 dashboard — default home; does not delete renderChat(). */
+/** Message list HTML shared by unified HOME and legacy chat. */
+function renderChatMessagesHtml(): string {
+  const empty = state.messages.length === 0
+  const navCards = empty ? '' : renderNavChatCardsHtml()
+  if (empty) {
+    return `
+      <div class="home-v2-voice" data-voice-state="${escapeAttr(
+        state.listening ? 'listening' : state.busy ? 'thinking' : 'idle',
+      )}">
+        <button type="button"
+          class="home-v2-orb ${state.listening ? 'listening' : ''} ${state.busy ? 'busy' : ''}"
+          data-action="mic"
+          data-home-v2-orb="1"
+          aria-label="AIZIO 음성 입력"
+          aria-pressed="${state.listening ? 'true' : 'false'}">
+          <span class="home-v2-orb-ring" aria-hidden="true"></span>
+          <span class="home-v2-orb-core">A</span>
+        </button>
+        <p class="home-v2-brand">AIZIO</p>
+        <p class="home-v2-prompt" id="voice-caption" data-home-v2-prompt="1">${escapeHtml(
+          state.listening ? state.voiceHint || '듣고 있습니다…' : '무엇을 도와드릴까요?',
+        )}</p>
+      </div>`
+  }
+  return state.messages
+    .map((m, idx, arr) => {
+      const mine = m.role === 'user'
+      const name = mine ? state.settings.displayName || 'YOU' : 'AIZIO'
+      const clock = formatChatClock(m.createdAt)
+      const avatar = mine
+        ? avatarButtonHtml({
+            name,
+            src: state.settings.avatarDataUrl,
+            mine: true,
+          })
+        : `<button type="button" class="msg-avatar-btn aizio" data-profile-open="1" data-profile-name="AIZIO" data-profile-src="" data-profile-mine="0" aria-label="AIZIO">
+            <span class="msg-avatar-letter">A</span>
+          </button>`
+      const attachCards = !mine && idx === arr.length - 1 && navCards ? navCards : ''
+      return `
+          <div class="msg-row ${mine ? 'user' : 'assistant'}">
+            ${avatar}
+            <div class="msg-col">
+              <div class="msg-head">
+                <span class="msg-name">${escapeHtml(name)}</span>
+                ${clock ? `<time class="msg-time">${clock}</time>` : ''}
+              </div>
+              <div class="msg-bubble ${mine ? 'user' : 'assistant'}">${escapeHtml(m.text)}${
+                !mine && m.musicNeedsGesture ? renderMusicPlayChip(m.musicPlayUrl, true) : ''
+              }</div>
+              ${attachCards}
+            </div>
+          </div>`
+    })
+    .join('')
+}
+
+/** Unified HOME — dashboard + conversation on one screen. */
 function renderHomeV2View(): string {
   try {
     const model = buildHomeV2Model({
@@ -2696,15 +2746,43 @@ function renderHomeV2View(): string {
       busy: state.busy,
       draft: state.draft,
     })
+    const mode = loadInterpretMode()
+    const lockBar = `
+    <details class="translate-bar ${mode.active ? 'on' : ''}" ${mode.active ? 'open' : ''}>
+      <summary class="translate-bar-head">
+        <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
+        <span class="ver">v${APP_VERSION}</span>
+      </summary>
+      <div class="translate-chips">
+        ${TRANSLATE_LANGS.map(
+          (l) =>
+            `<button type="button" class="${mode.active && mode.langB === l.code ? 'active' : ''}" data-translate-cmd="${escapeAttr(l.cmd)}">${escapeHtml(l.label)}</button>`,
+        ).join('')}
+        <button type="button" class="stop-btn" data-translate-stop="1">스톱</button>
+      </div>
+    </details>`
+    const wizard = shouldShowAiWizard() ? renderAiWizardHtml() : ''
+    const tools =
+      state.messages.length > 0
+        ? `<div class="chat-tools home-v2-chat-tools">
+            <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+          </div>`
+        : ''
+    const voiceHint = `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${
+      state.listening || state.voiceHint ? '' : 'hidden'
+    }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
     return renderHomeV2Shell(model, {
       draft: state.draft,
       busy: state.busy,
       listening: state.listening,
       appVersion: APP_VERSION,
-      composerExtraHtml: renderMusicMiniPlayer(
+      composerExtraHtml: `${lockBar}${renderMusicMiniPlayer(
         state.musicSession || sessionSnapshot(),
         state.musicPlayerOpen,
-      ),
+      )}`,
+      threadHtml: renderChatMessagesHtml(),
+      aboveThreadHtml: `${wizard}${tools}`,
+      voiceHintHtml: voiceHint,
     })
   } catch (err) {
     const code = err instanceof Error ? err.name || 'HomeV2Error' : 'HomeV2Error'
@@ -2803,12 +2881,10 @@ function renderNavSettingsSection(): string {
 
 function renderChatOrHomeV2(): string {
   if (activeHomeVariant() !== 'v2') {
-    // Legacy recovery: chrome only when Design Lab is explicitly surfaced (settings).
     return renderChat()
   }
-  if (state.homeV2Pane === 'thread') {
-    return renderChat()
-  }
+  // Single unified home (dashboard + chat) — no separate 대화 pane.
+  state.homeV2Pane = 'home'
   return renderHomeV2View()
 }
 
@@ -4109,13 +4185,13 @@ function render(opts: RenderOpts = {}): void {
           defaultTravel: loadNavigationSettings().defaultTravelMode,
         })
       : ''
-  const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
-  // Install CTA stays visible on HOME v2 — users must be able to add to home screen.
+  const hideBrand = homeV2On && state.view === 'chat'
+  // Install CTA stays visible on HOME — users must be able to add to home screen.
   refreshInstallHint()
   const installHtml = renderInstall()
   app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
-  document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
+  document.body.dataset.homeV2Pane = homeV2On ? 'home' : ''
   document.body.classList.toggle('home-v2-active', homeV2On)
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
@@ -4874,18 +4950,14 @@ function bind(): void {
   document.querySelector('[data-action="home-v2-feedback"]')?.addEventListener('click', () => {
     showFlash('검토 메모: 디자인·배치 의견을 알려 주세요. (기능은 기존과 동일)')
   })
-  document.querySelector('[data-action="home-v2-nav-home"]')?.addEventListener('click', () => {
-    state.view = 'chat'
-    state.homeV2Pane = 'home'
-    state.homeV2MoreOpen = false
-    render()
-  })
-  document.querySelector('[data-action="home-v2-nav-thread"]')?.addEventListener('click', () => {
-    state.view = 'chat'
-    state.homeV2Pane = 'thread'
-    state.homeV2MoreOpen = false
-    render()
-    scrollChat()
+  document.querySelectorAll('[data-action="home-v2-nav-home"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.view = 'chat'
+      state.homeV2Pane = 'home'
+      state.homeV2MoreOpen = false
+      render()
+      scrollChat()
+    })
   })
   document.querySelectorAll('[data-action="home-v2-nav-more"]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -4913,7 +4985,7 @@ function bind(): void {
       const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
       if (!cmd || cmd.startsWith('__')) return
       state.view = 'chat'
-      state.homeV2Pane = 'thread'
+      state.homeV2Pane = 'home'
       state.homeV2MoreOpen = false
       void handleUserText(cmd)
     })
@@ -4924,7 +4996,7 @@ function bind(): void {
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
     state.view = 'chat'
-    state.homeV2Pane = 'thread'
+    state.homeV2Pane = 'home'
     void handleUserText(HOME_V2_MUSIC_COMMAND)
   })
   document.querySelector('[data-action="nav-sheet-close"]')?.addEventListener('click', () => {
@@ -5126,7 +5198,7 @@ function bind(): void {
         else if (inbox.friends.unread > 0) goToView('friends')
         else {
           state.view = 'chat'
-          state.homeV2Pane = 'thread'
+          state.homeV2Pane = 'home'
           render()
         }
       }
@@ -5138,7 +5210,7 @@ function bind(): void {
     state.homeV2MoreOpen = false
     if (v === 'chat') {
       state.view = 'chat'
-      state.homeV2Pane = 'thread'
+      state.homeV2Pane = 'home'
       render()
       return
     }
@@ -5151,7 +5223,7 @@ function bind(): void {
   document.querySelector('[data-action="home-v2-guide"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
     state.view = 'chat'
-    state.homeV2Pane = 'thread'
+    state.homeV2Pane = 'home'
     void handleUserText('사용설명서')
   })
   document.querySelector('[data-action="home-v2-goto-push"]')?.addEventListener('click', () => {

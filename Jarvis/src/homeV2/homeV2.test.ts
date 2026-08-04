@@ -174,11 +174,13 @@ describe('HOME v2 render', () => {
     expect(html).not.toContain('HOME v2 미리보기')
   })
 
-  it('nav has five items; menu sheet puts features under one menu', () => {
+  it('nav has one 홈 tab (no separate 대화); menu holds features', () => {
     const nav = renderHomeV2NavWithPane('chat', 'home', false)
     expect(nav).toContain('홈')
     expect(nav).toContain('메뉴')
     expect(nav).toContain('home-v2-menu-btn')
+    expect(nav).not.toContain('home-v2-nav-thread')
+    expect(nav).not.toContain('>대화<')
     expect(nav).not.toContain('>전체<')
     const more = renderHomeV2MoreSheet()
     expect(more).toContain('aria-label="메뉴"')
@@ -192,6 +194,29 @@ describe('HOME v2 render', () => {
     expect(more).toContain('data-view="invest"')
     expect(more).toContain('디자인 전환')
     expect(more).toContain('브리핑')
+  })
+
+  it('unified shell includes thread slot', () => {
+    const html = renderHomeV2Shell(
+      {
+        header: { greeting: '안녕하세요', dateLine: '8월 5일', weatherLine: null },
+        summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
+        smartCard: { kind: 'empty', title: '오늘은 예정된 일정이 없습니다', items: [], targetView: 'life' },
+        translate: { active: false, label: '번역 잠금 꺼짐' },
+        voiceState: 'idle',
+        prompt: '무엇을 도와드릴까요?',
+      },
+      {
+        draft: '',
+        busy: false,
+        listening: false,
+        appVersion: '1.16.0',
+        threadHtml: '<div class="msg-row">hi</div>',
+      },
+    )
+    expect(html).toContain('home-v2-unified')
+    expect(html).toContain('home-v2-thread')
+    expect(html).toContain('msg-row')
   })
 
   it('navigation sheet and design lab', () => {

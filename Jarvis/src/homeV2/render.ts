@@ -1,11 +1,13 @@
 /**
  * Pure HTML renderers for HOME v2 (no DOM side effects).
+ * Single unified home: dashboard strip + conversation (no separate 대화 tab).
  */
 
 import type { HomeV2Model } from './model'
 import type { HomeVariant } from './prefs'
 import { getHomeSpaceInbox } from '../spaceInbox'
 
+/** @deprecated pane split removed — kept for type compat */
 export type HomeV2Pane = 'home' | 'thread'
 
 function esc(s: string): string {
@@ -34,14 +36,22 @@ export function renderHomeV2Chrome(active: HomeVariant): string {
   `
 }
 
-export function renderHomeV2Shell(model: HomeV2Model, opts: {
-  draft: string
-  busy: boolean
-  listening: boolean
-  appVersion: string
-  /** Optional HTML above composer (e.g. music mini player) */
-  composerExtraHtml?: string
-}): string {
+export function renderHomeV2Shell(
+  model: HomeV2Model,
+  opts: {
+    draft: string
+    busy: boolean
+    listening: boolean
+    appVersion: string
+    /** Optional HTML above composer (e.g. music mini player) */
+    composerExtraHtml?: string
+    /** Chat thread HTML (messages or empty state) */
+    threadHtml?: string
+    /** AI wizard / tools above the thread */
+    aboveThreadHtml?: string
+    voiceHintHtml?: string
+  },
+): string {
   const vs = model.voiceState
   const weather = model.header.weatherLine
     ? `<span class="home-v2-weather">${esc(model.header.weatherLine)}</span>`
@@ -53,8 +63,25 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
           .join('')}</ul>`
       : `<p class="home-v2-card-empty">여유로운 하루예요</p>`
 
+  const thread =
+    opts.threadHtml != null
+      ? opts.threadHtml
+      : `<div class="home-v2-voice" data-voice-state="${escAttr(vs)}">
+          <button type="button"
+            class="home-v2-orb ${opts.listening ? 'listening' : ''} ${opts.busy ? 'busy' : ''}"
+            data-action="mic"
+            data-home-v2-orb="1"
+            aria-label="AIZIO 음성 입력"
+            aria-pressed="${opts.listening ? 'true' : 'false'}">
+            <span class="home-v2-orb-ring" aria-hidden="true"></span>
+            <span class="home-v2-orb-core">A</span>
+          </button>
+          <p class="home-v2-brand">AIZIO</p>
+          <p class="home-v2-prompt" id="voice-caption" data-home-v2-prompt="1">${esc(model.prompt)}</p>
+        </div>`
+
   return `
-    <section class="panel home-v2-panel" data-home-v2="1">
+    <section class="panel home-v2-panel home-v2-unified" data-home-v2="1">
       <header class="home-v2-header">
         <div class="home-v2-header-text">
           <h1 class="home-v2-greet">${esc(model.header.greeting)}</h1>
@@ -62,11 +89,6 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
             <span>${esc(model.header.dateLine)}</span>
             ${weather}
           </p>
-          ${
-            model.header.greeting === '안녕하세요'
-              ? '<p class="home-v2-sub">오늘도 무엇을 도와드릴까요?</p>'
-              : ''
-          }
         </div>
         <button type="button" class="ghost-btn tiny home-v2-settings" data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog">메뉴</button>
       </header>
@@ -84,34 +106,6 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
           <span class="home-v2-sum-label">새 메시지</span>
           <strong>${model.summary.unreadMessages}</strong>
         </button>
-      </div>
-
-      <div class="home-v2-voice" data-voice-state="${escAttr(vs)}">
-        <button type="button"
-          class="home-v2-orb ${opts.listening ? 'listening' : ''} ${opts.busy ? 'busy' : ''}"
-          data-action="mic"
-          data-home-v2-orb="1"
-          aria-label="AIZIO 음성 입력"
-          aria-pressed="${opts.listening ? 'true' : 'false'}">
-          <span class="home-v2-orb-ring" aria-hidden="true"></span>
-          <span class="home-v2-orb-core">A</span>
-        </button>
-        <p class="home-v2-brand">AIZIO</p>
-        <p class="home-v2-prompt" id="voice-caption" data-home-v2-prompt="1">${esc(model.prompt)}</p>
-      </div>
-
-      <div class="home-v2-composer-wrap composer-dock">
-        <button type="button" class="home-v2-translate-badge ${model.translate.active ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역 잠금">
-          ${esc(model.translate.label)} <span class="ver">v${esc(opts.appVersion)}</span>
-        </button>
-        ${opts.composerExtraHtml || ''}
-        <form class="composer chat-composer home-v2-composer" id="composer">
-          <button type="button" class="icon-btn ${opts.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${opts.listening ? 'true' : 'false'}">${opts.listening ? 'STOP' : 'MIC'}</button>
-          <input id="draft" class="home-v2-draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
-            model.translate.active ? '한국말로 입력 → 번역' : opts.listening ? '음성 인식 중…' : 'AIZIO에게 메시지…'
-          }" value="${escAttr(opts.draft)}" ${opts.busy ? 'disabled' : ''} />
-          <button class="primary-btn send-btn" type="submit" ${opts.busy ? 'disabled' : ''}>전송</button>
-        </form>
       </div>
 
       <div class="home-v2-quick" aria-label="빠른 실행">
@@ -140,13 +134,33 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
         </div>
         ${cardItems}
       </button>
+
+      ${opts.aboveThreadHtml || ''}
+
+      <div class="messages chat-thread home-v2-thread" id="chat-thread">${thread}</div>
+      ${opts.voiceHintHtml || ''}
+
+      <div class="home-v2-composer-wrap composer-dock">
+        <button type="button" class="home-v2-translate-badge ${model.translate.active ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역 잠금">
+          ${esc(model.translate.label)} <span class="ver">v${esc(opts.appVersion)}</span>
+        </button>
+        ${opts.composerExtraHtml || ''}
+        <form class="composer chat-composer home-v2-composer" id="composer">
+          <button type="button" class="icon-btn ${opts.listening ? 'listening' : ''}" data-action="mic" aria-label="음성 입력" aria-pressed="${opts.listening ? 'true' : 'false'}">${opts.listening ? 'STOP' : 'MIC'}</button>
+          <input id="draft" class="home-v2-draft" type="text" enterkeyhint="send" autocomplete="off" placeholder="${
+            model.translate.active ? '한국말로 입력 → 번역' : opts.listening ? '음성 인식 중…' : 'AIZIO에게 메시지…'
+          }" value="${escAttr(opts.draft)}" ${opts.busy ? 'disabled' : ''} />
+          <button class="primary-btn send-btn" type="submit" ${opts.busy ? 'disabled' : ''}>전송</button>
+        </form>
+      </div>
     </section>
   `
 }
 
+/** Bottom nav — single 홈 tab (no separate 대화). */
 export function renderHomeV2NavWithPane(
   activeView: string,
-  pane: 'home' | 'thread',
+  _pane: 'home' | 'thread',
   moreOpen: boolean,
 ): string {
   const inbox = getHomeSpaceInbox()
@@ -158,14 +172,7 @@ export function renderHomeV2NavWithPane(
       label: '홈',
       ico: '홈',
       attrs: 'data-action="home-v2-nav-home"',
-      active: activeView === 'chat' && pane === 'home' && !moreOpen,
-    },
-    {
-      key: 'thread',
-      label: '대화',
-      ico: '대화',
-      attrs: 'data-action="home-v2-nav-thread"',
-      active: activeView === 'chat' && pane === 'thread' && !moreOpen,
+      active: activeView === 'chat' && !moreOpen,
     },
     {
       key: 'life',
@@ -188,7 +195,6 @@ export function renderHomeV2NavWithPane(
       ico: '',
       attrs: 'data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog"',
       active: moreOpen,
-      // Family has its own tab; menu badge shows friends unread.
       badge: friendsBadge || undefined,
     },
   ]
@@ -227,7 +233,7 @@ export function renderHomeV2MoreSheet(): string {
           <strong>메뉴</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
-        <p class="hint home-v2-more-hint">하나의 앱 주소에서 메뉴로 모든 기능을 엽니다.</p>
+        <p class="hint home-v2-more-hint">하나의 홈에서 메뉴로 모든 기능을 엽니다.</p>
         <div class="home-v2-more-group">
           <h4>주요 기능</h4>
           <ul class="home-v2-more-list">
@@ -284,9 +290,9 @@ export function renderNavigationSheet(opts?: {
     ['집', 'home'],
     ['회사', 'work'],
     ['가까운 주차장', 'parking'],
-    ['가까운 주유소', 'gas'],
-    ['가까운 병원', 'hospital'],
-    ['가까운 약국', 'pharmacy'],
+    ['주유소', 'gas'],
+    ['병원', 'hospital'],
+    ['약국', 'pharmacy'],
   ]
   const maps: Array<[string, string]> = [
     ['카카오맵', 'kakao'],
@@ -357,21 +363,21 @@ export function renderDesignLabSection(opts: {
 }): string {
   if (!opts.visible) return ''
   return `
-    <details class="device-test-panel home-v2-lab" open data-home-v2-lab="1">
+    <details class="device-test-panel" data-home-design-lab="1">
       <summary><strong>홈 화면 · 디자인 전환</strong></summary>
-      <p class="hint">기본 홈은 HOME v2입니다. 기존 홈은 복구용으로 유지됩니다. 쿼리: <code>?home=v2</code> / <code>?home=legacy</code></p>
+      <p class="hint">기본은 HOME v2입니다. 기존 홈은 복구용으로 남겨 두었습니다.</p>
       <div class="row-btns">
-        <button type="button" class="primary-btn" data-action="home-v2-set" data-home-variant="legacy">기존 홈 보기</button>
-        <button type="button" class="primary-btn" data-action="home-v2-set" data-home-variant="v2">HOME v2 보기</button>
+        <button type="button" class="ghost-btn ${opts.active === 'v2' ? 'active' : ''}" data-action="home-v2-set" data-home-variant="v2">HOME v2 보기</button>
+        <button type="button" class="ghost-btn ${opts.active === 'legacy' ? 'active' : ''}" data-action="home-v2-set" data-home-variant="legacy">기존 홈 보기</button>
       </div>
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="legacy">실행 시 기본: 기존</button>
-        <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="v2">실행 시 기본: v2</button>
+        <button type="button" class="ghost-btn" data-action="home-v2-boot" data-home-boot="v2">실행 시 기본: v2</button>
+        <button type="button" class="ghost-btn" data-action="home-v2-boot" data-home-boot="legacy">실행 시 기본: 기존</button>
+      </div>
+      <p class="hint">현재: ${opts.active === 'v2' ? 'HOME v2' : '기존 홈'} · 부트 기본: ${opts.bootDefault === 'v2' ? 'v2' : '기존'}</p>
+      <div class="row-btns">
         <button type="button" class="ghost-btn danger-btn" data-action="home-v2-reset-prefs">홈 화면 설정 초기화</button>
       </div>
-      <p class="hint">현재 화면: <strong>${opts.active === 'v2' ? 'HOME v2' : '기존 홈'}</strong> · 부트 기본: <strong>${
-        opts.bootDefault === 'v2' ? 'HOME v2' : '기존 홈'
-      }</strong></p>
     </details>
   `
 }

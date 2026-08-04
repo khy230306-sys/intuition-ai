@@ -2,27 +2,30 @@ import { useMemo, useState } from 'react'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CHAR_IMG, CharImg, CAR_IMGS } from '../components/GameArt'
 import { useRound } from './useRound'
 import { shuffle } from '../data/colors'
 
-type Item = { id: string; emoji: string; x: number; y: number; isCar: boolean; found?: boolean }
+type Item = { id: string; src: string; x: number; y: number; isCar: boolean; found?: boolean }
 
-const CARS = ['🚗', '🚕', '🚌', '🚓', '🚒', '🚑', '🚙']
-const DECOYS = ['🌳', '🏠', '☁️', '🌻', '🐶', '⭐', '🎈', '🍎']
+const DECOYS = [CHAR_IMG.star, CHAR_IMG.paint, CHAR_IMG.sand, CHAR_IMG.drum]
 
 function makeScene(): Item[] {
-  const cars = shuffle(CARS).slice(0, 4).map((emoji, i) => ({
-    id: `c${i}`,
-    emoji,
-    x: 12 + Math.random() * 70,
-    y: 15 + Math.random() * 60,
-    isCar: true,
-  }))
+  const cars = shuffle([...CAR_IMGS])
+    .slice(0, 4)
+    .map((src, i) => ({
+      id: `c${i}`,
+      src,
+      x: 12 + Math.random() * 70,
+      y: 15 + Math.random() * 60,
+      isCar: true,
+    }))
   const decoys = shuffle(DECOYS)
+    .concat(shuffle(DECOYS))
     .slice(0, 8)
-    .map((emoji, i) => ({
+    .map((src, i) => ({
       id: `d${i}`,
-      emoji,
+      src,
       x: 8 + Math.random() * 78,
       y: 10 + Math.random() * 68,
       isCar: false,
@@ -70,7 +73,7 @@ export function HiddenCars() {
             style={{ left: `${item.x}%`, top: `${item.y}%` }}
             onClick={() => tap(item)}
           >
-            {item.emoji}
+            <CharImg src={item.src} size={48} />
           </button>
         ))}
       </div>

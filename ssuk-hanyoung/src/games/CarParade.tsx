@@ -3,8 +3,8 @@ import { PLAY_COLORS, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CharImg, carImg } from '../components/GameArt'
 import { useRound } from './useRound'
-import { CAR_EMOJIS } from '../data/vehicles'
 
 function setup() {
   const colors = shuffle(PLAY_COLORS).slice(0, 4)
@@ -12,7 +12,7 @@ function setup() {
     id: `t-${c.id}`,
     colorId: c.id,
     hex: c.hex,
-    emoji: CAR_EMOJIS[i % CAR_EMOJIS.length]!,
+    src: carImg(i),
     ko: c.ko,
   }))
   const cars = shuffle(order.map((c) => ({ ...c, id: `c-${c.colorId}` })))
@@ -75,7 +75,7 @@ export function CarParade() {
                 style={{ background: `${slot.hex}55`, borderColor: slot.hex }}
                 onClick={() => put(i)}
               >
-                {car ? <span style={{ fontSize: '2rem' }}>{car.emoji}</span> : <span>{slot.ko}</span>}
+                {car ? <CharImg src={car.src} size={64} /> : <span>{slot.ko}</span>}
               </button>
             )
           })}
@@ -85,14 +85,14 @@ export function CarParade() {
             <button
               key={c.id}
               type="button"
-              className={`car-chip${selected === c.id ? ' selected' : ''}`}
-              style={{ background: c.hex, minWidth: '4.8rem' }}
+              className={`car-chip photo${selected === c.id ? ' selected' : ''}`}
+              style={{ background: c.hex, minWidth: '5.2rem' }}
               onClick={() => {
                 setSelected(c.id)
                 speak('어디에 세울까요?')
               }}
             >
-              <span className="emoji">{c.emoji}</span>
+              <CharImg src={c.src} size={56} />
             </button>
           ))}
         </div>

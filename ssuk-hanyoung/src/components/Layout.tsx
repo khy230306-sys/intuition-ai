@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { getProfile, useProfileSubscribe } from '../lib/store'
 import { unlockSpeech } from '../lib/speech'
-import { CartoonArt } from './CartoonArt'
+import { CHAR_IMG, CharImg } from './GameArt'
 
 const NAV = [
-  { to: '/', label: '홈', art: 'bus' as const, color: '#FFD400', end: true },
-  { to: '/games', label: '게임', art: 'car' as const, color: '#FF2D55' },
-  { to: '/explore', label: '탐험', art: 'star' as const, color: '#2F6BFF' },
-  { to: '/parents', label: '부모님', art: 'house' as const, color: '#22C55E' },
+  { to: '/', label: '홈', src: CHAR_IMG.bus, end: true },
+  { to: '/games', label: '게임', src: CHAR_IMG.car },
+  { to: '/explore', label: '탐험', src: CHAR_IMG.star },
+  { to: '/parents', label: '부모님', src: CHAR_IMG.ambulance },
 ]
 
 export function Layout() {
@@ -30,13 +30,13 @@ export function Layout() {
     <div className="app-shell" onPointerDown={() => unlockSpeech()}>
       <header className="topbar">
         <Link to="/" className="brand" aria-label="쑥쑥놀이터 홈">
-          <span className="brand-badge">
-            <CartoonArt kind="bus" color="#FFD400" size={40} />
+          <span className="brand-badge photo">
+            <CharImg src={CHAR_IMG.bus} size={44} />
           </span>
           <span className="brand-name">쑥쑥놀이터</span>
         </Link>
         <div className="star-chip" aria-label={`별 ${stars}개`}>
-          <span aria-hidden>⭐</span>
+          <CharImg src={CHAR_IMG.star} size={22} />
           <span>{stars}</span>
         </div>
       </header>
@@ -53,8 +53,8 @@ export function Layout() {
                 end={n.end}
                 className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
               >
-                <span className="ico art" aria-hidden>
-                  <CartoonArt kind={n.art} color={n.color} size={28} />
+                <span className="ico photo" aria-hidden>
+                  <CharImg src={n.src} size={30} />
                 </span>
                 {n.label}
               </NavLink>

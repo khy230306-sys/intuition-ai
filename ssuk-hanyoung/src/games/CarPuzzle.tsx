@@ -3,15 +3,16 @@ import { shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 import { useRound } from './useRound'
 
 type Piece = { id: number; label: string; placed: boolean }
 
 const SETS = [
-  { title: '소방차', emoji: '🚒', parts: ['앞', '몸통', '바퀴'] },
-  { title: '버스', emoji: '🚌', parts: ['앞', '창문', '바퀴'] },
-  { title: '경찰차', emoji: '🚓', parts: ['경광등', '몸통', '바퀴'] },
-  { title: '기차', emoji: '🚂', parts: ['기관차', '칸', '바퀴'] },
+  { title: '소방차', src: CHAR_IMG.fire, parts: ['앞', '몸통', '바퀴'] },
+  { title: '버스', src: CHAR_IMG.bus, parts: ['앞', '창문', '바퀴'] },
+  { title: '경찰차', src: CHAR_IMG.police, parts: ['경광등', '몸통', '바퀴'] },
+  { title: '덤프트럭', src: CHAR_IMG.dump, parts: ['앞', '짐칸', '바퀴'] },
 ]
 
 export function CarPuzzle() {
@@ -56,8 +57,9 @@ export function CarPuzzle() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big">
-          {set.emoji} {set.title} 만들기
+        <div className="prompt-big" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <CharImg src={set.src} size={56} />
+          <span>{set.title} 만들기</span>
         </div>
       </div>
       <div className="play-area">
@@ -65,7 +67,7 @@ export function CarPuzzle() {
           {set.parts.map((label, i) => (
             <button key={label} type="button" className="slot" onClick={() => place(i)}>
               {slots[i] != null ? (
-                <span style={{ fontSize: '1.8rem' }}>{set.emoji}</span>
+                <CharImg src={set.src} size={58} />
               ) : (
                 <span>
                   {i + 1}. {label}

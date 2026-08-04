@@ -4,31 +4,22 @@ import { speak } from '../lib/speech'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { CartoonArt, type ArtKind } from '../components/CartoonArt'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 
-type Subject = {
-  id: ArtKind
-  ko: string
-  kind: 'car' | 'fun'
-}
+type Subject = { id: string; ko: string; src: string }
 
 const SUBJECTS: Subject[] = [
-  { id: 'car', ko: '자동차', kind: 'car' },
-  { id: 'bus', ko: '버스', kind: 'car' },
-  { id: 'fire', ko: '소방차', kind: 'car' },
-  { id: 'police', ko: '경찰차', kind: 'car' },
-  { id: 'ambulance', ko: '구급차', kind: 'car' },
-  { id: 'truck', ko: '트럭', kind: 'car' },
-  { id: 'train', ko: '기차', kind: 'car' },
-  { id: 'plane', ko: '비행기', kind: 'fun' },
-  { id: 'house', ko: '집', kind: 'fun' },
-  { id: 'cat', ko: '고양이', kind: 'fun' },
-  { id: 'dog', ko: '강아지', kind: 'fun' },
-  { id: 'flower', ko: '꽃', kind: 'fun' },
-  { id: 'star', ko: '별', kind: 'fun' },
-  { id: 'rocket', ko: '로켓', kind: 'fun' },
-  { id: 'fish', ko: '물고기', kind: 'fun' },
-  { id: 'dinosaur', ko: '공룡', kind: 'fun' },
+  { id: 'car', ko: '자동차', src: CHAR_IMG.car },
+  { id: 'bus', ko: '버스', src: CHAR_IMG.bus },
+  { id: 'fire', ko: '소방차', src: CHAR_IMG.fire },
+  { id: 'police', ko: '경찰차', src: CHAR_IMG.police },
+  { id: 'ambulance', ko: '구급차', src: CHAR_IMG.ambulance },
+  { id: 'truck', ko: '트럭', src: CHAR_IMG.dump },
+  { id: 'tractor', ko: '트랙터', src: CHAR_IMG.tractor },
+  { id: 'paint', ko: '팔레트', src: CHAR_IMG.paint },
+  { id: 'sand', ko: '모래성', src: CHAR_IMG.sand },
+  { id: 'star', ko: '별', src: CHAR_IMG.star },
+  { id: 'drum', ko: '북', src: CHAR_IMG.drum },
 ]
 
 export function ColorBook() {
@@ -40,7 +31,7 @@ export function ColorBook() {
 
   function pickSubject(s: Subject) {
     setSubject(s)
-    speak(`${s.ko}를 색칠해 보아요`)
+    speak(`${s.ko}를 골라 보아요`)
   }
 
   function paint(c: (typeof PLAY_COLORS)[number]) {
@@ -60,14 +51,14 @@ export function ColorBook() {
   }
 
   return (
-    <GameShell title="색칠놀이" subtitle="원하는 그림을 골라 색칠해요">
+    <GameShell title="색칠놀이" subtitle="캐릭터를 고르고 색깔 무대를 바꿔요">
       <Confetti show={confetti} />
       {toast && <div className="toast">{toast}</div>}
       <div className="prompt">
         <div className="prompt-big">
           {color.ko} {subject.ko}
         </div>
-        <div className="prompt-sub">위 그림을 고르고, 아래 색깔을 눌러요</div>
+        <div className="prompt-sub">아래 색깔을 누르면 무대가 바뀌어요</div>
       </div>
       <div className="play-area">
         <div className="subject-row">
@@ -75,17 +66,26 @@ export function ColorBook() {
             <button
               key={s.id}
               type="button"
-              className={`subject-chip art${subject.id === s.id ? ' on' : ''}`}
+              className={`subject-chip photo${subject.id === s.id ? ' on' : ''}`}
               onClick={() => pickSubject(s)}
             >
-              <CartoonArt kind={s.id} color={subject.id === s.id ? color.hex : '#FFD400'} size={44} />
+              <CharImg src={s.src} size={48} />
               <span>{s.ko}</span>
             </button>
           ))}
         </div>
 
-        <div className="color-stage bold" style={{ background: `linear-gradient(180deg, ${color.hex}55, #fff8e7)` }}>
-          <CartoonArt kind={subject.id} color={color.hex} size={200} className="stage-art" />
+        <div
+          className="color-stage photo-stage"
+          style={{
+            background: `radial-gradient(circle at 50% 70%, #fff 0 26%, ${color.hex} 27% 100%)`,
+            boxShadow: `0 0 0 6px ${color.hex}`,
+          }}
+        >
+          <CharImg src={subject.src} size={210} className="stage-photo" />
+          <div className="color-ribbon" style={{ background: color.hex }}>
+            {color.ko}
+          </div>
         </div>
 
         <div className="grid-3" style={{ marginTop: '0.9rem' }}>
@@ -94,24 +94,13 @@ export function ColorBook() {
               key={c.id}
               type="button"
               className={`swatch bold${c.id === color.id ? ' on' : ''}`}
-              style={{
-                background: c.hex,
-                color: c.id === 'yellow' ? '#1a1510' : '#fff',
-              }}
+              style={{ background: c.hex, color: c.id === 'yellow' ? '#1a1510' : '#fff' }}
               onClick={() => paint(c)}
             >
               {c.ko.replace('색', '')}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="btn btn-sky btn-block"
-          style={{ marginTop: '0.8rem' }}
-          onClick={() => speak(`이 ${subject.ko}는 ${color.ko}이에요`)}
-        >
-          말하기 🔊
-        </button>
       </div>
     </GameShell>
   )

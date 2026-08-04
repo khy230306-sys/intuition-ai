@@ -20,19 +20,20 @@ const DEFAULT: Profile = {
   missionsDone: [],
 }
 
+const C = '/assets/chars'
 export const STICKERS = [
-  { id: 'bus', emoji: '🚌', ko: '버스' },
-  { id: 'police', emoji: '🚓', ko: '경찰차' },
-  { id: 'fire', emoji: '🚒', ko: '소방차' },
-  { id: 'ambulance', emoji: '🚑', ko: '구급차' },
-  { id: 'sports', emoji: '🏎️', ko: '스포츠카' },
-  { id: 'truck', emoji: '🚚', ko: '트럭' },
-  { id: 'train', emoji: '🚂', ko: '기차' },
-  { id: 'plane', emoji: '✈️', ko: '비행기' },
-  { id: 'star', emoji: '⭐', ko: '별' },
-  { id: 'rainbow', emoji: '🌈', ko: '무지개' },
-  { id: 'trophy', emoji: '🏆', ko: '트로피' },
-  { id: 'heart', emoji: '❤️', ko: '하트' },
+  { id: 'bus', src: `${C}/bus.png`, ko: '버스' },
+  { id: 'police', src: `${C}/police.png`, ko: '경찰차' },
+  { id: 'fire', src: `${C}/fire.png`, ko: '소방차' },
+  { id: 'ambulance', src: `${C}/ambulance.png`, ko: '구급차' },
+  { id: 'sports', src: `${C}/car.png`, ko: '스포츠카' },
+  { id: 'truck', src: `${C}/dump.png`, ko: '트럭' },
+  { id: 'train', src: `${C}/tractor.png`, ko: '기차' },
+  { id: 'plane', src: `${C}/char-star.png`, ko: '비행기' },
+  { id: 'star', src: `${C}/char-star.png`, ko: '별' },
+  { id: 'rainbow', src: `${C}/char-paint.png`, ko: '무지개' },
+  { id: 'trophy', src: `${C}/char-drum.png`, ko: '트로피' },
+  { id: 'heart', src: `${C}/char-sand.png`, ko: '하트' },
 ]
 
 function todayKey() {

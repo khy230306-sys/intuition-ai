@@ -1,39 +1,93 @@
-import { CartoonArt } from '../components/CartoonArt'
+const CHAR = '/assets/chars'
 
-/** Map game ids to bold cartoon art for cards */
-export function GameArt({ id, size = 64 }: { id: string; size?: number }) {
-  const map: Record<string, { kind: string; color: string }> = {
-    'sound-board': { kind: 'police', color: '#2F6BFF' },
-    'story-tap': { kind: 'bus', color: '#FFD400' },
-    'car-parade': { kind: 'car', color: '#FF2D55' },
-    'car-puzzle': { kind: 'fire', color: '#FF2D55' },
-    'sticker-book': { kind: 'star', color: '#FFD400' },
-    'color-follow': { kind: 'car', color: '#8B5CF6' },
-    'maze-drive': { kind: 'car', color: '#22C55E' },
-    'hidden-cars': { kind: 'truck', color: '#FF7A00' },
-    'wait-go': { kind: 'car', color: '#22C55E' },
-    'rhythm-tap': { kind: 'star', color: '#FF5DA2' },
-    'car-paint': { kind: 'car', color: '#FF2D55' },
-    'sand-play': { kind: 'truck', color: '#FFD400' },
-    'bubble-pop': { kind: 'fish', color: '#38BDF8' },
-    'stamp-pad': { kind: 'dog', color: '#B86B3C' },
-    'finger-paint': { kind: 'flower', color: '#FF5DA2' },
-    'pop-it': { kind: 'star', color: '#8B5CF6' },
-    'shape-touch': { kind: 'star', color: '#2F6BFF' },
-    'color-garage': { kind: 'house', color: '#FF2D55' },
-    'vroom-race': { kind: 'car', color: '#2F6BFF' },
-    parking: { kind: 'car', color: '#22C55E' },
-    'car-builder': { kind: 'truck', color: '#FF7A00' },
-    'find-color-car': { kind: 'car', color: '#FF2D55' },
-    'color-mix': { kind: 'flower', color: '#8B5CF6' },
-    'car-memory': { kind: 'bus', color: '#FFD400' },
-    'car-sounds': { kind: 'ambulance', color: '#FFF8E7' },
-    'traffic-light': { kind: 'car', color: '#22C55E' },
-    'car-wash': { kind: 'car', color: '#38BDF8' },
-    balloons: { kind: 'star', color: '#FF5DA2' },
-    'bus-count': { kind: 'bus', color: '#FFD400' },
-    'color-quiz': { kind: 'flower', color: '#FF2D55' },
+/** High-quality illustrated characters (not flat emoji SVGs) */
+export const CHAR_IMG = {
+  bus: `${CHAR}/bus.png`,
+  busFront: `${CHAR}/bus-front.png`,
+  car: `${CHAR}/car.png`,
+  fire: `${CHAR}/fire.png`,
+  police: `${CHAR}/police.png`,
+  ambulance: `${CHAR}/ambulance.png`,
+  dump: `${CHAR}/dump.png`,
+  tractor: `${CHAR}/tractor.png`,
+  star: `${CHAR}/char-star.png`,
+  paint: `${CHAR}/char-paint.png`,
+  sand: `${CHAR}/char-sand.png`,
+  drum: `${CHAR}/char-drum.png`,
+} as const
+
+/** Rotate through distinct vehicle characters (no emoji) */
+export const CAR_IMGS = [
+  CHAR_IMG.car,
+  CHAR_IMG.police,
+  CHAR_IMG.fire,
+  CHAR_IMG.ambulance,
+  CHAR_IMG.bus,
+  CHAR_IMG.dump,
+  CHAR_IMG.tractor,
+  CHAR_IMG.busFront,
+] as const
+
+export function carImg(index: number): string {
+  return CAR_IMGS[index % CAR_IMGS.length]!
+}
+
+export function CharImg({
+  src,
+  alt = '',
+  size = 88,
+  className,
+}: {
+  src: string
+  alt?: string
+  size?: number
+  className?: string
+}) {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`char-img${className ? ` ${className}` : ''}`}
+      draggable={false}
+    />
+  )
+}
+
+/** Game card art: always use illustrated PNGs */
+export function GameArt({ id, size = 92 }: { id: string; size?: number }) {
+  const map: Record<string, string> = {
+    'sound-board': CHAR_IMG.police,
+    'story-tap': CHAR_IMG.bus,
+    'car-parade': CHAR_IMG.car,
+    'car-puzzle': CHAR_IMG.fire,
+    'sticker-book': CHAR_IMG.star,
+    'color-follow': CHAR_IMG.paint,
+    'maze-drive': CHAR_IMG.tractor,
+    'hidden-cars': CHAR_IMG.dump,
+    'wait-go': CHAR_IMG.car,
+    'rhythm-tap': CHAR_IMG.drum,
+    'car-paint': CHAR_IMG.paint,
+    'sand-play': CHAR_IMG.sand,
+    'bubble-pop': CHAR_IMG.star,
+    'stamp-pad': CHAR_IMG.paint,
+    'finger-paint': CHAR_IMG.paint,
+    'pop-it': CHAR_IMG.star,
+    'shape-touch': CHAR_IMG.star,
+    'color-garage': CHAR_IMG.bus,
+    'vroom-race': CHAR_IMG.car,
+    parking: CHAR_IMG.police,
+    'car-builder': CHAR_IMG.dump,
+    'find-color-car': CHAR_IMG.fire,
+    'color-mix': CHAR_IMG.paint,
+    'car-memory': CHAR_IMG.busFront,
+    'car-sounds': CHAR_IMG.ambulance,
+    'traffic-light': CHAR_IMG.car,
+    'car-wash': CHAR_IMG.ambulance,
+    balloons: CHAR_IMG.star,
+    'bus-count': CHAR_IMG.bus,
+    'color-quiz': CHAR_IMG.paint,
   }
-  const m = map[id] || { kind: 'car', color: '#FF2D55' }
-  return <CartoonArt kind={m.kind} color={m.color} size={size} />
+  return <CharImg src={map[id] || CHAR_IMG.car} size={size} />
 }

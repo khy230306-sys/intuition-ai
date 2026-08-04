@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { PLAY_COLORS, pick, shuffle } from '../data/colors'
-import { CAR_EMOJIS } from '../data/vehicles'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CharImg, carImg } from '../components/GameArt'
 import { useRound } from './useRound'
 
-type Item = { id: string; colorId: string; hex: string; emoji: string; found?: boolean }
+type Item = { id: string; colorId: string; hex: string; src: string; found?: boolean }
 
 function makeBoard(targetId: string): Item[] {
   const target = PLAY_COLORS.find((c) => c.id === targetId)!
@@ -16,13 +16,13 @@ function makeBoard(targetId: string): Item[] {
       id: `t-${i}`,
       colorId: target.id,
       hex: target.hex,
-      emoji: CAR_EMOJIS[i % CAR_EMOJIS.length]!,
+      src: carImg(i),
     })),
     ...others.map((c, i) => ({
       id: `o-${i}`,
       colorId: c.id,
       hex: c.hex,
-      emoji: CAR_EMOJIS[(i + 3) % CAR_EMOJIS.length]!,
+      src: carImg(i + 3),
     })),
   ]
   return shuffle(items)
@@ -75,11 +75,11 @@ export function FindColorCar() {
             <button
               key={item.id}
               type="button"
-              className={`car-chip${item.found ? ' done' : ''}`}
+              className={`car-chip photo${item.found ? ' done' : ''}`}
               style={{ background: item.hex }}
               onClick={() => tap(item)}
             >
-              <span className="emoji">{item.emoji}</span>
+              <CharImg src={item.src} size={58} />
             </button>
           ))}
         </div>

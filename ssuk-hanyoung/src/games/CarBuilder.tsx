@@ -3,13 +3,14 @@ import { PLAY_COLORS, pick } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 import { useRound } from './useRound'
 
 const BODIES = [
-  { id: 'sedan', label: '승용차', emoji: '🚗' },
-  { id: 'bus', label: '버스', emoji: '🚌' },
-  { id: 'truck', label: '트럭', emoji: '🚚' },
-  { id: 'police', label: '경찰차', emoji: '🚓' },
+  { id: 'sedan', label: '승용차', src: CHAR_IMG.car },
+  { id: 'bus', label: '버스', src: CHAR_IMG.bus },
+  { id: 'truck', label: '트럭', src: CHAR_IMG.dump },
+  { id: 'police', label: '경찰차', src: CHAR_IMG.police },
 ]
 
 export function CarBuilder() {
@@ -47,21 +48,17 @@ export function CarBuilder() {
           {target.color.ko} {target.body.label}를 만들어요
         </div>
         <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(`${target.color.ko} ${target.body.label}`)}>
-          다시 듣기 🔊
+          다시 듣기
         </button>
       </div>
       <div className="play-area">
         <div
           className="paint-car"
-          style={{ background: 'linear-gradient(#dbeafe,#fff)' }}
+          style={{ background: color ? `${color.hex}55` : 'linear-gradient(#dbeafe,#fff)' }}
           aria-label="조립 중인 자동차"
         >
-          <div className="cabin" />
-          <div className="body" style={{ background: color?.hex || '#ddd' }} />
-          <div className="wheel l" />
-          <div className="wheel r" />
-          <div style={{ position: 'absolute', inset: 0, placeItems: 'center', fontSize: '3rem', display: 'grid' }}>
-            {body?.emoji || '❓'}
+          <div style={{ display: 'grid', placeItems: 'center', minHeight: '8rem' }}>
+            {body ? <CharImg src={body.src} size={120} /> : <CharImg src={CHAR_IMG.star} size={72} />}
           </div>
         </div>
         <h3 className="section-title" style={{ marginTop: '0.8rem' }}>
@@ -72,7 +69,7 @@ export function CarBuilder() {
             <button
               key={b.id}
               type="button"
-              className="part"
+              className="part photo"
               style={{ outline: body?.id === b.id ? '3px solid var(--sunny)' : undefined }}
               onClick={() => {
                 setBody(b)
@@ -80,7 +77,8 @@ export function CarBuilder() {
                 check(b, color)
               }}
             >
-              {b.emoji} {b.label}
+              <CharImg src={b.src} size={44} />
+              <span>{b.label}</span>
             </button>
           ))}
         </div>
@@ -90,19 +88,24 @@ export function CarBuilder() {
             <button
               key={c.id}
               type="button"
-              className="swatch"
-              style={{ background: c.hex, outline: color?.id === c.id ? '4px solid #1a1510' : undefined }}
+              className="color-swatch"
+              style={{
+                background: c.hex,
+                outline: color?.id === c.id ? '3px solid var(--sunny)' : undefined,
+              }}
               onClick={() => {
                 setColor(c)
                 speak(c.ko)
                 check(body, c)
               }}
-            />
+            >
+              {c.ko}
+            </button>
           ))}
         </div>
         {round.done && (
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.8rem' }} onClick={round.reset}>
-            또 만들어요!
+            또 조립!
           </button>
         )}
       </div>

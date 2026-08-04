@@ -4,9 +4,9 @@ import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
-import { CartoonArt } from '../components/CartoonArt'
+import { CharImg, carImg } from '../components/GameArt'
 
-type Car = { id: string; colorId: string; hex: string }
+type Car = { id: string; colorId: string; hex: string; src: string }
 
 function makeCars(colorIds: string[]): Car[] {
   return shuffle(
@@ -16,6 +16,7 @@ function makeCars(colorIds: string[]): Car[] {
         id: `${cid}-${i}-${j}-${Math.random().toString(36).slice(2, 6)}`,
         colorId: cid,
         hex: c.hex,
+        src: carImg(i * 2 + j),
       }))
     }),
   )
@@ -66,9 +67,6 @@ export function ColorGarage() {
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
         <div className="prompt-big">{selected ? '같은 색 차고를 눌러요!' : '자동차를 먼저 눌러요!'}</div>
-        <div className="prompt-sub">
-          {round.score}/{round.total} 라운드
-        </div>
       </div>
       <div className="play-area">
         <div className="grid-3" style={{ marginBottom: '0.8rem' }}>
@@ -76,14 +74,14 @@ export function ColorGarage() {
             <button
               key={car.id}
               type="button"
-              className={`car-chip art${selected === car.id ? ' selected' : ''}`}
-              style={{ background: `${car.hex}33` }}
+              className={`car-chip photo${selected === car.id ? ' selected' : ''}`}
+              style={{ background: `${car.hex}33`, boxShadow: `0 0 0 4px ${car.hex}` }}
               onClick={() => {
                 setSelected(car.id)
                 speak('이 자동차를 어디로 넣을까요?')
               }}
             >
-              <CartoonArt kind="car" color={car.hex} size={72} />
+              <CharImg src={car.src} size={78} />
             </button>
           ))}
         </div>
@@ -94,7 +92,7 @@ export function ColorGarage() {
               <div className={`garage${garages[g.id]!.length ? ' ok' : ''}`} style={{ background: `${g.hex}55`, borderColor: g.hex }}>
                 {garages[g.id]!.map((id) => {
                   const car = cars.find((c) => c.id === id)!
-                  return <CartoonArt key={id} kind="car" color={car.hex} size={36} />
+                  return <CharImg key={id} src={car.src} size={40} />
                 })}
                 {!garages[g.id]!.length && <span style={{ color: 'var(--muted)' }}>비어 있어요</span>}
               </div>

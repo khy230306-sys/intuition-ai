@@ -1229,18 +1229,120 @@ img {
   background: #fff3c4;
 }
 
-/* Bold cartoon art system */
+/* Illustrated photo characters (not flat emoji SVGs) */
+.char-img {
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .art-card {
   text-align: center;
-  padding: 1rem 0.75rem 1.05rem;
+  padding: 0.85rem 0.7rem 1rem;
+}
+
+.photo-card {
+  overflow: hidden;
 }
 
 .art-wrap {
   display: grid;
   place-items: center;
   min-height: 5.2rem;
-  margin-bottom: 0.25rem;
-  filter: drop-shadow(2px 3px 0 rgba(26, 21, 16, 0.18));
+  margin-bottom: 0.2rem;
+}
+
+.art-wrap.photo {
+  min-height: 8.4rem;
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 50% 72%, #fff 0 38%, transparent 39%),
+    linear-gradient(165deg, #fff4c4 0%, #ffd56a 52%, #ffb85c 100%);
+  border: 3px solid #1a1510;
+  margin: 0 0 0.55rem;
+  padding: 0.45rem 0.3rem 0.25rem;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.06);
+}
+
+.art-wrap.photo .char-img {
+  width: min(132px, 38vw) !important;
+  height: min(132px, 38vw) !important;
+  filter: drop-shadow(0 8px 10px rgba(26, 21, 16, 0.18));
+  animation: char-bob 2.8s ease-in-out infinite;
+}
+
+@keyframes char-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.sound-btn.photo-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.55rem 0.35rem 0.65rem;
+}
+
+.sound-btn.photo-btn .char-img {
+  filter: drop-shadow(0 4px 0 rgba(26, 21, 16, 0.12));
+}
+
+.car-chip.photo .char-img {
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.12));
+}
+
+.brand-badge.photo,
+.nav-item .ico.photo {
+  background: #fff7cc;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.subject-chip.photo {
+  padding: 0.3rem 0.7rem 0.3rem 0.3rem;
+}
+
+.car-chip.photo,
+.follow-pad.photo {
+  background: #fff;
+  border-width: 4px;
+  min-height: 7rem;
+}
+
+.color-stage.photo-stage {
+  min-height: 16rem;
+  border-width: 4px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stage-photo {
+  animation: float-y 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 10px 0 rgba(26, 21, 16, 0.12));
+}
+
+.color-ribbon {
+  position: absolute;
+  left: 50%;
+  bottom: 0.7rem;
+  transform: translateX(-50%);
+  border: 3px solid #1a1510;
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-family: var(--font-display);
+  color: #fff;
+  text-shadow: 1px 1px 0 #0005;
 }
 
 .toy-btn {

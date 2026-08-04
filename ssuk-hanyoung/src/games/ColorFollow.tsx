@@ -4,7 +4,7 @@ import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
-import { CartoonArt } from '../components/CartoonArt'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 
 const COLORS = PLAY_COLORS.slice(0, 4)
 
@@ -66,8 +66,7 @@ export function ColorFollow() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big">{phase === 'watch' ? '👀 잘 보세요' : '👆 따라 눌러요'}</div>
-        <div className="prompt-sub">길이 {seq.length} · 집중 놀이</div>
+        <div className="prompt-big">{phase === 'watch' ? '잘 보세요' : '따라 눌러요'}</div>
       </div>
       <div className="play-area">
         <div className="grid-2">
@@ -75,12 +74,12 @@ export function ColorFollow() {
             <button
               key={c.id}
               type="button"
-              className={`follow-pad art${flash === c.id ? ' lit' : ''}`}
-              style={{ background: `${c.hex}33` }}
+              className={`follow-pad photo${flash === c.id ? ' lit' : ''}`}
+              style={{ background: `${c.hex}33`, boxShadow: flash === c.id ? `0 0 0 6px ${c.hex}` : undefined }}
               onClick={() => tap(c.id)}
               disabled={phase !== 'play'}
             >
-              <CartoonArt kind="car" color={c.hex} size={78} />
+              <CharImg src={CHAR_IMG.car} size={88} />
               <span className="toy-label">{c.ko.replace('색', '')}</span>
             </button>
           ))}

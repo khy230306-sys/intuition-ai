@@ -4,7 +4,7 @@ import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
-import { CartoonArt } from '../components/CartoonArt'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 
 type Racer = { id: string; colorId: string; hex: string; left: number }
 
@@ -55,7 +55,6 @@ export function VroomRace() {
         <div className="prompt-big" style={{ color: target.hex }}>
           {target.ko} 자동차!
         </div>
-        <div className="prompt-sub">같은 색을 찾아 출발시켜요</div>
       </div>
       <div className="play-area">
         <div className="grid-2">
@@ -63,27 +62,22 @@ export function VroomRace() {
             <button
               key={r.id}
               type="button"
-              className={`car-chip art${wrong === r.id ? ' wrong' : ''}`}
-              style={{ background: `${r.hex}44` }}
+              className={`car-chip photo${wrong === r.id ? ' wrong' : ''}`}
+              style={{ background: `${r.hex}33`, boxShadow: `0 0 0 5px ${r.hex}` }}
               onClick={() => tap(r)}
             >
-              <CartoonArt kind="car" color={r.hex} size={86} />
+              <CharImg src={CHAR_IMG.car} size={96} />
             </button>
           ))}
         </div>
         <div className="road" aria-hidden>
           {racers.map((r, i) => (
-            <span key={r.id} className="racer art" style={{ left: `${r.left}%`, bottom: `${0.2 + i * 1.55}rem` }}>
-              <CartoonArt kind="car" color={r.hex} size={42} />
+            <span key={r.id} className="racer photo" style={{ left: `${r.left}%`, bottom: `${0.15 + i * 1.5}rem` }}>
+              <CharImg src={CHAR_IMG.car} size={48} />
             </span>
           ))}
         </div>
-        <button
-          type="button"
-          className="btn btn-ghost btn-block"
-          style={{ marginTop: '0.75rem' }}
-          onClick={() => speak(`${target.ko} 자동차를 탭해요!`)}
-        >
+        <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: '0.75rem' }} onClick={() => speak(`${target.ko} 자동차를 탭해요!`)}>
           다시 듣기 🔊
         </button>
         {round.done && (

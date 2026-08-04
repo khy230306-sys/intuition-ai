@@ -1,21 +1,22 @@
+import { useRef, useState } from 'react'
 import { speak } from '../lib/speech'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
-import { useRef, useState } from 'react'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 
 const SOUNDS = [
-  { id: 'horn', emoji: '🚗', ko: '빵빵', say: '빵빵!' },
-  { id: 'vroom', emoji: '🏎️', ko: '부릉', say: '부릉부릉!' },
-  { id: 'siren', emoji: '🚓', ko: '삐뽀', say: '삐뽀삐뽀!' },
-  { id: 'fire', emoji: '🚒', ko: '위잉', say: '위이잉!' },
-  { id: 'bus', emoji: '🚌', ko: '버스', say: '버스가 출발해요!' },
-  { id: 'train', emoji: '🚂', ko: '기차', say: '울릉울릉!' },
-  { id: 'plane', emoji: '✈️', ko: '비행기', say: '슈우웅!' },
-  { id: 'bike', emoji: '🚲', ko: '따르릉', say: '따르릉!' },
-  { id: 'truck', emoji: '🚚', ko: '트럭', say: '털털털!' },
-  { id: 'amb', emoji: '🚑', ko: '삐용', say: '삐용삐용!' },
-  { id: 'cheer', emoji: '🎉', ko: '야호', say: '야호! 잘했어요!' },
-  { id: 'sleep', emoji: '🌙', ko: '쿨쿨', say: '쿨쿨… 잘 자요' },
+  { id: 'horn', src: CHAR_IMG.car, ko: '빵빵', say: '빵빵!' },
+  { id: 'vroom', src: CHAR_IMG.car, ko: '부릉', say: '부릉부릉!' },
+  { id: 'siren', src: CHAR_IMG.police, ko: '삐뽀', say: '삐뽀삐뽀!' },
+  { id: 'fire', src: CHAR_IMG.fire, ko: '위잉', say: '위이잉!' },
+  { id: 'bus', src: CHAR_IMG.bus, ko: '버스', say: '버스가 출발해요!' },
+  { id: 'train', src: CHAR_IMG.tractor, ko: '기차', say: '울릉울릉!' },
+  { id: 'plane', src: CHAR_IMG.star, ko: '비행기', say: '슈우웅!' },
+  { id: 'bike', src: CHAR_IMG.busFront, ko: '따르릉', say: '따르릉!' },
+  { id: 'truck', src: CHAR_IMG.dump, ko: '트럭', say: '털털털!' },
+  { id: 'amb', src: CHAR_IMG.ambulance, ko: '삐용', say: '삐용삐용!' },
+  { id: 'cheer', src: CHAR_IMG.star, ko: '야호', say: '야호! 잘했어요!' },
+  { id: 'sleep', src: CHAR_IMG.sand, ko: '쿨쿨', say: '쿨쿨… 잘 자요' },
 ]
 
 export function SoundBoard() {
@@ -42,10 +43,10 @@ export function SoundBoard() {
             <button
               key={s.id}
               type="button"
-              className={`sound-btn${active === s.id ? ' on' : ''}`}
+              className={`sound-btn photo-btn${active === s.id ? ' on' : ''}`}
               onClick={() => play(s)}
             >
-              <span className="card-emoji">{s.emoji}</span>
+              <CharImg src={s.src} size={72} />
               <span className="card-title">{s.ko}</span>
             </button>
           ))}

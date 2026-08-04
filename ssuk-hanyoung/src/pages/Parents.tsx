@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { getProfile, setName } from '../lib/store'
 import { GAMES } from '../data/games'
+import { GameArt } from '../components/GameArt'
 
 export function Parents() {
   const [name, setNameLocal] = useState(() => getProfile().name)
@@ -58,8 +59,10 @@ export function Parents() {
               const g = GAMES.find((x) => x.id === id)
               if (!g) return null
               return (
-                <div key={id} className="card">
-                  <div className="card-emoji">{g.emoji}</div>
+                <div key={id} className="card art-card photo-card">
+                  <div className="art-wrap photo">
+                    <GameArt id={id} size={88} />
+                  </div>
                   <div className="card-title">{g.title}</div>
                   <div className="card-sub">{count}번 플레이</div>
                 </div>

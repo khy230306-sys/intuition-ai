@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { PLAY_COLORS, shuffle } from '../data/colors'
-import { CAR_EMOJIS } from '../data/vehicles'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CharImg, carImg } from '../components/GameArt'
 import { useRound } from './useRound'
 
-type Spot = { id: string; colorId: string; hex: string; filled?: string }
-type Car = { id: string; colorId: string; hex: string; emoji: string }
+type Spot = { id: string; colorId: string; hex: string }
+type Car = { id: string; colorId: string; hex: string; src: string }
 
 function setup() {
   const colors = shuffle(PLAY_COLORS).slice(0, 4)
@@ -17,7 +17,7 @@ function setup() {
       id: `c-${c.id}`,
       colorId: c.id,
       hex: c.hex,
-      emoji: CAR_EMOJIS[i % CAR_EMOJIS.length]!,
+      src: carImg(i),
     })),
   )
   return { spots, cars }
@@ -60,7 +60,7 @@ export function ParkingLot() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big">🅿️ 색깔 주차!</div>
+        <div className="prompt-big">색깔 주차!</div>
         <div className="prompt-sub">자동차를 고르고 같은 색 자리에 넣어요</div>
       </div>
       <div className="play-area">
@@ -76,7 +76,11 @@ export function ParkingLot() {
                 style={{ background: `${s.hex}66`, borderColor: s.hex }}
                 onClick={() => park(s)}
               >
-                {car ? <span style={{ fontSize: '2.2rem' }}>{car.emoji}</span> : <span>{PLAY_COLORS.find((c) => c.id === s.colorId)!.ko}</span>}
+                {car ? (
+                  <CharImg src={car.src} size={68} />
+                ) : (
+                  <span>{PLAY_COLORS.find((c) => c.id === s.colorId)!.ko}</span>
+                )}
               </button>
             )
           })}
@@ -86,14 +90,14 @@ export function ParkingLot() {
             <button
               key={c.id}
               type="button"
-              className={`car-chip${selected === c.id ? ' selected' : ''}`}
-              style={{ background: c.hex, minWidth: '4.5rem' }}
+              className={`car-chip photo${selected === c.id ? ' selected' : ''}`}
+              style={{ background: c.hex, minWidth: '5rem' }}
               onClick={() => {
                 setSelected(c.id)
                 speak('어디에 주차할까요?')
               }}
             >
-              <span className="emoji">{c.emoji}</span>
+              <CharImg src={c.src} size={56} />
             </button>
           ))}
         </div>

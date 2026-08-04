@@ -4,9 +4,21 @@ import { pick, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { CHAR_IMG, CharImg } from '../components/GameArt'
 import { useRound } from './useRound'
 
-const POOL = VEHICLES.filter((v) => ['police', 'fire', 'ambulance', 'bus', 'car', 'train', 'plane', 'truck'].includes(v.id))
+const IMG: Record<string, string> = {
+  police: CHAR_IMG.police,
+  fire: CHAR_IMG.fire,
+  ambulance: CHAR_IMG.ambulance,
+  bus: CHAR_IMG.bus,
+  car: CHAR_IMG.car,
+  train: CHAR_IMG.tractor,
+  plane: CHAR_IMG.star,
+  truck: CHAR_IMG.dump,
+}
+
+const POOL = VEHICLES.filter((v) => v.id in IMG)
 
 export function CarSounds() {
   const round = useRound('car-sounds', 6)
@@ -41,18 +53,16 @@ export function CarSounds() {
       <div className="prompt">
         <div className="prompt-big">{target.sound}</div>
         <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(target.sound)}>
-          소리 다시 듣기 🔊
+          소리 다시 듣기
         </button>
       </div>
       <div className="play-area">
         <div className="grid-2">
           {choices.map((v) => (
-            <button key={v.id} type="button" className="card" onClick={() => answer(v.id)}>
-              {v.img ? (
-                <img src={v.img} alt="" width={72} height={72} style={{ margin: '0 auto', objectFit: 'contain' }} />
-              ) : (
-                <div className="card-emoji">{v.emoji}</div>
-              )}
+            <button key={v.id} type="button" className="card art-card photo-card" onClick={() => answer(v.id)}>
+              <div className="art-wrap photo">
+                <CharImg src={IMG[v.id] || CHAR_IMG.car} size={88} />
+              </div>
               <div className="card-title" style={{ textAlign: 'center' }}>
                 {v.ko}
               </div>

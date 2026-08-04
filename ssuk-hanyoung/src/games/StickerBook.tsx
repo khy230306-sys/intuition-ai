@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { getProfile, STICKERS } from '../lib/store'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
+import { CharImg } from '../components/GameArt'
 
 export function StickerBook() {
   const profile = getProfile()
@@ -26,8 +27,8 @@ export function StickerBook() {
                 className={`sticker-slot${has ? ' has' : ''}`}
                 onClick={() => speak(has ? `${s.ko} 스티커!` : '아직 없어요. 별을 모아 보아요')}
               >
-                <span style={{ fontSize: '2rem', filter: has ? 'none' : 'grayscale(1)', opacity: has ? 1 : 0.35 }}>
-                  {s.emoji}
+                <span style={{ filter: has ? 'none' : 'grayscale(1)', opacity: has ? 1 : 0.35 }}>
+                  <CharImg src={s.src} size={64} />
                 </span>
                 <span className="card-title" style={{ fontSize: '0.9rem' }}>
                   {has ? s.ko : '???'}

@@ -14,7 +14,7 @@
  *   npm run deploy:web
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -148,13 +148,46 @@ function pruneOldDeployments() {
   }
 }
 
+function gitCommitShort() {
+  const res = spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  return (res.stdout || '').trim() || 'unknown'
+}
+
+/** Stamp public/build-meta.json before vite build so SW precache + runtime agree. */
+function writeProductionBuildMeta() {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const meta = {
+    app: 'AIZIO',
+    version: pkg.version,
+    buildId: process.env.BUILD_ID || `prod-${Date.now()}`,
+    commit: process.env.GIT_COMMIT || gitCommitShort(),
+    channel: 'production',
+    builtAt: new Date().toISOString(),
+    productionUrl: `https://${FIXED_DOMAIN}`,
+    note: 'Fixed production — stable boot',
+  }
+  writeFileSync(join(root, 'public', 'build-meta.json'), `${JSON.stringify(meta, null, 2)}\n`)
+  console.log(`build-meta: v${meta.version} commit=${meta.commit} buildId=${meta.buildId}`)
+  return meta
+}
+
 function buildFreshDist() {
+  const meta = writeProductionBuildMeta()
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   console.log(`Building fresh dist for v${pkg.version}…`)
   const res = spawnSync('npm', ['run', 'build'], {
     cwd: root,
     encoding: 'utf8',
     stdio: 'inherit',
+    env: {
+      ...process.env,
+      GIT_COMMIT: meta.commit,
+      BUILD_ID: meta.buildId,
+      AIZIO_CHANNEL: 'production',
+    },
   })
   if (res.status !== 0) {
     throw new Error('npm run build failed — aborting deploy so stale dist is never uploaded')
@@ -175,6 +208,9 @@ function buildFreshDist() {
     throw new Error(
       `Built bundle ${jsName} does not contain APP_VERSION ${pkg.version} — refusing to deploy stale/wrong build`,
     )
+  }
+  if (!html.includes('data-boot-inline') && !html.includes('boot-inline')) {
+    throw new Error('dist/index.html missing inline boot splash — refusing blank-prone build')
   }
   if (!html.includes(pkg.version) && !html.includes(`jarvis-version`)) {
     console.warn(`[warn] index.html has no version meta; bundle OK (${pkg.version})`)

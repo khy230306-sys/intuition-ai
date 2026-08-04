@@ -13,5 +13,16 @@ describe('boot / version refresh safety', () => {
     expect(src).toContain('withTimeout(clearAppCaches()')
     expect(src).toContain('continueBootAfterRefresh')
     expect(src).toContain('paintBootSplash')
+    // Auto SW update must soft-apply; hard wipe caused intermittent blank screens.
+    expect(src).toContain('updateSW(true)')
+    expect(src).toContain('markAppBooted')
+  })
+
+  it('index.html paints dark inline splash before modules load', async () => {
+    const fs = await import('node:fs')
+    const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+    expect(html).toContain('data-boot-inline')
+    expect(html).toContain('background: #070b12')
+    expect(html).toContain('__aizioMarkBooted')
   })
 })

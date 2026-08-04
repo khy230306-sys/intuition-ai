@@ -34,11 +34,13 @@ body {
   min-height: 100dvh;
   font-family: var(--font-body);
   color: var(--ink);
+  background-color: var(--bg0);
   background: var(--bg0);
   overscroll-behavior: none;
 }
 
 body {
+  background-color: var(--bg0);
   background:
     radial-gradient(ellipse 100% 70% at 50% -20%, rgba(0, 210, 190, 0.18), transparent 55%),
     radial-gradient(ellipse 80% 50% at 100% 100%, rgba(90, 200, 255, 0.1), transparent 50%),

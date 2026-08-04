@@ -2,6 +2,7 @@ export type BuildMetaLite = {
   channel?: string
   version?: string
   commit?: string
+  buildId?: string
 }
 
 let cachedMeta: BuildMetaLite | null = null
@@ -26,10 +27,12 @@ export async function loadBuildMetaLite(): Promise<BuildMetaLite> {
         return cachedMeta
       }
       const json = (await res.json()) as BuildMetaLite
+      const full = json as BuildMetaLite & { buildId?: string }
       cachedMeta = {
-        channel: String(json.channel || ''),
-        version: json.version ? String(json.version) : undefined,
-        commit: json.commit ? String(json.commit) : undefined,
+        channel: String(full.channel || ''),
+        version: full.version ? String(full.version) : undefined,
+        commit: full.commit ? String(full.commit) : undefined,
+        buildId: full.buildId ? String(full.buildId) : undefined,
       }
       return cachedMeta
     } catch {

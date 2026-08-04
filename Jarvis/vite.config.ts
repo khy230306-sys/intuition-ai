@@ -80,6 +80,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        // ShipStatic injects ?_ship=<snapshot>; hard-refresh uses _v/_t.
+        // Without this, precache misses → intermittent blank loads on iPhone.
+        ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^_ship$/, /^_v$/, /^_t$/, /^_check$/],
         importScripts: ['push-handler.js'],
         runtimeCaching: [
           {

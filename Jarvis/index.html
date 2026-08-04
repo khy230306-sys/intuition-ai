@@ -23,10 +23,104 @@
       rel="stylesheet"
     />
     <title>AIZIO %APP_VERSION%</title>
+    <!-- Critical paint before CSS/JS: never leave a white blank frame on iPhone. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        min-height: 100dvh;
+        background: #070b12;
+        color: #e8eef7;
+      }
+      #app {
+        min-height: 100dvh;
+      }
+      .boot-inline {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 70dvh;
+        padding: 28px 20px;
+        text-align: center;
+        font-family: 'IBM Plex Sans KR', system-ui, sans-serif;
+      }
+      .boot-inline h1 {
+        margin: 0;
+        font-family: Orbitron, system-ui, sans-serif;
+        font-size: 1.55rem;
+        letter-spacing: 0.14em;
+        font-weight: 700;
+      }
+      .boot-inline p {
+        margin: 0;
+        opacity: 0.72;
+        line-height: 1.45;
+      }
+      .boot-inline button {
+        margin-top: 14px;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 18px;
+        background: #00d2be;
+        color: #041016;
+        font-weight: 700;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <section class="boot-inline" data-boot-inline="1" aria-live="polite">
+        <h1>AIZIO</h1>
+        <p>불러오는 중…</p>
+      </section>
+    </div>
     <div id="flash" class="flash" role="status" aria-live="polite"></div>
+    <script>
+      ;(function () {
+        window.__aizioMarkBooted = function () {
+          window.__aizioBooted = true
+        }
+        window.addEventListener('error', function (ev) {
+          if (ev && ev.filename && /\/assets\/index-.*\.js/.test(String(ev.filename))) {
+            window.__aizioBootAssetError = true
+          }
+        })
+        window.setTimeout(function () {
+          if (window.__aizioBooted) return
+          var app = document.getElementById('app')
+          if (!app) return
+          if (
+            app.querySelector(
+              '.location-gate, .home-v2-unified, .app-shell, [data-boot-ready], nav.nav, .brand',
+            )
+          ) {
+            return
+          }
+          var html = app.innerHTML || ''
+          var stuckSplash = !!app.querySelector('[data-boot-inline="1"]')
+          var empty = html.replace(/\s+/g, '').length < 40
+          if (!stuckSplash && !empty && !window.__aizioBootAssetError) return
+          app.innerHTML =
+            '<section class="boot-inline" data-boot-fail="1">' +
+            '<h1>AIZIO</h1>' +
+            '<p>화면을 불러오지 못했습니다.<br />네트워크 후 다시 시도해 주세요.</p>' +
+            '<button type="button" id="aizio-boot-retry">다시 시도</button>' +
+            '</section>'
+          var btn = document.getElementById('aizio-boot-retry')
+          if (btn) {
+            btn.addEventListener('click', function () {
+              try {
+                sessionStorage.removeItem('jarvis.refreshing')
+              } catch (e) {}
+              location.reload()
+            })
+          }
+        }, 7000)
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

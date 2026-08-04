@@ -277,8 +277,9 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.16.0'
+const APP_VERSION = '1.16.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
+const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
 let voiceSessionGen = 0
@@ -344,15 +345,26 @@ async function clearAppCaches(): Promise<void> {
 function paintBootSplash(message: string): void {
   const app = document.getElementById('app')
   if (!app) return
+  // Inline styles: must remain visible even if CSS chunk failed to load.
   app.innerHTML = `
-    <section class="location-gate" data-boot-splash="1" style="min-height:70dvh">
-      <div class="loc-card">
-        <div class="big-orb"></div>
-        <h1>AIZIO</h1>
-        <p class="loc-lead">${escapeHtml(message)}</p>
-        <p class="loc-body muted">잠시만 기다려 주세요…</p>
+    <section class="location-gate boot-inline" data-boot-splash="1" style="min-height:70dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px 20px;color:#e8eef7;background:#070b12">
+      <div class="loc-card" style="max-width:22rem">
+        <div class="big-orb" aria-hidden="true"></div>
+        <h1 style="margin:0 0 10px;letter-spacing:0.14em">AIZIO</h1>
+        <p class="loc-lead" style="margin:0;opacity:0.9">${escapeHtml(message)}</p>
+        <p class="loc-body muted" style="margin:10px 0 0;opacity:0.65">잠시만 기다려 주세요…</p>
       </div>
     </section>`
+}
+
+function markAppBooted(): void {
+  try {
+    ;(window as unknown as { __aizioMarkBooted?: () => void }).__aizioMarkBooted?.()
+  } catch {
+    /* ignore */
+  }
+  const app = document.getElementById('app')
+  if (app) app.setAttribute('data-boot-ready', '1')
 }
 
 async function hardRefreshApp(): Promise<void> {
@@ -4144,6 +4156,29 @@ function goToSpaceTab(kind: 'family' | 'friends', next: 'chat' | 'notices' | 'ev
 function render(opts: RenderOpts = {}): void {
   const app = document.getElementById('app')
   if (!app) return
+  try {
+    renderUnsafe(opts, app)
+    markAppBooted()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    recordDiagError(`render_fail:${msg.slice(0, 80)}`)
+    paintBootSplash(`화면 오류: ${msg.slice(0, 100)}`)
+    app.insertAdjacentHTML(
+      'beforeend',
+      `<p style="text-align:center;margin-top:12px"><button type="button" class="primary-btn" id="render-retry">다시 시도</button></p>`,
+    )
+    document.getElementById('render-retry')?.addEventListener('click', () => {
+      try {
+        renderUnsafe(opts, app)
+        markAppBooted()
+      } catch {
+        window.location.reload()
+      }
+    })
+  }
+}
+
+function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   if (!state.locationReady) {
     refreshInstallHint()
     app.innerHTML = `${renderLocationGate()}${renderInstallGuideModal()}`
@@ -6202,10 +6237,14 @@ let swUpdateTimer: number | null = null
 function boot(): void {
   bootMediaPreviewDelegation()
   bootNavDelegation()
-  registerSW({
+  // Soft SW apply on update — hard cache wipe caused intermittent white screens on iPhone.
+  const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      void hardRefreshApp()
+      paintBootSplash('새 버전을 적용하는 중…')
+      void Promise.resolve(updateSW(true)).catch(() => {
+        void hardRefreshApp()
+      })
     },
     onRegisteredSW(_url, reg) {
       if (!reg) return
@@ -6275,7 +6314,24 @@ function bootAppCore(): void {
   void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
   state.messages = loadChat()
   state.settings = loadSettings()
-  void loadBuildMetaLite().then(() => {
+  void loadBuildMetaLite().then((meta) => {
+    // One soft reload when production buildId changes (version string may stay put).
+    try {
+      const buildId = meta.buildId
+      if (buildId) {
+        const seenBuild = localStorage.getItem(SEEN_BUILD_ID_KEY)
+        if (seenBuild && seenBuild !== buildId && sessionStorage.getItem('jarvis.buildReloaded') !== '1') {
+          sessionStorage.setItem('jarvis.buildReloaded', '1')
+          localStorage.setItem(SEEN_BUILD_ID_KEY, buildId)
+          paintBootSplash('최신 빌드를 불러오는 중…')
+          window.location.reload()
+          return
+        }
+        localStorage.setItem(SEEN_BUILD_ID_KEY, buildId)
+      }
+    } catch {
+      /* ignore storage */
+    }
     // Refresh once channel is known so HOME v2 / design-lab resolve correctly.
     if (state.locationReady) render({ guardNav: false })
   })

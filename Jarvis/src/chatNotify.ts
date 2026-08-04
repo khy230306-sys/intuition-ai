@@ -3,9 +3,9 @@
  * iOS: Home Screen PWA + notification permission required for background delivery.
  */
 
-import { buildPushPayload, type PushSubscription as WebPushSub } from '@block65/webcrypto-web-push'
 import { loadSettings } from './storage'
-import { VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VAPID_SUBJECT, urlBase64ToUint8Array } from './vapid'
+import { getPushServerStatus } from './push/serverUrl'
+import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from './vapid'
 
 export type ChatNotifyKind = 'family' | 'friends'
 
@@ -159,6 +159,10 @@ export async function showChatNotification(input: {
   }
 }
 
+/**
+ * Background chat push via push-server relay (VAPID private key never in the browser).
+ * Without a configured push server URL, returns 0 (local Notification still works while open).
+ */
 export async function pushChatToSubscriptions(
   subscriptions: Array<StoredPushSubscription | null | undefined>,
   payload: { title: string; body: string; kind: ChatNotifyKind; tag?: string },
@@ -169,43 +173,30 @@ export async function pushChatToSubscriptions(
   }
   if (!unique.size) return 0
 
-  const message = {
-    data: JSON.stringify({
-      title: payload.title.slice(0, 64),
-      body: payload.body.slice(0, 160),
-      kind: payload.kind,
-      view: payload.kind,
-      tag: payload.tag || `jarvis-${payload.kind}-chat`,
-    }),
-    options: { ttl: 60 * 60, urgency: 'high' as const },
-  }
+  const server = getPushServerStatus()
+  if (!server.configured || !server.baseUrl) return 0
 
-  const vapid = {
-    subject: VAPID_SUBJECT,
-    publicKey: VAPID_PUBLIC_KEY,
-    privateKey: VAPID_PRIVATE_KEY,
+  try {
+    const res = await fetch(`${server.baseUrl}/v1/push/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscriptions: [...unique.values()].map((s) => ({
+          endpoint: s.endpoint,
+          keys: s.keys,
+        })),
+        payload: {
+          title: payload.title.slice(0, 64),
+          body: payload.body.slice(0, 160),
+          kind: payload.kind,
+          tag: payload.tag || `jarvis-${payload.kind}-chat`,
+        },
+      }),
+    })
+    if (!res.ok) return 0
+    const data = (await res.json()) as { sent?: number }
+    return typeof data.sent === 'number' ? data.sent : 0
+  } catch {
+    return 0
   }
-
-  let sent = 0
-  await Promise.all(
-    [...unique.values()].map(async (sub) => {
-      try {
-        const webSub: WebPushSub = {
-          endpoint: sub.endpoint,
-          expirationTime: sub.expirationTime ?? null,
-          keys: sub.keys,
-        }
-        const init = await buildPushPayload(message, webSub, vapid)
-        const res = await fetch(sub.endpoint, {
-          method: init.method,
-          headers: init.headers,
-          body: init.body as BodyInit,
-        })
-        if (res.status === 201 || res.status === 200) sent += 1
-      } catch {
-        /* expired endpoint etc. */
-      }
-    }),
-  )
-  return sent
 }

@@ -11,6 +11,7 @@ export default defineConfig({
   base: './',
   build: {
     chunkSizeWarningLimit: 900,
+    sourcemap: false,
   },
   server: {
     host: '0.0.0.0',

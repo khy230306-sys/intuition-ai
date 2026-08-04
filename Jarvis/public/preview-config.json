@@ -1,0 +1,5 @@
+{
+  "channel": "preview",
+  "defaultPushServerUrl": "",
+  "note": "Set PUSH_SERVER_URL when running deploy:preview to bake default server"
+}

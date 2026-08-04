@@ -2844,10 +2844,7 @@ function renderChat(): string {
             : `<button type="button" class="msg-avatar-btn aizio" data-profile-open="1" data-profile-name="AIZIO" data-profile-src="" data-profile-mine="0" aria-label="AIZIO">
                 <span class="msg-avatar-letter">A</span>
               </button>`
-          const attachCards =
-            !mine && idx === arr.length - 1 && navCards && /장소|후보|찾았|검색/.test(m.text)
-              ? navCards
-              : ''
+          const attachCards = !mine && idx === arr.length - 1 && navCards ? navCards : ''
           return `
           <div class="msg-row ${mine ? 'user' : 'assistant'}">
             ${avatar}

@@ -3,10 +3,11 @@ import { PLAY_COLORS, pick } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
-import { CHAR_IMG, CharImg } from '../components/GameArt'
 
 const COLORS = PLAY_COLORS.slice(0, 4)
+const KINDS = ['car', 'bus', 'fire', 'police'] as const
 
 export function ColorFollow() {
   const round = useRound('color-follow', 5)
@@ -70,16 +71,19 @@ export function ColorFollow() {
       </div>
       <div className="play-area">
         <div className="grid-2">
-          {COLORS.map((c) => (
+          {COLORS.map((c, i) => (
             <button
               key={c.id}
               type="button"
               className={`follow-pad photo${flash === c.id ? ' lit' : ''}`}
-              style={{ background: `${c.hex}33`, boxShadow: flash === c.id ? `0 0 0 6px ${c.hex}` : undefined }}
+              style={{
+                background: `${c.hex}44`,
+                boxShadow: flash === c.id ? `0 0 0 6px ${c.hex}` : `0 0 0 4px ${c.hex}`,
+              }}
               onClick={() => tap(c.id)}
               disabled={phase !== 'play'}
             >
-              <CharImg src={CHAR_IMG.car} size={88} />
+              <PaintSubject kind={KINDS[i]!} color={c.hex} size={96} />
               <span className="toy-label">{c.ko.replace('색', '')}</span>
             </button>
           ))}

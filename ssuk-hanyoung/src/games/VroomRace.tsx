@@ -3,18 +3,22 @@ import { PLAY_COLORS, pick, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
-import { CHAR_IMG, CharImg } from '../components/GameArt'
 
-type Racer = { id: string; colorId: string; hex: string; left: number }
+type Racer = { id: string; colorId: string; hex: string; kind: string; left: number }
+
+const KINDS = ['car', 'bus', 'fire', 'police', 'truck', 'ambulance']
 
 function makeRacers(targetId: string): Racer[] {
   const others = shuffle(PLAY_COLORS.filter((c) => c.id !== targetId)).slice(0, 3)
   const target = PLAY_COLORS.find((c) => c.id === targetId)!
+  const kinds = shuffle([...KINDS])
   return shuffle([target, ...others]).map((c, i) => ({
     id: `${c.id}-${i}`,
     colorId: c.id,
     hex: c.hex,
+    kind: kinds[i % kinds.length]!,
     left: 8 + i * 2,
   }))
 }
@@ -66,19 +70,19 @@ export function VroomRace() {
               style={{ background: `${r.hex}33`, boxShadow: `0 0 0 5px ${r.hex}` }}
               onClick={() => tap(r)}
             >
-              <CharImg src={CHAR_IMG.car} size={96} />
+              <PaintSubject kind={r.kind} color={r.hex} size={100} />
             </button>
           ))}
         </div>
         <div className="road" aria-hidden>
           {racers.map((r, i) => (
             <span key={r.id} className="racer photo" style={{ left: `${r.left}%`, bottom: `${0.15 + i * 1.5}rem` }}>
-              <CharImg src={CHAR_IMG.car} size={48} />
+              <PaintSubject kind={r.kind} color={r.hex} size={44} />
             </span>
           ))}
         </div>
         <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: '0.75rem' }} onClick={() => speak(`${target.ko} 자동차를 탭해요!`)}>
-          다시 듣기 🔊
+          다시 듣기
         </button>
         {round.done && (
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.6rem' }} onClick={round.reset}>

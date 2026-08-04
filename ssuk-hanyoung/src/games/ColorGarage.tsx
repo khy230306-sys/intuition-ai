@@ -3,10 +3,12 @@ import { PLAY_COLORS, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
-import { CharImg, carImg } from '../components/GameArt'
 
-type Car = { id: string; colorId: string; hex: string; src: string }
+type Car = { id: string; colorId: string; hex: string; kind: string }
+
+const KINDS = ['car', 'bus', 'fire', 'police', 'truck', 'ambulance']
 
 function makeCars(colorIds: string[]): Car[] {
   return shuffle(
@@ -16,7 +18,7 @@ function makeCars(colorIds: string[]): Car[] {
         id: `${cid}-${i}-${j}-${Math.random().toString(36).slice(2, 6)}`,
         colorId: cid,
         hex: c.hex,
-        src: carImg(i * 2 + j),
+        kind: KINDS[(i * 2 + j) % KINDS.length]!,
       }))
     }),
   )
@@ -81,7 +83,7 @@ export function ColorGarage() {
                 speak('이 자동차를 어디로 넣을까요?')
               }}
             >
-              <CharImg src={car.src} size={78} />
+              <PaintSubject kind={car.kind} color={car.hex} size={78} />
             </button>
           ))}
         </div>
@@ -92,7 +94,7 @@ export function ColorGarage() {
               <div className={`garage${garages[g.id]!.length ? ' ok' : ''}`} style={{ background: `${g.hex}55`, borderColor: g.hex }}>
                 {garages[g.id]!.map((id) => {
                   const car = cars.find((c) => c.id === id)!
-                  return <CharImg key={id} src={car.src} size={40} />
+                  return <PaintSubject key={id} kind={car.kind} color={car.hex} size={40} />
                 })}
                 {!garages[g.id]!.length && <span style={{ color: 'var(--muted)' }}>비어 있어요</span>}
               </div>

@@ -35,7 +35,7 @@ export const GAMES: GameMeta[] = [
   {
     id: 'car-puzzle',
     title: '자동차 퍼즐',
-    subtitle: '조각을 순서대로 맞춰요',
+    subtitle: '앞·몸통·바퀴 조각을 맞춰요',
     emoji: '🧩',
     tags: ['car', 'new', 'focus', 'touch'],
     accent: 'grape',

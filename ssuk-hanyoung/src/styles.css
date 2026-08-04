@@ -1417,6 +1417,123 @@ img {
   filter: drop-shadow(3px 4px 0 rgba(26, 21, 16, 0.25));
 }
 
+.puzzle-part {
+  display: block;
+  overflow: visible;
+}
+
+.puzzle-goal {
+  display: grid;
+  place-items: center;
+  min-height: 7.5rem;
+  margin-bottom: 0.7rem;
+  border-radius: 1.3rem;
+  border: 3px dashed #1a1510;
+  background: linear-gradient(180deg, #fff7cc, #ffe8a0);
+}
+
+.puzzle-goal-ghost {
+  display: grid;
+  place-items: center;
+  gap: 0.15rem;
+  opacity: 0.72;
+  font-family: var(--font-display);
+}
+
+.puzzle-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.puzzle-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 7.2rem;
+  padding: 0.45rem;
+  border-radius: 1.2rem;
+  border: 3px dashed #1a1510;
+  background: #fffdf5;
+}
+
+.puzzle-slot.filled {
+  border-style: solid;
+  background: #e8fff0;
+}
+
+.puzzle-slot.target {
+  box-shadow: 0 0 0 4px var(--sunny);
+}
+
+.puzzle-slot-label {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+}
+
+.puzzle-slot-label.ghost {
+  color: var(--muted);
+}
+
+.puzzle-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: center;
+}
+
+.puzzle-piece {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 5.6rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border-radius: 1.15rem;
+  border: 4px solid #1a1510;
+  background: #fff;
+  box-shadow: 0 5px 0 #1a1510;
+  font-family: var(--font-display);
+}
+
+.puzzle-piece.on {
+  background: var(--sunny);
+  transform: translateY(-2px);
+}
+
+.puzzle-piece:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #1a1510;
+}
+
+.story-choices {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.story-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 1.2rem;
+  border: 4px solid #1a1510;
+  background: var(--sunny);
+  box-shadow: 0 5px 0 #1a1510;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  text-align: left;
+}
+
+.story-choice:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #1a1510;
+}
+
 .swatch.bold {
   border-width: 4px;
   font-size: 1rem;

@@ -3,10 +3,12 @@ import { PLAY_COLORS, pick, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { CharImg, carImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
-type Item = { id: string; colorId: string; hex: string; src: string; found?: boolean }
+type Item = { id: string; colorId: string; hex: string; kind: string; found?: boolean }
+
+const KINDS = ['car', 'bus', 'fire', 'police', 'truck', 'ambulance']
 
 function makeBoard(targetId: string): Item[] {
   const target = PLAY_COLORS.find((c) => c.id === targetId)!
@@ -16,13 +18,13 @@ function makeBoard(targetId: string): Item[] {
       id: `t-${i}`,
       colorId: target.id,
       hex: target.hex,
-      src: carImg(i),
+      kind: KINDS[i % KINDS.length]!,
     })),
     ...others.map((c, i) => ({
       id: `o-${i}`,
       colorId: c.id,
       hex: c.hex,
-      src: carImg(i + 3),
+      kind: KINDS[(i + 3) % KINDS.length]!,
     })),
   ]
   return shuffle(items)
@@ -76,10 +78,10 @@ export function FindColorCar() {
               key={item.id}
               type="button"
               className={`car-chip photo${item.found ? ' done' : ''}`}
-              style={{ background: item.hex }}
+              style={{ background: `${item.hex}33`, boxShadow: `0 0 0 3px ${item.hex}` }}
               onClick={() => tap(item)}
             >
-              <CharImg src={item.src} size={58} />
+              <PaintSubject kind={item.kind} color={item.hex} size={58} />
             </button>
           ))}
         </div>

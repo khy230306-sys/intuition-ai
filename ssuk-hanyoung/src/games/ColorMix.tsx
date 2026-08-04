@@ -8,11 +8,21 @@ import { shuffle } from '../data/colors'
 type Mix = { a: string; b: string; result: string; aHex: string; bHex: string; rHex: string; label: string }
 
 const MIXES: Mix[] = [
-  { a: '빨강', b: '노랑', result: '주황', aHex: '#FF4D6D', bHex: '#FFD60A', rHex: '#FF8A3D', label: '주황색' },
-  { a: '파랑', b: '노랑', result: '초록', aHex: '#5B8CFF', bHex: '#FFD60A', rHex: '#3DDC84', label: '초록색' },
-  { a: '빨강', b: '파랑', result: '보라', aHex: '#FF4D6D', bHex: '#5B8CFF', rHex: '#A78BFA', label: '보라색' },
-  { a: '빨강', b: '하얀', result: '분홍', aHex: '#FF4D6D', bHex: '#FFF8E7', rHex: '#FF8FAB', label: '분홍색' },
+  { a: '빨강', b: '노랑', result: '주황', aHex: '#FF2D55', bHex: '#FFD400', rHex: '#FF7A00', label: '주황색' },
+  { a: '파랑', b: '노랑', result: '초록', aHex: '#2F6BFF', bHex: '#FFD400', rHex: '#22C55E', label: '초록색' },
+  { a: '빨강', b: '파랑', result: '보라', aHex: '#FF2D55', bHex: '#2F6BFF', rHex: '#8B5CF6', label: '보라색' },
+  { a: '빨강', b: '하얀', result: '분홍', aHex: '#FF2D55', bHex: '#FFF8E7', rHex: '#FF5DA2', label: '분홍색' },
 ]
+
+const DECOY_HEX: Record<string, string> = {
+  검정: '#1A1510',
+  하늘: '#38BDF8',
+  갈색: '#B86B3C',
+  주황: '#FF7A00',
+  초록: '#22C55E',
+  보라: '#8B5CF6',
+  분홍: '#FF5DA2',
+}
 
 export function ColorMix() {
   const round = useRound('color-mix', 4)
@@ -68,10 +78,15 @@ export function ColorMix() {
           {picked.length < 2 ? '섞어 보아요' : '?'}
         </div>
         <div className="parts">
-          <button type="button" className="part" style={{ background: mix.aHex }} onClick={() => add('a')}>
+          <button type="button" className="part" style={{ background: mix.aHex, color: '#fff' }} onClick={() => add('a')}>
             {mix.a}
           </button>
-          <button type="button" className="part" style={{ background: mix.bHex }} onClick={() => add('b')}>
+          <button
+            type="button"
+            className="part"
+            style={{ background: mix.bHex, color: mix.b === '하얀' || mix.b === '노랑' ? '#1a1510' : '#fff' }}
+            onClick={() => add('b')}
+          >
             {mix.b}
           </button>
           <button type="button" className="part" onClick={() => setPicked([])}>
@@ -80,11 +95,20 @@ export function ColorMix() {
         </div>
         <h3 className="section-title">무엇이 됐을까요?</h3>
         <div className="grid-3">
-          {choices.map((c) => (
-            <button key={c} type="button" className="btn btn-ghost btn-block" onClick={() => answer(c)}>
-              {c}
-            </button>
-          ))}
+          {choices.map((c) => {
+            const hex = c === mix.result ? mix.rHex : DECOY_HEX[c] || '#ccc'
+            return (
+              <button
+                key={c}
+                type="button"
+                className="swatch bold"
+                style={{ background: hex, color: c === '노랑' || c === '하늘' || hex === '#FFF8E7' ? '#1a1510' : '#fff' }}
+                onClick={() => answer(c)}
+              >
+                {c}
+              </button>
+            )
+          })}
         </div>
         {round.done && (
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.8rem' }} onClick={round.reset}>

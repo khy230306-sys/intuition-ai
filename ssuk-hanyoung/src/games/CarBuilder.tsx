@@ -3,14 +3,14 @@ import { PLAY_COLORS, pick } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { CHAR_IMG, CharImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
 const BODIES = [
-  { id: 'sedan', label: '승용차', src: CHAR_IMG.car },
-  { id: 'bus', label: '버스', src: CHAR_IMG.bus },
-  { id: 'truck', label: '트럭', src: CHAR_IMG.dump },
-  { id: 'police', label: '경찰차', src: CHAR_IMG.police },
+  { id: 'sedan', label: '승용차', kind: 'car' },
+  { id: 'bus', label: '버스', kind: 'bus' },
+  { id: 'truck', label: '트럭', kind: 'truck' },
+  { id: 'police', label: '경찰차', kind: 'police' },
 ]
 
 export function CarBuilder() {
@@ -39,6 +39,9 @@ export function CarBuilder() {
     }
   }
 
+  const previewColor = color?.hex ?? '#d9d2c5'
+  const previewKind = body?.kind ?? 'car'
+
   return (
     <GameShell title="자동차 조립" subtitle="요청한 차와 색깔을 맞춰요" progress={round.progress}>
       <Confetti show={round.confetti} />
@@ -47,18 +50,17 @@ export function CarBuilder() {
         <div className="prompt-big">
           {target.color.ko} {target.body.label}를 만들어요
         </div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+          <PaintSubject kind={target.body.kind} color={target.color.hex} size={64} />
+        </div>
         <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(`${target.color.ko} ${target.body.label}`)}>
           다시 듣기
         </button>
       </div>
       <div className="play-area">
-        <div
-          className="paint-car"
-          style={{ background: color ? `${color.hex}55` : 'linear-gradient(#dbeafe,#fff)' }}
-          aria-label="조립 중인 자동차"
-        >
+        <div className="paint-car" style={{ background: `${previewColor}33` }} aria-label="조립 중인 자동차">
           <div style={{ display: 'grid', placeItems: 'center', minHeight: '8rem' }}>
-            {body ? <CharImg src={body.src} size={120} /> : <CharImg src={CHAR_IMG.star} size={72} />}
+            <PaintSubject kind={previewKind} color={previewColor} size={130} />
           </div>
         </div>
         <h3 className="section-title" style={{ marginTop: '0.8rem' }}>
@@ -77,7 +79,7 @@ export function CarBuilder() {
                 check(b, color)
               }}
             >
-              <CharImg src={b.src} size={44} />
+              <PaintSubject kind={b.kind} color={color?.hex ?? '#FFD60A'} size={48} />
               <span>{b.label}</span>
             </button>
           ))}

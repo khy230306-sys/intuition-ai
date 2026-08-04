@@ -3,11 +3,13 @@ import { PLAY_COLORS, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { CharImg, carImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
 type Spot = { id: string; colorId: string; hex: string }
-type Car = { id: string; colorId: string; hex: string; src: string }
+type Car = { id: string; colorId: string; hex: string; kind: string }
+
+const KINDS = ['car', 'bus', 'fire', 'police']
 
 function setup() {
   const colors = shuffle(PLAY_COLORS).slice(0, 4)
@@ -17,7 +19,7 @@ function setup() {
       id: `c-${c.id}`,
       colorId: c.id,
       hex: c.hex,
-      src: carImg(i),
+      kind: KINDS[i % KINDS.length]!,
     })),
   )
   return { spots, cars }
@@ -77,7 +79,7 @@ export function ParkingLot() {
                 onClick={() => park(s)}
               >
                 {car ? (
-                  <CharImg src={car.src} size={68} />
+                  <PaintSubject kind={car.kind} color={car.hex} size={68} />
                 ) : (
                   <span>{PLAY_COLORS.find((c) => c.id === s.colorId)!.ko}</span>
                 )}
@@ -91,13 +93,13 @@ export function ParkingLot() {
               key={c.id}
               type="button"
               className={`car-chip photo${selected === c.id ? ' selected' : ''}`}
-              style={{ background: c.hex, minWidth: '5rem' }}
+              style={{ background: `${c.hex}44`, minWidth: '5rem', boxShadow: `0 0 0 3px ${c.hex}` }}
               onClick={() => {
                 setSelected(c.id)
                 speak('어디에 주차할까요?')
               }}
             >
-              <CharImg src={c.src} size={56} />
+              <PaintSubject kind={c.kind} color={c.hex} size={56} />
             </button>
           ))}
         </div>

@@ -1,5 +1,5 @@
 {
   "channel": "preview",
-  "defaultPushServerUrl": "https://medal-kansas-attachment-gilbert.trycloudflare.com",
-  "note": "Preview default push server (user can override in Settings)"
+  "defaultPushServerUrl": "",
+  "note": "Push server optional for HOME v2 design review — set in Settings if available"
 }

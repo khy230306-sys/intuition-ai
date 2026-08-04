@@ -212,8 +212,29 @@ import {
   updateMusicPreferences,
   type MusicSession,
 } from './music'
+import {
+  HOME_V2_QUICK_COMMANDS,
+  buildHomeV2Model,
+  clearHomeV2Prefs,
+  getCachedBuildChannel,
+  isDesignLabVisible,
+  loadBuildMetaLite,
+  readBootDefaultHome,
+  readStoredHomeVariant,
+  renderDesignLabSection,
+  renderHomeV2Chrome,
+  renderHomeV2MoreSheet,
+  renderHomeV2NavWithPane,
+  renderHomeV2Shell,
+  resolveHomeVariant,
+  writeBootDefaultHome,
+  writeStoredHomeVariant,
+  type HomeVariant,
+  type HomeV2Pane,
+  type HomeV2QuickId,
+} from './homeV2'
 
-const APP_VERSION = '1.15.2'
+const APP_VERSION = '1.15.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -476,9 +497,35 @@ const state = {
   friendsSyncStatus: '대기',
   /** Persist home "대화방" panel open/closed across remounts (null = auto). */
   homeRoomsOpen: null as boolean | null,
+  /** HOME v2 preview pane (home dashboard vs conversation thread). */
+  homeV2Pane: 'home' as HomeV2Pane,
+  /** HOME v2 "전체" sheet */
+  homeV2MoreOpen: false,
   /** Deep-link / QR invite waiting for location gate */
   pendingInvite: null as null | { kind: SpaceKind; code: string },
   prefillJoinCode: '',
+}
+
+function activeHomeVariant(): HomeVariant {
+  let queryHome: string | null = null
+  try {
+    queryHome = new URL(window.location.href).searchParams.get('home')
+  } catch {
+    queryHome = null
+  }
+  const host = typeof location !== 'undefined' ? location.hostname : ''
+  return resolveHomeVariant({
+    queryHome,
+    channel: getCachedBuildChannel(),
+    hostname: host,
+    stored: readStoredHomeVariant(),
+    bootDefault: readBootDefaultHome(),
+  })
+}
+
+function designLabVisibleNow(): boolean {
+  const host = typeof location !== 'undefined' ? location.hostname : ''
+  return isDesignLabVisible(getCachedBuildChannel(), host)
 }
 
 let arcade: ArcadeHandle | null = null
@@ -686,6 +733,17 @@ function captureViewFromUrl(): void {
       u.searchParams.delete('view')
       const q = u.searchParams.toString()
       window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+    }
+    // Keep ?home= for shareable compare URLs; sync stored preference on preview only.
+    const homeQ = u.searchParams.get('home')
+    if (homeQ && designLabVisibleNow()) {
+      const resolved = resolveHomeVariant({
+        queryHome: homeQ,
+        channel: getCachedBuildChannel(),
+        hostname: location.hostname,
+      })
+      writeStoredHomeVariant(resolved)
+      if (resolved === 'v2') state.homeV2Pane = 'home'
     }
   } catch {
     /* ignore */
@@ -1329,16 +1387,26 @@ function patchVoiceUi(): void {
   const mic = document.querySelector<HTMLButtonElement>(micSel)
   if (mic) {
     mic.classList.toggle('listening', state.listening)
-    mic.textContent = state.listening ? 'STOP' : 'MIC'
+    if (!mic.hasAttribute('data-home-v2-orb')) {
+      mic.textContent = state.listening ? 'STOP' : 'MIC'
+    }
     mic.setAttribute('aria-pressed', state.listening ? 'true' : 'false')
   }
   // Keep other mic buttons idle-looking while dictating elsewhere
   document.querySelectorAll<HTMLButtonElement>('[data-action="mic"], [data-action="space-mic"]').forEach((btn) => {
     if (btn === mic) return
     btn.classList.remove('listening')
-    btn.textContent = 'MIC'
+    if (!btn.hasAttribute('data-home-v2-orb')) btn.textContent = 'MIC'
     btn.setAttribute('aria-pressed', 'false')
   })
+  document.querySelectorAll<HTMLElement>('[data-home-v2-orb]').forEach((orb) => {
+    orb.classList.toggle('listening', state.listening && target === 'jarvis')
+    orb.classList.toggle('busy', state.busy && !state.listening)
+  })
+  const voiceWrap = document.querySelector<HTMLElement>('.home-v2-voice')
+  if (voiceWrap) {
+    voiceWrap.dataset.voiceState = state.listening ? 'listening' : state.busy ? 'busy' : 'idle'
+  }
   const status = document.querySelector('.status-pill')
   if (status) {
     status.textContent = state.listening
@@ -1353,10 +1421,11 @@ function patchVoiceUi(): void {
     target === 'family' ? 'family-voice-caption' : target === 'friends' ? 'friends-voice-caption' : 'voice-caption'
   const caption = document.getElementById(captionId)
   if (caption) {
-    caption.hidden = !state.listening && !state.voiceHint
+    const onHomeV2 = caption.hasAttribute('data-home-v2-prompt')
+    if (!onHomeV2) caption.hidden = !state.listening && !state.voiceHint
     caption.textContent = state.listening
       ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
-      : state.voiceHint
+      : state.voiceHint || (onHomeV2 ? '무엇을 도와드릴까요?' : state.voiceHint)
     caption.classList.toggle('live', state.listening)
   }
   const inputId = target === 'family' ? 'family-draft' : target === 'friends' ? 'friends-draft' : 'draft'
@@ -2418,6 +2487,43 @@ function renderShareModal(): string {
   `
 }
 
+/** HOME v2 dashboard — parallel test surface; does not replace renderChat(). */
+function renderHomeV2View(): string {
+  try {
+    const model = buildHomeV2Model({
+      weather: state.weather,
+      listening: state.listening,
+      busy: state.busy,
+      draft: state.draft,
+    })
+    return renderHomeV2Shell(model, {
+      draft: state.draft,
+      busy: state.busy,
+      listening: state.listening,
+      appVersion: APP_VERSION,
+      composerExtraHtml: renderMusicMiniPlayer(
+        state.musicSession || sessionSnapshot(),
+        state.musicPlayerOpen,
+      ),
+    })
+  } catch (err) {
+    console.warn('[homeV2] render failed, falling back to legacy home', err)
+    writeStoredHomeVariant('legacy')
+    return renderChat()
+  }
+}
+
+function renderChatOrHomeV2(): string {
+  if (activeHomeVariant() !== 'v2') {
+    const chrome = designLabVisibleNow() ? renderHomeV2Chrome('legacy') : ''
+    return `${chrome}${renderChat()}`
+  }
+  if (state.homeV2Pane === 'thread') {
+    return `${renderHomeV2Chrome('v2')}${renderChat()}`
+  }
+  return renderHomeV2View()
+}
+
 function renderChat(): string {
   const mode = loadInterpretMode()
   const empty = state.messages.length === 0
@@ -3388,6 +3494,11 @@ function renderSettings(): string {
           </div>
           <pre class="device-diag-out hint" data-push-test-out>푸시 테스트 결과가 여기에 표시됩니다.</pre>
         </details>
+        ${renderDesignLabSection({
+          active: activeHomeVariant(),
+          bootDefault: readBootDefaultHome(),
+          visible: designLabVisibleNow(),
+        })}
         ${renderHybridAiSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
@@ -3494,17 +3605,24 @@ function goToView(next: View, ev?: MouseEvent): void {
     // Re-tapping FAM/FRD jumps to chat tab (faster than hunting sub-tabs)
     if (next === 'family' && state.familyTab !== 'chat') {
       state.familyTab = 'chat'
+      state.homeV2MoreOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
     if (next === 'friends' && state.friendsTab !== 'chat') {
       state.friendsTab = 'chat'
+      state.homeV2MoreOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
+    }
+    if (state.homeV2MoreOpen) {
+      state.homeV2MoreOpen = false
+      render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
     }
     return
   }
   stopArcade()
+  state.homeV2MoreOpen = false
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
@@ -3536,9 +3654,10 @@ function render(opts: RenderOpts = {}): void {
     return
   }
   invalidateSpaceInboxCache()
+  const homeV2On = activeHomeVariant() === 'v2'
   const main =
     state.view === 'chat'
-      ? renderChat()
+      ? renderChatOrHomeV2()
       : state.view === 'invest'
         ? renderInvest()
         : state.view === 'life'
@@ -3554,8 +3673,15 @@ function render(opts: RenderOpts = {}): void {
                   : state.view === 'actions'
                     ? renderActions()
                     : renderSettings()
-  app.innerHTML = `${renderBrand()}${renderInstall()}${main}${renderNav()}${renderShareModal()}${renderInstallGuideModal()}`
+  const nav = homeV2On
+    ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
+    : renderNav()
+  const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${renderInstall()}${main}${nav}${more}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
+  document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
+  document.body.classList.toggle('home-v2-active', homeV2On)
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
       armNavGuard({ mode: 'async', ms: 260 })
@@ -4287,6 +4413,141 @@ function bind(): void {
   composer?.addEventListener('submit', (e) => {
     e.preventDefault()
     void handleUserText(state.draft)
+  })
+
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-set"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.homeVariant === 'v2' ? 'v2' : 'legacy'
+      writeStoredHomeVariant(v)
+      state.homeV2MoreOpen = false
+      state.homeV2Pane = 'home'
+      state.view = 'chat'
+      try {
+        const u = new URL(window.location.href)
+        u.searchParams.set('home', v)
+        window.history.replaceState({}, '', `${u.pathname}?${u.searchParams.toString()}${u.hash}`)
+      } catch {
+        /* ignore */
+      }
+      showFlash(v === 'v2' ? 'HOME v2 미리보기' : '기존 홈으로 전환')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-boot-default"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.homeVariant === 'v2' ? 'v2' : 'legacy'
+      writeBootDefaultHome(v)
+      showFlash(v === 'v2' ? '실행 시 기본: HOME v2 (Preview)' : '실행 시 기본: 기존 홈')
+      render()
+    })
+  })
+  document.querySelector('[data-action="home-v2-reset-prefs"]')?.addEventListener('click', () => {
+    clearHomeV2Prefs()
+    state.homeV2Pane = 'home'
+    state.homeV2MoreOpen = false
+    try {
+      const u = new URL(window.location.href)
+      u.searchParams.delete('home')
+      const q = u.searchParams.toString()
+      window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+    } catch {
+      /* ignore */
+    }
+    showFlash('HOME v2 설정을 초기화했습니다.')
+    render()
+  })
+  document.querySelector('[data-action="home-v2-feedback"]')?.addEventListener('click', () => {
+    showFlash('검토 메모: 디자인·배치 의견을 알려 주세요. (기능은 기존과 동일)')
+  })
+  document.querySelector('[data-action="home-v2-nav-home"]')?.addEventListener('click', () => {
+    state.view = 'chat'
+    state.homeV2Pane = 'home'
+    state.homeV2MoreOpen = false
+    render()
+  })
+  document.querySelector('[data-action="home-v2-nav-thread"]')?.addEventListener('click', () => {
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    state.homeV2MoreOpen = false
+    render()
+    scrollChat()
+  })
+  document.querySelector('[data-action="home-v2-nav-more"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = !state.homeV2MoreOpen
+    render()
+  })
+  document.querySelector('[data-action="home-v2-more-close"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    render()
+  })
+  document.querySelector('[data-home-v2-more="1"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.homeV2MoreOpen = false
+      render()
+    }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-quick"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.quickId as HomeV2QuickId | undefined
+      const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
+      if (!cmd) return
+      state.view = 'chat'
+      state.homeV2Pane = 'thread'
+      state.homeV2MoreOpen = false
+      void handleUserText(cmd)
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-go"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const go = btn.dataset.homeGo
+      state.homeV2MoreOpen = false
+      if (go === 'todos' || go === 'alarms') {
+        goToView('life')
+        return
+      }
+      if (go === 'messages') {
+        const inbox = getHomeSpaceInbox()
+        if (inbox.family.unread > 0) goToView('family')
+        else if (inbox.friends.unread > 0) goToView('friends')
+        else {
+          state.view = 'chat'
+          state.homeV2Pane = 'thread'
+          render()
+        }
+      }
+    })
+  })
+  document.querySelector('[data-action="home-v2-smart"]')?.addEventListener('click', () => {
+    const btn = document.querySelector<HTMLButtonElement>('[data-action="home-v2-smart"]')
+    const v = (btn?.dataset.smartView || 'life') as View
+    state.homeV2MoreOpen = false
+    if (v === 'chat') {
+      state.view = 'chat'
+      state.homeV2Pane = 'thread'
+      render()
+      return
+    }
+    goToView(v)
+  })
+  document.querySelector('[data-action="home-v2-translate"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('global')
+  })
+  document.querySelector('[data-action="home-v2-guide"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    void handleUserText('사용설명서')
+  })
+  document.querySelector('[data-action="home-v2-goto-push"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('settings')
+    showFlash('설정 → 실기기 테스트 모드 · 푸시')
+  })
+  document.querySelector('[data-action="home-v2-goto-diag"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    goToView('settings')
+    showFlash('설정 → 진단 새로고침 / JSON 내보내기')
   })
 
   document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((btn) => {
@@ -5288,10 +5549,18 @@ function bootAppCore(): void {
   void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
   state.messages = loadChat()
   state.settings = loadSettings()
+  void loadBuildMetaLite().then(() => {
+    // Refresh once channel is known so Preview design-lab / HOME v2 resolve correctly.
+    if (state.locationReady) render({ guardNav: false })
+  })
   void import('./push').then(async (m) => {
-    const url = (state.settings.pushServerBaseUrl || '').trim()
-    if (url) m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
-    else await m.applyPreviewPushServerDefault({ allowHttpLocalhost: true })
+    try {
+      const url = (state.settings.pushServerBaseUrl || '').trim()
+      if (url) m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+      else await m.applyPreviewPushServerDefault({ allowHttpLocalhost: true })
+    } catch {
+      /* push default is optional — HOME design preview must not fail */
+    }
   })
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (ev) => {

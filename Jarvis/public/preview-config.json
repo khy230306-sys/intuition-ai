@@ -1,5 +1,5 @@
 {
   "channel": "preview",
   "defaultPushServerUrl": "",
-  "note": "Push server optional for HOME v2 design review — set in Settings if available"
+  "note": "Set PUSH_SERVER_URL when running deploy:preview to bake default server"
 }

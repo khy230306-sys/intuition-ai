@@ -7,13 +7,15 @@
 
 | Field | Value |
 |-------|--------|
-| REVIEW_URL | https://keen-drifter-97nqfnk.shipstatic.com |
-| Version | 1.15.2 |
-| Commit | 2160fb9 |
-| Default PUSH_SERVER_URL (baked) | https://medal-kansas-attachment-gilbert.trycloudflare.com |
+| REVIEW_URL | https://airy-dome-rpkmd84.shipstatic.com |
+| Version | 1.15.3 |
+| Commit | 48e7b1a |
+| HOME v2 | https://airy-dome-rpkmd84.shipstatic.com/?home=v2 |
+| Legacy home | https://airy-dome-rpkmd84.shipstatic.com/?home=legacy |
+| Default PUSH_SERVER_URL (baked) | _(empty — set in Settings; tunnel optional)_ |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
-Previous preview (still valid snapshot, older build): https://harmonic-rift-5oo4f3w.shipstatic.com
+Previous previews: https://keen-drifter-97nqfnk.shipstatic.com · https://harmonic-rift-5oo4f3w.shipstatic.com
 
 ## Status
 

@@ -2,7 +2,16 @@
 
 **Status:** 디자인 검토 대기  
 **Version:** 1.15.3  
+**Commit:** 48e7b1a  
 **Does not change production:** https://jarvis-app.shipstatic.com
+
+## Preview URLs
+
+| | URL |
+|--|--|
+| Preview (default = legacy home) | https://airy-dome-rpkmd84.shipstatic.com |
+| Legacy direct | https://airy-dome-rpkmd84.shipstatic.com/?home=legacy |
+| HOME v2 direct | https://airy-dome-rpkmd84.shipstatic.com/?home=v2 |
 
 ## What this is
 

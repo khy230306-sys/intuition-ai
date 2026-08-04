@@ -13,7 +13,7 @@
 | 손님관리 | https://tuned-spectra-l0b6f5n.shipstatic.com/?customers=1 |
 | Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
 
-Previous previews: https://hyper-cluster-i63ofol.shipstatic.com · https://encoded-mesh-r5a5fkf.shipstatic.com · https://infused-whirl-dpn0rm4.shipstatic.com
+Previous previews: https://spatial-pulse-m3o6tgj.shipstatic.com · https://hyper-cluster-i63ofol.shipstatic.com · https://encoded-mesh-r5a5fkf.shipstatic.com
 
 ## Commands
 

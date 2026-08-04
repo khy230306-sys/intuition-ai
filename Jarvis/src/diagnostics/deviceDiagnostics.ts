@@ -7,6 +7,7 @@ import { getPushServerStatus, loadReminderPushSubscription } from '../push'
 import { canUseWebPush, loadStoredPushSubscription } from '../chatNotify'
 import { loadHybridAiConfig } from '../ai-providers'
 import { loadLifeFlags } from '../life-os/featureFlags'
+import { navigationDiagSnapshot } from '../navigation'
 
 export type DeviceDiagnostics = {
   app: 'AIZIO'
@@ -54,6 +55,8 @@ export type DeviceDiagnostics = {
     hasAnyKey: boolean
   }
   featureFlags: Record<string, boolean>
+  /** No full addresses / coordinates */
+  navigation: Record<string, unknown>
   recentErrorCodes: string[]
   href: string
 }
@@ -238,6 +241,7 @@ export async function collectDeviceDiagnostics(appVersionFallback: string): Prom
       hasAnyKey: configured.length > 0,
     },
     featureFlags: loadLifeFlags() as unknown as Record<string, boolean>,
+    navigation: navigationDiagSnapshot(),
     recentErrorCodes: recentErrors(),
     href: typeof location !== 'undefined' ? location.href.split('#')[0]! : '',
   }

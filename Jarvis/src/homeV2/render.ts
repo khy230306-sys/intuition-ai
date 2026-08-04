@@ -119,6 +119,10 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
           <span class="home-v2-q-ico" aria-hidden="true">◎</span>
           <span>브리핑</span>
         </button>
+        <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="navigate">
+          <span class="home-v2-q-ico" aria-hidden="true">↗</span>
+          <span>길안내</span>
+        </button>
         <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="schedule">
           <span class="home-v2-q-ico" aria-hidden="true">＋</span>
           <span>일정 추가</span>
@@ -127,13 +131,9 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
           <span class="home-v2-q-ico" aria-hidden="true">☁</span>
           <span>날씨</span>
         </button>
-        <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="music">
-          <span class="home-v2-q-ico" aria-hidden="true">♪</span>
-          <span>음악</span>
-        </button>
       </div>
 
-      <button type="button" class="home-v2-smart-card" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}">
+      <button type="button" class="home-v2-smart-card ${model.smartCard.kind === 'empty' ? 'is-empty' : ''}" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}">
         <div class="home-v2-card-head">
           <strong>${esc(model.smartCard.title)}</strong>
           <span class="home-v2-card-go">열기</span>
@@ -208,19 +208,11 @@ export function renderHomeV2NavWithPane(
   `
 }
 
+function moreItem(label: string, attrs: string): string {
+  return `<li><button type="button" ${attrs}>${esc(label)}</button></li>`
+}
+
 export function renderHomeV2MoreSheet(): string {
-  const links: Array<{ label: string; view?: string; action?: string; hint?: string }> = [
-    { label: '투자', view: 'invest' },
-    { label: '친구', view: 'friends' },
-    { label: '번역', view: 'global' },
-    { label: '게임', view: 'games' },
-    { label: '실행(액션)', view: 'actions' },
-    { label: 'API 키 · 설정', view: 'settings', hint: '하이브리드 AI / OpenAI' },
-    { label: '사용설명서', action: 'home-v2-guide' },
-    { label: '푸시 실기기 테스트', view: 'settings', action: 'home-v2-goto-push' },
-    { label: '진단', view: 'settings', action: 'home-v2-goto-diag' },
-    { label: '기존 홈으로', action: 'home-v2-set', hint: 'legacy' },
-  ]
   return `
     <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="전체 메뉴">
       <div class="home-v2-more-sheet">
@@ -228,24 +220,101 @@ export function renderHomeV2MoreSheet(): string {
           <strong>전체</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
-        <ul class="home-v2-more-list">
-          ${links
-            .map((l) => {
-              if (l.action === 'home-v2-set') {
-                return `<li><button type="button" data-action="home-v2-set" data-home-variant="legacy">${esc(l.label)}</button></li>`
-              }
-              if (l.action === 'home-v2-guide') {
-                return `<li><button type="button" data-action="home-v2-guide">${esc(l.label)}</button></li>`
-              }
-              if (l.action === 'home-v2-goto-push' || l.action === 'home-v2-goto-diag') {
-                return `<li><button type="button" data-action="${l.action}">${esc(l.label)}</button></li>`
-              }
-              return `<li><button type="button" data-view="${l.view}">${esc(l.label)}${
-                l.hint ? ` <span class="hint">${esc(l.hint)}</span>` : ''
-              }</button></li>`
-            })
+        <div class="home-v2-more-group">
+          <h4>생활</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('길안내', 'data-action="home-v2-open-nav"')}
+            ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
+            ${moreItem('음악', 'data-action="home-v2-music"')}
+            ${moreItem('일정 · 할 일', 'data-view="life"')}
+            ${moreItem('알림', 'data-view="life"')}
+          </ul>
+        </div>
+        <div class="home-v2-more-group">
+          <h4>소통</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('친구', 'data-view="friends"')}
+            ${moreItem('가족', 'data-view="family"')}
+            ${moreItem('번역', 'data-view="global"')}
+          </ul>
+        </div>
+        <div class="home-v2-more-group">
+          <h4>도구</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('투자', 'data-view="invest"')}
+            ${moreItem('게임', 'data-view="games"')}
+            ${moreItem('실행(액션)', 'data-view="actions"')}
+            ${moreItem('설정', 'data-view="settings"')}
+          </ul>
+        </div>
+        <div class="home-v2-more-group">
+          <h4>지원</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('사용설명서', 'data-action="home-v2-guide"')}
+            ${moreItem('API 키', 'data-view="settings"')}
+            ${moreItem('진단', 'data-action="home-v2-goto-diag"')}
+            ${moreItem('푸시 실기기 테스트', 'data-action="home-v2-goto-push"')}
+            ${moreItem('디자인 전환 · 기존 홈', 'data-action="home-v2-set" data-home-variant="legacy"')}
+          </ul>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+export function renderNavigationSheet(opts?: {
+  defaultMap?: string
+  defaultTravel?: string
+}): string {
+  const map = opts?.defaultMap || 'system'
+  const travel = opts?.defaultTravel || 'driving'
+  const chips = [
+    ['집', 'home'],
+    ['회사', 'work'],
+    ['가까운 주차장', 'parking'],
+    ['가까운 주유소', 'gas'],
+    ['가까운 병원', 'hospital'],
+    ['가까운 약국', 'pharmacy'],
+  ]
+  return `
+    <div class="home-v2-nav-sheet" data-nav-sheet="1" role="dialog" aria-label="길안내">
+      <div class="home-v2-nav-sheet-panel">
+        <div class="home-v2-more-head">
+          <strong>길안내</strong>
+          <button type="button" class="ghost-btn tiny" data-action="nav-sheet-close">닫기</button>
+        </div>
+        <p class="hint">어디로 안내할까요? 외부 지도 앱·웹으로 안전하게 연결합니다.</p>
+        <label class="home-v2-nav-label">목적지
+          <input type="text" id="nav-dest-input" class="home-v2-nav-input" placeholder="예: 울산역, 집, 가까운 약국" autocomplete="off" />
+        </label>
+        <div class="home-v2-nav-chips" aria-label="빠른 선택">
+          ${chips
+            .map(
+              ([label, key]) =>
+                `<button type="button" class="ghost-btn tiny" data-action="nav-chip" data-nav-chip="${key}">${esc(label)}</button>`,
+            )
             .join('')}
-        </ul>
+        </div>
+        <label class="home-v2-nav-label">이동수단
+          <select id="nav-travel-select">
+            <option value="driving" ${travel === 'driving' ? 'selected' : ''}>자동차</option>
+            <option value="walking" ${travel === 'walking' ? 'selected' : ''}>도보</option>
+            <option value="transit" ${travel === 'transit' ? 'selected' : ''}>대중교통</option>
+            <option value="bicycling" ${travel === 'bicycling' ? 'selected' : ''}>자전거</option>
+            <option value="unspecified" ${travel === 'unspecified' ? 'selected' : ''}>지정 없음</option>
+          </select>
+        </label>
+        <label class="home-v2-nav-label">지도 앱
+          <select id="nav-map-select">
+            <option value="system" ${map === 'system' ? 'selected' : ''}>자동</option>
+            <option value="apple" ${map === 'apple' ? 'selected' : ''}>Apple 지도</option>
+            <option value="google" ${map === 'google' ? 'selected' : ''}>Google 지도</option>
+            <option value="kakao" ${map === 'kakao' ? 'selected' : ''}>카카오맵</option>
+            <option value="naver" ${map === 'naver' ? 'selected' : ''}>네이버지도</option>
+          </select>
+        </label>
+        <button type="button" class="primary-btn" data-action="nav-sheet-start">길찾기 시작</button>
+        <p class="hint">운전 중에는 화면을 조작하지 마세요. 경로 정확도는 지도 앱을 따릅니다.</p>
       </div>
     </div>
   `
@@ -259,8 +328,8 @@ export function renderDesignLabSection(opts: {
   if (!opts.visible) return ''
   return `
     <details class="device-test-panel home-v2-lab" open data-home-v2-lab="1">
-      <summary><strong>디자인 테스트 · HOME v2</strong></summary>
-      <p class="hint">Preview 전용. 프로덕션 기본 홈은 변경되지 않습니다. 쿼리: <code>?home=v2</code> / <code>?home=legacy</code></p>
+      <summary><strong>홈 화면 · 디자인 전환</strong></summary>
+      <p class="hint">기본 홈은 HOME v2입니다. 기존 홈은 복구용으로 유지됩니다. 쿼리: <code>?home=v2</code> / <code>?home=legacy</code></p>
       <div class="row-btns">
         <button type="button" class="primary-btn" data-action="home-v2-set" data-home-variant="legacy">기존 홈 보기</button>
         <button type="button" class="primary-btn" data-action="home-v2-set" data-home-variant="v2">HOME v2 보기</button>
@@ -268,7 +337,7 @@ export function renderDesignLabSection(opts: {
       <div class="row-btns">
         <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="legacy">실행 시 기본: 기존</button>
         <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="v2">실행 시 기본: v2</button>
-        <button type="button" class="ghost-btn danger-btn" data-action="home-v2-reset-prefs">HOME v2 설정 초기화</button>
+        <button type="button" class="ghost-btn danger-btn" data-action="home-v2-reset-prefs">홈 화면 설정 초기화</button>
       </div>
       <p class="hint">현재 화면: <strong>${opts.active === 'v2' ? 'HOME v2' : '기존 홈'}</strong> · 부트 기본: <strong>${
         opts.bootDefault === 'v2' ? 'HOME v2' : '기존 홈'

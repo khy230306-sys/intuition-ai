@@ -59,7 +59,13 @@ export function isAllowedExternalUrl(url: string): boolean {
       'open.spotify.com',
       'music.apple.com',
       'www.google.com',
+      'www.google.co.kr',
       'maps.google.com',
+      'maps.apple.com',
+      'map.kakao.com',
+      'm.map.kakao.com',
+      'map.naver.com',
+      'm.map.naver.com',
       'translate.google.com',
       'jarvis-app.shipstatic.com',
     ]

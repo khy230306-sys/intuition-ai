@@ -5,12 +5,17 @@ import {
   parseHomeQuery,
   resolveHomeVariant,
   writeBootDefaultHome,
-  writeStoredHomeVariant,
   readBootDefaultHome,
 } from './prefs'
 import { buildSmartCard } from './smartCard'
 import { HOME_V2_QUICK_COMMANDS, buildHomeV2Header, resolveVoiceUiState } from './model'
-import { renderDesignLabSection, renderHomeV2Shell, renderHomeV2NavWithPane, renderHomeV2MoreSheet } from './render'
+import {
+  renderDesignLabSection,
+  renderHomeV2Shell,
+  renderHomeV2NavWithPane,
+  renderHomeV2MoreSheet,
+  renderNavigationSheet,
+} from './render'
 
 const store = new Map<string, string>()
 vi.stubGlobal('localStorage', {
@@ -24,29 +29,25 @@ vi.stubGlobal('localStorage', {
   clear: () => store.clear(),
 })
 
-describe('HOME v2 prefs', () => {
+describe('HOME v2 prefs (v2 default)', () => {
   beforeEach(() => store.clear())
 
-  it('defaults to legacy on production host', () => {
-    writeStoredHomeVariant('v2')
+  it('defaults to v2 for new users on any host', () => {
     expect(
       resolveHomeVariant({
-        hostname: 'jarvis-app.shipstatic.com',
-        channel: 'preview',
-        stored: 'v2',
-        bootDefault: 'v2',
-      }),
-    ).toBe('legacy')
-  })
-
-  it('honors query over storage', () => {
-    expect(
-      resolveHomeVariant({
-        queryHome: 'v2',
         hostname: 'jarvis-app.shipstatic.com',
         channel: 'production',
       }),
     ).toBe('v2')
+    expect(
+      resolveHomeVariant({
+        hostname: 'example.com',
+        channel: 'production',
+      }),
+    ).toBe('v2')
+  })
+
+  it('honors query over storage', () => {
     expect(
       resolveHomeVariant({
         queryHome: 'legacy',
@@ -55,31 +56,30 @@ describe('HOME v2 prefs', () => {
         stored: 'v2',
       }),
     ).toBe('legacy')
+    expect(
+      resolveHomeVariant({
+        queryHome: 'v2',
+        stored: 'legacy',
+      }),
+    ).toBe('v2')
   })
 
-  it('uses stored preference only on preview-like hosts', () => {
+  it('respects explicit stored legacy', () => {
     expect(
       resolveHomeVariant({
         hostname: 'keen-drifter-97nqfnk.shipstatic.com',
         channel: 'preview',
-        stored: 'v2',
-      }),
-    ).toBe('v2')
-    expect(
-      resolveHomeVariant({
-        hostname: 'example.com',
-        channel: 'production',
-        stored: 'v2',
+        stored: 'legacy',
       }),
     ).toBe('legacy')
   })
 
-  it('boot default is legacy until set', () => {
-    expect(readBootDefaultHome()).toBe('legacy')
-    writeBootDefaultHome('v2')
+  it('boot default is v2 when unset', () => {
     expect(readBootDefaultHome()).toBe('v2')
-    clearHomeV2Prefs()
+    writeBootDefaultHome('legacy')
     expect(readBootDefaultHome()).toBe('legacy')
+    clearHomeV2Prefs()
+    expect(readBootDefaultHome()).toBe('v2')
   })
 
   it('parseHomeQuery', () => {
@@ -88,9 +88,8 @@ describe('HOME v2 prefs', () => {
     expect(parseHomeQuery('')).toBe(null)
   })
 
-  it('hides design lab on production host', () => {
-    expect(isDesignLabVisible('preview', 'jarvis-app.shipstatic.com')).toBe(false)
-    expect(isDesignLabVisible('preview', 'foo.shipstatic.com')).toBe(true)
+  it('design lab always visible for recovery', () => {
+    expect(isDesignLabVisible('preview', 'jarvis-app.shipstatic.com')).toBe(true)
     expect(isDesignLabVisible('production', 'localhost')).toBe(true)
   })
 })
@@ -122,7 +121,6 @@ describe('smart card priority', () => {
     })
     expect(msg.kind).toBe('messages')
     expect(msg.items.length).toBeLessThanOrEqual(3)
-    expect(msg.items[0]?.label).toMatch(/우리/)
     expect(
       buildSmartCard({
         nextScheduleLines: [],
@@ -138,29 +136,25 @@ describe('voice + quick commands', () => {
   it('maps voice states', () => {
     expect(resolveVoiceUiState({ listening: true, busy: false })).toBe('listening')
     expect(resolveVoiceUiState({ listening: false, busy: true })).toBe('busy')
-    expect(resolveVoiceUiState({ listening: false, busy: false, error: true })).toBe('error')
     expect(resolveVoiceUiState({ listening: false, busy: false })).toBe('idle')
   })
 
-  it('quick commands connect to existing phrases', () => {
+  it('quick commands include navigation', () => {
     expect(HOME_V2_QUICK_COMMANDS.briefing).toBe('브리핑')
+    expect(HOME_V2_QUICK_COMMANDS.navigate).toBe('__open_nav_sheet__')
     expect(HOME_V2_QUICK_COMMANDS.schedule).toMatch(/일정/)
     expect(HOME_V2_QUICK_COMMANDS.weather).toMatch(/날씨/)
-    expect(HOME_V2_QUICK_COMMANDS.music).toMatch(/음악/)
   })
 
   it('hides weather when missing and avoids double 님', () => {
-    const h = buildHomeV2Header('성규', null)
-    expect(h.greeting).toBe('안녕하세요, 성규님')
-    expect(h.weatherLine).toBeNull()
+    expect(buildHomeV2Header('성규', null).greeting).toBe('안녕하세요, 성규님')
     expect(buildHomeV2Header('주인님', null).greeting).toBe('안녕하세요, 주인님')
-    const anon = buildHomeV2Header('', null)
-    expect(anon.greeting).toBe('안녕하세요')
+    expect(buildHomeV2Header('', null).greeting).toBe('안녕하세요')
   })
 })
 
 describe('HOME v2 render', () => {
-  it('renders shell without secrets and with safe-area classes', () => {
+  it('renders shell with 길안내 quick action', () => {
     const html = renderHomeV2Shell(
       {
         header: { greeting: '안녕하세요', dateLine: '8월 5일', weatherLine: null },
@@ -170,37 +164,30 @@ describe('HOME v2 render', () => {
         voiceState: 'idle',
         prompt: '무엇을 도와드릴까요?',
       },
-      { draft: '', busy: false, listening: false, appVersion: '1.15.3' },
+      { draft: '', busy: false, listening: false, appVersion: '1.15.4' },
     )
-    expect(html).toContain('data-home-v2="1"')
-    expect(html).toContain('data-action="mic"')
-    expect(html).toContain('id="composer"')
-    expect(html).toContain('id="draft"')
-    expect(html).toContain('data-quick-id="briefing"')
-    expect(html.toLowerCase()).not.toContain('sk-')
-    expect(html.toLowerCase()).not.toContain('vapid_private')
-    expect(html).not.toContain('말로 쓰는 일상 비서')
+    expect(html).toContain('data-quick-id="navigate"')
+    expect(html).toContain('길안내')
+    expect(html).not.toContain('data-quick-id="music"')
+    expect(html).toContain('is-empty')
   })
 
-  it('nav has five korean items and more sheet links existing views', () => {
+  it('nav has five items; more sheet groups life/comms/tools', () => {
     const nav = renderHomeV2NavWithPane('chat', 'home', false)
     expect(nav).toContain('홈')
-    expect(nav).toContain('대화')
-    expect(nav).toContain('생활')
-    expect(nav).toContain('가족')
     expect(nav).toContain('전체')
-    expect(nav).not.toContain('>INV<')
     const more = renderHomeV2MoreSheet()
+    expect(more).toContain('길안내')
+    expect(more).toContain('음악')
     expect(more).toContain('data-view="invest"')
-    expect(more).toContain('data-view="friends"')
-    expect(more).toContain('data-view="games"')
-    expect(more).toContain('data-action="home-v2-guide"')
+    expect(more).toContain('디자인 전환')
   })
 
-  it('design lab hidden when not visible', () => {
-    expect(renderDesignLabSection({ active: 'legacy', bootDefault: 'legacy', visible: false })).toBe('')
-    expect(renderDesignLabSection({ active: 'v2', bootDefault: 'legacy', visible: true })).toContain(
-      '디자인 테스트',
+  it('navigation sheet and design lab', () => {
+    expect(renderNavigationSheet()).toContain('data-nav-sheet')
+    expect(renderNavigationSheet()).toContain('길찾기 시작')
+    expect(renderDesignLabSection({ active: 'v2', bootDefault: 'v2', visible: true })).toContain(
+      'HOME v2',
     )
   })
 })

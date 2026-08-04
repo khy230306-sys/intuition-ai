@@ -47,6 +47,7 @@ describe('device diagnostics', () => {
       user: { userId: 'u1', deviceId: 'd1', mode: 'guest' },
       providers: { mode: 'auto', configured: ['openrouter'], hasAnyKey: true },
       featureFlags: { dnaEnabled: true },
+      navigation: { hasHome: false, hasWork: false, favoriteCount: 0 },
       recentErrorCodes: ['leak sk-abcdefghijklmnopqrstuvwxyz1234'],
       href: 'https://example.com/',
     }

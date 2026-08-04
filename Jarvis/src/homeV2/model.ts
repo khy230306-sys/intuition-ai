@@ -186,9 +186,12 @@ export function buildHomeV2Model(opts: {
 
 export const HOME_V2_QUICK_COMMANDS = {
   briefing: '브리핑',
+  navigate: '__open_nav_sheet__',
   schedule: '일정 추가해줘',
   weather: '오늘 날씨 알려줘',
-  music: '조용한 음악 틀어줘',
 } as const
 
 export type HomeV2QuickId = keyof typeof HOME_V2_QUICK_COMMANDS
+
+/** Music remains available via 전체 메뉴 / 음성 — not removed from the product. */
+export const HOME_V2_MUSIC_COMMAND = '조용한 음악 틀어줘'

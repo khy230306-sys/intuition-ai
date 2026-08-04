@@ -1,12 +1,14 @@
 /**
- * HOME v2 preview preference — local only.
- * Never changes production default home.
+ * HOME variant preference — local only.
+ * Default for new users: HOME v2. Legacy remains recoverable.
  */
 
 export type HomeVariant = 'legacy' | 'v2'
 
 const STORAGE_KEY = 'aizio.home.variant.v1'
 const BOOT_DEFAULT_KEY = 'aizio.home.bootDefault.v1'
+/** One-time migration marker: unset stored preference → treat as v2 default era */
+const MIGRATION_KEY = 'aizio.home.v2DefaultMigration.v1'
 
 export function readStoredHomeVariant(): HomeVariant | null {
   try {
@@ -22,23 +24,28 @@ export function writeStoredHomeVariant(variant: HomeVariant | null): void {
   try {
     if (!variant) localStorage.removeItem(STORAGE_KEY)
     else localStorage.setItem(STORAGE_KEY, variant)
+    localStorage.setItem(MIGRATION_KEY, '1')
   } catch {
     /* ignore */
   }
 }
 
+/** Boot default when no session override — v2 for new installs. */
 export function readBootDefaultHome(): HomeVariant {
   try {
     const v = localStorage.getItem(BOOT_DEFAULT_KEY)
-    return v === 'v2' ? 'v2' : 'legacy'
+    if (v === 'legacy') return 'legacy'
+    if (v === 'v2') return 'v2'
+    return 'v2'
   } catch {
-    return 'legacy'
+    return 'v2'
   }
 }
 
 export function writeBootDefaultHome(variant: HomeVariant): void {
   try {
     localStorage.setItem(BOOT_DEFAULT_KEY, variant)
+    localStorage.setItem(MIGRATION_KEY, '1')
   } catch {
     /* ignore */
   }
@@ -48,6 +55,7 @@ export function clearHomeV2Prefs(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(BOOT_DEFAULT_KEY)
+    localStorage.removeItem(MIGRATION_KEY)
   } catch {
     /* ignore */
   }
@@ -67,7 +75,6 @@ export function isPreviewLikeChannel(channel: string | null | undefined, hostnam
   if (c === 'preview' || c === 'dev') return true
   const host = hostname.toLowerCase()
   if (host === 'localhost' || host === '127.0.0.1') return true
-  // ShipStatic snapshot hosts (not production fixed domain)
   if (host.endsWith('.shipstatic.com') && host !== 'jarvis-app.shipstatic.com') return true
   return false
 }
@@ -78,8 +85,8 @@ export function isProductionHost(hostname: string): boolean {
 
 /**
  * Resolve active home variant.
- * Priority: URL query → (preview only) stored session/boot preference → legacy.
- * Production host always defaults to legacy unless explicit ?home=v2.
+ * Priority: URL query → stored user choice → boot default → **v2**.
+ * Explicit legacy choice is always respected.
  */
 export function resolveHomeVariant(input: {
   queryHome?: string | null
@@ -91,19 +98,14 @@ export function resolveHomeVariant(input: {
   const q = parseHomeQuery(input.queryHome)
   if (q) return q
 
-  const host = input.hostname || (typeof location !== 'undefined' ? location.hostname : '')
-  if (isProductionHost(host)) return 'legacy'
-
-  const preview = isPreviewLikeChannel(input.channel, host)
-  if (!preview) return 'legacy'
-
   if (input.stored === 'v2' || input.stored === 'legacy') return input.stored
-  if (input.bootDefault === 'v2') return 'v2'
-  return 'legacy'
+
+  const boot = input.bootDefault ?? readBootDefaultHome()
+  if (boot === 'legacy') return 'legacy'
+  return 'v2'
 }
 
-/** Design lab / HOME v2 toggle UI — preview-like only. */
-export function isDesignLabVisible(channel: string | null | undefined, hostname: string): boolean {
-  if (isProductionHost(hostname)) return false
-  return isPreviewLikeChannel(channel, hostname)
+/** Home design switch — always available so users can recover legacy. */
+export function isDesignLabVisible(_channel?: string | null, _hostname?: string): boolean {
+  return true
 }

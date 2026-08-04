@@ -14,7 +14,14 @@ import {
   type HybridProviderId,
 } from './ai-providers'
 import { renderAiWizardHtml, renderHybridAiSettingsHtml } from './ai-providers/settingsUi'
-import { copyTextNow, quickActions, selectVisibleInviteText, shareText } from './actions'
+import {
+  copyTextNow,
+  navigateHref,
+  openUrl,
+  quickActions,
+  selectVisibleInviteText,
+  shareText,
+} from './actions'
 import {
   buildSpaceInviteUrl,
   detectInviteKind,
@@ -213,6 +220,7 @@ import {
   type MusicSession,
 } from './music'
 import {
+  HOME_V2_MUSIC_COMMAND,
   HOME_V2_QUICK_COMMANDS,
   buildHomeV2Model,
   clearHomeV2Prefs,
@@ -226,6 +234,7 @@ import {
   renderHomeV2MoreSheet,
   renderHomeV2NavWithPane,
   renderHomeV2Shell,
+  renderNavigationSheet,
   resolveHomeVariant,
   writeBootDefaultHome,
   writeStoredHomeVariant,
@@ -233,8 +242,22 @@ import {
   type HomeV2Pane,
   type HomeV2QuickId,
 } from './homeV2'
+import {
+  loadNavigationSettings,
+  queryGeoPermission,
+  resetNavigationLocalState,
+  setSavedPlace,
+  clearSavedPlace,
+  startNavigationFromSheet,
+  updateNavigationSettings,
+  buildMapTestSearchUrl,
+  isSafeMapUrl,
+  type MapProviderId,
+  type TravelMode,
+} from './navigation'
+import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.15.3'
+const APP_VERSION = '1.15.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -501,6 +524,8 @@ const state = {
   homeV2Pane: 'home' as HomeV2Pane,
   /** HOME v2 "전체" sheet */
   homeV2MoreOpen: false,
+  /** AI 길안내 bottom sheet */
+  homeV2NavSheetOpen: false,
   /** Deep-link / QR invite waiting for location gate */
   pendingInvite: null as null | { kind: SpaceKind; code: string },
   prefillJoinCode: '',
@@ -526,6 +551,64 @@ function activeHomeVariant(): HomeVariant {
 function designLabVisibleNow(): boolean {
   const host = typeof location !== 'undefined' ? location.hostname : ''
   return isDesignLabVisible(getCachedBuildChannel(), host)
+}
+
+async function refreshNavPermStatus(): Promise<void> {
+  const el = document.querySelector('[data-nav-perm-status]')
+  if (!el) return
+  try {
+    const p = await queryGeoPermission()
+    const label =
+      p === 'granted'
+        ? '허용됨'
+        : p === 'denied'
+          ? '거부됨'
+          : p === 'prompt'
+            ? '미요청'
+            : p === 'unsupported'
+              ? '미지원'
+              : '확인 불가'
+    el.textContent = `위치 권한: ${label}`
+  } catch {
+    el.textContent = '위치 권한: 확인 불가'
+  }
+}
+
+function openNavigationSheet(): void {
+  state.homeV2MoreOpen = false
+  state.homeV2NavSheetOpen = true
+  state.view = 'chat'
+  state.homeV2Pane = 'home'
+  render()
+}
+
+async function runNavigationFromUi(dest: string, nearby = false): Promise<void> {
+  const travel = (document.getElementById('nav-travel-select') as HTMLSelectElement | null)?.value as
+    | TravelMode
+    | undefined
+  const map = (document.getElementById('nav-map-select') as HTMLSelectElement | null)?.value as
+    | MapProviderId
+    | undefined
+  const res = await startNavigationFromSheet({
+    destinationText: dest,
+    travelMode: travel || loadNavigationSettings().defaultTravelMode,
+    preferredMap: map || loadNavigationSettings().defaultMap,
+    nearby,
+  })
+  state.homeV2NavSheetOpen = false
+  pushMsg('assistant', res.text)
+  state.view = 'chat'
+  state.homeV2Pane = 'thread'
+  render()
+  scrollChat()
+  if (res.action) {
+    try {
+      await res.action()
+    } catch {
+      showFlash('지도 앱을 열지 못했습니다. 웹 지도로 다시 시도해 주세요.')
+    }
+  }
+  if (res.openSettings) goToView('settings')
 }
 
 let arcade: ArcadeHandle | null = null
@@ -734,9 +817,9 @@ function captureViewFromUrl(): void {
       const q = u.searchParams.toString()
       window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
     }
-    // Keep ?home= for shareable compare URLs; sync stored preference on preview only.
+    // Keep ?home= for shareable compare URLs; sync stored preference when present.
     const homeQ = u.searchParams.get('home')
-    if (homeQ && designLabVisibleNow()) {
+    if (homeQ) {
       const resolved = resolveHomeVariant({
         queryHome: homeQ,
         channel: getCachedBuildChannel(),
@@ -744,6 +827,11 @@ function captureViewFromUrl(): void {
       })
       writeStoredHomeVariant(resolved)
       if (resolved === 'v2') state.homeV2Pane = 'home'
+    }
+    if (u.searchParams.get('nav') === '1' || u.searchParams.get('navigation') === '1') {
+      state.homeV2NavSheetOpen = true
+      state.view = 'chat'
+      state.homeV2Pane = 'home'
     }
   } catch {
     /* ignore */
@@ -2487,7 +2575,7 @@ function renderShareModal(): string {
   `
 }
 
-/** HOME v2 dashboard — parallel test surface; does not replace renderChat(). */
+/** HOME v2 dashboard — default home; does not delete renderChat(). */
 function renderHomeV2View(): string {
   try {
     const model = buildHomeV2Model({
@@ -2507,10 +2595,62 @@ function renderHomeV2View(): string {
       ),
     })
   } catch (err) {
-    console.warn('[homeV2] render failed, falling back to legacy home', err)
+    const code = err instanceof Error ? err.name || 'HomeV2Error' : 'HomeV2Error'
+    recordDiagError(`home_v2_fallback:${code}`)
     writeStoredHomeVariant('legacy')
+    showFlash('새 홈 화면을 불러오지 못해 기존 홈으로 전환했습니다.')
     return renderChat()
   }
+}
+
+function renderNavSettingsSection(): string {
+  const nav = loadNavigationSettings()
+  const homeAddr = nav.home?.addressText || ''
+  const workAddr = nav.work?.addressText || ''
+  return `
+    <details class="device-test-panel" data-nav-settings="1" open>
+      <summary><strong>길안내 및 지도</strong></summary>
+      <p class="hint">목적지를 이해해 지도 앱·웹으로 연결합니다. 위치·주소는 서버에 저장하지 않습니다.</p>
+      <label>기본 지도 앱
+        <select name="navDefaultMap" data-nav-field="defaultMap">
+          <option value="system" ${nav.defaultMap === 'system' ? 'selected' : ''}>자동</option>
+          <option value="apple" ${nav.defaultMap === 'apple' ? 'selected' : ''}>Apple 지도</option>
+          <option value="google" ${nav.defaultMap === 'google' ? 'selected' : ''}>Google 지도</option>
+          <option value="kakao" ${nav.defaultMap === 'kakao' ? 'selected' : ''}>카카오맵</option>
+          <option value="naver" ${nav.defaultMap === 'naver' ? 'selected' : ''}>네이버지도</option>
+        </select>
+      </label>
+      <label>기본 이동수단
+        <select name="navDefaultTravel" data-nav-field="defaultTravel">
+          <option value="unspecified" ${nav.defaultTravelMode === 'unspecified' ? 'selected' : ''}>지정 없음</option>
+          <option value="driving" ${nav.defaultTravelMode === 'driving' ? 'selected' : ''}>자동차</option>
+          <option value="walking" ${nav.defaultTravelMode === 'walking' ? 'selected' : ''}>도보</option>
+          <option value="transit" ${nav.defaultTravelMode === 'transit' ? 'selected' : ''}>대중교통</option>
+          <option value="bicycling" ${nav.defaultTravelMode === 'bicycling' ? 'selected' : ''}>자전거</option>
+        </select>
+      </label>
+      <label>집 주소
+        <input type="text" data-nav-home-addr value="${escapeAttr(homeAddr)}" placeholder="예: 울산광역시 …" autocomplete="street-address" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-save-home">집 저장</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-home">집 지우기</button>
+      </div>
+      <label>회사 주소
+        <input type="text" data-nav-work-addr value="${escapeAttr(workAddr)}" placeholder="예: 서울특별시 …" autocomplete="street-address" />
+      </label>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-save-work">회사 저장</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-work">회사 지우기</button>
+      </div>
+      <p class="hint" data-nav-perm-status>위치 권한: 확인 중…</p>
+      <div class="row-btns">
+        <button type="button" class="ghost-btn" data-action="nav-request-location">위치 권한 요청</button>
+        <button type="button" class="ghost-btn" data-action="nav-clear-session">최근 길안내 상태 초기화</button>
+        <button type="button" class="ghost-btn" data-action="nav-test-map">지도 연결 테스트</button>
+      </div>
+    </details>
+  `
 }
 
 function renderChatOrHomeV2(): string {
@@ -3494,6 +3634,7 @@ function renderSettings(): string {
           </div>
           <pre class="device-diag-out hint" data-push-test-out>푸시 테스트 결과가 여기에 표시됩니다.</pre>
         </details>
+        ${renderNavSettingsSection()}
         ${renderDesignLabSection({
           active: activeHomeVariant(),
           bootDefault: readBootDefaultHome(),
@@ -3606,23 +3747,27 @@ function goToView(next: View, ev?: MouseEvent): void {
     if (next === 'family' && state.familyTab !== 'chat') {
       state.familyTab = 'chat'
       state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
     if (next === 'friends' && state.friendsTab !== 'chat') {
       state.friendsTab = 'chat'
       state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
-    if (state.homeV2MoreOpen) {
+    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen) {
       state.homeV2MoreOpen = false
+      state.homeV2NavSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
     }
     return
   }
   stopArcade()
   state.homeV2MoreOpen = false
+  state.homeV2NavSheetOpen = false
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
@@ -3677,10 +3822,17 @@ function render(opts: RenderOpts = {}): void {
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
   const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const navSheet =
+    state.homeV2NavSheetOpen
+      ? renderNavigationSheet({
+          defaultMap: loadNavigationSettings().defaultMap,
+          defaultTravel: loadNavigationSettings().defaultTravelMode,
+        })
+      : ''
   const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
   // Keep HOME v2 first viewport dense — install banner stays available on legacy / thread / other tabs.
   const installHtml = hideBrand ? '' : renderInstall()
-  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${renderShareModal()}${renderInstallGuideModal()}`
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
   document.body.classList.toggle('home-v2-active', homeV2On)
@@ -3692,6 +3844,7 @@ function render(opts: RenderOpts = {}): void {
     }
   }
   bind()
+  void refreshNavPermStatus()
   if (state.view === 'games') {
     // remount after DOM ready
     requestAnimationFrame(() => mountActiveArcade())
@@ -4491,12 +4644,127 @@ function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-quick"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.quickId as HomeV2QuickId | undefined
+      if (id === 'navigate') {
+        openNavigationSheet()
+        return
+      }
       const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
-      if (!cmd) return
+      if (!cmd || cmd.startsWith('__')) return
       state.view = 'chat'
       state.homeV2Pane = 'thread'
       state.homeV2MoreOpen = false
       void handleUserText(cmd)
+    })
+  })
+  document.querySelector('[data-action="home-v2-open-nav"]')?.addEventListener('click', () => {
+    openNavigationSheet()
+  })
+  document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    state.view = 'chat'
+    state.homeV2Pane = 'thread'
+    void handleUserText(HOME_V2_MUSIC_COMMAND)
+  })
+  document.querySelector('[data-action="nav-sheet-close"]')?.addEventListener('click', () => {
+    state.homeV2NavSheetOpen = false
+    render()
+  })
+  document.querySelector('[data-nav-sheet="1"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      state.homeV2NavSheetOpen = false
+      render()
+    }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="nav-chip"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.navChip || ''
+      const input = document.getElementById('nav-dest-input') as HTMLInputElement | null
+      const map: Record<string, { text: string; nearby?: boolean }> = {
+        home: { text: '집' },
+        work: { text: '회사' },
+        parking: { text: '주차장', nearby: true },
+        gas: { text: '주유소', nearby: true },
+        hospital: { text: '병원', nearby: true },
+        pharmacy: { text: '약국', nearby: true },
+      }
+      const hit = map[key]
+      if (!hit) return
+      if (input) input.value = hit.nearby ? `가까운 ${hit.text}` : hit.text
+      void runNavigationFromUi(hit.nearby ? hit.text : hit.text, Boolean(hit.nearby))
+    })
+  })
+  document.querySelector('[data-action="nav-sheet-start"]')?.addEventListener('click', () => {
+    const input = document.getElementById('nav-dest-input') as HTMLInputElement | null
+    const dest = (input?.value || '').trim()
+    if (!dest) {
+      showFlash('목적지를 입력해 주세요.')
+      return
+    }
+    const nearby = /가까운|근처|주변/.test(dest)
+    void runNavigationFromUi(dest.replace(/^(?:가장\s*)?(?:가까운|근처|주변)\s*/, ''), nearby)
+  })
+  document.querySelector('[data-action="nav-save-home"]')?.addEventListener('click', () => {
+    const v = (document.querySelector('[data-nav-home-addr]') as HTMLInputElement | null)?.value || ''
+    if (!v.trim()) {
+      showFlash('집 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('home', { addressText: v.trim() })
+    showFlash('집 주소를 저장했습니다.')
+  })
+  document.querySelector('[data-action="nav-save-work"]')?.addEventListener('click', () => {
+    const v = (document.querySelector('[data-nav-work-addr]') as HTMLInputElement | null)?.value || ''
+    if (!v.trim()) {
+      showFlash('회사 주소를 입력해 주세요.')
+      return
+    }
+    setSavedPlace('work', { addressText: v.trim() })
+    showFlash('회사 주소를 저장했습니다.')
+  })
+  document.querySelector('[data-action="nav-clear-home"]')?.addEventListener('click', () => {
+    clearSavedPlace('home')
+    showFlash('집 주소를 지웠습니다.')
+    render()
+  })
+  document.querySelector('[data-action="nav-clear-work"]')?.addEventListener('click', () => {
+    clearSavedPlace('work')
+    showFlash('회사 주소를 지웠습니다.')
+    render()
+  })
+  document.querySelector('[data-action="nav-request-location"]')?.addEventListener('click', () => {
+    void import('./navigation').then(async (m) => {
+      const r = await m.requestCurrentPosition()
+      showFlash(r.ok ? '위치를 확인했습니다. (좌표는 저장하지 않습니다)' : `위치 확인 실패 · ${r.errorCode || 'denied'}`)
+      void refreshNavPermStatus()
+    })
+  })
+  document.querySelector('[data-action="nav-clear-session"]')?.addEventListener('click', () => {
+    resetNavigationLocalState()
+    showFlash('최근 길안내 상태를 초기화했습니다.')
+  })
+  document.querySelector('[data-action="nav-test-map"]')?.addEventListener('click', () => {
+    const sel = document.querySelector('[data-nav-field="defaultMap"]') as HTMLSelectElement | null
+    const provider = (sel?.value || loadNavigationSettings().defaultMap) as MapProviderId
+    const links = buildMapTestSearchUrl(provider)
+    if (!isSafeMapUrl(links.webUrl)) {
+      showFlash('허용되지 않은 지도 링크입니다.')
+      return
+    }
+    if (links.appUrl && isSafeMapUrl(links.appUrl)) navigateHref(links.appUrl, { newTab: false })
+    openUrl(links.webUrl, links.label)
+    showFlash(`${links.label} 검색 화면을 엽니다. (테스트용 · 서울역)`)
+  })
+  document.querySelectorAll<HTMLSelectElement>('[data-nav-field]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const field = sel.dataset.navField
+      if (field === 'defaultMap') {
+        updateNavigationSettings({ defaultMap: sel.value as MapProviderId })
+        showFlash('기본 지도 앱을 저장했습니다.')
+      }
+      if (field === 'defaultTravel') {
+        updateNavigationSettings({ defaultTravelMode: sel.value as TravelMode })
+        showFlash('기본 이동수단을 저장했습니다.')
+      }
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-go"]').forEach((btn) => {
@@ -5552,9 +5820,17 @@ function bootAppCore(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
   void loadBuildMetaLite().then(() => {
-    // Refresh once channel is known so Preview design-lab / HOME v2 resolve correctly.
+    // Refresh once channel is known so HOME v2 / design-lab resolve correctly.
     if (state.locationReady) render({ guardNav: false })
   })
+  try {
+    if (sessionStorage.getItem('aizio.nav.openSheet.v1') === '1') {
+      sessionStorage.removeItem('aizio.nav.openSheet.v1')
+      state.homeV2NavSheetOpen = true
+    }
+  } catch {
+    /* ignore */
+  }
   void import('./push').then(async (m) => {
     try {
       const url = (state.settings.pushServerBaseUrl || '').trim()

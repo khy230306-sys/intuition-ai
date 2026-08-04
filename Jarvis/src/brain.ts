@@ -11,6 +11,7 @@ import {
   sendSms,
   shareText,
 } from './actions'
+import { tryHandleNavigation } from './navigation'
 import {
   analyzeHolding,
   compound,
@@ -759,6 +760,25 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // AI 길안내 v1 — maps app/web handoff (before generic chat / legacy mapMatch)
+  try {
+    const nav = await tryHandleNavigation(text)
+    if (nav?.handled) {
+      if (typeof sessionStorage !== 'undefined') {
+        if (nav.openSheet) sessionStorage.setItem('aizio.nav.openSheet.v1', '1')
+        if (nav.openSettings) sessionStorage.setItem('aizio.nav.focusSettings.v1', '1')
+      }
+      return {
+        text: nav.text,
+        speak: nav.speak !== false,
+        action: nav.action,
+        view: nav.openSettings ? 'settings' : undefined,
+      }
+    }
+  } catch {
+    /* navigation must never block other skills */
+  }
+
   // Bare stop always handled (even if lock was cleared / old session)
   if (/^(스톱|스탑|stop|그만|종료)$/i.test(text.trim())) {
     const locked = await handleTranslate(text)
@@ -1120,9 +1140,18 @@ export async function think(
     return { text: appIntent.message, speak: true, action: () => appIntent }
   }
 
+  // Legacy short map patterns — prefer navigation module when possible
   const mapMatch = text.match(/^(?:지도|길찾기)\s*(.+)$/i) || text.match(/^(.+?)\s*(?:지도|길찾기)$/i)
   if (mapMatch) {
     const q = mapMatch[1].trim()
+    try {
+      const nav = await tryHandleNavigation(`${q} 길찾기`)
+      if (nav?.handled) {
+        return { text: nav.text, speak: true, action: nav.action }
+      }
+    } catch {
+      /* fall through */
+    }
     return { text: `"${q}" 지도를 엽니다.`, speak: true, action: () => openMaps(q) }
   }
 

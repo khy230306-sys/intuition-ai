@@ -2964,3 +2964,104 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
     margin: 0 auto;
   }
 }
+
+/* HOME v2 polish + navigation sheet */
+.home-v2-header {
+  max-height: 10vh;
+  margin-bottom: 2px;
+}
+.home-v2-greet {
+  font-size: clamp(1rem, 3.8vw, 1.22rem);
+}
+.home-v2-sum-item {
+  min-height: 52px;
+  justify-content: space-between;
+}
+.home-v2-sum-item strong {
+  font-variant-numeric: tabular-nums;
+}
+.home-v2-orb {
+  width: 88px;
+  height: 88px;
+}
+.home-v2-voice {
+  gap: 2px;
+  padding: 4px 0 0;
+}
+.home-v2-composer-wrap {
+  padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+}
+.home-v2-quick-btn {
+  min-height: 48px;
+}
+.home-v2-q-ico {
+  width: 30px;
+  height: 30px;
+  font-size: 0.9rem;
+}
+.home-v2-smart-card.is-empty {
+  padding: 10px 12px;
+  min-height: 0;
+}
+.home-v2-smart-card.is-empty .home-v2-card-empty {
+  margin-top: 2px;
+}
+.home-v2-nav button {
+  min-height: 48px;
+}
+.home-v2-more-group h4 {
+  margin: 10px 0 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+  text-transform: none;
+}
+.home-v2-nav-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  padding-bottom: calc(12px + var(--safe-bottom));
+}
+.home-v2-nav-sheet-panel {
+  width: min(480px, 100%);
+  max-height: min(78vh, 640px);
+  overflow: auto;
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 14px 14px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.home-v2-nav-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.home-v2-nav-input,
+.home-v2-nav-sheet-panel select {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.22);
+  background: rgba(8, 14, 22, 0.9);
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 1rem;
+}
+.home-v2-nav-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.home-v2-nav-chips .ghost-btn {
+  min-height: 36px;
+}

@@ -1,6 +1,6 @@
 # AIZIO Life OS 2.0 — Device Test (cards UI)
 
-**App version target:** 1.20.1+  
+**App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).  
 **Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
 
@@ -22,17 +22,17 @@
 | 2 | 지금 가장 중요한 일이 뭐야? | `priority_recommendation` | 자세히 | 미확인 | | chat | |
 | 3 | 오늘 일정이 바빠? | `context_summary` (busy) | 자세히 | 미확인 | | chat | |
 | 4 | 30분 동안 AIZIO 개발에 집중할래. | `focus_session` active | 종료 | 미확인 | | chat | |
-| 5 | 집중 상태 보여줘. | `focus_session` | 종료/자세히 | 미확인 | | chat | |
+| 5 | 집중 상태 보여줘. | `focus_session` | 종료/자세히 | phrase-smoke 통과 (실기기 미확인) | | chat | |
 | 6 | Background 10s then reopen | remaining time from timestamp | — | 미확인 | | | |
 | 7 | 집중 끝. | `focus_session` completed | — | 미확인 | | chat | |
-| 8 | 출근 Routine 후보 보여줘. | `habit_candidate` or empty text | 저장/무시/거절 | 미확인 | | chat | |
+| 8 | 출근 Routine 후보 보여줘. | `habit_candidate` or empty text | 저장/무시/거절 | phrase-smoke 통과 (실기기 미확인) | | chat | |
 | 9 | Habit 거절 후 다시 후보 | 재표시 없음 | — | 미확인 | | | |
 | 10 | 퇴근하면 집으로 길 안내하고 잔잔한 음악 준비해줘. | `automation_plan` | 저장/취소 | 미확인 | | chat | |
 | 11 | 자동화 저장 | plan saved message | — | 미확인 | | | |
 | 12 | AIZIO 출시 목표 다음 할 일 알려줘. | `goal_coach` | 자세히 | 미확인 | | chat | |
-| 13 | 네비게이션 관련 아이디어 찾아줘. | `knowledge_results` or empty | 더 보기 | 미확인 | | chat | |
-| 14 | 모닝 브리프. | `morning_brief` | 펼쳐보기 | 미확인 | | chat | |
-| 15 | 저녁 요약. | `evening_summary` | 펼쳐보기 | 미확인 | | chat | |
+| 13 | 네비게이션 관련 아이디어 찾아줘. | `knowledge_results` or empty | 더 보기 | phrase-smoke 통과 (실기기 미확인) | | chat | |
+| 14 | 모닝 브리프. | `morning_brief` | 펼쳐보기 | phrase-smoke 통과 · 명시 요청 시 quiet hours 우회 (실기기 미확인) | | chat | |
+| 15 | 저녁 요약. | `evening_summary` | 펼쳐보기 | phrase-smoke 통과 · 명시 요청 시 quiet hours 우회 (실기기 미확인) | | chat | |
 | 16 | Home strip / smart Focus | ≤2 signals; Focus when active | chip tap | 미확인 | | home | |
 | 17 | Proactive OFF | no auto promo strip | — | 미확인 | | home | |
 | 18 | 조용한 음악 틀어줘 | music (no los2 steal) | play chip | 미확인 | | | |

@@ -46,8 +46,15 @@ export function handleRelationshipQuery(text: string): string | null {
   const saved = saveRelationshipFromText(text)
   if (saved) return saved
 
+  // Knowledge / idea search must not be stolen by fuzzy person matching
+  if (/아이디어\s*찾아|지식\s*검색|기록\s*검색|통합\s*검색/.test(text)) return null
+  if (/찾아줘|검색해줘/.test(text) && /아이디어|메모|프로젝트|기록/.test(text) && !/(?:엄마|아빠|김부장|담당|동료)/.test(text)) {
+    return null
+  }
+
   const related = text.match(/([가-힣A-Za-z]{2,20})\s*(?:관련|과\s*관련|이랑|하고).*(?:일정|메모|얘기|대화)/)
-  const person = related?.[1] || text.match(/(?:엄마|아빠|김부장|[가-힣]{2,10})/)?.[0]
+  // Only explicit person cues — never arbitrary Hangul tokens (e.g. 「네비게이션」)
+  const person = related?.[1] || text.match(/(?:엄마|아빠|김부장)/)?.[0]
   if (person && /일정|메모|관련|마지막/.test(text)) {
     const r = searchRelatedLocal(person)
     const lines = [`【${r.person} 관련】`]

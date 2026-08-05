@@ -43,13 +43,17 @@ export function inQuietHours(d = new Date()): boolean {
   return h >= p.quietStartHour && h < p.quietEndHour
 }
 
-export function companionAllowed(kind: CompanionKind): boolean {
+export function companionAllowed(
+  kind: CompanionKind,
+  opts?: { bypassQuietHours?: boolean },
+): boolean {
   if (!isLifeOs2Enabled('companionEnabled')) return false
   if (!loadLos2Privacy().companionEnabled) return false
   const p = loadCompanionPrefs()
   if (kind === 'morning' && !p.morningEnabled) return false
   if (kind === 'evening' && !p.eveningEnabled) return false
-  if (inQuietHours()) return false
+  // Quiet hours block proactive pushes only — explicit user asks always win
+  if (!opts?.bypassQuietHours && inQuietHours()) return false
   return true
 }
 

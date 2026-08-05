@@ -2,8 +2,8 @@ import { fuseContext } from '../context-fusion/contextFusionEngine'
 import { loadSettings } from '../../storage'
 import { companionAllowed, rememberCompanion, wasSameCompanionRecently } from './companionPolicy'
 
-export function buildMorningCompanion(): string {
-  if (!companionAllowed('morning')) {
+export function buildMorningCompanion(opts?: { explicitRequest?: boolean }): string {
+  if (!companionAllowed('morning', { bypassQuietHours: !!opts?.explicitRequest })) {
     return 'Morning Companion이 꺼져 있거나 방해 금지 시간입니다.'
   }
   const ctx = fuseContext({ force: true })

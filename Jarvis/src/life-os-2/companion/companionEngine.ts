@@ -17,12 +17,12 @@ export function handleCompanionQuery(text: string): string | null {
   }
 
   if (/모닝|아침\s*브리프|morning\s*companion|좋은\s*아침\s*요약/i.test(text)) {
-    const t = buildMorningCompanion()
+    const t = buildMorningCompanion({ explicitRequest: true })
     emitLifeOs2Event('companion.morning', {})
     return t
   }
   if (/저녁\s*요약|이브닝|오늘\s*정리|evening\s*summary/i.test(text)) {
-    const t = buildEveningCompanion()
+    const t = buildEveningCompanion({ explicitRequest: true })
     emitLifeOs2Event('companion.evening', {})
     return t
   }

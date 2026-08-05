@@ -38,7 +38,13 @@ export function parseLifeOs2Intent(text: string): LifeOs2Parsed | null {
 
   if (/습관\s*확인|습관\s*승인/.test(t)) return { intent: 'confirm_habit' }
   if (/습관\s*거절|습관\s*거부/.test(t)) return { intent: 'reject_habit' }
-  if (/습관\s*(보여|목록|후보)|^습관$/.test(t)) return { intent: 'show_habits' }
+  if (
+    /습관\s*(보여|목록|후보)|^습관$/.test(t) ||
+    /(?:출근\s*)?(?:Routine|루틴)\s*후보/.test(t) ||
+    /Routine\s*후보\s*보여/.test(t)
+  ) {
+    return { intent: 'show_habits' }
+  }
 
   if (/오늘\s*뭐\s*해야|현재\s*상황|컨텍스트/.test(t)) return { intent: 'ask_current_context' }
   if (/가장\s*중요한\s*일|우선순위/.test(t)) return { intent: 'ask_priority' }
@@ -61,7 +67,12 @@ export function parseLifeOs2Intent(text: string): LifeOs2Parsed | null {
     /지식\s*검색|통합\s*검색|예전에\s*.+?(?:얘기|내용)|아이디어\s*찾아|기록\s*검색|관련\s*.+?\s*모두\s*보여/.test(
       t,
     ) ||
-    (/찾아줘|검색해줘/.test(t) && /메모|프로젝트|아이디어|목표|타임라인|일정/.test(t) && !/길|지도|내비/.test(t))
+    (
+      /찾아줘|검색해줘/.test(t) &&
+      /메모|프로젝트|아이디어|목표|타임라인|일정/.test(t) &&
+      // Block map/nav asks, but allow 「네비게이션 관련 아이디어」 knowledge search
+      !(/길\s*안내|지도\s*열어|내비\s*켜|네비\s*켜/.test(t) && !/아이디어|메모|기록/.test(t))
+    )
   ) {
     return { intent: 'search_knowledge', text: t }
   }

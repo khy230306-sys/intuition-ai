@@ -103,7 +103,11 @@ export async function coordinateLifeOs2(text: string): Promise<Los2HandleResult 
     if (/오늘\s*집중\s*기록|집중\s*기록/.test(t)) {
       return ok(formatFocusHistory(), [buildFocusCard(getActiveFocus(), 'status')])
     }
-    if (/집중\s*(상태|현황|중)?\s*$/.test(t) || /집중\s*어때/.test(t)) {
+    if (
+      /집중\s*(상태|현황)(\s*(보여|알려|확인))?/.test(t) ||
+      /집중\s*중\s*$/.test(t) ||
+      /집중\s*어때/.test(t)
+    ) {
       return ok(formatFocusStatus(), [buildFocusCard(getActiveFocus(), 'status')])
     }
   }
@@ -183,7 +187,11 @@ export async function coordinateLifeOs2(text: string): Promise<Los2HandleResult 
   if (isLifeOs2Enabled('knowledgeEngineEnabled')) {
     const kn = handleKnowledgeQuery(t)
     if (kn) {
-      let query = t.replace(/찾아줘|검색해줘|지식\s*검색|관련|내용|보여줘/g, '').trim()
+      let query = t
+        .replace(/찾아줘|검색해줘|지식\s*검색|통합\s*검색|관련|내용|보여줘|아이디어/g, ' ')
+        .replace(/[.!?…]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
       if (query.length < 2) query = t
       const items = searchKnowledge({ query, reindex: false })
       return ok(kn, [buildKnowledgeCard(query, items)])

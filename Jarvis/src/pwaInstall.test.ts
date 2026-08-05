@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  attemptPwaInstall,
   clearPwaInstalledMark,
   copyAppUrl,
   detectInstallPlatform,
@@ -12,6 +13,7 @@ import {
   isPreviewInstallHost,
   isRunningAsInstalledPwa,
   markPwaInstalled,
+  openInstallShareSheet,
   PRODUCTION_INSTALL_URL,
   setDeferredInstallPromptForTests,
   shouldShowInstallButton,
@@ -66,6 +68,7 @@ describe('pwaInstall', () => {
   beforeEach(() => {
     setDeferredInstallPromptForTests(null)
     clearPwaInstalledMark()
+    vi.unstubAllGlobals()
   })
 
   it('hides button when running as installed PWA', () => {
@@ -95,23 +98,28 @@ describe('pwaInstall', () => {
 
   it('detects platforms and guide copy', () => {
     expect(detectInstallPlatform('iPhone')).toBe('ios')
-    expect(detectInstallPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1')).toBe(
-      'ios-chrome',
-    )
+    expect(
+      detectInstallPlatform(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe('ios-chrome')
     expect(isIosNonSafari('CriOS/120 iPhone')).toBe(true)
     expect(detectInstallPlatform('Android 14')).toBe('android')
     expect(isMobileInstallTarget('iPad')).toBe(true)
     expect(installGuideSteps('ios').steps.length).toBeGreaterThan(2)
-    expect(installGuideSteps('ios').steps.join(' ')).toMatch(/Safari 공유/)
+    expect(installGuideSteps('ios').steps.join(' ')).toMatch(/공유 창/)
     expect(installGuideSteps('ios', { previewHost: true }).steps.join(' ')).toMatch(/Preview/)
     expect(installGuideSteps('ios-chrome').title).toMatch(/Safari/)
     expect(installGuideSteps('android').title).toMatch(/안드로이드/)
-    expect(installCtaLabel('ios')).toMatch(/설치 방법/)
+    expect(installCtaLabel('ios')).toMatch(/홈 화면에 설치/)
     expect(isPreviewInstallHost('pulsing-bloom-qk5a536.shipstatic.com')).toBe(true)
     expect(isPreviewInstallHost('jarvis-app.shipstatic.com')).toBe(false)
-    expect(getRecommendedInstallUrl('pulsing-bloom-qk5a536.shipstatic.com', 'https://pulsing-bloom-qk5a536.shipstatic.com')).toBe(
-      PRODUCTION_INSTALL_URL,
-    )
+    expect(
+      getRecommendedInstallUrl(
+        'pulsing-bloom-qk5a536.shipstatic.com',
+        'https://pulsing-bloom-qk5a536.shipstatic.com',
+      ),
+    ).toBe(PRODUCTION_INSTALL_URL)
     expect(getRecommendedInstallUrl('jarvis-app.shipstatic.com', 'https://jarvis-app.shipstatic.com')).toBe(
       'https://jarvis-app.shipstatic.com',
     )
@@ -120,5 +128,44 @@ describe('pwaInstall', () => {
   it('copyAppUrl returns boolean without throwing', async () => {
     const ok = await copyAppUrl()
     expect(typeof ok).toBe('boolean')
+  })
+
+  it('openInstallShareSheet uses navigator.share', async () => {
+    const share = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', { share, canShare: () => true })
+    expect(await openInstallShareSheet('https://jarvis-app.shipstatic.com/')).toBe('shared')
+    expect(share).toHaveBeenCalled()
+    const abort = Object.assign(new Error('nope'), { name: 'AbortError' })
+    share.mockRejectedValueOnce(abort)
+    expect(await openInstallShareSheet('https://jarvis-app.shipstatic.com/')).toBe('dismissed')
+  })
+
+  it('attemptPwaInstall opens share sheet on iOS when no native prompt', async () => {
+    const share = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+      share,
+      canShare: () => true,
+      serviceWorker: undefined,
+    })
+    vi.stubGlobal('location', { origin: 'https://jarvis-app.shipstatic.com', hostname: 'jarvis-app.shipstatic.com' })
+    const r = await attemptPwaInstall()
+    expect(r.kind).toBe('shared')
+    expect(share).toHaveBeenCalled()
+  })
+
+  it('attemptPwaInstall uses beforeinstallprompt when available', async () => {
+    const prompt = vi.fn(async () => undefined)
+    setDeferredInstallPromptForTests({
+      prompt,
+      userChoice: Promise.resolve({ outcome: 'accepted', platform: 'web' }),
+    } as never)
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/120',
+      serviceWorker: { ready: Promise.resolve({}) },
+    })
+    const r = await attemptPwaInstall()
+    expect(r.kind).toBe('accepted')
+    expect(prompt).toHaveBeenCalled()
   })
 })

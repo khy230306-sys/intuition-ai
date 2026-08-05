@@ -306,7 +306,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.3'
+const APP_VERSION = '1.20.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -721,12 +721,7 @@ function renderHomeInstallButton(opts?: { compact?: boolean }): string {
   const compact = opts?.compact
   const platform = detectInstallPlatform()
   const label = installCtaLabel(platform)
-  const short =
-    platform === 'ios' || platform === 'ios-chrome'
-      ? '설치 방법'
-      : compact
-        ? '홈 화면 설치'
-        : label
+  const short = compact ? '홈 화면 설치' : label
   return `
     <button type="button" class="install-home-btn ${compact ? 'compact' : ''}" data-action="install-home" aria-label="${escapeAttr(label)}">
       <span class="install-home-ico" aria-hidden="true">↓</span>
@@ -750,22 +745,27 @@ async function handleInstallHomeClick(): Promise<void> {
     render()
     return
   }
+  if (result.kind === 'shared') {
+    // Share sheet opened — user completes with 「홈 화면에 추가」
+    state.installGuideOpen = false
+    showFlash(
+      isPreviewInstallHost()
+        ? '공유 창에서 「홈 화면에 추가」를 누르세요. (정식 앱은 jarvis-app.shipstatic.com)'
+        : '공유 창에서 「홈 화면에 추가」→「추가」를 누르면 설치됩니다.',
+    )
+    refreshInstallHint()
+    render()
+    return
+  }
   if (result.kind === 'dismissed') {
     showFlash('설치가 취소되었습니다. 언제든 다시 누를 수 있어요.')
     refreshInstallHint()
     render()
     return
   }
-  // Native sheet unavailable — show platform steps (iPhone / Android)
+  // Share/prompt unavailable — show platform steps
   state.installGuideOpen = result.kind === 'need-guide' ? result.platform : detectInstallPlatform()
-  const platform = state.installGuideOpen
-  if (platform === 'ios' || platform === 'ios-chrome') {
-    showFlash(
-      isPreviewInstallHost()
-        ? '아이폰은 Safari 공유로만 추가됩니다. Preview가 아니라 정식 주소를 쓰세요.'
-        : '아이폰은 앱 버튼으로 설치되지 않습니다. Safari 공유 → 홈 화면에 추가',
-    )
-  }
+  showFlash('공유 창을 열 수 없어 설치 방법을 표시합니다.')
   render()
 }
 
@@ -2414,10 +2414,10 @@ function renderInstall(): string {
   const tip =
     platform === 'ios'
       ? preview
-        ? '이 주소는 Preview · 홈 화면은 정식 주소 + Safari 공유로 추가'
-        : '버튼은 안내만 합니다 · Safari 공유 → 홈 화면에 추가'
+        ? '버튼 → 공유 창 자동 열림 · 「홈 화면에 추가」 선택 (Preview)'
+        : '버튼을 누르면 공유 창이 열립니다 · 「홈 화면에 추가」 선택'
       : platform === 'ios-chrome'
-        ? 'Chrome에서는 불가 · Safari로 연 뒤 공유 → 홈 화면에 추가'
+        ? '가능하면 Safari에서 · 버튼이 공유 창을 엽니다'
         : platform === 'android'
           ? hasNativeInstallPrompt()
             ? '버튼을 누르면 설치 창이 열립니다'

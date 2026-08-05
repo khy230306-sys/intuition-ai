@@ -34,8 +34,9 @@ export function getRecommendedInstallUrl(
 }
 
 export function installCtaLabel(platform: InstallPlatform = detectInstallPlatform()): string {
-  if (platform === 'ios' || platform === 'ios-chrome') return '설치 방법 보기'
-  if (platform === 'android' && !hasNativeInstallPrompt()) return '설치 방법 보기'
+  // Button triggers the closest native install UI available on the platform
+  if (platform === 'ios' || platform === 'ios-chrome') return '홈 화면에 설치'
+  if (platform === 'android' && !hasNativeInstallPrompt()) return '홈 화면에 설치'
   return '홈 화면에 설치'
 }
 
@@ -207,11 +208,40 @@ export function bindPwaInstallEvents(): void {
 export type InstallAttemptResult =
   | { kind: 'accepted' }
   | { kind: 'dismissed' }
+  | { kind: 'shared' } // iOS: native share sheet opened (user picks 홈 화면에 추가)
   | { kind: 'need-guide'; platform: InstallPlatform }
   | { kind: 'already-installed' }
   | { kind: 'unavailable' }
 
-/** Try native install sheet; otherwise caller should show the step-by-step guide. */
+/**
+ * Open the OS share sheet so the user can tap 「홈 화면에 추가」.
+ * Closest path to one-tap install on iOS (Apple provides no install API).
+ */
+export async function openInstallShareSheet(
+  url = typeof location !== 'undefined' ? `${location.origin}/` : PRODUCTION_INSTALL_URL,
+): Promise<'shared' | 'dismissed' | 'unavailable'> {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+    return 'unavailable'
+  }
+  try {
+    const canShare =
+      typeof navigator.canShare !== 'function' ||
+      navigator.canShare({ url, title: 'AIZIO' })
+    if (!canShare) return 'unavailable'
+    await navigator.share({
+      title: 'AIZIO',
+      text: '공유 목록에서 「홈 화면에 추가」를 누르면 설치됩니다.',
+      url,
+    })
+    return 'shared'
+  } catch (err) {
+    const name = err && typeof err === 'object' && 'name' in err ? String((err as { name: string }).name) : ''
+    if (name === 'AbortError') return 'dismissed'
+    return 'unavailable'
+  }
+}
+
+/** Try native Chromium install prompt, then iOS share sheet; else guide. */
 export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
   if (typeof window !== 'undefined' && isRunningAsInstalledPwa()) {
     markPwaInstalled()
@@ -225,10 +255,14 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
     try {
       await Promise.race([
         navigator.serviceWorker.ready,
-        new Promise((r) => setTimeout(r, 800)),
+        new Promise((r) => setTimeout(r, 1200)),
       ])
     } catch {
       /* ignore */
+    }
+    // One more short wait — prompt sometimes arrives just after SW ready
+    if (!deferredPrompt) {
+      await new Promise((r) => setTimeout(r, 400))
     }
   }
   const promptEvent = deferredPrompt
@@ -246,7 +280,20 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
       return { kind: 'need-guide', platform: detectInstallPlatform() }
     }
   }
-  return { kind: 'need-guide', platform: detectInstallPlatform() }
+
+  const platform = detectInstallPlatform()
+  // iPhone/iPad: no beforeinstallprompt — open system share sheet from this tap
+  if (platform === 'ios' || platform === 'ios-chrome') {
+    // iOS 「홈 화면에 추가」 targets the current document — share this origin
+    const shareUrl =
+      typeof location !== 'undefined' ? `${location.origin}/` : `${getRecommendedInstallUrl()}/`
+    const shareResult = await openInstallShareSheet(shareUrl)
+    if (shareResult === 'shared') return { kind: 'shared' }
+    if (shareResult === 'dismissed') return { kind: 'dismissed' }
+    // Share unavailable (rare) → fall through to written guide
+  }
+
+  return { kind: 'need-guide', platform }
 }
 
 export function installGuideSteps(platform: InstallPlatform, opts?: { previewHost?: boolean }): { title: string; steps: string[] } {
@@ -270,9 +317,9 @@ export function installGuideSteps(platform: InstallPlatform, opts?: { previewHos
     return {
       title: '아이폰 · Safari로 홈 화면에 추가',
       steps: [
-        '앱 안의 「설치」버튼은 아이폰에서 바로 설치하지 않습니다. Safari 공유가 필요합니다.',
+        '「홈 화면에 설치」를 누르면 공유 창이 자동으로 열립니다.',
         previewNote || '가능하면 정식 주소(jarvis-app.shipstatic.com)에서 추가하세요.',
-        'Safari 하단(또는 상단) 공유 버튼(□↑)을 누릅니다.',
+        '공유 창이 안 열리면 Safari 하단(또는 상단) 공유 버튼(□↑)을 직접 누릅니다.',
         '시트를 아래로 스크롤해 「홈 화면에 추가」를 고릅니다. (위쪽에 「즐겨찾기」만 보이면 더 아래로)',
         '목록에 없으면 「편집」또는 「동작 편집」→ 「홈 화면에 추가」켜기 → 완료 후 다시 공유.',
         '오른쪽 위 「추가」를 누릅니다. 개인정보 보호 브라우징이면 일반 탭으로 바꿔 다시 시도하세요.',

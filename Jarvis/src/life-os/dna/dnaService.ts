@@ -92,6 +92,12 @@ export function forgetDna(query: string): { ok: boolean; message: string } {
     saveDna([])
     appendAudit('dna.clear', 'all')
     emitLifeEvent('dna.changed', { cleared: true })
+    try {
+      // AIE Learning — do not re-recommend cleared memories
+      void import('../../aie').then((m) => m.recordForgottenMemory('dna_cleared_all')).catch(() => {})
+    } catch {
+      /* optional */
+    }
     return { ok: true, message: 'DNA 기억을 모두 삭제했습니다.' }
   }
   if (next.length === items.length) {
@@ -100,6 +106,11 @@ export function forgetDna(query: string): { ok: boolean; message: string } {
   saveDna(next)
   appendAudit('dna.delete', q)
   emitLifeEvent('dna.changed', {})
+  try {
+    void import('../../aie').then((m) => m.recordForgottenMemory(q)).catch(() => {})
+  } catch {
+    /* optional */
+  }
   return { ok: true, message: '해당 기억을 삭제했습니다.' }
 }
 

@@ -55,6 +55,14 @@ import { getAppLocale } from './i18n'
 import { tryHandleMusicSkill } from './music'
 import { coreResultToBrainReply, processCoreBrain, stripWakeWord } from './core-brain'
 import {
+  aieEnrichAnswer,
+  aieFormatMultiTaskCombined,
+  aiePrepare,
+  buildAieDailyBriefChat,
+  formatActionPlanSummary,
+  type AiePrepareResult,
+} from './aie'
+import {
   addExpense,
   addHabit,
   addJournal,
@@ -496,7 +504,12 @@ async function handleLife(text: string): Promise<BrainReply | null> {
   const name = settings.displayName
 
   if (/브리핑|오늘\s*뭐하지|모닝|아침\s*보고|하루\s*요약/i.test(text)) {
-    return { text: morningBriefing(), speak: true }
+    // AIE Daily Brief (Context-based) — legacy morningBriefing still available inside Life OS brief
+    try {
+      return { text: buildAieDailyBriefChat(), speak: true }
+    } catch {
+      return { text: morningBriefing(), speak: true }
+    }
   }
 
   if (/공휴일|휴일/.test(text)) {
@@ -720,12 +733,82 @@ async function replyWeather(
 export async function think(
   input: string,
   history: { role: string; text: string }[] = [],
-  opts?: { source?: 'text' | 'voice' | 'system' },
+  opts?: {
+    source?: 'text' | 'voice' | 'system'
+    /** Internal: skip AIE multi-task split (executing a planned segment). */
+    skipAieMultiTask?: boolean
+    /** Internal: skip recommendation append. */
+    skipAieEnrich?: boolean
+  },
 ): Promise<BrainReply> {
   const settings = loadSettings()
   const name = settings.displayName
   const raw = input.trim()
   if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
+
+  // AIZIO Intelligence Engine — orchestrator only (never replaces Core Brain)
+  let aiePrep: AiePrepareResult | null = null
+  try {
+    if (!opts?.skipAieMultiTask) {
+      const strippedForAie = stripWakeWord(raw).text || raw
+      aiePrep = aiePrepare({
+        text: strippedForAie,
+        history,
+        source: opts?.source || 'text',
+        skipMultiTask: false,
+        skipRecommend: Boolean(opts?.skipAieEnrich),
+      })
+      if (aiePrep.shouldRunMultiTask) {
+        const parts: Array<{ label: string; text: string }> = []
+        let last: BrainReply | null = null
+        for (const task of aiePrep.plan.tasks) {
+          const r = await think(task.text, history, {
+            source: opts?.source || 'text',
+            skipAieMultiTask: true,
+            skipAieEnrich: true,
+          })
+          parts.push({ label: task.reason, text: r.text })
+          last = r
+        }
+        const combined = aieFormatMultiTaskCombined(
+          formatActionPlanSummary(aiePrep.plan),
+          parts,
+        )
+        return {
+          text: combined,
+          speak: true,
+          view: last?.view,
+          action: last?.action,
+          musicShowMiniPlayer: last?.musicShowMiniPlayer,
+          musicNeedsGesture: last?.musicNeedsGesture,
+          musicPlayUrl: last?.musicPlayUrl,
+        }
+      }
+    } else {
+      aiePrep = aiePrepare({
+        text: stripWakeWord(raw).text || raw,
+        history,
+        source: opts?.source || 'text',
+        skipMultiTask: true,
+        skipRecommend: true,
+      })
+    }
+  } catch {
+    aiePrep = null
+  }
+
+  const enrich = (reply: BrainReply): BrainReply => {
+    if (!aiePrep || opts?.skipAieEnrich) return reply
+    try {
+      const text = aieEnrichAnswer(reply.text, aiePrep, {
+        appendPlan: false,
+        appendRecs: true,
+      })
+      return text === reply.text ? reply : { ...reply, text }
+    } catch {
+      return reply
+    }
+  }
 
   // AIZIO Core Brain — classify & run registered Skills; otherwise continue legacy pipeline
   let text = raw
@@ -742,7 +825,7 @@ export async function think(
     })
     coreClaimedMusic = core.intent === 'play_music' || core.intent === 'control_music'
     const handled = coreResultToBrainReply(core)
-    if (handled) return handled
+    if (handled) return enrich(handled)
     // onlyFailed music/translate sets fallbackLegacy=true so legacy may retry once
     coreFailedMusicOrTranslate =
       core.fallbackLegacy &&
@@ -847,7 +930,11 @@ export async function think(
     return { text: `오늘은 ${label}입니다.`, speak: true }
   }
   if (everyday?.kind === 'briefing') {
-    return { text: morningBriefing(), speak: true }
+    try {
+      return { text: buildAieDailyBriefChat(), speak: true }
+    } catch {
+      return { text: morningBriefing(), speak: true }
+    }
   }
   if (everyday?.kind === 'userGuide') {
     return { text: userGuideText(name), speak: true }
@@ -1284,9 +1371,9 @@ export async function think(
   if (hasAnyConfiguredProvider()) {
     try {
       const cloud = await callCloudLLM(text, settings, history)
-      if (cloud) return { text: cloud, speak: true }
+      if (cloud) return enrich({ text: cloud, speak: true })
     } catch (err) {
-      return { text: aiEngineErrorText(err), speak: true }
+      return enrich({ text: aiEngineErrorText(err), speak: true })
     }
   }
 
@@ -1303,7 +1390,7 @@ export async function think(
 
   // Readable casual chat (compliment / thanks / emotion) — never STT-error path
   const casual = localCasualReply(text)
-  if (casual) return { text: casual, speak: true }
+  if (casual) return enrich({ text: casual, speak: true })
 
   // STT garbage only for true gibberish — not for unknown-but-readable chat
   if (looksLikeSttGarbage(text)) {

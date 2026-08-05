@@ -8,6 +8,8 @@ import { loadCachedWeather, type WeatherSnap } from '../weather'
 import { getHomeSpaceInbox } from '../spaceInbox'
 import { loadInterpretMode } from '../translateBrain'
 import { buildSmartCard, type SmartCardModel } from './smartCard'
+import { getActiveFocus } from '../life-os-2/focus/focusSession'
+import { isLifeOs2Enabled } from '../life-os-2/featureFlags'
 
 export type VoiceUiState = 'idle' | 'listening' | 'busy' | 'speaking' | 'error'
 
@@ -172,6 +174,18 @@ export function buildHomeV2Model(opts: {
       friendsUnread: inbox.friends.unread,
       familyName: inbox.family.hasRoom ? inbox.family.name : '가족방',
       friendsName: inbox.friends.hasRoom ? inbox.friends.name : '친구방',
+      activeFocusLabel: (() => {
+        try {
+          if (!isLifeOs2Enabled('focusEnabled')) return null
+          const f = getActiveFocus()
+          if (!f) return null
+          const end = Date.parse(f.plannedEndAt)
+          const left = Number.isFinite(end) ? Math.max(0, Math.round((end - Date.now()) / 60_000)) : 0
+          return `${f.title} · 약 ${left}분`
+        } catch {
+          return null
+        }
+      })(),
     }),
     translate: {
       active: Boolean(mode.active),

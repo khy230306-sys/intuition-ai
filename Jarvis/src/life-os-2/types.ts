@@ -9,30 +9,13 @@ export type SourceConfidence = {
   updatedAt: string | null
 }
 
-export type Los2CardKind =
-  | 'context'
-  | 'prediction'
-  | 'habit'
-  | 'focus'
-  | 'automation'
-  | 'coach'
-  | 'morning'
-  | 'evening'
-  | 'knowledge'
-  | 'recommendation'
-
-export type Los2Card = {
-  kind: Los2CardKind
-  title: string
-  body: string
-  collapsedByDefault?: boolean
-  meta?: Record<string, string | number | boolean | null>
-}
+export type { LifeOs2UiCard as Los2Card } from './ui/cardTypes'
 
 export type Los2HandleResult = {
   handled: boolean
   text: string
   speakText?: string
-  cards?: Los2Card[]
+  /** Structured cards for chat UI (optional). */
+  lifeCards?: import('./ui/cardTypes').LifeOs2UiCard[]
   view?: string
 }

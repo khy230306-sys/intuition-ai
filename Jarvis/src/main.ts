@@ -41,6 +41,13 @@ import {
 } from './inviteJoin'
 import { canUseCameraScan, decodeQrFromFile, decodeQrFromVideo } from './qrDecode'
 import { think } from './brain'
+import { renderLifeOs2CardsHtml } from './life-os-2/ui/cardRender'
+import {
+  isAllowedLos2CardAction,
+  isSafeExternalUrl,
+  LOS2_ALLOWED_VIEWS,
+} from './life-os-2/ui/uiActions'
+import { buildHomeLos2Signals, renderHomeLos2StripHtml } from './life-os-2/ui/homeStrip'
 import {
   attemptPwaInstall,
   bindPwaInstallEvents,
@@ -294,7 +301,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.0'
+const APP_VERSION = '1.20.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -1124,6 +1131,99 @@ function bootMediaPreviewDelegation(): void {
   })
 }
 
+/** Life OS 2.0 card actions — allowlisted only. */
+let los2CardDelegationReady = false
+function bootLos2CardDelegation(): void {
+  if (los2CardDelegationReady) return
+  los2CardDelegationReady = true
+  document.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement | null
+    const homeHint = t?.closest?.('[data-los2-home-hint]') as HTMLElement | null
+    if (homeHint) {
+      const hint = homeHint.getAttribute('data-los2-home-hint') || ''
+      if (hint) {
+        e.preventDefault()
+        void handleUserText(hint)
+      }
+      return
+    }
+    const btn = t?.closest?.('[data-los2-action]') as HTMLElement | null
+    if (!btn) return
+    e.preventDefault()
+    e.stopPropagation()
+    const action = btn.getAttribute('data-los2-action') || ''
+    if (!isAllowedLos2CardAction(action)) return
+    const cardId = btn.getAttribute('data-los2-card') || ''
+    let payload: Record<string, string> = {}
+    try {
+      const raw = btn.getAttribute('data-los2-payload') || ''
+      if (raw) payload = JSON.parse(decodeURIComponent(raw)) as Record<string, string>
+    } catch {
+      payload = {}
+    }
+    void handleLos2CardAction(action, cardId, payload)
+  })
+}
+
+async function handleLos2CardAction(
+  action: string,
+  cardId: string,
+  payload: Record<string, string>,
+): Promise<void> {
+  const safeCardSel = (id: string) =>
+    `[data-los2-card-root="${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`
+  if (action === 'TOGGLE_EXPAND') {
+    document.querySelector(safeCardSel(cardId))?.classList.toggle('is-collapsed')
+    return
+  }
+  if (action === 'DISMISS_CARD') {
+    document.querySelector(safeCardSel(cardId))?.remove()
+    return
+  }
+  if (action === 'OPEN_ROUTE') {
+    const view = payload.view || 'life'
+    if (LOS2_ALLOWED_VIEWS.has(view)) {
+      state.view = view as View
+      render()
+    }
+    return
+  }
+  if (action === 'OPEN_SAFE_EXTERNAL_URL') {
+    const url = payload.url || ''
+    if (isSafeExternalUrl(url)) void openUrl(url, '링크')
+    else showFlash('허용되지 않은 링크입니다.')
+    return
+  }
+  if (action === 'STOP_FOCUS') {
+    await handleUserText('집중 끝')
+    return
+  }
+  if (action === 'START_FOCUS') {
+    await handleUserText(payload.hint || '집중 모드 시작')
+    return
+  }
+  if (action === 'SAVE_AUTOMATION' || action === 'RUN_AUTOMATION' || action === 'CANCEL_AUTOMATION') {
+    await handleUserText(payload.hint || (action === 'SAVE_AUTOMATION' ? '자동화 저장' : action === 'RUN_AUTOMATION' ? '자동화 실행' : '자동화 중지'))
+    return
+  }
+  if (action === 'CONFIRM_HABIT') {
+    await handleUserText('습관 확인')
+    return
+  }
+  if (action === 'REJECT_HABIT') {
+    await handleUserText('습관 거절')
+    return
+  }
+  if (action === 'IGNORE_HABIT_ONCE') {
+    document.querySelector(safeCardSel(cardId))?.remove()
+    showFlash('이번 제안만 숨겼습니다.')
+    return
+  }
+  if (action === 'SEND_HINT' && payload.hint) {
+    await handleUserText(payload.hint)
+  }
+}
+
 /** One-time nav/tab delegation — survives remounts; faster than rebinding every render. */
 let navDelegationReady = false
 function bootNavDelegation(): void {
@@ -1351,7 +1451,7 @@ async function refreshWeather(): Promise<void> {
 function pushMsg(
   role: ChatMessage['role'],
   text: string,
-  extra?: Partial<Pick<ChatMessage, 'musicNeedsGesture' | 'musicPlayUrl' | 'actionHint'>>,
+  extra?: Partial<Pick<ChatMessage, 'musicNeedsGesture' | 'musicPlayUrl' | 'actionHint' | 'lifeCards'>>,
 ): ChatMessage {
   const msg: ChatMessage = { id: uid(), role, text, createdAt: Date.now(), ...extra }
   state.messages.push(msg)
@@ -1499,11 +1599,13 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
         pushMsg('assistant', `${reply.text}\n(${result.message})`, {
           musicNeedsGesture: reply.musicNeedsGesture,
           musicPlayUrl: reply.musicPlayUrl,
+          lifeCards: reply.lifeCards,
         })
       } else {
         pushMsg('assistant', reply.text, {
           musicNeedsGesture: reply.musicNeedsGesture,
           musicPlayUrl: reply.musicPlayUrl,
+          lifeCards: reply.lifeCards,
         })
       }
       if (result && 'view' in result && result.view) state.view = result.view
@@ -1511,6 +1613,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       pushMsg('assistant', reply.text, {
         musicNeedsGesture: reply.musicNeedsGesture,
         musicPlayUrl: reply.musicPlayUrl,
+        lifeCards: reply.lifeCards,
       })
     }
     if (reply.musicShowMiniPlayer) {
@@ -2853,11 +2956,20 @@ function renderChatMessagesHtml(): string {
               <div class="msg-bubble ${mine ? 'user' : 'assistant'}">${escapeHtml(m.text)}${
                 !mine && m.musicNeedsGesture ? renderMusicPlayChip(m.musicPlayUrl, true) : ''
               }</div>
+              ${!mine && m.lifeCards?.length ? renderLos2CardsForMessage(m) : ''}
               ${attachCards}
             </div>
           </div>`
     })
     .join('')
+}
+
+function renderLos2CardsForMessage(m: ChatMessage): string {
+  try {
+    return renderLifeOs2CardsHtml(m.lifeCards)
+  } catch {
+    return ''
+  }
 }
 
 /** Unified HOME — dashboard + conversation on one screen. */
@@ -2909,7 +3021,7 @@ function renderHomeV2View(): string {
         state.musicPlayerOpen,
       )}`,
       threadHtml: renderChatMessagesHtml(),
-      aboveThreadHtml: `${wizard}${tools}`,
+      aboveThreadHtml: `${wizard}${tools}${renderHomeLos2StripHtml(buildHomeLos2Signals())}`,
       voiceHintHtml: voiceHint,
     })
   } catch (err) {
@@ -3112,6 +3224,7 @@ function renderChat(): string {
                   ? renderMusicPlayChip(m.musicPlayUrl, true)
                   : ''
               }</div>
+              ${!mine && m.lifeCards?.length ? renderLos2CardsForMessage(m) : ''}
               ${attachCards}
             </div>
           </div>`
@@ -5352,8 +5465,13 @@ function bind(): void {
   })
   document.querySelector('[data-action="home-v2-smart"]')?.addEventListener('click', () => {
     const btn = document.querySelector<HTMLButtonElement>('[data-action="home-v2-smart"]')
+    const hint = btn?.dataset.smartHint || ''
     const v = (btn?.dataset.smartView || 'life') as View
     state.homeV2MoreOpen = false
+    if (hint) {
+      void handleUserText(hint)
+      return
+    }
     if (v === 'chat') {
       state.view = 'chat'
       state.homeV2Pane = 'home'
@@ -6255,6 +6373,7 @@ let swUpdateTimer: number | null = null
 function boot(): void {
   bootMediaPreviewDelegation()
   bootNavDelegation()
+  bootLos2CardDelegation()
   // Soft SW apply on update — hard cache wipe caused intermittent white screens on iPhone.
   const updateSW = registerSW({
     immediate: true,

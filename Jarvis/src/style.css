@@ -3423,3 +3423,154 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   white-space: nowrap;
 }
 .maplibregl-map { font: inherit; }
+
+/* —— Life OS 2.0 chat cards —— */
+.los2-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 4px;
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+.los2-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(160deg, rgba(18, 28, 36, 0.95), rgba(12, 20, 28, 0.98));
+  border-radius: 14px;
+  padding: 12px 12px 10px;
+  color: var(--text, #e8eef2);
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.los2-card-head { margin-bottom: 8px; }
+.los2-card-titles {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.los2-card-title {
+  font-size: 0.95rem;
+  line-height: 1.35;
+  min-width: 0;
+}
+.los2-card-status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 210, 190, 0.15);
+  color: #9ef0e6;
+}
+.los2-card-status[data-status="failed"],
+.los2-card-status[data-status="partial"] {
+  background: rgba(255, 160, 80, 0.18);
+  color: #ffd0a8;
+}
+.los2-card-status[data-status="active"] {
+  background: rgba(80, 160, 255, 0.2);
+  color: #b8d8ff;
+}
+.los2-card-summary {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted, #9aabbb);
+  line-height: 1.4;
+}
+.los2-card-items,
+.los2-card-more {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.los2-card-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+.los2-card-item-label {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+.los2-card-item-meta {
+  font-size: 0.72rem;
+  color: var(--muted, #9aabbb);
+}
+.los2-card-item-detail {
+  font-size: 0.75rem;
+  color: var(--muted, #9aabbb);
+  line-height: 1.35;
+}
+.los2-card.is-collapsed .los2-card-more { display: none; }
+.los2-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.los2-card-btn {
+  min-height: 40px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 210, 190, 0.12);
+  color: #dffaf6;
+  font-size: 0.82rem;
+  touch-action: manipulation;
+}
+.los2-card-btn:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .los2-card-btn:active { transform: none; }
+}
+
+/* Home strip — sits above thread, below tools; avoid music/nav overlap */
+.home-v2-los2-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 2px 8px;
+  margin: 0 0 4px;
+}
+.home-v2-los2-chip {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 44px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(20, 32, 42, 0.85);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-v2-los2-chip-title {
+  font-size: 0.72rem;
+  color: var(--muted, #9aabbb);
+}
+.home-v2-los2-chip-sub {
+  font-size: 0.84rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-v2-smart-card.is-focus {
+  border-color: rgba(80, 160, 255, 0.35);
+}
+.msg-col .los2-cards {
+  /* Keep cards above composer; music mini lives in composer-dock */
+  position: relative;
+  z-index: 1;
+}

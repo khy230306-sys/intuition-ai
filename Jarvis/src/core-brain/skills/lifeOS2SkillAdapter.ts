@@ -1,6 +1,5 @@
 /**
- * Life OS 2.0 skill — lazy-loaded by Skill Registry.
- * Orchestrates life-os-2 engines; does not replace Life OS 1.x skill.
+ * Life OS 2.0 skill — lazy-loaded; returns text + lifeCards via brainPatch.
  */
 
 import type { SkillContext, SkillResult } from '../types'
@@ -35,38 +34,42 @@ export function canHandle(ctx: SkillContext): boolean {
   return INTENTS.has(ctx.intent)
 }
 
-function ok(message: string): SkillResult {
-  return {
-    success: true,
-    status: 'completed',
-    data: {},
-    message,
-    speakText: message.split('\n')[0]?.slice(0, 160),
-    error: null,
-  }
-}
-
-function fail(message: string): SkillResult {
-  return {
-    success: false,
-    status: 'failed',
-    data: {},
-    message,
-    speakText: message.slice(0, 120),
-    error: { code: 'skill_failed' },
-  }
-}
-
 export async function execute(ctx: SkillContext): Promise<SkillResult> {
   const text = ctx.request.normalizedText || ctx.request.text
   try {
     const { coordinateLifeOs2 } = await import('../../life-os-2/lifeCoordinator')
     const result = await coordinateLifeOs2(text)
     if (!result?.handled) {
-      return fail('Life OS 2.0이 이 요청을 처리하지 못했습니다.')
+      return {
+        success: false,
+        status: 'failed',
+        data: {},
+        message: 'Life OS 2.0이 이 요청을 처리하지 못했습니다.',
+        speakText: '처리할 수 없어요.',
+        error: { code: 'skill_failed' },
+      }
     }
-    return ok(result.text)
+    return {
+      success: true,
+      status: 'completed',
+      data: { lifeCards: result.lifeCards || [] },
+      message: result.text,
+      speakText: result.speakText || result.text.split('\n')[0]?.slice(0, 160),
+      brainPatch: {
+        text: result.text,
+        speak: true,
+        lifeCards: result.lifeCards,
+      },
+      error: null,
+    }
   } catch (e) {
-    return fail(e instanceof Error ? e.message : 'Life OS 2.0 오류')
+    return {
+      success: false,
+      status: 'failed',
+      data: {},
+      message: e instanceof Error ? e.message : 'Life OS 2.0 오류',
+      speakText: '오류가 났어요.',
+      error: { code: 'skill_failed' },
+    }
   }
 }

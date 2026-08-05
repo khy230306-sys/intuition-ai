@@ -172,6 +172,7 @@ describe('Life OS 2.0', () => {
     const r = await coordinateLifeOs2('오늘 뭐 해야 해?')
     expect(r?.handled).toBe(true)
     expect(r?.text).toMatch(/Context|할 일/)
+    expect(r?.lifeCards?.[0]?.type).toBe('context_summary')
   })
 
   it('parse intents and Core Brain routes focus', async () => {

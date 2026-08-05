@@ -2,7 +2,7 @@
  * Situation smart-card priority for HOME v2 (pure logic).
  */
 
-export type SmartCardKind = 'schedule' | 'todos' | 'messages' | 'empty'
+export type SmartCardKind = 'focus' | 'schedule' | 'todos' | 'messages' | 'empty'
 
 export type SmartCardItem = {
   id: string
@@ -15,6 +15,8 @@ export type SmartCardModel = {
   items: SmartCardItem[]
   /** Existing view to open on card tap */
   targetView: 'life' | 'family' | 'friends' | 'chat'
+  /** Optional command to send into chat instead of switching view */
+  chatHint?: string
 }
 
 export type SmartCardInput = {
@@ -24,9 +26,20 @@ export type SmartCardInput = {
   friendsUnread: number
   familyName?: string
   friendsName?: string
+  /** Active focus line from Life OS 2.0 (optional) */
+  activeFocusLabel?: string | null
 }
 
 export function buildSmartCard(input: SmartCardInput): SmartCardModel {
+  if (input.activeFocusLabel) {
+    return {
+      kind: 'focus',
+      title: '현재 Focus',
+      items: [{ id: 'focus-1', label: input.activeFocusLabel }],
+      targetView: 'chat',
+      chatHint: '집중 상태 보여줘',
+    }
+  }
   if (input.nextScheduleLines.length > 0) {
     return {
       kind: 'schedule',

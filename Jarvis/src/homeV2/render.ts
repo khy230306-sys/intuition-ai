@@ -161,10 +161,10 @@ export function renderHomeV2Shell(
         </button>
       </div>
 
-      <button type="button" class="home-v2-smart-card ${model.smartCard.kind === 'empty' ? 'is-empty' : ''}" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}">
+      <button type="button" class="home-v2-smart-card ${model.smartCard.kind === 'empty' ? 'is-empty' : ''} ${model.smartCard.kind === 'focus' ? 'is-focus' : ''}" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}" data-smart-hint="${escAttr(model.smartCard.chatHint || '')}">
         <div class="home-v2-card-head">
           <strong>${esc(model.smartCard.title)}</strong>
-          <span class="home-v2-card-go">${model.smartCard.kind === 'empty' ? '시작' : '열기'}</span>
+          <span class="home-v2-card-go">${model.smartCard.kind === 'focus' ? '상태' : model.smartCard.kind === 'empty' ? '시작' : '열기'}</span>
         </div>
         ${cardItems}
       </button>

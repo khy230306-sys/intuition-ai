@@ -122,6 +122,16 @@ describe('smart card priority', () => {
     })
     expect(msg.kind).toBe('messages')
     expect(msg.items.length).toBeLessThanOrEqual(3)
+    const focus = buildSmartCard({
+      nextScheduleLines: ['10:00 미팅'],
+      importantTodos: [],
+      familyUnread: 0,
+      friendsUnread: 0,
+      activeFocusLabel: 'AIZIO 개발 · 약 20분',
+    })
+    expect(focus.kind).toBe('focus')
+    expect(focus.chatHint).toMatch(/집중/)
+
     const empty = buildSmartCard({
       nextScheduleLines: [],
       importantTodos: [],

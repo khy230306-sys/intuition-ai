@@ -9,6 +9,8 @@ export interface ChatMessage {
   /** AIZIO Music Skill — gesture play chip on this bubble */
   musicNeedsGesture?: boolean
   musicPlayUrl?: string | null
+  /** Life OS 2.0 structured cards (assistant only). */
+  lifeCards?: import('./life-os-2/ui/cardTypes').LifeOs2UiCard[]
 }
 
 export interface MemoryItem {
@@ -193,4 +195,6 @@ export interface BrainReply {
   musicNeedsGesture?: boolean
   musicPlayUrl?: string | null
   musicShowMiniPlayer?: boolean
+  /** Life OS 2.0 structured assistant cards. */
+  lifeCards?: import('./life-os-2/ui/cardTypes').LifeOs2UiCard[]
 }

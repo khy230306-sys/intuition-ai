@@ -3,7 +3,7 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**Production (v1.20.7):** https://jarvis-app.shipstatic.com · snapshot `pristine-seed-4g2g9i9` · commit `f022e5a`
+**Production (v1.20.8):** https://jarvis-app.shipstatic.com · SPA `ship.json` rewrites · fixed URL only (not Preview snapshots)
 
 ## Status legend
 

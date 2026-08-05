@@ -90,6 +90,7 @@ export function scorePick(
   risk: 'conservative' | 'balanced' | 'aggressive',
   owned: Set<string>,
   watched: Set<string>,
+  opts?: { preferKr?: boolean },
 ): ScoredPick {
   const reasons: string[] = []
   const warnings: string[] = []
@@ -97,11 +98,24 @@ export function scorePick(
   const factors = factorsFromQuote(q)
   const { rangePos, changePct: ch, ret5dPct, volumeRatio, rsiProxy, momentumScore, meanRevScore } =
     factors
+  const preferKr = opts?.preferKr !== false
+
+  // ——— Domestic (KOSPI/KOSDAQ) priority ———
+  if (preferKr && c.market === 'KR') {
+    score += 10
+    if (reasons.length < 4) reasons.push('국내(코스피·코스닥) 우선')
+  } else if (preferKr && c.market === 'US') {
+    score -= 6
+  }
 
   // ——— Core ETF tilt (many algo portfolios keep beta core) ———
   if (c.kind === 'etf' && !LEVERAGED.has(c.symbol)) {
     score += risk === 'aggressive' ? 5 : 12
-    reasons.push('분산 코어(ETF)')
+    if (c.market === 'KR') {
+      reasons.push('국내 지수 ETF')
+    } else {
+      reasons.push('분산 코어(ETF)')
+    }
   }
   if (LEVERAGED.has(c.symbol)) {
     score -= risk === 'conservative' ? 22 : risk === 'balanced' ? 12 : 4
@@ -366,6 +380,15 @@ export function wantsStockRecommend(text: string): boolean {
   )
 }
 
+function rankPreferKr(a: ScoredPick, b: ScoredPick): number {
+  if (b.score !== a.score) return b.score - a.score
+  // Tie-break: KR before US
+  if (a.candidate.market !== b.candidate.market) {
+    return a.candidate.market === 'KR' ? -1 : 1
+  }
+  return 0
+}
+
 export async function buildColdRecommendations(text: string): Promise<string> {
   const profile = loadProfile()
   const risk = detectRiskOverride(text) || profile.riskTolerance || 'balanced'
@@ -373,6 +396,7 @@ export async function buildColdRecommendations(text: string): Promise<string> {
   const sector = detectSectorFilter(text)
   const owned = new Set(loadHoldings().map((h) => h.symbol.toUpperCase()))
   const watched = new Set(loadWatchlist().map((w) => w.symbol.toUpperCase()))
+  const preferKr = market !== 'US'
 
   let universe = filterUniverse(market, sector)
   if (universe.length < 5 && sector) {
@@ -382,23 +406,31 @@ export async function buildColdRecommendations(text: string): Promise<string> {
   const quotes = await mapPool(universe, 10, async (c) => ({ c, q: await cachedQuote(c.symbol) }))
   let scored = quotes
     .filter((x): x is { c: RecCandidate; q: QuoteSnapshot } => Boolean(x.q))
-    .map(({ c, q }) => scorePick(c, q, risk, owned, watched))
+    .map(({ c, q }) => scorePick(c, q, risk, owned, watched, { preferKr }))
 
-  scored = enrichWithRelativeStrength(scored).sort((a, b) => b.score - a.score)
+  scored = enrichWithRelativeStrength(scored).sort(rankPreferKr)
 
   if (!scored.length) {
     return structuralFallback(universe, risk, owned)
   }
 
-  const enginePicks = scored.filter((s) => s.action === '엔진추천').slice(0, 5)
-  const top = (enginePicks.length >= 3 ? enginePicks : scored.slice(0, 5)).slice(0, 5)
-  const watch = scored.filter((s) => s.action === '관심' && !top.includes(s)).slice(0, 3)
+  // Domestic-first top list: fill with KR picks before US when market is KR/ALL
+  const ordered = preferKr
+    ? [
+        ...scored.filter((s) => s.candidate.market === 'KR'),
+        ...scored.filter((s) => s.candidate.market !== 'KR'),
+      ]
+    : scored
+  const enginePicks = ordered.filter((s) => s.action === '엔진추천').slice(0, 5)
+  const top = (enginePicks.length >= 3 ? enginePicks : ordered.slice(0, 5)).slice(0, 5)
+  const watch = ordered.filter((s) => s.action === '관심' && !top.includes(s)).slice(0, 3)
   const avoid = scored
     .filter((s) => s.action === '회피' || (s.rangePos != null && s.rangePos > 0.92))
     .slice(-3)
     .reverse()
 
-  const marketLabel = market === 'KR' ? '한국' : market === 'US' ? '미국' : '한·미'
+  const marketLabel =
+    market === 'KR' ? '국내 코스피·코스닥' : market === 'US' ? '미국' : '국내 우선·한미'
   const riskLabel = risk === 'conservative' ? '보수' : risk === 'aggressive' ? '공격' : '균형'
   const sectorLabel = sector ? ` · 섹터 ${sector}` : ''
 

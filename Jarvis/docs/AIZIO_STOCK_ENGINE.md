@@ -39,7 +39,7 @@ Each pick shows:
 
 - Live: Yahoo Finance chart API (browser; CORS may fall back to proxy/snapshot)  
 - Offline: `public/quote-snapshot.json` via `npm run quotes`  
-- Universe: `src/stockEngine/universe.ts` (~95 liquid KR/US names + ETFs)
+- Universe: `src/stockEngine/universe.ts` — **default screen = KOSPI/KOSDAQ**; US only if user asks `미국 종목 추천`
 
 ## Code map
 

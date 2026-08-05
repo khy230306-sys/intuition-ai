@@ -55,15 +55,42 @@ describe('stockEngine universe', () => {
     expect(REC_UNIVERSE.some((c) => c.kind === 'etf')).toBe(true)
   })
 
-  it('filters market and sector', () => {
+  it('filters market and sector; defaults to KR', () => {
     expect(detectMarket('미국 종목 추천')).toBe('US')
     expect(detectMarket('한국 주식 추천')).toBe('KR')
+    expect(detectMarket('코스피 종목 추천')).toBe('KR')
+    expect(detectMarket('주식 종목 추천')).toBe('KR')
+    expect(detectMarket('한미 종목 추천')).toBe('ALL')
     expect(detectSectorFilter('반도체 종목 추천')).toBe('반도체')
-    const semi = filterUniverse('ALL', '반도체')
-    expect(semi.every((c) => c.sector === '반도체' || c.symbol === 'SMH' || c.symbol === 'SOXX')).toBe(
-      true,
-    )
-    expect(semi.length).toBeGreaterThan(5)
+    const kr = filterUniverse('KR', null)
+    expect(kr.length).toBeGreaterThan(40)
+    expect(kr.every((c) => c.market === 'KR')).toBe(true)
+    const semi = filterUniverse('KR', '반도체')
+    expect(semi.every((c) => c.sector === '반도체')).toBe(true)
+    expect(semi.length).toBeGreaterThan(3)
+  })
+
+  it('boosts KR names when preferKr', () => {
+    const kr = REC_UNIVERSE.find((x) => x.symbol === '005930.KS')!
+    const us = REC_UNIVERSE.find((x) => x.symbol === 'AAPL')!
+    const quote = (symbol: string, name: string) =>
+      q({
+        symbol,
+        name,
+        price: 100,
+        fiftyTwoLow: 80,
+        fiftyTwoHigh: 120,
+        changePct: 0.2,
+        ret5dPct: 1,
+        currency: symbol.includes('.KS') ? 'KRW' : 'USD',
+      })
+    const sk = scorePick(kr, quote(kr.symbol, kr.name), 'balanced', new Set(), new Set(), {
+      preferKr: true,
+    })
+    const sa = scorePick(us, quote(us.symbol, us.name), 'balanced', new Set(), new Set(), {
+      preferKr: true,
+    })
+    expect(sk.score).toBeGreaterThan(sa.score)
   })
 })
 

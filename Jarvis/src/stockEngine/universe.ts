@@ -81,7 +81,24 @@ export const REC_UNIVERSE: RecCandidate[] = [
   { symbol: '033780.KS', name: 'KT&G', currency: 'KRW', sector: '소비', market: 'KR', kind: 'stock' },
   { symbol: '090430.KS', name: '아모레퍼시픽', currency: 'KRW', sector: '소비', market: 'KR', kind: 'stock' },
   { symbol: '028260.KS', name: '삼성물산', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
-  // ——— US ———
+  { symbol: '000100.KS', name: '유한양행', currency: 'KRW', sector: '바이오', market: 'KR', kind: 'stock' },
+  { symbol: '128940.KS', name: '한미약품', currency: 'KRW', sector: '바이오', market: 'KR', kind: 'stock' },
+  { symbol: '196170.KS', name: '알테오젠', currency: 'KRW', sector: '바이오', market: 'KR', kind: 'stock' },
+  { symbol: '247540.KS', name: '에코프로비엠', currency: 'KRW', sector: '배터리', market: 'KR', kind: 'stock' },
+  { symbol: '086520.KS', name: '에코프로', currency: 'KRW', sector: '배터리', market: 'KR', kind: 'stock' },
+  { symbol: '009540.KS', name: 'HD한국조선해양', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
+  { symbol: '042660.KS', name: '한화오션', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
+  { symbol: '010140.KS', name: '삼성중공업', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
+  { symbol: '003550.KS', name: 'LG', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
+  { symbol: '034730.KS', name: 'SK', currency: 'KRW', sector: '산업', market: 'KR', kind: 'stock' },
+  { symbol: '138040.KS', name: '메리츠금융', currency: 'KRW', sector: '금융', market: 'KR', kind: 'stock' },
+  { symbol: '323410.KS', name: '카카오뱅크', currency: 'KRW', sector: '금융', market: 'KR', kind: 'stock' },
+  { symbol: '263750.KS', name: '펄어비스', currency: 'KRW', sector: '소비', market: 'KR', kind: 'stock' },
+  // Korea index ETFs (KOSPI / KOSDAQ proxies)
+  { symbol: '069500.KS', name: 'KODEX 200', currency: 'KRW', sector: '지수ETF', market: 'KR', kind: 'etf' },
+  { symbol: '229200.KS', name: 'KODEX 코스닥150', currency: 'KRW', sector: '지수ETF', market: 'KR', kind: 'etf' },
+  { symbol: '102110.KS', name: 'TIGER 200', currency: 'KRW', sector: '지수ETF', market: 'KR', kind: 'etf' },
+  // ——— US (only when user asks 미국/해외) ———
   { symbol: 'AAPL', name: 'Apple', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
   { symbol: 'MSFT', name: 'Microsoft', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
   { symbol: 'GOOGL', name: 'Alphabet', currency: 'USD', sector: '빅테크', market: 'US', kind: 'stock' },
@@ -137,10 +154,16 @@ export const REC_UNIVERSE: RecCandidate[] = [
   { symbol: 'TQQQ', name: 'ProShares UltraPro QQQ', currency: 'USD', sector: '지수ETF', market: 'US', kind: 'etf' },
 ]
 
+/**
+ * Market scope for screening.
+ * Default = KR (KOSPI/KOSDAQ first). US/ALL only when the user asks.
+ */
 export function detectMarket(text: string): RecMarket {
-  if (/미국|나스닥|미장|달러|us\b|nasdaq|s&p/i.test(text)) return 'US'
+  if (/한·?\s*미|한미\b|전체|글로벌|해외\s*포함/i.test(text)) return 'ALL'
+  if (/미국|나스닥|미장|달러|해외|us\b|nasdaq|s&p|nyse/i.test(text)) return 'US'
   if (/한국|국내|코스피|코스닥|한장/i.test(text)) return 'KR'
-  return 'ALL'
+  // 「주식 종목 추천」 등 기본 → 국내 우선
+  return 'KR'
 }
 
 export function detectSectorFilter(text: string): StockSector | null {

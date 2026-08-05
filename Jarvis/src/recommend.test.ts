@@ -43,6 +43,7 @@ describe('cold stock recommend', () => {
     const { think } = await import('./brain')
     const reply = await think('주식 종목 추천')
     expect(reply.text).toMatch(/추천 종목|투자 매력도|목표가|손절/)
+    expect(reply.text).toMatch(/국내|코스피|코스닥/)
     expect(reply.text).toMatch(/본인/)
     expect(reply.text).not.toMatch(/이해하지 못했/)
   }, 30000)

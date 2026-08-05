@@ -43,7 +43,7 @@ export async function buildStockAnalysis(text: string): Promise<string | null> {
   let verdictReasons: string[] = []
   let verdictWarnings: string[] = []
   if (uni) {
-    const scored = scorePick(uni, q, risk, owned, watched)
+    const scored = scorePick(uni, q, risk, owned, watched, { preferKr: uni.market === 'KR' })
     verdictScore = scored.score
     verdictAction = scored.action
     verdictReasons = scored.reasons

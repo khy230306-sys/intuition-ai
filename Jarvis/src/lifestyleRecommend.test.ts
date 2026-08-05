@@ -29,8 +29,12 @@ describe('lifestyle recommend router', () => {
 
   it('builds actionable replies', () => {
     const food = buildLifestyleReply('강남 맛집 추천', 'food')
-    expect(food.mapsQuery || food.searchQuery).toBeTruthy()
-    expect(food.text).toMatch(/먹을|맛집|후보/)
+    expect(food.mapsQuery).toMatch(/강남/)
+    expect(food.text).toMatch(/강남|맛집|지도/)
+
+    const jiri = buildLifestyleReply('지리산 맛집', 'food')
+    expect(jiri.mapsQuery).toMatch(/지리산/)
+    expect(jiri.text).toMatch(/지리산/)
 
     const travel = buildLifestyleReply('국내여행은 어디가좋을까', 'travel_kr')
     expect(travel.text).toMatch(/제주|부산|강릉|국내/)
@@ -40,8 +44,13 @@ describe('lifestyle recommend router', () => {
   it('brain routes food/travel away from stock screening', async () => {
     const { think } = await import('./brain')
     const food = await think('맛집추천')
-    expect(food.text).toMatch(/먹을|맛집|후보|지도/)
+    expect(food.text).toMatch(/먹을|맛집|지도|후보|방향/)
     expect(food.text).not.toMatch(/냉정 스크리닝|종목/)
+
+    const placeFood = await think('지리산 맛집 찾아줘')
+    expect(placeFood.text).toMatch(/지리산|지도/)
+    expect(placeFood.text).not.toMatch(/한식 집밥 스타일/)
+    expect(placeFood.action).toBeTypeOf('function')
 
     const travel = await think('국내여행은 어디가좋을까?')
     expect(travel.text).toMatch(/제주|부산|강릉|여행/)

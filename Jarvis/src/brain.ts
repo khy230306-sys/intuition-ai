@@ -780,6 +780,14 @@ export async function think(
         text: nav2.text,
         speak: nav2.speak !== false,
         view: nav2.view || (nav2.openNav ? 'navigation' : undefined),
+        action:
+          nav2.mapsQuery || nav2.searchQuery
+            ? () => {
+                if (nav2.mapsQuery) return openMaps(nav2.mapsQuery)
+                if (nav2.searchQuery) return openSearch(nav2.searchQuery)
+                return { ok: true, message: '검색' }
+              }
+            : undefined,
       }
     }
   } catch {

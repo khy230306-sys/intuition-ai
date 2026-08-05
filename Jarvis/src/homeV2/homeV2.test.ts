@@ -122,14 +122,14 @@ describe('smart card priority', () => {
     })
     expect(msg.kind).toBe('messages')
     expect(msg.items.length).toBeLessThanOrEqual(3)
-    expect(
-      buildSmartCard({
-        nextScheduleLines: [],
-        importantTodos: [],
-        familyUnread: 0,
-        friendsUnread: 0,
-      }).title,
-    ).toMatch(/예정된 일정이 없습니다/)
+    const empty = buildSmartCard({
+      nextScheduleLines: [],
+      importantTodos: [],
+      familyUnread: 0,
+      friendsUnread: 0,
+    })
+    expect(empty.title).toMatch(/여유로운 하루/)
+    expect(empty.items[0]?.label).toMatch(/브리핑/)
   })
 })
 
@@ -160,15 +160,23 @@ describe('HOME v2 render', () => {
       {
         header: { greeting: '안녕하세요', dateLine: '8월 5일', weatherLine: null },
         summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
-        smartCard: { kind: 'empty', title: '오늘은 예정된 일정이 없습니다', items: [], targetView: 'life' },
+        smartCard: {
+          kind: 'empty',
+          title: '여유로운 하루예요',
+          items: [{ id: 'cta', label: '브리핑으로 하루를 시작해 보세요' }],
+          targetView: 'life',
+        },
         translate: { active: false, label: '번역 잠금 꺼짐' },
         voiceState: 'idle',
         prompt: '무엇을 도와드릴까요?',
       },
       { draft: '', busy: false, listening: false, appVersion: '1.15.4' },
     )
+    expect(html).toContain('home-v2-brand-mark')
+    expect(html).toContain('AIZIO')
     expect(html).toContain('data-quick-id="navigate"')
     expect(html).toContain('길안내')
+    expect(html).toContain('home-v2-quick-primary')
     expect(html).not.toContain('data-quick-id="music"')
     expect(html).toContain('is-empty')
     expect(html).not.toContain('data-home-v2-chrome')
@@ -207,7 +215,12 @@ describe('HOME v2 render', () => {
       {
         header: { greeting: '안녕하세요', dateLine: '8월 5일', weatherLine: null },
         summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
-        smartCard: { kind: 'empty', title: '오늘은 예정된 일정이 없습니다', items: [], targetView: 'life' },
+        smartCard: {
+          kind: 'empty',
+          title: '여유로운 하루예요',
+          items: [{ id: 'cta', label: '브리핑으로 하루를 시작해 보세요' }],
+          targetView: 'life',
+        },
         translate: { active: false, label: '번역 잠금 꺼짐' },
         voiceState: 'idle',
         prompt: '무엇을 도와드릴까요?',

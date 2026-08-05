@@ -169,13 +169,20 @@ export function buildLifestyleReply(raw: string, kind: LifestyleKind): Lifestyle
     }
     case "food": {
       const ideas = foodIdeas(t);
-      const area = (t.match(/(?:서울|부산|대구|인천|광주|대전|울산|제주|강남|홍대|이태원|성수|해운대|광안|전주|수원)[^\s]{0,6}/)?.[0] || "").trim();
+      const area = (
+        t.match(
+          /(?:서울|부산|대구|인천|광주|대전|울산|제주|강남|홍대|이태원|성수|해운대|광안|전주|수원|지리산|설악|한라|남산|경주|여수|강릉|속초|양양|전주|수원|망미|광안리)[^\s]{0,8}/,
+        )?.[0] || ""
+      ).trim();
       const mapsQ = area ? `${area} 맛집` : "근처 맛집";
       return {
         kind,
-        text:
-          `먹을 곳 후보예요:\n${ideas.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n\n` +
-          "지도에서 근처 맛집을 열어둘게요. 동네·메뉴만 더 말해도 됩니다.",
+        text: area
+          ? `「${area}」맛집을 지도·검색으로 바로 찾아볼게요.\n` +
+            `메뉴 감만 잡아두면 좋아요:\n${ideas.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n\n` +
+            `「${area} 한식 맛집」처럼 더 좁혀도 됩니다.`
+          : `먹을 곳 방향이에요:\n${ideas.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n\n` +
+            "지도에서 근처 맛집을 열어둘게요. 동네·산·역 이름을 붙이면 더 정확해집니다.",
         mapsQuery: mapsQ,
         searchQuery: area ? `${area} 맛집 추천` : "오늘 뭐 먹지 맛집",
       };

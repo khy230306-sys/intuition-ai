@@ -105,6 +105,7 @@ export function renderHomeV2Shell(
     <section class="panel home-v2-panel home-v2-unified" data-home-v2="1">
       <header class="home-v2-header">
         <div class="home-v2-header-text">
+          <p class="home-v2-brand-mark">AIZIO</p>
           <h1 class="home-v2-greet">${esc(model.header.greeting)}</h1>
           <p class="home-v2-meta">
             <span>${esc(model.header.dateLine)}</span>
@@ -130,28 +131,40 @@ export function renderHomeV2Shell(
       </div>
 
       <div class="home-v2-quick" aria-label="빠른 실행">
-        <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="briefing">
+        <button type="button" class="home-v2-quick-btn home-v2-quick-primary" data-action="home-v2-quick" data-quick-id="briefing">
           <span class="home-v2-q-ico" aria-hidden="true">◎</span>
-          <span>브리핑</span>
+          <span class="home-v2-q-copy">
+            <span class="home-v2-q-title">브리핑</span>
+            <span class="home-v2-q-sub">오늘 한눈에</span>
+          </span>
         </button>
         <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="navigate">
           <span class="home-v2-q-ico" aria-hidden="true">↗</span>
-          <span>길안내</span>
+          <span class="home-v2-q-copy">
+            <span class="home-v2-q-title">길안내</span>
+            <span class="home-v2-q-sub">장소 · 경로</span>
+          </span>
         </button>
         <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="schedule">
           <span class="home-v2-q-ico" aria-hidden="true">＋</span>
-          <span>일정 추가</span>
+          <span class="home-v2-q-copy">
+            <span class="home-v2-q-title">일정</span>
+            <span class="home-v2-q-sub">추가하기</span>
+          </span>
         </button>
         <button type="button" class="home-v2-quick-btn" data-action="home-v2-quick" data-quick-id="weather">
           <span class="home-v2-q-ico" aria-hidden="true">☁</span>
-          <span>날씨</span>
+          <span class="home-v2-q-copy">
+            <span class="home-v2-q-title">날씨</span>
+            <span class="home-v2-q-sub">지금 기온</span>
+          </span>
         </button>
       </div>
 
       <button type="button" class="home-v2-smart-card ${model.smartCard.kind === 'empty' ? 'is-empty' : ''}" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}">
         <div class="home-v2-card-head">
           <strong>${esc(model.smartCard.title)}</strong>
-          <span class="home-v2-card-go">열기</span>
+          <span class="home-v2-card-go">${model.smartCard.kind === 'empty' ? '시작' : '열기'}</span>
         </div>
         ${cardItems}
       </button>

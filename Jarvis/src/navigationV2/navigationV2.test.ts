@@ -102,6 +102,25 @@ describe('place search catalog', () => {
   })
 })
 
+describe('food / venue place intent', () => {
+  it('routes 지리산 맛집 찾아줘 to place_search with clean query', async () => {
+    const { classifyNavV2Intent } = await import('./navigationIntent')
+    const i = classifyNavV2Intent('지리산 맛집 찾아줘')
+    expect(i.kind).toBe('place_search')
+    expect(i.query).toMatch(/지리산/)
+    expect(i.query).toMatch(/맛집/)
+    expect(i.query).not.toMatch(/찾아/)
+  })
+
+  it('empty catalog food search offers mapsQuery', async () => {
+    const r = await tryHandleNavigationV2('지리산 맛집 찾아줘')
+    expect(r?.handled).toBe(true)
+    expect(r?.mapsQuery).toMatch(/지리산/)
+    expect(r?.text).toMatch(/지도/)
+    expect(r?.text).not.toMatch(/한식 집밥 스타일/)
+  })
+})
+
 describe('context select', () => {
   beforeEach(() => {
     clearNavV2Context()

@@ -42,7 +42,11 @@ export function loadNavV2Settings(): NavV2Settings {
 export function saveNavV2Settings(next: Partial<NavV2Settings>): NavV2Settings {
   const cur = loadNavV2Settings()
   const merged = { ...cur, ...next, updatedAt: nowIso() }
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged))
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged))
+  } catch {
+    /* private mode / missing storage */
+  }
   return merged
 }
 
@@ -62,13 +66,21 @@ export function loadRecentSearches(): RecentPlace[] {
 export function pushRecentSearch(query: string, name?: string): void {
   const q = query.trim()
   if (!q) return
-  const list = loadRecentSearches().filter((r) => r.query !== q)
-  list.unshift({ query: q, name: name || q, at: Date.now() })
-  localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10)))
+  try {
+    const list = loadRecentSearches().filter((r) => r.query !== q)
+    list.unshift({ query: q, name: name || q, at: Date.now() })
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10)))
+  } catch {
+    /* private mode / missing storage — must not break place search */
+  }
 }
 
 export function clearRecentSearches(): void {
-  localStorage.removeItem(RECENT_KEY)
+  try {
+    localStorage.removeItem(RECENT_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 export function loadFavorites(): PlaceCandidate[] {
@@ -83,15 +95,23 @@ export function loadFavorites(): PlaceCandidate[] {
 }
 
 export function addFavorite(place: PlaceCandidate): void {
-  const list = loadFavorites().filter((p) => p.id !== place.id)
-  list.unshift({ ...place, source: 'favorite' })
-  localStorage.setItem(FAV_KEY, JSON.stringify(list.slice(0, 30)))
+  try {
+    const list = loadFavorites().filter((p) => p.id !== place.id)
+    list.unshift({ ...place, source: 'favorite' })
+    localStorage.setItem(FAV_KEY, JSON.stringify(list.slice(0, 30)))
+  } catch {
+    /* ignore */
+  }
 }
 
 export function clearAllNavV2LocalData(): void {
-  localStorage.removeItem(SETTINGS_KEY)
-  localStorage.removeItem(RECENT_KEY)
-  localStorage.removeItem(FAV_KEY)
+  try {
+    localStorage.removeItem(SETTINGS_KEY)
+    localStorage.removeItem(RECENT_KEY)
+    localStorage.removeItem(FAV_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Diagnostics — no coordinates / full addresses */

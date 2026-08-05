@@ -68,8 +68,8 @@ export function buildSmartCard(input: SmartCardInput): SmartCardModel {
   }
   return {
     kind: 'empty',
-    title: '오늘은 예정된 일정이 없습니다',
-    items: [],
+    title: '여유로운 하루예요',
+    items: [{ id: 'cta-brief', label: '브리핑으로 하루를 시작해 보세요 · 탭해서 생활 열기' }],
     targetView: 'life',
   }
 }

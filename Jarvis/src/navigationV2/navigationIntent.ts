@@ -31,13 +31,20 @@ const CHAT_ABOUT =
 
 /** Non-place domains — never steal these for navigation */
 const NOT_PLACE =
-  /주식|종목|시세|추천|포트폴리오|지출|추가\s*\d|평균|분산|알림|브리핑|번역|날씨|환율|게임|음악|노래|통역|전화|문자|검색해|시세|매수|매도|할\s*일|일정|손님|생일/
+  /주식|종목|시세|포트폴리오|지출|추가\s*\d|평균|분산|알림|브리핑|번역|날씨|환율|게임|음악|노래|통역|전화|문자|시세|매수|매도|할\s*일|일정|손님|생일/
+
+/** Food/place seeking — must beat lifestyle category replies */
+const FOOD_OR_VENUE =
+  /맛집|맛있는\s*집|밥집|식당|음식점|먹을\s*곳|술집|카페|커피|브런치|분식|고깃집|해장/
+
+const PLACE_SEEK =
+  /찾아\s*줘|찾아줘|알려\s*줘|알려줘|추천\s*해|추천해|추천\s*좀|어디\s*좋|가고\s*싶|갈\s*만|가고싶|검색/
 
 const PLACE_TOKEN =
-  /동$|역$|로\s*\d|길\s*\d|번\s*출구|주민센터|대학교|병원|약국|주유|주차|카페|편의점|화장실|식당|음식점|ATM|은행|경찰|소방|터미널|공항|공원|마트|센터$/
+  /동$|역$|로\s*\d|길\s*\d|번\s*출구|주민센터|대학교|병원|약국|주유|주차|카페|편의점|화장실|식당|음식점|맛집|ATM|은행|경찰|소방|터미널|공항|공원|마트|센터$/
 
 const CHAIN_OR_LANDMARK =
-  /스타벅|스벅|맥도|이마트|롯데|홈플러스|백화|KTX|케이티엑스|울산대|서울역|부산역|강남역|역삼|울산역/
+  /스타벅|스벅|맥도|이마트|롯데|홈플러스|백화|KTX|케이티엑스|울산대|서울역|부산역|강남역|역삼|울산역|지리산|설악|한라산|남산|해운대|광안리|경복궁/
 
 const PARTIAL_SEED = /^(?:역삼|강남|울산|부산|서울|스타|스벅|약국|병원|주차|주유|망양)/i
 
@@ -120,8 +127,17 @@ export function classifyNavV2Intent(raw: string, opts?: { hasActiveContext?: boo
     return { kind: 'open_navigation', confidence: 0.9, original }
   }
 
-  if (/(근처|주변|가까운).*(약국|병원|주유|주차|카페|편의점|화장실|식당|음식|ATM|은행|경찰|소방)/.test(original)) {
+  if (/(근처|주변|가까운).*(약국|병원|주유|주차|카페|편의점|화장실|식당|음식|맛집|ATM|은행|경찰|소방)/.test(original)) {
     return { kind: 'nearby_search', query: original, confidence: 0.93, original }
+  }
+
+  // 「지리산 맛집 찾아줘」— concrete area + venue, not cuisine categories
+  if (FOOD_OR_VENUE.test(original) && PLACE_SEEK.test(original) && !/주식|종목|코인/.test(original)) {
+    const query = original
+      .replace(/(?:을|를|이|가|좀)?\s*(?:찾아|알려|추천|검색)\s*(?:줘|주세요|해\s*줘|해줘|해\s*주세요)?[.!?？]*\s*$/i, '')
+      .replace(/(?:으로|로)\s*(?:안내|가자).*$/i, '')
+      .trim()
+    return { kind: 'place_search', query: query || original, confidence: 0.91, original }
   }
 
   if (NAV_VERB.test(original) && !NOT_PLACE.test(original)) {

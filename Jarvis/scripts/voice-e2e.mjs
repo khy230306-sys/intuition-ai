@@ -111,14 +111,43 @@ async function main() {
   await page.goto(base, { waitUntil: 'networkidle0' })
   await page.waitForSelector('[data-action="mic"]', { timeout: 15000 })
 
-  await page.click('[data-view="settings"]')
+  // Empty HOME has orb + composer MIC — both must be wired (regression for querySelector-only bind).
+  const micCount = await page.$$eval('[data-action="mic"]', (els) => els.length)
+  if (micCount < 2) throw new Error(`expected ≥2 mic buttons on empty home, got ${micCount}`)
+
+  await page.click('.home-v2-composer [data-action="mic"]')
+  await page.waitForFunction(() => window.__fakeRecs && window.__fakeRecs.length > 0, {
+    timeout: 8000,
+  })
+  // Stop without sending so later chat flow stays clean
+  await page.click('.home-v2-composer [data-action="mic"]')
+
+  // Settings entry may live in 메뉴 sheet on HOME v2
+  const settingsBtn = await page.$('[data-view="settings"]')
+  if (settingsBtn) {
+    await settingsBtn.click()
+  } else {
+    await page.click('[data-action="home-v2-nav-more"]')
+    await page.waitForSelector('[data-view="settings"]', { timeout: 5000 })
+    await page.click('[data-view="settings"]')
+  }
   await page.waitForSelector('[data-action="voice-test"]')
   await page.click('[data-action="voice-test"]')
   await page.waitForSelector('.msg.assistant')
 
-  await page.click('[data-view="chat"]')
+  // Back to chat / home
+  const chatBtn = await page.$('[data-view="chat"]')
+  if (chatBtn) await chatBtn.click()
+  else {
+    const homeBtn = await page.$('[data-action="home-v2-nav-home"]')
+    if (homeBtn) await homeBtn.click()
+    else await page.click('[data-view="home"]')
+  }
   await page.waitForSelector('[data-action="mic"]')
-  await page.click('[data-action="mic"]')
+  // Prefer composer MIC when present; else first mic
+  const composerMic = await page.$('.home-v2-composer [data-action="mic"], .chat-composer [data-action="mic"]')
+  if (composerMic) await composerMic.click()
+  else await page.click('[data-action="mic"]')
 
   await page.waitForFunction(() => window.__fakeRecs && window.__fakeRecs.length > 0, { timeout: 8000 })
 

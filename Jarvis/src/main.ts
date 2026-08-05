@@ -93,6 +93,12 @@ import {
 } from './storage'
 import type { ChatMessage, JarvisSettings, QuoteSnapshot, View } from './types'
 import { VoiceListener, canListen, ensureMicPermission, probeVoiceSupport, speakAsync, stopSpeaking } from './voice'
+import {
+  attachMicClickHandlers,
+  syncJarvisMicButtons,
+  syncSpaceMicButtons,
+  syncVoiceCaptions,
+} from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
 import {
   canUseGeolocation,
@@ -279,7 +285,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.18.0'
+const APP_VERSION = '1.18.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -1536,27 +1542,16 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
 /** Update mic/caption/draft without destroying the recognition session via full remount. */
 function patchVoiceUi(): void {
   const target = state.dictationTarget
-  const micSel =
-    target === 'family'
-      ? '[data-action="space-mic"][data-space="family"]'
-      : target === 'friends'
-        ? '[data-action="space-mic"][data-space="friends"]'
-        : '[data-action="mic"]'
-  const mic = document.querySelector<HTMLButtonElement>(micSel)
-  if (mic) {
-    mic.classList.toggle('listening', state.listening)
-    if (!mic.hasAttribute('data-home-v2-orb')) {
-      mic.textContent = state.listening ? 'STOP' : 'MIC'
-    }
-    mic.setAttribute('aria-pressed', state.listening ? 'true' : 'false')
+  if (target === 'jarvis') {
+    syncJarvisMicButtons(document, state.listening)
+    syncSpaceMicButtons(document, { listening: false, space: null })
+  } else if (target === 'family' || target === 'friends') {
+    syncJarvisMicButtons(document, false)
+    syncSpaceMicButtons(document, { listening: state.listening, space: target })
+  } else {
+    syncJarvisMicButtons(document, false)
+    syncSpaceMicButtons(document, { listening: false, space: null })
   }
-  // Keep other mic buttons idle-looking while dictating elsewhere
-  document.querySelectorAll<HTMLButtonElement>('[data-action="mic"], [data-action="space-mic"]').forEach((btn) => {
-    if (btn === mic) return
-    btn.classList.remove('listening')
-    if (!btn.hasAttribute('data-home-v2-orb')) btn.textContent = 'MIC'
-    btn.setAttribute('aria-pressed', 'false')
-  })
   document.querySelectorAll<HTMLElement>('[data-home-v2-orb]').forEach((orb) => {
     orb.classList.toggle('listening', state.listening && target === 'jarvis')
     orb.classList.toggle('busy', state.busy && !state.listening)
@@ -1577,15 +1572,12 @@ function patchVoiceUi(): void {
   }
   const captionId =
     target === 'family' ? 'family-voice-caption' : target === 'friends' ? 'friends-voice-caption' : 'voice-caption'
-  const caption = document.getElementById(captionId)
-  if (caption) {
-    const onHomeV2 = caption.hasAttribute('data-home-v2-prompt')
-    if (!onHomeV2) caption.hidden = !state.listening && !state.voiceHint
-    caption.textContent = state.listening
-      ? state.voiceHint || '듣고 있습니다… 말씀해 주세요'
-      : state.voiceHint || (onHomeV2 ? '무엇을 도와드릴까요?' : state.voiceHint)
-    caption.classList.toggle('live', state.listening)
-  }
+  syncVoiceCaptions(document, {
+    captionId,
+    listening: state.listening,
+    hint: state.voiceHint,
+    idleHomePrompt: '무엇을 도와드릴까요?',
+  })
   const inputId = target === 'family' ? 'family-draft' : target === 'friends' ? 'friends-draft' : 'draft'
   const input = document.getElementById(inputId) as HTMLInputElement | null
   if (input && state.listening) {
@@ -1868,6 +1860,106 @@ async function sendSpaceMedia(space: 'family' | 'friends', file: File): Promise<
   } catch (err) {
     showFlash(err instanceof Error ? err.message : t('chat.media.tooLarge'))
   }
+}
+
+/** Jarvis chat MIC (HOME orb, composer MIC, nav MIC) — shared by every data-action="mic". */
+function startJarvisDictation(): void {
+  // Never block MIC on TTS; only soft-block while thinking
+  if (state.busy) {
+    stopSpeaking()
+    showFlash('답변 준비 중… 곧 MIC를 쓸 수 있습니다')
+    return
+  }
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    showFlash('음성 인식은 HTTPS(홈 화면 앱)에서만 됩니다.')
+    return
+  }
+  if (!canListen()) {
+    showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
+    return
+  }
+  if (state.listening && state.dictationTarget === 'jarvis') {
+    voiceSessionGen += 1
+    const partial = voice.consumeTranscript()
+    state.listening = false
+    state.voiceHint = ''
+    patchVoiceUi()
+    if (partial) void handleUserText(partial, { source: 'voice' })
+    else render()
+    return
+  }
+  if (state.listening) {
+    voiceSessionGen += 1
+    voice.stop()
+    state.listening = false
+  }
+  stopSpeaking()
+  const session = ++voiceSessionGen
+  state.dictationTarget = 'jarvis'
+  state.draft = ''
+  // Outside interpret lock, always listen in Korean so weather/life commands STT cleanly
+  const listenLang = currentListenLang() || 'ko-KR'
+  state.listenLang = listenLang
+  state.voiceHint = loadInterpretMode().active
+    ? `통역 듣는 중 (${listenLang}) · 말씀 끝나면 잠시 기다려 주세요`
+    : '듣고 있습니다… «오늘 날씨 알려줘»처럼 또박또박 (끝나면 잠깐 대기)'
+  // Ensure chat shell exists without heavy remount when already on chat
+  if (state.view !== 'chat' || !document.querySelector('#voice-caption, [data-home-v2-prompt="1"]')) {
+    state.view = 'chat'
+    state.listening = true
+    render()
+  } else {
+    state.listening = true
+    patchVoiceUi()
+  }
+  void (async () => {
+    const micOk = await ensureMicPermission()
+    if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis' || !state.listening) return
+    if (!micOk) {
+      state.listening = false
+      state.voiceHint = ''
+      showFlash('마이크 권한이 필요합니다. 설정 → AIZIO/Safari → 마이크 허용')
+      patchVoiceUi()
+      return
+    }
+    const ok = voice.start(
+      {
+        onInterim: (text) => {
+          state.draft = text
+          state.voiceHint = text || state.voiceHint
+          patchVoiceUi()
+        },
+        onFinal: (text) => {
+          if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis') return
+          state.listening = false
+          state.voiceHint = '인식 완료'
+          state.draft = text
+          patchVoiceUi()
+          void handleUserText(text, { source: 'voice' })
+        },
+        onState: (s) => {
+          if (session !== voiceSessionGen) return
+          state.listening = s === 'listening' || s === 'processing'
+          if (s === 'idle' && !state.busy) state.listening = false
+          patchVoiceUi()
+        },
+        onError: (err) => {
+          if (session !== voiceSessionGen) return
+          state.listening = false
+          state.voiceHint = ''
+          showFlash(err)
+          patchVoiceUi()
+        },
+      },
+      listenLang,
+    )
+    if (!ok) {
+      state.listening = false
+      state.voiceHint = ''
+      showFlash('음성 인식을 시작하지 못했습니다. 다시 MIC를 눌러 주세요.')
+      patchVoiceUi()
+    }
+  })()
 }
 
 function startSpaceDictation(space: 'family' | 'friends'): void {
@@ -2770,9 +2862,13 @@ function renderHomeV2View(): string {
             <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
           </div>`
         : ''
-    const voiceHint = `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${
-      state.listening || state.voiceHint ? '' : 'hidden'
-    }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
+    // Empty HOME already has #voice-caption on the orb — do not duplicate the id.
+    const voiceHint =
+      state.messages.length === 0
+        ? ''
+        : `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" data-voice-caption="1" ${
+            state.listening || state.voiceHint ? '' : 'hidden'
+          }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
     return renderHomeV2Shell(model, {
       draft: state.draft,
       busy: state.busy,
@@ -3028,7 +3124,7 @@ function renderChat(): string {
       ${wizard}
       ${chatTools}
       <div class="messages chat-thread" id="chat-thread">${body}</div>
-      <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
+      <div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" data-voice-caption="1" ${state.listening || state.voiceHint ? '' : 'hidden'}>${escapeHtml(
         state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint,
       )}</div>
       <div class="composer-dock">
@@ -5321,102 +5417,9 @@ function bind(): void {
     if (hud) hud.textContent = `Lv.1 · SCORE 0 · BEST ${best ?? '—'} · BEST Lv.${bestLv ?? '—'}`
   })
 
-  document.querySelector('[data-action="mic"]')?.addEventListener('click', () => {
-    // Never block MIC on TTS; only soft-block while thinking
-    if (state.busy) {
-      stopSpeaking()
-      showFlash('답변 준비 중… 곧 MIC를 쓸 수 있습니다')
-      return
-    }
-    if (typeof window !== 'undefined' && !window.isSecureContext) {
-      showFlash('음성 인식은 HTTPS(홈 화면 앱)에서만 됩니다.')
-      return
-    }
-    if (!canListen()) {
-      showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
-      return
-    }
-    if (state.listening && state.dictationTarget === 'jarvis') {
-      voiceSessionGen += 1
-      const partial = voice.consumeTranscript()
-      state.listening = false
-      state.voiceHint = ''
-      patchVoiceUi()
-      if (partial) void handleUserText(partial, { source: 'voice' })
-      else render()
-      return
-    }
-    if (state.listening) {
-      voiceSessionGen += 1
-      voice.stop()
-      state.listening = false
-    }
-    stopSpeaking()
-    const session = ++voiceSessionGen
-    state.dictationTarget = 'jarvis'
-    state.draft = ''
-    // Outside interpret lock, always listen in Korean so weather/life commands STT cleanly
-    const listenLang = currentListenLang() || 'ko-KR'
-    state.listenLang = listenLang
-    state.voiceHint = loadInterpretMode().active
-      ? `통역 듣는 중 (${listenLang}) · 말씀 끝나면 잠시 기다려 주세요`
-      : '듣고 있습니다… «오늘 날씨 알려줘»처럼 또박또박 (끝나면 잠깐 대기)'
-    // Ensure chat shell exists without heavy remount when already on chat
-    if (state.view !== 'chat' || !document.getElementById('voice-caption')) {
-      state.view = 'chat'
-      state.listening = true
-      render()
-    } else {
-      state.listening = true
-      patchVoiceUi()
-    }
-    void (async () => {
-      const micOk = await ensureMicPermission()
-      if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis' || !state.listening) return
-      if (!micOk) {
-        state.listening = false
-        state.voiceHint = ''
-        showFlash('마이크 권한이 필요합니다. 설정 → AIZIO/Safari → 마이크 허용')
-        patchVoiceUi()
-        return
-      }
-      const ok = voice.start(
-        {
-          onInterim: (text) => {
-            state.draft = text
-            state.voiceHint = text || state.voiceHint
-            patchVoiceUi()
-          },
-          onFinal: (text) => {
-            if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis') return
-            state.listening = false
-            state.voiceHint = '인식 완료'
-            state.draft = text
-            patchVoiceUi()
-            void handleUserText(text, { source: 'voice' })
-          },
-          onState: (s) => {
-            if (session !== voiceSessionGen) return
-            state.listening = s === 'listening' || s === 'processing'
-            if (s === 'idle' && !state.busy) state.listening = false
-            patchVoiceUi()
-          },
-          onError: (err) => {
-            if (session !== voiceSessionGen) return
-            state.listening = false
-            state.voiceHint = ''
-            showFlash(err)
-            patchVoiceUi()
-          },
-        },
-        listenLang,
-      )
-      if (!ok) {
-        state.listening = false
-        state.voiceHint = ''
-        patchVoiceUi()
-      }
-    })()
+  // Bind EVERY Jarvis MIC (HOME orb + composer + nav). querySelector alone left composer dead.
+  attachMicClickHandlers(document, () => {
+    startJarvisDictation()
   })
 
   document.querySelectorAll<HTMLButtonElement>('[data-action="space-mic"]').forEach((btn) => {

@@ -5,6 +5,7 @@ import {
   __setRecognitionCtorForTests,
   canListen,
   collapseStutteredTranscript,
+  ensureMicPermission,
   mergeUtteranceFinals,
   probeVoiceSupport,
 } from './voice'
@@ -237,6 +238,41 @@ describe('VoiceListener patient mode', () => {
     listener.stop()
     vi.advanceTimersByTime(600)
     expect(finals).toBe(1)
+  })
+})
+
+describe('ensureMicPermission', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    __setRecognitionCtorForTests(null)
+  })
+
+  it('returns false on hard permission deny', async () => {
+    __setRecognitionCtorForTests(class {} as unknown as new () => SpeechRecognitionLike)
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia: async () => {
+          const err = new Error('denied')
+          err.name = 'NotAllowedError'
+          throw err
+        },
+      },
+    })
+    await expect(ensureMicPermission()).resolves.toBe(false)
+  })
+
+  it('still allows speech when device is missing but recognition exists', async () => {
+    __setRecognitionCtorForTests(class {} as unknown as new () => SpeechRecognitionLike)
+    vi.stubGlobal('navigator', {
+      mediaDevices: {
+        getUserMedia: async () => {
+          const err = new Error('no device')
+          err.name = 'NotFoundError'
+          throw err
+        },
+      },
+    })
+    await expect(ensureMicPermission()).resolves.toBe(true)
   })
 })
 

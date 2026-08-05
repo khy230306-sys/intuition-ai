@@ -70,8 +70,19 @@ export async function ensureMicPermission(): Promise<boolean> {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
     for (const t of stream.getTracks()) t.stop()
     return true
-  } catch {
-    return false
+  } catch (err) {
+    const name =
+      err && typeof err === 'object' && 'name' in err ? String((err as { name: string }).name) : ''
+    // Hard deny — do not start recognition
+    if (
+      name === 'NotAllowedError' ||
+      name === 'PermissionDeniedError' ||
+      name === 'SecurityError'
+    ) {
+      return false
+    }
+    // No device / transient failures — still allow Web Speech (Safari quirk)
+    return canListen()
   }
 }
 

@@ -2813,6 +2813,7 @@ body[data-jarvis-view='friends'] .orb::after {
   border-radius: 50%;
   border: 2px solid rgba(0, 210, 190, 0.35);
   animation: home-v2-breathe 3.2s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .home-v2-orb.listening .home-v2-orb-ring {

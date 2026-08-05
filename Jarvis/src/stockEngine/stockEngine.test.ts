@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { factorsFromBars, factorsFromQuote, rangePosition } from './factors'
+import {
+  factorsFromBars,
+  factorsFromQuote,
+  rangePosition,
+  rsiProxyFromRet5d,
+} from './factors'
 import { detectMarket, detectSectorFilter, filterUniverse, REC_UNIVERSE } from './universe'
-import { scorePick, wantsStockRecommend } from './screen'
+import {
+  actionFromScore,
+  enrichWithRelativeStrength,
+  scorePick,
+  wantsStockRecommend,
+} from './screen'
 import { wantsStockAnalysis } from './analyze'
 import type { QuoteSnapshot } from '../types'
 
@@ -36,10 +46,11 @@ function q(partial: Partial<QuoteSnapshot> & Pick<QuoteSnapshot, 'symbol' | 'pri
 }
 
 describe('stockEngine universe', () => {
-  it('has expanded liquid universe', () => {
-    expect(REC_UNIVERSE.length).toBeGreaterThanOrEqual(40)
+  it('has broad liquid universe', () => {
+    expect(REC_UNIVERSE.length).toBeGreaterThanOrEqual(80)
     expect(REC_UNIVERSE.some((c) => c.symbol === '005930.KS')).toBe(true)
     expect(REC_UNIVERSE.some((c) => c.symbol === 'NVDA')).toBe(true)
+    expect(REC_UNIVERSE.some((c) => c.symbol === 'SMH')).toBe(true)
     expect(REC_UNIVERSE.some((c) => c.kind === 'etf')).toBe(true)
   })
 
@@ -48,13 +59,15 @@ describe('stockEngine universe', () => {
     expect(detectMarket('한국 주식 추천')).toBe('KR')
     expect(detectSectorFilter('반도체 종목 추천')).toBe('반도체')
     const semi = filterUniverse('ALL', '반도체')
-    expect(semi.every((c) => c.sector === '반도체')).toBe(true)
-    expect(semi.length).toBeGreaterThan(3)
+    expect(semi.every((c) => c.sector === '반도체' || c.symbol === 'SMH' || c.symbol === 'SOXX')).toBe(
+      true,
+    )
+    expect(semi.length).toBeGreaterThan(5)
   })
 })
 
 describe('stockEngine factors + score', () => {
-  it('computes range and relative volume', () => {
+  it('computes range, volume, rsi proxy, momentum', () => {
     const quote = q({
       symbol: 'TEST',
       price: 90,
@@ -62,12 +75,16 @@ describe('stockEngine factors + score', () => {
       fiftyTwoHigh: 120,
       volume: 2_000_000,
       avgVolume5d: 1_000_000,
-      ret5dPct: -4,
+      ret5dPct: -8,
+      changePct: -3,
     })
     expect(rangePosition(quote)).toBeCloseTo(0.25, 2)
     const f = factorsFromQuote(quote)
     expect(f.volumeRatio).toBeCloseTo(2, 2)
-    expect(f.ret5dPct).toBe(-4)
+    expect(f.ret5dPct).toBe(-8)
+    expect(f.rsiProxy).toBeLessThan(45)
+    expect(f.meanRevScore).toBeGreaterThan(0.5)
+    expect(rsiProxyFromRet5d(12)).toBeGreaterThan(60)
   })
 
   it('derives bars factors', () => {
@@ -110,6 +127,26 @@ describe('stockEngine factors + score', () => {
       new Set(),
     )
     expect(low.score).toBeGreaterThan(high.score)
+    expect(actionFromScore(70)).toBe('엔진추천')
+    expect(actionFromScore(30)).toBe('회피')
+  })
+
+  it('enriches relative strength', () => {
+    const c = REC_UNIVERSE.find((x) => x.symbol === 'AAPL')!
+    const picks = [8, -5, 2].map((ret) =>
+      scorePick(
+        c,
+        q({ symbol: c.symbol, name: c.name, price: 100, ret5dPct: ret, changePct: 0 }),
+        'balanced',
+        new Set(),
+        new Set(),
+      ),
+    )
+    const enriched = enrichWithRelativeStrength(picks)
+    const strong = enriched.find((p) => p.factors.ret5dPct === 8)!
+    const weak = enriched.find((p) => p.factors.ret5dPct === -5)!
+    expect(strong.rsPctile).toBeGreaterThan(weak.rsPctile!)
+    expect(strong.score).toBeGreaterThanOrEqual(weak.score)
   })
 })
 
@@ -119,6 +156,7 @@ describe('stockEngine intents', () => {
   it('detects recommend and analysis asks', () => {
     expect(wantsStockRecommend('주식 종목 추천')).toBe(true)
     expect(wantsStockRecommend('반도체 종목 추천')).toBe(true)
+    expect(wantsStockRecommend('퀀트 추천')).toBe(true)
     expect(wantsStockRecommend('맛집 추천')).toBe(false)
     expect(wantsStockAnalysis('삼성전자 종목분석')).toBe(true)
     expect(wantsStockAnalysis('삼성전자 시세')).toBe(false)

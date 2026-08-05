@@ -1,6 +1,6 @@
 /**
- * AIZIO Stock Engine v2 — multi-factor screening, analysis, portfolio.
- * Deterministic & local-first. Not investment advice.
+ * AIZIO Stock Engine v2.1 — AI-quant multi-factor screening, analysis, portfolio.
+ * Deterministic & local-first. Confident ranks; final decision is the user's.
  */
 
 export {
@@ -12,14 +12,23 @@ export {
   type RecMarket,
   type StockSector,
 } from './universe'
-export { factorsFromQuote, factorsFromBars, rangePosition, type StockFactors } from './factors'
+export {
+  factorsFromQuote,
+  factorsFromBars,
+  rangePosition,
+  rsiProxyFromRet5d,
+  type StockFactors,
+} from './factors'
 export {
   wantsStockRecommend,
   buildColdRecommendations,
   scorePick,
+  enrichWithRelativeStrength,
+  actionFromScore,
   type ScoredPick,
+  type RecAction,
 } from './screen'
 export { wantsStockAnalysis, buildStockAnalysis } from './analyze'
 export { buildPortfolioReport } from './portfolio'
 
-export const STOCK_ENGINE_VERSION = '2.0.0'
+export const STOCK_ENGINE_VERSION = '2.1.0'

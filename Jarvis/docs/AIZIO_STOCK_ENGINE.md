@@ -1,30 +1,37 @@
-# AIZIO Stock Engine v2
+# AIZIO Stock Engine v2.1 (AI Quant Screen)
 
-Deterministic, local-first equity helper for the PWA. **Not investment advice.**
+Deterministic, local-first equity helper for the PWA.  
+**Confident ranks from live/snapshot factors. Final invest decision is the user’s.**
 
 ## Capabilities
 
 | Feature | Command examples |
 |--------|-------------------|
-| Multi-factor screening | `주식 종목 추천`, `반도체 종목 추천`, `미국 보수 종목 추천` |
+| AI-quant screening | `주식 종목 추천`, `반도체 종목 추천`, `미국 보수 종목 추천` |
 | Single-name analysis | `삼성전자 종목분석`, `NVDA 종목분석` |
 | Portfolio | `포트폴리오` |
 | Engine info | `주식 엔진` |
-| Quotes / tools | existing: 시세, 관심종목, 보유, 포지션, 적립, 체크리스트 |
+| Quotes / tools | 시세, 관심종목, 보유, 포지션, 적립, 체크리스트 |
 
-### Factors
+## Model (retail AI / algo screener methods)
 
-1. 52-week range position  
-2. Day change % (sanitized)  
-3. ~5-day momentum (from Yahoo chart bars / snapshot)  
-4. Relative volume vs recent average  
-5. Sector fit vs risk profile + already-owned penalty  
+Not a broker auto-trader — adopts **screening methodologies** used by many AI/algo tools:
 
-### Data
+1. **Momentum** — day + ~5d path + range trend tilt (CTA-style)  
+2. **Mean reversion** — RSI proxy from 5d, oversold + volume (MR bots)  
+3. **Relative strength** — cross-sectional 5d percentile in the screened set  
+4. **52-week range** — chase / value band  
+5. **Volume confirmation** — vs recent average  
+6. **Sector × risk profile** + already-owned penalty  
+7. **Leverage guard** — QLD / TQQQ capped for conservative / balanced  
+
+Actions: `엔진추천` (≥68) · `관심` · `관망` · `회피`
+
+## Data
 
 - Live: Yahoo Finance chart API (browser; CORS may fall back to proxy/snapshot)  
-- Offline: `public/quote-snapshot.json` built by `npm run quotes`  
-- Universe: `src/stockEngine/universe.ts` (~45 liquid KR/US names + ETFs)
+- Offline: `public/quote-snapshot.json` via `npm run quotes`  
+- Universe: `src/stockEngine/universe.ts` (~95 liquid KR/US names + ETFs)
 
 ## Code map
 
@@ -36,5 +43,5 @@ Deterministic, local-first equity helper for the PWA. **Not investment advice.**
 ## Honesty rules
 
 - Never invent prices  
-- Always show disclaimer on screening / analysis / portfolio  
-- AI chat must not override engine numbers for picks  
+- One clear user-decides line on screening / analysis / portfolio  
+- AI chat must not invent prices or override engine numbers for picks  

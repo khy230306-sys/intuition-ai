@@ -42,8 +42,9 @@ describe('cold stock recommend', () => {
   it('returns cold screening for 주식 종목 추천', async () => {
     const { think } = await import('./brain')
     const reply = await think('주식 종목 추천')
-    expect(reply.text).toMatch(/냉정 스크리닝|상위 후보/)
-    expect(reply.text).toMatch(/면책/)
+    expect(reply.text).toMatch(/엔진 추천|AI퀀트|스크리닝/)
+    expect(reply.text).toMatch(/본인/)
     expect(reply.text).not.toMatch(/이해하지 못했/)
   }, 30000)
 })
+

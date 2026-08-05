@@ -3,7 +3,7 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**App (v1.20.7):** encyclopedia Q&A + reminder false-positive fix @ `db2e2fb` — Preview ShipStatic limit; needs production deploy approval to ship to device
+**Production (v1.20.7):** https://jarvis-app.shipstatic.com · snapshot `pristine-seed-4g2g9i9` · commit `f022e5a`
 
 ## Status legend
 

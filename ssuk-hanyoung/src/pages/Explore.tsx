@@ -2,28 +2,45 @@ import { Link, useParams } from 'react-router-dom'
 import { COLORS } from '../data/colors'
 import { VEHICLES } from '../data/vehicles'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { CHAR_IMG, CharImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 
-const VEHICLE_IMG: Record<string, string> = {
-  car: CHAR_IMG.car,
-  sports: CHAR_IMG.car,
-  taxi: CHAR_IMG.car,
-  police: CHAR_IMG.police,
-  fire: CHAR_IMG.fire,
-  ambulance: CHAR_IMG.ambulance,
-  bus: CHAR_IMG.bus,
-  school: CHAR_IMG.busFront,
-  truck: CHAR_IMG.dump,
-  dump: CHAR_IMG.dump,
-  tractor: CHAR_IMG.tractor,
-  mixer: CHAR_IMG.dump,
-  train: CHAR_IMG.bus,
-  plane: CHAR_IMG.star,
-  helicopter: CHAR_IMG.star,
-  boat: CHAR_IMG.ambulance,
-  bike: CHAR_IMG.car,
-  moto: CHAR_IMG.police,
+const VEHICLE_KIND: Record<string, string> = {
+  car: 'car',
+  sports: 'car',
+  taxi: 'car',
+  police: 'police',
+  fire: 'fire',
+  ambulance: 'ambulance',
+  bus: 'bus',
+  school: 'bus',
+  truck: 'truck',
+  dump: 'truck',
+  tractor: 'tractor',
+  mixer: 'truck',
+  train: 'bus',
+  moto: 'car',
 }
+
+const VEHICLE_COLOR: Record<string, string> = {
+  car: '#FF2D55',
+  sports: '#FF7A00',
+  taxi: '#FFD400',
+  police: '#2F6BFF',
+  fire: '#FF2D55',
+  ambulance: '#FFF8E7',
+  bus: '#FFD400',
+  school: '#FFD400',
+  truck: '#FF7A00',
+  dump: '#FF7A00',
+  tractor: '#22C55E',
+  mixer: '#8B5CF6',
+  train: '#2F6BFF',
+  moto: '#1A1510',
+}
+
+const SHOW_VEHICLES = VEHICLES.filter((v) => v.id in VEHICLE_KIND)
 
 export function Explore() {
   const { topic } = useParams()
@@ -36,29 +53,22 @@ export function Explore() {
         <h1>탐험</h1>
       </div>
       <p className="section-sub" style={{ marginTop: '-0.4rem' }}>
-        진짜 자동차 친구들을 만져 보아요
+        눌러서 배워 보아요
       </p>
       <div className="grid-2">
         <Link to="/explore/colors" className="card art-card photo-card" style={{ background: '#FFD6E4' }}>
           <div className="art-wrap photo">
             <CharImg src={CHAR_IMG.paint} size={110} />
           </div>
-          <div className="card-title">색깔 탐험</div>
-          <div className="card-sub">{COLORS.length}가지 선명한 색깔</div>
+          <div className="card-title">색깔</div>
+          <div className="card-sub">{COLORS.length}가지</div>
         </Link>
         <Link to="/explore/vehicles" className="card art-card photo-card" style={{ background: '#D6E4FF' }}>
           <div className="art-wrap photo">
             <CharImg src={CHAR_IMG.fire} size={110} />
           </div>
-          <div className="card-title">탈것 탐험</div>
-          <div className="card-sub">입체 자동차 캐릭터</div>
-        </Link>
-        <Link to="/games" className="card art-card photo-card" style={{ background: '#FFF2B8' }}>
-          <div className="art-wrap photo">
-            <CharImg src={CHAR_IMG.bus} size={110} />
-          </div>
-          <div className="card-title">재미있는 게임</div>
-          <div className="card-sub">부릉부릉 놀이하러 가요</div>
+          <div className="card-title">자동차</div>
+          <div className="card-sub">{SHOW_VEHICLES.length}대</div>
         </Link>
       </div>
     </div>
@@ -72,7 +82,7 @@ function ColorExplore() {
         <Link to="/explore" className="icon-btn" aria-label="뒤로">
           ←
         </Link>
-        <h1>색깔 탐험</h1>
+        <h1>색깔</h1>
       </div>
       <div className="grid-3">
         {COLORS.map((c) => (
@@ -84,11 +94,13 @@ function ColorExplore() {
               background: c.hex,
               color: c.id === 'yellow' || c.id === 'white' || c.id === 'lime' ? '#1a1510' : '#fff',
             }}
-            onClick={() => speak(`${c.ko}. ${c.en}`)}
+            onClick={() => {
+              sfx.tap()
+              speak(c.ko)
+            }}
           >
             <span className="color-blob" style={{ background: c.hex }} />
             <div className="ko">{c.ko}</div>
-            <div className="en">{c.en}</div>
           </button>
         ))}
       </div>
@@ -103,16 +115,23 @@ function VehicleExplore() {
         <Link to="/explore" className="icon-btn" aria-label="뒤로">
           ←
         </Link>
-        <h1>탈것 탐험</h1>
+        <h1>자동차</h1>
       </div>
       <div className="grid-2">
-        {VEHICLES.map((v) => (
-          <button key={v.id} type="button" className="card explore-item art-card photo-card" onClick={() => speak(`${v.ko}. ${v.sound}`)}>
+        {SHOW_VEHICLES.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            className="card explore-item art-card photo-card"
+            onClick={() => {
+              sfx.horn()
+              speak(`${v.ko}. ${v.sound}`)
+            }}
+          >
             <div className="art-wrap photo">
-              <CharImg src={VEHICLE_IMG[v.id] || CHAR_IMG.car} size={120} />
+              <PaintSubject kind={VEHICLE_KIND[v.id]!} color={VEHICLE_COLOR[v.id] || '#FFD400'} size={120} />
             </div>
             <div className="ko">{v.ko}</div>
-            <div className="en">{v.en}</div>
           </button>
         ))}
       </div>

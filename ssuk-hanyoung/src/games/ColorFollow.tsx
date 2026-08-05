@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PLAY_COLORS, pick } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { PaintSubject } from '../components/PaintSubject'
@@ -41,6 +42,7 @@ export function ColorFollow() {
   function tap(id: string) {
     if (phase !== 'play' || round.done) return
     if (id !== seq[step]) {
+      sfx.wrong()
       speak('다시 보아요')
       setPhase('watch')
       setStep(0)
@@ -48,6 +50,7 @@ export function ColorFollow() {
     }
     const next = step + 1
     setFlash(id)
+    sfx.tap()
     setTimeout(() => setFlash(null), 250)
     if (next >= seq.length) {
       speak('잘했어요!')

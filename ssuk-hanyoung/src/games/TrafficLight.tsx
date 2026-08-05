@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
 type Light = 'red' | 'yellow' | 'green'
@@ -15,9 +17,15 @@ export function TrafficLight() {
     const id = window.setInterval(() => {
       setLight((cur) => {
         const next = cur === 'red' ? 'green' : cur === 'green' ? 'yellow' : 'red'
-        if (next === 'green') speak('초록불! 부릉부릉!')
-        if (next === 'red') speak('빨간불! 멈춰요!')
-        if (next === 'yellow') speak('노란불! 조심해요!')
+        if (next === 'green') {
+          sfx.go()
+          speak('초록불!')
+        }
+        if (next === 'red') {
+          sfx.wait()
+          speak('빨간불!')
+        }
+        if (next === 'yellow') speak('노란불!')
         return next
       })
     }, 2600)
@@ -28,17 +36,20 @@ export function TrafficLight() {
     if (round.done) return
     if (light === 'green') {
       setPos((p) => Math.min(78, p + 14))
-      speak('부릉부릉!')
+      sfx.vroom()
+      speak('부릉!')
       round.win('잘 달렸어요!')
     } else if (light === 'yellow') {
+      sfx.wait()
       speak('조금 더 기다려요')
     } else {
-      speak('빨간불이에요! 멈춰요!')
+      sfx.wrong()
+      speak('빨간불! 멈춰요!')
     }
   }
 
   return (
-    <GameShell title="신호등 놀이" subtitle="초록불에만 출발해요" progress={round.progress}>
+    <GameShell title="신호등" subtitle="초록불에만 출발!" progress={round.progress}>
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="play-area">
@@ -48,12 +59,17 @@ export function TrafficLight() {
           <div className={`light green${light === 'green' ? ' on' : ''}`} />
         </div>
         <div className="road">
-          <span className="racer" style={{ left: `${pos}%` }}>
-            🚗
+          <span className="racer photo" style={{ left: `${pos}%` }}>
+            <PaintSubject kind="car" color={light === 'green' ? '#22C55E' : '#FF2D55'} size={52} />
           </span>
         </div>
-        <button type="button" className="btn btn-leaf btn-lg btn-block" style={{ marginTop: '0.9rem' }} onClick={drive}>
-          부릉부릉 출발! 🚗
+        <button
+          type="button"
+          className={`btn btn-lg btn-block${light === 'green' ? ' btn-leaf' : ' btn-ghost'}`}
+          style={{ marginTop: '0.9rem' }}
+          onClick={drive}
+        >
+          {light === 'green' ? '출발!' : '기다려요'}
         </button>
         {round.done && (
           <button

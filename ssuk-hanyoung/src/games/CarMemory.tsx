@@ -1,20 +1,27 @@
 import { useState } from 'react'
 import { shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
-const ICONS = ['🚗', '🚕', '🚓', '🚑', '🚒', '🚌']
+const PAIRS = [
+  { kind: 'car', color: '#FF2D55' },
+  { kind: 'bus', color: '#FFD400' },
+  { kind: 'police', color: '#2F6BFF' },
+  { kind: 'fire', color: '#FF7A00' },
+]
 
-type Card = { id: string; icon: string; open: boolean; matched: boolean }
+type Card = { id: string; kind: string; color: string; open: boolean; matched: boolean }
 
 function deal(): Card[] {
-  const pair = shuffle(ICONS).slice(0, 6)
+  const pair = shuffle(PAIRS).slice(0, 4)
   return shuffle(
-    pair.flatMap((icon, i) => [
-      { id: `${i}a`, icon, open: false, matched: false },
-      { id: `${i}b`, icon, open: false, matched: false },
+    pair.flatMap((p, i) => [
+      { id: `${i}a`, kind: p.kind, color: p.color, open: false, matched: false },
+      { id: `${i}b`, kind: p.kind, color: p.color, open: false, matched: false },
     ]),
   )
 }
@@ -27,6 +34,7 @@ export function CarMemory() {
 
   function flip(card: Card) {
     if (lock || card.open || card.matched || round.done) return
+    sfx.tap()
     const nextOpen = [...openIds, card.id]
     const next = cards.map((c) => (c.id === card.id ? { ...c, open: true } : c))
     setCards(next)
@@ -36,14 +44,19 @@ export function CarMemory() {
     const [a, b] = nextOpen
     const ca = next.find((c) => c.id === a)!
     const cb = next.find((c) => c.id === b)!
-    if (ca.icon === cb.icon) {
-      speak('짝이 맞아요!')
+    if (ca.kind === cb.kind) {
+      sfx.cheer()
+      speak('짝!')
       const matched = next.map((c) => (c.id === a || c.id === b ? { ...c, matched: true } : c))
       setCards(matched)
       setOpenIds([])
       setLock(false)
-      if (matched.every((c) => c.matched)) round.win('모두 맞췄어요!')
+      if (matched.every((c) => c.matched)) {
+        sfx.win()
+        round.win('모두 맞췄어요!')
+      }
     } else {
+      sfx.wrong()
       speak('다시!')
       setTimeout(() => {
         setCards((cur) => cur.map((c) => (c.id === a || c.id === b ? { ...c, open: false } : c)))
@@ -54,7 +67,7 @@ export function CarMemory() {
   }
 
   return (
-    <GameShell title="자동차 기억카드" subtitle="같은 자동차 짝을 맞춰요" progress={cards.filter((c) => c.matched).length / cards.length}>
+    <GameShell title="짝 맞추기" subtitle="같은 차를 찾아요" progress={cards.filter((c) => c.matched).length / cards.length}>
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="play-area">
@@ -66,7 +79,7 @@ export function CarMemory() {
               className={`mem-card${c.open || c.matched ? '' : ' back'}${c.matched ? ' matched' : ''}`}
               onClick={() => flip(c)}
             >
-              {c.open || c.matched ? c.icon : '?'}
+              {c.open || c.matched ? <PaintSubject kind={c.kind} color={c.color} size={56} /> : '?'}
             </button>
           ))}
         </div>

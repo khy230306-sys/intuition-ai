@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PLAY_COLORS } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
@@ -38,11 +39,13 @@ export function ColorBook() {
   function paint(c: (typeof PLAY_COLORS)[number]) {
     setColor(c)
     setPop((n) => n + 1)
+    sfx.paint()
     speak(`${c.ko} ${subject.ko}!`)
     const next = painted + 1
     setPainted(next)
     if (next % 4 === 0) {
       addStars(1, 'car-paint')
+      sfx.cheer()
       setToast('멋져요!')
       setConfetti(true)
       setTimeout(() => {

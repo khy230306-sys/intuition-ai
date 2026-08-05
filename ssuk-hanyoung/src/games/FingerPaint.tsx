@@ -1,30 +1,36 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { PLAY_COLORS } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 
 export function FingerPaint() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
+  const dpr = useRef(1)
   const [color, setColor] = useState(PLAY_COLORS[0]!)
   const [strokes, setStrokes] = useState(0)
+
+  function paintBg(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.setTransform(dpr.current, 0, 0, dpr.current, 0, 0)
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.fillStyle = '#fffaf0'
+    ctx.fillRect(0, 0, w, h)
+  }
 
   useEffect(() => {
     const c = canvasRef.current
     if (!c) return
     const resize = () => {
       const rect = c.getBoundingClientRect()
-      const ratio = window.devicePixelRatio || 1
-      c.width = rect.width * ratio
-      c.height = rect.height * ratio
+      dpr.current = window.devicePixelRatio || 1
+      c.width = Math.max(1, Math.floor(rect.width * dpr.current))
+      c.height = Math.max(1, Math.floor(rect.height * dpr.current))
       const ctx = c.getContext('2d')
       if (!ctx) return
-      ctx.scale(ratio, ratio)
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
-      ctx.fillStyle = '#fffaf0'
-      ctx.fillRect(0, 0, rect.width, rect.height)
+      paintBg(ctx, rect.width, rect.height)
     }
     resize()
     window.addEventListener('resize', resize)
@@ -46,6 +52,7 @@ export function FingerPaint() {
     ctx.lineWidth = 18
     ctx.beginPath()
     ctx.moveTo(p.x, p.y)
+    sfx.paint()
   }
 
   function move(e: PointerEvent<HTMLCanvasElement>) {
@@ -64,6 +71,7 @@ export function FingerPaint() {
     setStrokes(next)
     if (next % 5 === 0) {
       addStars(1, 'finger-paint')
+      sfx.cheer()
       speak('멋져요!')
     }
   }
@@ -73,14 +81,13 @@ export function FingerPaint() {
     const ctx = c?.getContext('2d')
     if (!c || !ctx) return
     const rect = c.getBoundingClientRect()
-    ctx.fillStyle = '#fffaf0'
-    ctx.fillRect(0, 0, rect.width, rect.height)
+    paintBg(ctx, rect.width, rect.height)
     setStrokes(0)
     speak('깨끗해요')
   }
 
   return (
-    <GameShell title="손가락 그림" subtitle="손가락으로 마음껏 그려요">
+    <GameShell title="손가락 그림" subtitle="손가락으로 그려요">
       <div className="grid-3" style={{ marginBottom: '0.6rem' }}>
         {PLAY_COLORS.map((c) => (
           <button

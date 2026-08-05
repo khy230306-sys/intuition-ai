@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
-/** Simple 3-beat patterns kids can copy */
 const PATTERNS = [
   [1, 1, 1],
   [1, 0, 1],
@@ -18,6 +19,9 @@ export function RhythmTap() {
   const [phase, setPhase] = useState<'listen' | 'play'>('listen')
   const [lit, setLit] = useState(false)
   const [idx, setIdx] = useState(0)
+  const [flashI, setFlashI] = useState<number | null>(null)
+
+  const beatsNeeded = pattern.filter(Boolean).length
 
   useEffect(() => {
     if (phase !== 'listen' || round.done) return
@@ -27,14 +31,16 @@ export function RhythmTap() {
       if (i >= pattern.length) {
         clearInterval(timer)
         setLit(false)
+        setFlashI(null)
         setPhase('play')
         setIdx(0)
         speak('똑같이 눌러요')
         return
       }
+      setFlashI(i)
       if (pattern[i]) {
         setLit(true)
-        speak('톡')
+        sfx.drum()
         setTimeout(() => setLit(false), 280)
       }
       i += 1
@@ -44,27 +50,28 @@ export function RhythmTap() {
 
   function tap() {
     if (phase !== 'play' || round.done) return
-    // skip rests: advance until next beat or end
     let expect = idx
     while (expect < pattern.length && !pattern[expect]) expect += 1
     if (expect >= pattern.length) return
+
+    // Player should only tap on beat slots — rests are auto-skipped after a tap
     setLit(true)
+    sfx.drum()
     setTimeout(() => setLit(false), 200)
+    setFlashI(expect)
+
+    const beatsDone = pattern.slice(0, expect + 1).filter(Boolean).length
     const next = expect + 1
-    // check if remaining are all rests / done
-    let done = next >= pattern.length
-    if (!done) {
-      let j = next
-      while (j < pattern.length && !pattern[j]) j += 1
-      done = j >= pattern.length
-    }
-    if (done) {
+
+    if (beatsDone >= beatsNeeded) {
+      sfx.win()
       speak('멋져요!')
       round.win('박자 성공!')
       setTimeout(() => {
         setPattern(PATTERNS[(round.score + 1) % PATTERNS.length]!)
         setPhase('listen')
         setIdx(0)
+        setFlashI(null)
       }, 600)
     } else {
       setIdx(next)
@@ -76,16 +83,16 @@ export function RhythmTap() {
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big">{phase === 'listen' ? '👂 들어요' : '👆 따라 쳐요'}</div>
+        <div className="prompt-big">{phase === 'listen' ? '잘 들어요' : '따라 쳐요'}</div>
       </div>
-      <div className="play-area" style={{ display: 'grid', placeItems: 'center', minHeight: '16rem' }}>
-        <button
-          type="button"
-          className={`rhythm-drum${lit ? ' lit' : ''}`}
-          onClick={tap}
-          disabled={phase !== 'play'}
-        >
-          🥁
+      <div className="beat-strip" aria-hidden>
+        {pattern.map((b, i) => (
+          <span key={i} className={`beat-dot${b ? ' hit' : ' rest'}${flashI === i ? ' on' : ''}`} />
+        ))}
+      </div>
+      <div className="play-area" style={{ display: 'grid', placeItems: 'center', minHeight: '14rem' }}>
+        <button type="button" className={`rhythm-drum photo${lit ? ' lit' : ''}`} onClick={tap} disabled={phase !== 'play'}>
+          <PaintSubject kind="drum" color="#FF2D55" size={120} />
         </button>
         {round.done && (
           <button

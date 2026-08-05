@@ -1,3 +1,5 @@
+import { getSettings } from './store'
+
 let unlocked = false
 
 export function unlockSpeech() {
@@ -14,9 +16,12 @@ export function unlockSpeech() {
 
 export function speak(text: string, lang = 'ko-KR') {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+  if (getSettings().muteSpeech) return
+  const clean = text.replace(/[^\p{L}\p{N}\s.!?,~…·]/gu, '').trim()
+  if (!clean) return
   try {
     window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(text)
+    const u = new SpeechSynthesisUtterance(clean)
     u.lang = lang
     u.rate = 0.95
     u.pitch = 1.15

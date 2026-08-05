@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { addStars } from '../lib/store'
 import { cheer } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 
 export function useRound(gameId: string, total = 5) {
   const [score, setScore] = useState(0)
@@ -16,10 +17,12 @@ export function useRound(gameId: string, total = 5) {
           setDone(true)
           setConfetti(true)
           addStars(3, gameId)
+          sfx.win()
           cheer()
           setTimeout(() => setConfetti(false), 1600)
         } else {
           addStars(1, gameId)
+          sfx.cheer()
         }
         return next
       })

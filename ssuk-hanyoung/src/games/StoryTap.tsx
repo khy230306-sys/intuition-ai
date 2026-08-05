@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
@@ -16,16 +17,16 @@ const PAGES: Page[] = [
   {
     kind: 'bus',
     color: '#FFD400',
-    text: '노란 버스가 아침 인사를 해요. “오늘 어디로 갈까?”',
+    text: '노란 버스가 인사해요. 오늘 어디로 갈까?',
     choices: [
-      { label: '공원으로!', next: 1, good: true, kind: 'car', color: '#22C55E' },
-      { label: '바다로!', next: 2, good: true, kind: 'police', color: '#2F6BFF' },
+      { label: '공원!', next: 1, good: true, kind: 'car', color: '#22C55E' },
+      { label: '바다!', next: 2, good: true, kind: 'police', color: '#2F6BFF' },
     ],
   },
   {
     kind: 'car',
     color: '#FF2D55',
-    text: '공원에서 빨간 자동차 친구를 만났어요. 함께 달릴까요?',
+    text: '공원에서 빨간 차를 만났어요. 같이 달릴까요?',
     choices: [
       { label: '같이 달려요', next: 3, good: true, kind: 'car', color: '#FF2D55' },
       { label: '먼저 쉬어요', next: 4, kind: 'star', color: '#FFD400' },
@@ -34,28 +35,43 @@ const PAGES: Page[] = [
   {
     kind: 'police',
     color: '#2F6BFF',
-    text: '바다에서 파란 경찰차가 손을 흔들어요. 인사할까요?',
+    text: '바다에서 파란 경찰차가 손을 흔들어요!',
     choices: [
-      { label: '빵빵! 인사', next: 3, good: true, kind: 'police', color: '#2F6BFF' },
-      { label: '모래성 쌓기', next: 4, good: true, kind: 'sand', color: '#FFD400' },
+      { label: '빵빵 인사', next: 3, good: true, kind: 'police', color: '#2F6BFF' },
+      { label: '모래성', next: 5, good: true, kind: 'sand', color: '#E8B86D' },
     ],
   },
   {
     kind: 'fire',
     color: '#FF7A00',
-    text: '친구들과 신나게 달렸어요. 부릉부릉! 정말 즐거워요.',
-    choices: [{ label: '이야기 끝!', next: 5, good: true, kind: 'star', color: '#FFD400' }],
+    text: '친구들과 부릉부릉! 신나게 달렸어요.',
+    choices: [
+      { label: '더 달려요', next: 6, good: true, kind: 'truck', color: '#FF7A00' },
+      { label: '이야기 끝', next: 7, good: true, kind: 'star', color: '#FFD400' },
+    ],
   },
   {
     kind: 'star',
     color: '#FFD400',
-    text: '조금 쉬고 나니 힘이 나요. 다시 출발!',
+    text: '조금 쉬니 힘이 나요. 다시 출발!',
     choices: [{ label: '다시 달려요', next: 3, good: true, kind: 'car', color: '#FF2D55' }],
+  },
+  {
+    kind: 'sand',
+    color: '#E8B86D',
+    text: '모래성을 쌓고 트럭 친구도 만났어요.',
+    choices: [{ label: '같이 놀아요', next: 6, good: true, kind: 'truck', color: '#FF7A00' }],
+  },
+  {
+    kind: 'truck',
+    color: '#FF7A00',
+    text: '덤프트럭이 짐칸을 기울여요. 으쌰!',
+    choices: [{ label: '집으로!', next: 7, good: true, kind: 'bus', color: '#FFD400' }],
   },
   {
     kind: 'star',
     color: '#FF5DA2',
-    text: '오늘 모험 끝! 별이 반짝반짝 인사해요.',
+    text: '오늘 모험 끝! 별이 반짝반짝.',
   },
 ]
 
@@ -65,17 +81,21 @@ export function StoryTap() {
   const cur = PAGES[page]!
 
   function choose(next: number, good?: boolean) {
-    if (good) addStars(1, 'story-tap')
-    speak(PAGES[next]?.text.slice(0, 24) || '끝')
+    if (good) {
+      addStars(1, 'story-tap')
+      sfx.tap()
+    }
+    speak(PAGES[next]?.text || '끝')
     setPage(next)
-    if (next === 5) {
+    if (next === 7) {
+      sfx.win()
       setConfetti(true)
       setTimeout(() => setConfetti(false), 1400)
     }
   }
 
   return (
-    <GameShell title="자동차 동화" subtitle="그림을 보고 이야기를 골라요">
+    <GameShell title="자동차 동화" subtitle="그림을 보고 골라요">
       <Confetti show={confetti} />
       <div className="play-area story-card">
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: '0.5rem' }}>
@@ -95,7 +115,7 @@ export function StoryTap() {
               className="btn btn-sky"
               onClick={() => {
                 setPage(0)
-                speak('처음부터 다시!')
+                speak('처음부터!')
               }}
             >
               처음부터

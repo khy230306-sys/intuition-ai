@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { getProfile, useProfileSubscribe } from '../lib/store'
+import { getProfile, getSettings, useProfileSubscribe } from '../lib/store'
 import { unlockSpeech } from '../lib/speech'
+import { setSfxMuted } from '../lib/sfx'
 import { CHAR_IMG, CharImg } from './GameArt'
+import { StickerToast } from './StickerToast'
 
 const NAV = [
   { to: '/', label: '홈', src: CHAR_IMG.bus, end: true },
-  { to: '/games', label: '게임', src: CHAR_IMG.car },
-  { to: '/explore', label: '탐험', src: CHAR_IMG.star },
-  { to: '/parents', label: '부모님', src: CHAR_IMG.ambulance },
+  { to: '/games', label: '놀이', src: CHAR_IMG.car },
+  { to: '/explore', label: '탐험', src: CHAR_IMG.paint },
+  { to: '/parents', label: '부모', src: CHAR_IMG.star },
 ]
 
 export function Layout() {
@@ -18,6 +20,13 @@ export function Layout() {
 
   useEffect(() => {
     return useProfileSubscribe(() => setStars(getProfile().stars))
+  }, [])
+
+  useEffect(() => {
+    setSfxMuted(getSettings().muteSfx)
+    const onMute = (e: Event) => setSfxMuted(!!(e as CustomEvent).detail)
+    window.addEventListener('ssuk-sfx-mute', onMute)
+    return () => window.removeEventListener('ssuk-sfx-mute', onMute)
   }, [])
 
   useEffect(() => {
@@ -43,6 +52,7 @@ export function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <StickerToast />
       {!hideNav && (
         <nav className="bottom-nav" aria-label="주요 메뉴">
           <div className="bottom-nav-inner">

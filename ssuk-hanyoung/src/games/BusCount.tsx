@@ -1,43 +1,49 @@
 import { useEffect, useState } from 'react'
-import { pick, shuffle } from '../data/colors'
+import { shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
+
+const FRIEND_COLORS = ['#FF2D55', '#2F6BFF', '#FFD400', '#22C55E', '#FF7A00', '#8B5CF6']
 
 export function BusCount() {
   const round = useRound('bus-count', 5)
-  const [count, setCount] = useState(() => 2 + Math.floor(Math.random() * 5))
+  const [count, setCount] = useState(() => 2 + Math.floor(Math.random() * 4))
   const [choices, setChoices] = useState<number[]>([])
 
   useEffect(() => {
     const opts = shuffle([count, count + 1, Math.max(1, count - 1), count + 2]).slice(0, 3)
     setChoices(opts)
-    speak(`버스에 친구 ${count}명이 탔어요. 몇 명일까요?`)
+    speak(`버스에 친구 ${count}명. 몇 명일까요?`)
   }, [count, round.score])
 
   function answer(n: number) {
     if (round.done) return
     if (n === count) {
+      sfx.win()
       speak('맞아요!')
       round.win('잘 세요!')
-      setTimeout(() => setCount(2 + Math.floor(Math.random() * 5)), 600)
+      setTimeout(() => setCount(2 + Math.floor(Math.random() * 4)), 600)
     } else {
+      sfx.wrong()
       speak('다시 세어 보아요')
     }
   }
 
   return (
-    <GameShell title="버스 승객 세기" subtitle="버스에 탄 친구를 세어 봐요" progress={round.progress}>
+    <GameShell title="버스 세기" subtitle="친구를 세어 보아요" progress={round.progress}>
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="play-area">
-        <div style={{ textAlign: 'center', fontSize: '4rem' }}>🚌</div>
-        <div className="parts" style={{ minHeight: '3.5rem' }}>
+        <div style={{ display: 'grid', placeItems: 'center' }}>
+          <PaintSubject kind="bus" color="#FFD400" size={120} />
+        </div>
+        <div className="parts" style={{ minHeight: '4rem', justifyContent: 'center' }}>
           {Array.from({ length: count }, (_, i) => (
-            <span key={i} style={{ fontSize: '2rem' }}>
-              {pick(['🧒', '👧', '👦', '🧑'])}
-            </span>
+            <PaintSubject key={i} kind="star" color={FRIEND_COLORS[i % FRIEND_COLORS.length]!} size={44} />
           ))}
         </div>
         <div className="grid-3" style={{ marginTop: '0.9rem' }}>

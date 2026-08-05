@@ -1,22 +1,20 @@
 import { useRef, useState } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
-import { CHAR_IMG, CharImg } from '../components/GameArt'
+import { PaintSubject } from '../components/PaintSubject'
 
 const SOUNDS = [
-  { id: 'horn', src: CHAR_IMG.car, ko: '빵빵', say: '빵빵!' },
-  { id: 'vroom', src: CHAR_IMG.car, ko: '부릉', say: '부릉부릉!' },
-  { id: 'siren', src: CHAR_IMG.police, ko: '삐뽀', say: '삐뽀삐뽀!' },
-  { id: 'fire', src: CHAR_IMG.fire, ko: '위잉', say: '위이잉!' },
-  { id: 'bus', src: CHAR_IMG.bus, ko: '버스', say: '버스가 출발해요!' },
-  { id: 'train', src: CHAR_IMG.tractor, ko: '기차', say: '울릉울릉!' },
-  { id: 'plane', src: CHAR_IMG.star, ko: '비행기', say: '슈우웅!' },
-  { id: 'bike', src: CHAR_IMG.busFront, ko: '따르릉', say: '따르릉!' },
-  { id: 'truck', src: CHAR_IMG.dump, ko: '트럭', say: '털털털!' },
-  { id: 'amb', src: CHAR_IMG.ambulance, ko: '삐용', say: '삐용삐용!' },
-  { id: 'cheer', src: CHAR_IMG.star, ko: '야호', say: '야호! 잘했어요!' },
-  { id: 'sleep', src: CHAR_IMG.sand, ko: '쿨쿨', say: '쿨쿨… 잘 자요' },
+  { id: 'horn', kind: 'car', color: '#FF2D55', ko: '빵빵', say: '빵빵!', play: () => sfx.horn() },
+  { id: 'vroom', kind: 'car', color: '#FF7A00', ko: '부릉', say: '부릉부릉!', play: () => sfx.vroom() },
+  { id: 'siren', kind: 'police', color: '#2F6BFF', ko: '삐뽀', say: '삐뽀삐뽀!', play: () => sfx.siren() },
+  { id: 'fire', kind: 'fire', color: '#FF2D55', ko: '위잉', say: '위이잉!', play: () => sfx.siren() },
+  { id: 'bus', kind: 'bus', color: '#FFD400', ko: '버스', say: '버스가 출발해요!', play: () => sfx.horn() },
+  { id: 'truck', kind: 'truck', color: '#FF7A00', ko: '트럭', say: '털털털!', play: () => sfx.vroom() },
+  { id: 'amb', kind: 'ambulance', color: '#FFF8E7', ko: '삐용', say: '삐용삐용!', play: () => sfx.siren() },
+  { id: 'tractor', kind: 'tractor', color: '#22C55E', ko: '트랙터', say: '덜컹덜컹!', play: () => sfx.drum() },
+  { id: 'cheer', kind: 'star', color: '#FFD400', ko: '야호', say: '야호! 잘했어요!', play: () => sfx.cheer() },
 ]
 
 export function SoundBoard() {
@@ -25,17 +23,20 @@ export function SoundBoard() {
 
   function play(s: (typeof SOUNDS)[number]) {
     setActive(s.id)
+    s.play()
     speak(s.say)
     taps.current += 1
-    if (taps.current % 6 === 0) addStars(1, 'sound-board')
+    if (taps.current % 6 === 0) {
+      addStars(1, 'sound-board')
+      sfx.win()
+    }
     setTimeout(() => setActive(null), 350)
   }
 
   return (
-    <GameShell title="사운드보드" subtitle="버튼을 누르면 소리가 나요">
+    <GameShell title="사운드보드" subtitle="크게 눌러 보아요">
       <div className="prompt">
-        <div className="prompt-big">크게 눌러 보아요!</div>
-        <div className="prompt-sub">자동차 소리를 마음대로 내요</div>
+        <div className="prompt-big">빵빵! 삐뽀!</div>
       </div>
       <div className="play-area">
         <div className="grid-3">
@@ -46,7 +47,7 @@ export function SoundBoard() {
               className={`sound-btn photo-btn${active === s.id ? ' on' : ''}`}
               onClick={() => play(s)}
             >
-              <CharImg src={s.src} size={72} />
+              <PaintSubject kind={s.kind} color={s.color} size={72} />
               <span className="card-title">{s.ko}</span>
             </button>
           ))}

@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { PaintSubject } from '../components/PaintSubject'
 import { shuffle } from '../data/colors'
 
 type Cell = {
   id: number
   dug: boolean
-  treasure?: string
+  treasure?: { kind: string; color: string; ko: string }
 }
 
-const TREASURES = ['🚗', '🚌', '🚓', '🚒', '⭐', '🐚', '🦴', '🔑', '💎', '🧸']
+const TREASURES = [
+  { kind: 'car', color: '#FF2D55', ko: '자동차' },
+  { kind: 'bus', color: '#FFD400', ko: '버스' },
+  { kind: 'police', color: '#2F6BFF', ko: '경찰차' },
+  { kind: 'fire', color: '#FF7A00', ko: '소방차' },
+  { kind: 'star', color: '#FFD400', ko: '별' },
+]
 
 function makeBoard(): Cell[] {
   const spots = shuffle([...Array(12).keys()]).slice(0, 5)
@@ -36,18 +44,21 @@ export function SandPlay() {
     const next = board.map((c) => (c.id === cell.id ? { ...c, dug: true } : c))
     setBoard(next)
     if (cell.treasure) {
-      speak(`우와! ${cell.treasure}`)
+      sfx.cheer()
+      speak(`${cell.treasure.ko}!`)
       const n = found + 1
       setFound(n)
-      setToast('보물 발견!')
+      setToast('보물!')
       addStars(1, 'sand-play')
       if (n >= need) {
         setConfetti(true)
-        speak('모래 속 보물을 다 찾았어요!')
+        sfx.win()
+        speak('다 찾았어요!')
         setTimeout(() => setConfetti(false), 1400)
       }
     } else {
-      speak('모래만 나왔어요')
+      sfx.tap()
+      speak('모래예요')
     }
     setTimeout(() => setToast(null), 900)
   }
@@ -55,11 +66,13 @@ export function SandPlay() {
   function stackCastle() {
     const n = Math.min(5, castle + 1)
     setCastle(n)
-    speak(n >= 5 ? '모래성 완성!' : '모래를 쌓아요')
+    sfx.tap()
+    speak(n >= 5 ? '모래성 완성!' : '쌓아요')
     if (n >= 5) {
       addStars(2, 'sand-play')
+      sfx.win()
       setConfetti(true)
-      setToast('멋진 모래성!')
+      setToast('완성!')
       setTimeout(() => {
         setConfetti(false)
         setToast(null)
@@ -69,71 +82,70 @@ export function SandPlay() {
   }
 
   return (
-    <GameShell title="모래놀이" subtitle="모래를 파고, 모래성을 쌓아요">
+    <GameShell title="모래놀이" subtitle="파고, 쌓아요">
       <Confetti show={confetti} />
       {toast && <div className="toast">{toast}</div>}
       <div className="filter-row">
         <button type="button" className={`chip${mode === 'dig' ? ' on' : ''}`} onClick={() => setMode('dig')}>
-          🏖️ 보물 찾기
+          보물 찾기
         </button>
         <button type="button" className={`chip${mode === 'castle' ? ' on' : ''}`} onClick={() => setMode('castle')}>
-          🏰 모래성
+          모래성
         </button>
       </div>
-
-      {mode === 'dig' ? (
-        <>
-          <div className="prompt">
-            <div className="prompt-big">
-              모래를 터치! ({found}/{need})
+      <div className="play-area">
+        {mode === 'dig' ? (
+          <>
+            <div className="prompt-big" style={{ marginBottom: '0.6rem' }}>
+              보물 {found}/{need}
             </div>
-            <div className="prompt-sub">숨겨진 자동차와 보물을 찾아요</div>
-          </div>
-          <div className="play-area sand-box">
-            <div className="sand-grid">
-              {board.map((cell) => (
+            <div className="grid-3">
+              {board.map((c) => (
                 <button
-                  key={cell.id}
+                  key={c.id}
                   type="button"
-                  className={`sand-cell${cell.dug ? ' dug' : ''}`}
-                  onClick={() => dig(cell)}
+                  className="sand-cell"
+                  onClick={() => dig(c)}
+                  style={{ background: c.dug ? '#f5e6c8' : '#e8c07a' }}
                 >
-                  {cell.dug ? cell.treasure || '·' : '모래'}
+                  {c.dug ? (
+                    c.treasure ? (
+                      <PaintSubject kind={c.treasure.kind} color={c.treasure.color} size={48} />
+                    ) : (
+                      <span style={{ color: 'var(--muted)' }}>·</span>
+                    )
+                  ) : (
+                    <PaintSubject kind="sand" color="#D4A574" size={40} />
+                  )}
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className="btn btn-sunny btn-block"
-              style={{ marginTop: '0.8rem' }}
-              onClick={() => {
-                setBoard(makeBoard())
-                setFound(0)
-                speak('새 모래판이에요')
-              }}
-            >
-              새 모래판
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="prompt">
-            <div className="prompt-big">모래성을 쌓아요 ({castle}/5)</div>
-            <div className="prompt-sub">화면을 계속 터치해요</div>
-          </div>
-          <div className="play-area sand-box castle-area" onClick={stackCastle} role="button" tabIndex={0}>
-            <div className="castle-stack">
-              {Array.from({ length: castle }, (_, i) => (
-                <div key={i} className="castle-block" style={{ width: `${70 - i * 8}%` }}>
-                  {i === castle - 1 ? '🚩' : ''}
-                </div>
-              ))}
-              {castle === 0 && <p className="prompt-sub">여기를 터치해서 쌓기!</p>}
+            {found >= need && (
+              <button
+                type="button"
+                className="btn btn-sunny btn-block"
+                style={{ marginTop: '0.8rem' }}
+                onClick={() => {
+                  setBoard(makeBoard())
+                  setFound(0)
+                }}
+              >
+                또 찾기!
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="prompt-big">모래성 {castle}/5</div>
+            <div style={{ display: 'grid', placeItems: 'center', minHeight: '10rem' }}>
+              <PaintSubject kind="sand" color="#E8B86D" size={80 + castle * 16} />
             </div>
-          </div>
-        </>
-      )}
+            <button type="button" className="btn btn-sunny btn-lg btn-block" onClick={stackCastle}>
+              모래 쌓기
+            </button>
+          </>
+        )}
+      </div>
     </GameShell>
   )
 }

@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { useRound } from './useRound'
@@ -66,27 +67,30 @@ export function ShapeTouch() {
     void round.score
     return shuffle([...SHAPES])[0]!
   }, [round.score])
-  const choices = useMemo(() => shuffle([...SHAPES]), [target])
+  const choices = useMemo(() => shuffle([...SHAPES]).slice(0, 4), [target])
+
+  useEffect(() => {
+    speak(`${target.ko}를 찾아요`)
+  }, [target])
 
   function pick(id: string) {
     if (round.done) return
     if (id === target.id) {
+      sfx.win()
       speak(`맞아요! ${target.ko}`)
       round.win('잘했어요!')
     } else {
+      sfx.wrong()
       speak('다시 찾아 보아요')
     }
   }
 
   return (
-    <GameShell title="모양 만지기" subtitle="말한 모양을 터치해요" progress={round.progress}>
+    <GameShell title="모양 찾기" subtitle="들은 모양을 찾아요" progress={round.progress}>
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
-        <div className="prompt-big" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <ShapeArt id={target.id} color={target.color} size={48} />
-          {target.ko}
-        </div>
+        <div className="prompt-big">{target.ko} 찾기!</div>
         <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(`${target.ko}를 찾아요`)}>
           다시 듣기
         </button>

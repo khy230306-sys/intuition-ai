@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { CHAR_IMG, CharImg } from './GameArt'
 
 export function GameShell({
   title,
@@ -21,8 +22,8 @@ export function GameShell({
           ←
         </Link>
         <h1>{title}</h1>
-        <Link to="/" className="icon-btn" aria-label="홈">
-          🏠
+        <Link to="/" className="icon-btn photo" aria-label="홈">
+          <CharImg src={CHAR_IMG.bus} size={28} />
         </Link>
       </div>
       {subtitle && (

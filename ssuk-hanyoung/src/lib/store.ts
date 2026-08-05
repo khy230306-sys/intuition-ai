@@ -1,23 +1,27 @@
 export type Profile = {
   name: string
-  character: string
   stars: number
   played: Record<string, number>
   stickers: string[]
   missionDate: string
   missionsDone: string[]
+  muteSpeech: boolean
+  muteSfx: boolean
+  lastSticker?: string | null
 }
 
-const KEY = 'ssuk-hanyoung-v2'
+const KEY = 'ssuk-hanyoung-v3'
 
 const DEFAULT: Profile = {
   name: '한영이',
-  character: '🚌',
   stars: 0,
   played: {},
   stickers: [],
   missionDate: '',
   missionsDone: [],
+  muteSpeech: false,
+  muteSfx: false,
+  lastSticker: null,
 }
 
 const C = '/assets/chars'
@@ -26,14 +30,14 @@ export const STICKERS = [
   { id: 'police', src: `${C}/police.png`, ko: '경찰차' },
   { id: 'fire', src: `${C}/fire.png`, ko: '소방차' },
   { id: 'ambulance', src: `${C}/ambulance.png`, ko: '구급차' },
-  { id: 'sports', src: `${C}/car.png`, ko: '스포츠카' },
+  { id: 'sports', src: `${C}/car.png`, ko: '자동차' },
   { id: 'truck', src: `${C}/dump.png`, ko: '트럭' },
-  { id: 'train', src: `${C}/tractor.png`, ko: '기차' },
-  { id: 'plane', src: `${C}/char-star.png`, ko: '비행기' },
+  { id: 'tractor', src: `${C}/tractor.png`, ko: '트랙터' },
   { id: 'star', src: `${C}/char-star.png`, ko: '별' },
-  { id: 'rainbow', src: `${C}/char-paint.png`, ko: '무지개' },
-  { id: 'trophy', src: `${C}/char-drum.png`, ko: '트로피' },
-  { id: 'heart', src: `${C}/char-sand.png`, ko: '하트' },
+  { id: 'paint', src: `${C}/char-paint.png`, ko: '팔레트' },
+  { id: 'drum', src: `${C}/char-drum.png`, ko: '북' },
+  { id: 'sand', src: `${C}/char-sand.png`, ko: '모래성' },
+  { id: 'busFront', src: `${C}/bus-front.png`, ko: '스쿨버스' },
 ]
 
 function todayKey() {
@@ -43,15 +47,17 @@ function todayKey() {
 
 function read(): Profile {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(KEY) || localStorage.getItem('ssuk-hanyoung-v2')
     if (!raw) return { ...DEFAULT, played: {}, stickers: [], missionsDone: [] }
     const parsed = JSON.parse(raw)
     return {
       ...DEFAULT,
       ...parsed,
-      played: { ...DEFAULT.played, ...(parsed.played || {}) },
+      played: { ...(parsed.played || {}) },
       stickers: parsed.stickers || [],
       missionsDone: parsed.missionsDone || [],
+      muteSpeech: !!parsed.muteSpeech,
+      muteSfx: !!parsed.muteSfx,
     }
   } catch {
     return { ...DEFAULT, played: {}, stickers: [], missionsDone: [] }
@@ -67,6 +73,25 @@ export function getProfile(): Profile {
   return read()
 }
 
+export function getSettings() {
+  const p = read()
+  return { muteSpeech: p.muteSpeech, muteSfx: p.muteSfx }
+}
+
+export function setMuteSpeech(v: boolean) {
+  const p = read()
+  p.muteSpeech = v
+  write(p)
+}
+
+export function setMuteSfx(v: boolean) {
+  const p = read()
+  p.muteSfx = v
+  write(p)
+  // lazy import avoided — Layout syncs sfx mute
+  window.dispatchEvent(new CustomEvent('ssuk-sfx-mute', { detail: v }))
+}
+
 export function setName(name: string) {
   const p = read()
   p.name = name.trim() || DEFAULT.name
@@ -75,20 +100,29 @@ export function setName(name: string) {
 
 function maybeUnlockSticker(p: Profile) {
   const locked = STICKERS.filter((s) => !p.stickers.includes(s.id))
-  if (!locked.length) return
-  // unlock roughly every 4 stars earned total milestones
+  if (!locked.length) return null
   const should = p.stars > 0 && p.stars % 4 === 0
-  if (!should) return
+  if (!should) return null
   const pick = locked[Math.floor(Math.random() * locked.length)]!
   p.stickers = [...p.stickers, pick.id]
+  p.lastSticker = pick.id
+  return pick
+}
+
+export function consumeLastSticker() {
+  const p = read()
+  const id = p.lastSticker
+  if (!id) return null
+  p.lastSticker = null
+  write(p)
+  return STICKERS.find((s) => s.id === id) || null
 }
 
 export function addStars(n: number, gameId?: string) {
   const p = read()
   p.stars += n
   if (gameId) p.played[gameId] = (p.played[gameId] || 0) + 1
-  maybeUnlockSticker(p)
-  // auto-complete mission if matching game played
+  const unlocked = maybeUnlockSticker(p)
   ensureMissions(p)
   if (gameId && !p.missionsDone.includes(gameId)) {
     const todays = getMissionIdsFor(p.missionDate)
@@ -98,32 +132,26 @@ export function addStars(n: number, gameId?: string) {
     }
   }
   write(p)
+  if (unlocked) {
+    window.dispatchEvent(new CustomEvent('ssuk-sticker', { detail: unlocked }))
+  }
   return p.stars
 }
 
-export function unlockSticker(id: string) {
-  const p = read()
-  if (!p.stickers.includes(id)) {
-    p.stickers = [...p.stickers, id]
-    write(p)
-  }
-}
-
 function getMissionIdsFor(date: string) {
-  // stable daily trio from game ids
   const pool = [
     'color-follow',
-    'sand-play',
     'car-paint',
-    'bubble-pop',
     'maze-drive',
-    'hidden-cars',
     'sound-board',
     'car-parade',
     'car-puzzle',
     'story-tap',
     'wait-go',
-    'rhythm-tap',
+    'car-builder',
+    'sand-play',
+    'balloons',
+    'color-mix',
   ]
   let hash = 0
   for (let i = 0; i < date.length; i++) hash = (hash * 31 + date.charCodeAt(i)) >>> 0

@@ -294,7 +294,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.19.0'
+const APP_VERSION = '1.20.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -4145,7 +4145,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <p class="hint">백업 v7: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
+      <p class="hint">백업 v8: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·Life OS 2.0·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>

@@ -1,6 +1,7 @@
 import { classifyMusicIntent } from '../music/musicIntent'
 import type { AppLocale } from '../i18n'
 import { parseLifeOsIntent } from '../life-os/intentParse'
+import { parseLifeOs2Intent } from '../life-os-2/intentParse'
 import { parseRelationshipUtterance } from '../relationship'
 import { isCasualChatText } from '../spokenCommand'
 import { parseReminderUtterance } from '../smartReminder'
@@ -181,6 +182,41 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
         personDisplay: rem.personDisplay,
         personRelation: rem.personRelation,
       },
+    }
+  }
+
+  // Life OS 2.0 — specific fusion/focus/habit/automation (before Life OS 1 routines)
+  const life2 = parseLifeOs2Intent(t)
+  if (life2) {
+    const map2: Record<string, CoreIntent> = {
+      ask_current_context: 'ask_current_context',
+      ask_priority: 'ask_priority',
+      ask_prediction: 'ask_prediction',
+      show_habits: 'show_habits',
+      confirm_habit: 'confirm_habit',
+      reject_habit: 'reject_habit',
+      start_focus: 'start_focus',
+      stop_focus: 'stop_focus',
+      focus_status: 'focus_status',
+      save_relationship: 'save_relationship_ext',
+      search_relationship: 'search_relationship_ext',
+      search_knowledge: 'search_knowledge',
+      create_automation: 'create_automation',
+      run_automation: 'run_automation',
+      stop_automation: 'stop_automation',
+      goal_coaching: 'goal_coaching',
+      morning_brief: 'morning_brief',
+      evening_summary: 'evening_summary',
+      show_recommendations: 'show_recommendations',
+    }
+    const intent = map2[life2.intent]
+    if (intent) {
+      return {
+        intent,
+        confidence: 0.92,
+        source: 'local',
+        entities: { lifeOs2Intent: life2.intent },
+      }
     }
   }
 

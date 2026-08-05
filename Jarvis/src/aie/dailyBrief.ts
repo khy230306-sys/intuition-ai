@@ -7,6 +7,7 @@ import { morningBriefing } from '../smart'
 import { loadSettings } from '../storage'
 import { formatTodayBrief } from '../life-os/lifeContext'
 import { isLifeFeatureEnabled } from '../life-os/featureFlags'
+import { formatFusedContextSummary, fuseContext, isLifeOs2Enabled } from '../life-os-2/lifeOS2'
 import { buildAieContext, formatAieContextBlock } from './contextEngine'
 import { computeRecommendations, formatRecommendationsBlock } from './recommendationEngine'
 import type { AieContext } from './types'
@@ -114,6 +115,19 @@ export function buildAieDailyBrief(opts?: DailyBriefOptions): string {
     } catch {
       /* optional */
     }
+  }
+
+  // Life OS 2.0 Context Fusion snippet (flag-gated; never replaces AIE)
+  try {
+    if (isLifeOs2Enabled('contextFusionEnabled')) {
+      const fused = formatFusedContextSummary(fuseContext({ force: false }) || undefined)
+      if (fused) {
+        sections.push('')
+        sections.push(fused)
+      }
+    }
+  } catch {
+    /* Life OS 2 optional */
   }
 
   sections.push('')

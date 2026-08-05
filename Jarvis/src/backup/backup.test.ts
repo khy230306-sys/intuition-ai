@@ -21,7 +21,7 @@ beforeEach(() => {
   resetGuestIdentityForTests()
 })
 
-describe('backup v7', () => {
+describe('backup v8', () => {
   it('exports relationships, smart reminders, life os without api keys', () => {
     store.set('jarvis_chat_v1', JSON.stringify([{ id: '1', role: 'user', text: 'hi', createdAt: 1 }]))
     store.set('jarvis_relationships_v1', JSON.stringify([{ id: 'r1', label: '엄마', name: '김영희' }]))

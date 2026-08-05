@@ -59,6 +59,21 @@ const LIFE_OS_KEYS = [
   'aizio_life_consent_v1',
   'aizio_life_flags_v1',
   'aizio_life_schema_v1',
+  // Life OS 2.0
+  'aizio_life_os2_flags_v1',
+  'aizio_los2_schema_v1',
+  'aizio_los2_habits_v1',
+  'aizio_los2_focus_v1',
+  'aizio_los2_relationships_v1',
+  'aizio_los2_knowledge_v1',
+  'aizio_los2_automations_v1',
+  'aizio_los2_automation_runs_v1',
+  'aizio_los2_predictions_v1',
+  'aizio_los2_coaching_v1',
+  'aizio_los2_companion_v1',
+  'aizio_los2_proactive_v1',
+  'aizio_los2_habit_obs_v1',
+  'aizio_los2_privacy_v1',
 ] as const
 
 function readRaw(key: string): unknown {

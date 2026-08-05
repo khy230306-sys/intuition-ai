@@ -1,4 +1,4 @@
-export const BACKUP_SCHEMA_VERSION = 7 as const
+export const BACKUP_SCHEMA_VERSION = 8 as const
 
 export type BackupCategory =
   | 'chat'

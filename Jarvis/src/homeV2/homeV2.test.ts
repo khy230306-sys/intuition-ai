@@ -220,7 +220,8 @@ describe('HOME v2 render', () => {
     expect(more).toContain('data-view="games"')
     expect(more).toContain('data-view="settings"')
     expect(more).toContain('data-view="global"')
-    expect(more).toContain('data-action="install-home"')
+    expect(more).toContain('data-action="install-show-guide"')
+    expect(more).toContain('홈 화면 설치 방법')
     expect(more).toContain('길안내')
     expect(more).toContain('음악')
     expect(more).toContain('손님관리')
@@ -234,7 +235,7 @@ describe('HOME v2 render', () => {
     expect(more).not.toContain('실행(액션)')
     expect(more).not.toContain('API 키')
     expect((more.match(/data-view="life"/g) || []).length).toBe(1)
-    expect(renderHomeV2MoreSheet({ showInstall: false })).not.toContain('data-action="install-home"')
+    expect(renderHomeV2MoreSheet({ showInstall: false })).not.toContain('data-action="install-show-guide"')
   })
 
   it('unified shell includes thread slot', () => {

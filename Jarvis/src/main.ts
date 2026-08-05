@@ -56,8 +56,8 @@ import {
   getRecommendedInstallUrl,
   hasNativeInstallPrompt,
   detectInstallPlatform,
-  installCtaLabel,
   installGuideSteps,
+  installMethodSummary,
   isPreviewInstallHost,
   markPwaInstalled,
   onPwaInstallChange,
@@ -306,7 +306,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.4'
+const APP_VERSION = '1.20.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -714,20 +714,6 @@ function refreshInstallHint(): void {
   // Browser tab only — hide when already launched from the home-screen icon.
   state.showInstall = shouldShowInstallButton()
   if (!state.showInstall) state.installGuideOpen = false
-}
-
-function renderHomeInstallButton(opts?: { compact?: boolean }): string {
-  if (!state.showInstall) return ''
-  const compact = opts?.compact
-  const platform = detectInstallPlatform()
-  const label = installCtaLabel(platform)
-  const short = compact ? '홈 화면 설치' : label
-  return `
-    <button type="button" class="install-home-btn ${compact ? 'compact' : ''}" data-action="install-home" aria-label="${escapeAttr(label)}">
-      <span class="install-home-ico" aria-hidden="true">↓</span>
-      <span class="install-home-label">${compact ? short : label}</span>
-    </button>
-  `
 }
 
 async function handleInstallHomeClick(): Promise<void> {
@@ -2410,28 +2396,19 @@ function renderBrand(): string {
 function renderInstall(): string {
   if (!state.showInstall) return ''
   const platform = detectInstallPlatform()
-  const preview = isPreviewInstallHost()
-  const tip =
-    platform === 'ios'
-      ? preview
-        ? '버튼 → 공유 창 자동 열림 · 「홈 화면에 추가」 선택 (Preview)'
-        : '버튼을 누르면 공유 창이 열립니다 · 「홈 화면에 추가」 선택'
-      : platform === 'ios-chrome'
-        ? '가능하면 Safari에서 · 버튼이 공유 창을 엽니다'
-        : platform === 'android'
-          ? hasNativeInstallPrompt()
-            ? '버튼을 누르면 설치 창이 열립니다'
-            : '버튼 또는 Chrome 메뉴에서 홈 화면에 추가'
-          : '브라우저 설치 메뉴로 홈 화면에 추가'
+  const method = installMethodSummary(platform, { previewHost: isPreviewInstallHost() })
+  const lines = method.lines
+    .map((line, i) => `<li><span class="install-step-n">${i + 1}</span>${escapeHtml(line)}</li>`)
+    .join('')
   return `
-    <div class="install-banner" data-install-banner="1">
+    <div class="install-banner install-banner-method" data-install-banner="1">
       <div class="install-banner-copy">
-        <strong>홈 화면에 설치</strong>
-        <span>${tip}</span>
+        <strong>${escapeHtml(method.title)}</strong>
+        <ol class="install-banner-steps">${lines}</ol>
       </div>
       <div class="install-banner-actions">
-        ${renderHomeInstallButton()}
-        <button type="button" class="ghost-btn tiny install-already-btn" data-action="install-already-done">이미 설치함</button>
+        <button type="button" class="ghost-btn tiny" data-action="install-show-guide">자세히</button>
+        <button type="button" class="ghost-btn tiny install-already-btn" data-action="install-already-done">숨기기</button>
       </div>
     </div>
   `
@@ -2477,6 +2454,15 @@ function bindInstallUi(): void {
       e.preventDefault()
       e.stopPropagation()
       void handleInstallHomeClick()
+    })
+  })
+  document.querySelectorAll('[data-action="install-show-guide"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      state.homeV2MoreOpen = false
+      state.installGuideOpen = detectInstallPlatform()
+      render()
     })
   })
   document.querySelectorAll('[data-action="close-install-guide"]').forEach((btn) => {
@@ -2531,7 +2517,7 @@ function bindInstallUi(): void {
       markPwaInstalled()
       state.showInstall = false
       state.installGuideOpen = false
-      showFlash('홈 화면 설치 안내를 숨겼습니다.')
+      showFlash('홈 화면 설치 방법 안내를 숨겼습니다.')
       render()
     })
   })
@@ -2575,8 +2561,9 @@ function renderLocationGate(): string {
         </button>
         ${
           state.showInstall
-            ? `<div class="loc-install">${renderHomeInstallButton()}
-                <p class="hint">브라우저로 보셨다면 홈 화면에 설치해 앱처럼 쓰세요.</p></div>`
+            ? `<div class="loc-install loc-install-method">
+                <p class="hint"><strong>홈 화면 설치 방법</strong> — 화면 위 안내를 따라 Safari 공유 → 홈 화면에 추가하세요. 설치 후 아이콘으로 열면 안내가 사라집니다.</p>
+              </div>`
             : ''
         }
         <p class="loc-help">거부했다면: 설정 → 개인정보 보호 → 위치 서비스 → Safari/AIZIO → 허용</p>
@@ -2867,7 +2854,6 @@ function renderHomeWidget(): string {
           <strong class="home-weather">${escapeHtml(s.weatherLine)}</strong>
         </div>
         <div class="home-widget-actions">
-          ${renderHomeInstallButton({ compact: true })}
           <button type="button" class="ghost-btn tiny" data-action="open-share-app" aria-label="앱 공유">QR</button>
         </div>
       </div>
@@ -3243,7 +3229,7 @@ function renderChat(): string {
           <div class="big-orb"></div>
           <h2>AIZIO</h2>
           <p>말로 쓰는 일상 비서입니다.<br/>메시지를 보내거나 MIC로 말해 보세요.<br/><strong>사용설명서</strong>를 누르면 한눈에 볼 수 있어요.</p>
-          ${state.showInstall ? `<div class="hero-install">${renderHomeInstallButton()}</div>` : ''}
+          ${state.showInstall ? `<p class="hint hero-install-hint">홈 화면 설치 방법은 화면 위 안내를 보세요. 아이콘으로 실행하면 안내가 사라집니다.</p>` : ''}
           <div class="chips">
             ${SUGGESTIONS.map((s) => `<button type="button" data-suggest="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
           </div>

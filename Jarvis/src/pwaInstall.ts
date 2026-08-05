@@ -33,13 +33,6 @@ export function getRecommendedInstallUrl(
   return PRODUCTION_INSTALL_URL
 }
 
-export function installCtaLabel(platform: InstallPlatform = detectInstallPlatform()): string {
-  // Button triggers the closest native install UI available on the platform
-  if (platform === 'ios' || platform === 'ios-chrome') return '홈 화면에 설치'
-  if (platform === 'android' && !hasNativeInstallPrompt()) return '홈 화면에 설치'
-  return '홈 화면에 설치'
-}
-
 let deferredPrompt: BeforeInstallPromptEventLike | null = null
 let changeListeners: Array<() => void> = []
 
@@ -146,8 +139,8 @@ export function hasNativeInstallPrompt(): boolean {
 }
 
 /**
- * Show the install button only when the user is in a browser tab
- * (not already launched from the home-screen icon, and not previously marked installed).
+ * Show the install-method banner only in a browser tab
+ * (hidden when launched from the home-screen icon, or manually dismissed).
  */
 export function shouldShowInstallButton(
   win: Pick<Window, 'matchMedia'> & { navigator: Navigator; document?: Document } = window,
@@ -296,6 +289,53 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
   return { kind: 'need-guide', platform }
 }
 
+
+/** Short on-screen install method (no install button — iOS cannot auto-install). */
+export function installMethodSummary(
+  platform: InstallPlatform = detectInstallPlatform(),
+  opts?: { previewHost?: boolean },
+): { title: string; lines: string[] } {
+  const preview = opts?.previewHost
+  if (platform === 'ios-chrome') {
+    return {
+      title: '홈 화면 설치 방법',
+      lines: [
+        'Safari로 이 주소를 여세요 (Chrome/인앱에서는 추가가 안 됩니다).',
+        '공유(□↑) → 「홈 화면에 추가」→「추가」',
+        preview ? '정식 앱: jarvis-app.shipstatic.com' : '홈 화면 아이콘으로 열면 이 안내가 사라집니다.',
+      ],
+    }
+  }
+  if (platform === 'ios') {
+    return {
+      title: '홈 화면 설치 방법',
+      lines: [
+        'Safari 공유(□↑) → 아래로 스크롤 → 「홈 화면에 추가」',
+        '오른쪽 위 「추가」를 누르면 홈 화면에 AIZIO가 생깁니다.',
+        preview
+          ? '지금 주소는 Preview입니다. 정식: jarvis-app.shipstatic.com'
+          : '홈 화면 아이콘으로 실행하면 이 안내가 자동으로 사라집니다.',
+      ],
+    }
+  }
+  if (platform === 'android') {
+    return {
+      title: '홈 화면 설치 방법',
+      lines: [
+        'Chrome 메뉴(⋮) → 「앱 설치」또는 「홈 화면에 추가」',
+        '설치 후 아이콘으로 실행하면 이 안내가 사라집니다.',
+      ],
+    }
+  }
+  return {
+    title: '홈 화면 설치 방법',
+    lines: [
+      '브라우저 메뉴에서 「앱 설치」/ Install app 을 선택하세요.',
+      '설치 후 이 안내는 자동으로 숨겨집니다.',
+    ],
+  }
+}
+
 export function installGuideSteps(platform: InstallPlatform, opts?: { previewHost?: boolean }): { title: string; steps: string[] } {
   const previewNote = opts?.previewHost
     ? '지금 보시는 주소는 Preview입니다. 홈 화면에는 정식 주소(jarvis-app.shipstatic.com)를 추가하세요.'
@@ -317,9 +357,8 @@ export function installGuideSteps(platform: InstallPlatform, opts?: { previewHos
     return {
       title: '아이폰 · Safari로 홈 화면에 추가',
       steps: [
-        '「홈 화면에 설치」를 누르면 공유 창이 자동으로 열립니다.',
         previewNote || '가능하면 정식 주소(jarvis-app.shipstatic.com)에서 추가하세요.',
-        '공유 창이 안 열리면 Safari 하단(또는 상단) 공유 버튼(□↑)을 직접 누릅니다.',
+        'Safari 하단(또는 상단) 공유 버튼(□↑)을 누릅니다.',
         '시트를 아래로 스크롤해 「홈 화면에 추가」를 고릅니다. (위쪽에 「즐겨찾기」만 보이면 더 아래로)',
         '목록에 없으면 「편집」또는 「동작 편집」→ 「홈 화면에 추가」켜기 → 완료 후 다시 공유.',
         '오른쪽 위 「추가」를 누릅니다. 개인정보 보호 브라우징이면 일반 탭으로 바꿔 다시 시도하세요.',

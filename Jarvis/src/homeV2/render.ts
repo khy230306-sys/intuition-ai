@@ -266,7 +266,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <ul class="home-v2-more-list">
             ${moreItem('설정 · AI · 업데이트', 'data-view="settings"')}
             ${moreItem('번역 · 언어', 'data-view="global"')}
-            ${showInstall ? moreItem('홈 화면에 설치', 'data-action="install-home"') : ''}
+            ${showInstall ? moreItem('홈 화면 설치 방법', 'data-action="install-show-guide"') : ''}
             ${moreItem('사용설명서', 'data-action="home-v2-guide"')}
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}
             ${moreItem('푸시 테스트', 'data-action="home-v2-goto-push"')}

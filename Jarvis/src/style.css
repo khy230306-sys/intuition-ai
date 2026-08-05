@@ -126,9 +126,9 @@ body {
 .install-banner {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-radius: 14px;
   background: rgba(90, 200, 255, 0.1);
   border: 1px solid rgba(90, 200, 255, 0.28);
@@ -138,11 +138,49 @@ body {
   animation: fadeDown 0.45s ease both;
 }
 
+.install-banner-method {
+  align-items: stretch;
+}
+
 .install-banner-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
+  flex: 1;
+}
+
+.install-banner-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.install-banner-steps li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--text, #e8eef7);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.install-step-n {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #041018;
+  background: rgba(90, 200, 255, 0.85);
+  margin-top: 1px;
 }
 
 .install-banner-actions {
@@ -151,6 +189,12 @@ body {
   align-items: stretch;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.hero-install-hint {
+  margin: 10px 0 4px;
+  text-align: center;
+  font-size: 0.78rem;
 }
 
 .install-banner-actions .ghost-btn.tiny,

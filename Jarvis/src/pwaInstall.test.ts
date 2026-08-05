@@ -6,8 +6,8 @@ import {
   detectInstallPlatform,
   getRecommendedInstallUrl,
   hasPwaInstalledMark,
-  installCtaLabel,
   installGuideSteps,
+  installMethodSummary,
   isIosNonSafari,
   isMobileInstallTarget,
   isPreviewInstallHost,
@@ -107,11 +107,14 @@ describe('pwaInstall', () => {
     expect(detectInstallPlatform('Android 14')).toBe('android')
     expect(isMobileInstallTarget('iPad')).toBe(true)
     expect(installGuideSteps('ios').steps.length).toBeGreaterThan(2)
-    expect(installGuideSteps('ios').steps.join(' ')).toMatch(/공유 창/)
+    expect(installGuideSteps('ios').steps.join(' ')).toMatch(/홈 화면에 추가/)
     expect(installGuideSteps('ios', { previewHost: true }).steps.join(' ')).toMatch(/Preview/)
     expect(installGuideSteps('ios-chrome').title).toMatch(/Safari/)
     expect(installGuideSteps('android').title).toMatch(/안드로이드/)
-    expect(installCtaLabel('ios')).toMatch(/홈 화면에 설치/)
+    const method = installMethodSummary('ios')
+    expect(method.title).toBe('홈 화면 설치 방법')
+    expect(method.lines.join(' ')).toMatch(/공유/)
+    expect(installMethodSummary('ios', { previewHost: true }).lines.join(' ')).toMatch(/Preview|정식/)
     expect(isPreviewInstallHost('pulsing-bloom-qk5a536.shipstatic.com')).toBe(true)
     expect(isPreviewInstallHost('jarvis-app.shipstatic.com')).toBe(false)
     expect(

@@ -19,6 +19,12 @@ interface YahooChartResponse {
         shortName?: string
         marketState?: string
       }
+      indicators?: {
+        quote?: Array<{
+          close?: Array<number | null>
+          volume?: Array<number | null>
+        }>
+      }
     }>
     error?: { description?: string }
   }
@@ -56,16 +62,47 @@ async function loadSnapshot(): Promise<SnapshotFile | null> {
   return snapshotPromise
 }
 
+function barsFromResult(
+  result: NonNullable<NonNullable<YahooChartResponse['chart']>['result']>[0] | undefined,
+): { ret5dPct: number | null; avgVolume5d: number | null } {
+  const closes = (result?.indicators?.quote?.[0]?.close || []).filter(
+    (x): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0,
+  )
+  const volumes = (result?.indicators?.quote?.[0]?.volume || []).filter(
+    (x): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0,
+  )
+  let ret5dPct: number | null = null
+  if (closes.length >= 2) {
+    const first = closes[0]
+    const last = closes[closes.length - 1]
+    if (first > 0) {
+      const pct = ((last - first) / first) * 100
+      ret5dPct = Number.isFinite(pct) && Math.abs(pct) <= 40 ? pct : null
+    }
+  }
+  let avgVolume5d: number | null = null
+  if (volumes.length >= 2) {
+    const prior = volumes.slice(0, -1)
+    avgVolume5d = prior.reduce((a, b) => a + b, 0) / prior.length
+  } else if (volumes.length === 1) {
+    avgVolume5d = volumes[0]
+  }
+  return { ret5dPct, avgVolume5d }
+}
+
 function metaToQuote(
-  meta: NonNullable<NonNullable<YahooChartResponse['chart']>['result']>[0]['meta'],
+  result: NonNullable<NonNullable<YahooChartResponse['chart']>['result']>[0] | undefined,
   fallbackSymbol: string,
   fallbackName: string,
   fallbackCurrency: string,
 ): QuoteSnapshot | null {
+  const meta = result?.meta
   if (!meta?.regularMarketPrice) return null
   const prev = meta.chartPreviousClose ?? meta.previousClose
-  const changePct =
+  let changePct =
     prev && prev !== 0 ? ((meta.regularMarketPrice - prev) / prev) * 100 : null
+  if (changePct != null && Math.abs(changePct) > 25) changePct = null
+  const bars = barsFromResult(result)
   return {
     symbol: meta.symbol || fallbackSymbol,
     name: meta.longName || meta.shortName || fallbackName,
@@ -77,6 +114,8 @@ function metaToQuote(
     fiftyTwoHigh: meta.fiftyTwoWeekHigh ?? null,
     fiftyTwoLow: meta.fiftyTwoWeekLow ?? null,
     volume: meta.regularMarketVolume ?? null,
+    ret5dPct: bars.ret5dPct,
+    avgVolume5d: bars.avgVolume5d,
     marketState: meta.marketState,
     fetchedAt: Date.now(),
   }
@@ -110,7 +149,7 @@ async function fetchYahooLive(
     const url = `${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`
     const data = (await fetchJson(url, timeoutMs)) as YahooChartResponse | null
     if (!data) continue
-    const q = metaToQuote(data.chart?.result?.[0]?.meta, symbol, name, currency)
+    const q = metaToQuote(data.chart?.result?.[0], symbol, name, currency)
     if (q) return q
   }
   return null
@@ -139,7 +178,7 @@ async function fetchYahooProxied(
     } else {
       json = data as YahooChartResponse
     }
-    return metaToQuote(json?.chart?.result?.[0]?.meta, symbol, name, currency)
+    return metaToQuote(json?.chart?.result?.[0], symbol, name, currency)
   } catch {
     return null
   }

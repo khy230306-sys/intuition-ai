@@ -114,6 +114,10 @@ export interface QuoteSnapshot {
   fiftyTwoHigh: number | null
   fiftyTwoLow: number | null
   volume: number | null
+  /** ~5 trading-day return % when chart bars available */
+  ret5dPct?: number | null
+  /** Average volume over prior bars (for relative volume) */
+  avgVolume5d?: number | null
   marketState?: string
   fetchedAt: number
   /** How the quote was obtained — shown so users know if data may be stale. */

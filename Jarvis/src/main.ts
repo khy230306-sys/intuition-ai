@@ -279,7 +279,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.16.4'
+const APP_VERSION = '1.17.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -3053,11 +3053,14 @@ function renderInvest(): string {
 
   return `
     <section class="panel view-scroll">
-      <h2 class="section-title">INVEST</h2>
-      <p class="hint">실시간 시세(Yahoo) · 포트폴리오 · 관심종목 · 매매노트. 투자 조언이 아닌 참고 도구입니다.</p>
+      <h2 class="section-title">INVEST · 주식엔진</h2>
+      <p class="hint">AIZIO 주식엔진 v2 — 멀티팩터 스크리닝 · 종목분석 · 포트 비중. Yahoo 시세 참고용(투자 권유 아님).</p>
       <div class="chips left">
-        <button type="button" data-suggest="주식 종목 추천">냉정 추천</button>
-        <button type="button" data-suggest="포트폴리오">포트폴리오 새로고침</button>
+        <button type="button" data-suggest="주식 종목 추천">엔진 스크리닝</button>
+        <button type="button" data-suggest="반도체 종목 추천">반도체</button>
+        <button type="button" data-suggest="미국 보수 종목 추천">미국·보수</button>
+        <button type="button" data-suggest="삼성전자 종목분석">종목분석</button>
+        <button type="button" data-suggest="포트폴리오">포트폴리오</button>
         <button type="button" data-suggest="관심종목 목록">관심 시세</button>
         <button type="button" data-suggest="장시간">장 시간</button>
         <button type="button" data-suggest="환율">환율</button>

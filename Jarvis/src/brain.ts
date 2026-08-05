@@ -28,7 +28,14 @@ import {
   positionSize,
   riskProfileAdvice,
 } from './finance'
-import { buildColdRecommendations, wantsStockRecommend } from './recommend'
+import {
+  buildColdRecommendations,
+  buildPortfolioReport,
+  buildStockAnalysis,
+  wantsStockAnalysis,
+  wantsStockRecommend,
+  STOCK_ENGINE_VERSION,
+} from './stockEngine'
 import { buildLifestyleReply, detectLifestyleRecommend } from './lifestyleRecommend'
 import {
   convertUnit,
@@ -182,6 +189,26 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
     return { text: report, speak: true }
   }
 
+  if (wantsStockAnalysis(text)) {
+    const report = await buildStockAnalysis(text)
+    return { text: report || '종목분석에 실패했습니다.', speak: true }
+  }
+
+  if (/주식\s*엔진|엔진\s*버전|stock\s*engine/i.test(text)) {
+    return {
+      text: [
+        `【AIZIO 주식엔진 v${STOCK_ENGINE_VERSION}】`,
+        '· 멀티팩터 스크리닝 (52주·당일·5일·거래량·섹터)',
+        '· 종목분석 / 포트폴리오 비중·손익',
+        '· 한·미 유동 유니버스 + 오프라인 스냅샷',
+        '',
+        '예: 「주식 종목 추천」 「반도체 종목 추천」 「삼성전자 종목분석」 「포트폴리오」',
+        '면책: 참고 도구이며 투자 권유가 아닙니다.',
+      ].join('\n'),
+      speak: true,
+    }
+  }
+
   if (
     /장\s*시간|시장\s*개장|장중|마켓\s*아워|market\s*hours|장\s*열렸|개장했|개장\s*했|휴장|장\s*마감|거래\s*시간|개장\s*시간/i.test(
       text,
@@ -191,38 +218,8 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
   }
 
   if (/포트폴리오|보유\s*현황|내\s*주식|자산\s*현황/i.test(text)) {
-    const holdings = loadHoldings()
-    if (holdings.length === 0) {
-      return {
-        text: '보유 종목이 없습니다.\n예: "보유 삼성전자 10주 평단 70000"',
-      }
-    }
-    const lines: string[] = ['【포트폴리오】']
-    let totalKrw = 0
-    let totalUsd = 0
-    const quotes = await Promise.all(
-      holdings.map(async (h) => {
-        try {
-          return await fetchQuote(h.symbol, { allowProxy: false, timeoutMs: 2200 })
-        } catch {
-          return null
-        }
-      }),
-    )
-    holdings.forEach((h, i) => {
-      const q = quotes[i]
-      lines.push(analyzeHolding(h, q))
-      lines.push('')
-      if (q) {
-        if (h.currency === 'KRW') totalKrw += q.price * h.shares
-        else totalUsd += q.price * h.shares
-      } else if (h.currency === 'KRW') totalKrw += h.avgPrice * h.shares
-      else totalUsd += h.avgPrice * h.shares
-    })
-    if (totalKrw) lines.push(`KRW 합계(추정) ${formatMoney(totalKrw, 'KRW')}`)
-    if (totalUsd) lines.push(`USD 합계(추정) ${formatMoney(totalUsd, 'USD')}`)
-    lines.push('면책: 시세 지연·오류 가능. 투자 결정 책임은 본인에게 있습니다.')
-    return { text: lines.join('\n'), speak: false }
+    const report = await buildPortfolioReport()
+    return { text: report, speak: false }
   }
 
   if (/관심\s*종목\s*(목록|보여|리스트)|워치\s*리스트|watchlist/i.test(text)) {

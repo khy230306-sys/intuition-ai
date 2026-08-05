@@ -1,7 +1,6 @@
 import { registerSW } from 'virtual:pwa-register'
 import './style.css'
 import {
-  FIXED_APP_URL,
   UPDATE_RETRY_KEY,
   buildUpdateUrl,
   clearPendingUpdate,

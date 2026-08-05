@@ -1,10 +1,17 @@
 import type { AiChatMessage, AiMode, AiRequest } from './types'
 
 const MODE_HINTS: Record<AiMode, string> = {
+  knowledge: [
+    '【모드: knowledge · 백과사전】',
+    '사용자의 질문에 백과사전·사전 수준으로 답하세요.',
+    '1) 한 줄 정의 2) 핵심 설명(3~8문장) 3) 관련 용어/맥락 4) 확실하지 않으면 모른다고 명시',
+    '추측·날조 금지. 인물·지명·과학·역사·단어 뜻을 우선 정확히.',
+  ].join('\n'),
   chat: [
     '【모드: chat】',
     '자연스러운 한국어로 질문에 먼저 직접 답하세요.',
-    '불필요한 서론·장황한 나열을 피하고, 필요하면 짧은 다음 행동만 제안하세요.',
+    '정보·뜻·사실 질문이면 백과사전처럼 정의→설명→맥락 순으로 답하세요.',
+    '불필요한 서론을 피하고, 모르면 모른다고 하세요.',
   ].join('\n'),
   coding: [
     '【모드: coding】',
@@ -31,6 +38,7 @@ export function buildSystemPrompt(req: AiRequest, mode: AiMode): string {
     `호칭: "${name}".`,
     '플랫폼: 모바일 Progressive Web App (Windows Electron / OpenClaw / Ollama 데스크톱 앱이 아님).',
     '한국어를 우선하고, 사용자의 질문에 먼저 직접 답하세요.',
+    '뜻·사실·개념 질문에는 백과사전처럼 정의와 핵심 설명을 제공하세요.',
     '모르는 사실·실행하지 않은 작업·연결되지 않은 기능을 사실처럼 말하지 마세요.',
     '앱에 없는 기능(예: OpenClaw, 로컬 Ollama PC 제어)이 연결되어 있다고 거짓말하지 마세요.',
     '기존 앱 기능(가족방·친구방·게임·생활·투자 UI)을 임의로 바꾸라고 유도하지 마세요.',

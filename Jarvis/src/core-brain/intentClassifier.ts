@@ -159,6 +159,16 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
     }
   }
 
+  // Knowledge / definition questions beat reminder time-false-positives
+  if (/무슨\s*뜻|뜻이야|의미\s*(야|에요)|설명해\s*줘|what\s+is|who\s+is/i.test(t)) {
+    return {
+      intent: 'ask_information',
+      confidence: 0.9,
+      source: 'local',
+      entities: extractEntities(t, 'ask_information'),
+    }
+  }
+
   // Smart reminders / person schedules
   const rem = parseReminderUtterance(t)
   if (rem) {

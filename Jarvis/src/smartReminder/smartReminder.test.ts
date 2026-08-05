@@ -32,6 +32,12 @@ describe('AIZIO Smart Reminder', () => {
     expect(p?.title).toMatch(/엄마|병원|진찰|예약/)
   })
 
+  it('does not treat definition questions or pasted clocks as reminders', () => {
+    expect(parseReminderUtterance('Ra ahn 아 무슨뜻이야?')).toBeNull()
+    expect(parseReminderUtterance('성 성규 13:28 Ra ahn 아 무슨뜻이야?')).toBeNull()
+    expect(parseReminderUtterance('서울이 뭐야?')).toBeNull()
+  })
+
   it('does not invent future for past times', () => {
     const now = new Date()
     now.setHours(16, 0, 0, 0)

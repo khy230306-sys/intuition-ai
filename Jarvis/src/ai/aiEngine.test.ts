@@ -20,6 +20,7 @@ describe('selectAiMode', () => {
   })
   it('defaults to chat', () => {
     expect(selectAiMode('오늘 기분 어때?')).toBe('chat')
+    expect(selectAiMode('Ra 무슨 뜻이야?')).toBe('knowledge')
   })
 })
 

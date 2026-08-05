@@ -1,4 +1,5 @@
 import type { AiMode } from './types'
+import { isKnowledgeQuestion } from '../encyclopedia/queryParse'
 
 /**
  * Infer request mode from Korean/English user text.
@@ -7,6 +8,8 @@ import type { AiMode } from './types'
 export function selectAiMode(text: string): AiMode {
   const t = text.trim()
   if (!t) return 'chat'
+
+  if (isKnowledgeQuestion(t)) return 'knowledge'
 
   if (
     /코드|버그|오류|에러|리팩터|리팩토|타입스크립트|typescript|javascript|python|함수|컴포넌트|빌드\s*실패|스택\s*트레이스|stack\s*trace|pr\b|pull\s*request|git\s*diff|테스트\s*작성|unit\s*test|css|html|api\s*설계|구현해|고쳐|수정해|디버그/i.test(

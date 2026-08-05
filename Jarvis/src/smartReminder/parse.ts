@@ -21,6 +21,16 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
   const text = String(raw || '').trim()
   if (!text || text.length > 160) return null
 
+  // Definition / encyclopedia — never treat as reminder (even if pasted chat has 「13:28」)
+  // Do NOT match bare 「뭐야」 — that also ends schedule asks like 「엄마 오늘 일정 뭐야?」
+  if (
+    /무슨\s*뜻|뜻이야|의미\s*(야|에요|인가요)|설명해\s*줘|정의해|정의가|뭐\s*뜻|what\s+is|who\s+is|mean\??$/i.test(
+      text,
+    )
+  ) {
+    return null
+  }
+
   // Smart-reminder list only — do not steal 「가족 일정」(family space / calendar skill).
   if (
     /(?:스마트\s*)?알림\s*(목록|보여|리스트)|리마인더\s*(목록|보여|리스트)|저장된\s*알림/.test(text) ||
@@ -93,10 +103,11 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
 
   const dt = parseScheduleDateTime(text)
   const rel = matchRelation(text)
-  const hasCue = SCHEDULE_CUES.test(text) || Boolean(dt) || /있어|해줘|저장/.test(text)
+  const hasExplicitCue = SCHEDULE_CUES.test(text) || /알려줘|알림|리마인더|저장해|기록해/.test(text)
+  const hasCue = hasExplicitCue || Boolean(dt)
 
-  // Create: timed appointment / reminder phrases
-  if (dt || (rel && SCHEDULE_CUES.test(text))) {
+  // Create: need a real schedule/reminder cue — bare 「13:28」 in pasted chat is not enough
+  if ((dt && hasExplicitCue) || (rel && SCHEDULE_CUES.test(text))) {
     let title = text
       .replace(/(오늘|내일|모레|오전|오후|아침|저녁|\d+\s*시|\d+\s*분|매주|이번\s*주|다음\s*주)/g, ' ')
       .replace(/(월|화|수|목|금|토|일)요일/g, ' ')

@@ -1,6 +1,6 @@
 /** Shared AI engine types — provider-agnostic. */
 
-export type AiMode = 'chat' | 'coding' | 'planning' | 'analysis'
+export type AiMode = 'chat' | 'coding' | 'planning' | 'analysis' | 'knowledge'
 
 export type AiProviderId = 'openai-compatible'
 

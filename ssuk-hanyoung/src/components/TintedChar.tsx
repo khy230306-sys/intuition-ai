@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react'
+import { memo } from 'react'
 
 /**
- * Illustrated PNG tinted to `color`.
- * Grayscale base + masked multiply wash keeps outlines/faces readable
- * without the original baked body color fighting the tint.
+ * Lightweight tinted character: one image + one masked color wash.
+ * Uses small/medium WebP sources from callers.
  */
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
   alt?: string
 }
 
-export function TintedChar({ src, color, size = 120, className, alt = '' }: Props) {
+export const TintedChar = memo(function TintedChar({ src, color, size = 120, className, alt = '' }: Props) {
   const style = {
     width: size,
     height: size,
@@ -24,9 +24,17 @@ export function TintedChar({ src, color, size = 120, className, alt = '' }: Prop
 
   return (
     <span className={`tinted-char${className ? ` ${className}` : ''}`} style={style} aria-hidden={alt ? undefined : true}>
-      <img src={src} alt={alt} className="tinted-base" width={size} height={size} draggable={false} />
+      <img
+        src={src}
+        alt={alt}
+        className="tinted-base"
+        width={size}
+        height={size}
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+      />
       <span className="tinted-wash" />
-      <img src={src} alt="" className="tinted-line" width={size} height={size} draggable={false} />
     </span>
   )
-}
+})

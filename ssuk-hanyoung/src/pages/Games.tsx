@@ -53,7 +53,7 @@ export function Games() {
           {list.map((g) => (
             <Link key={g.id} to={`/games/${g.id}`} className="card art-card photo-card">
               <div className="art-wrap photo">
-                <GameArt id={g.id} size={132} />
+                <GameArt id={g.id} size={100} />
               </div>
               <div className="card-title">{g.title}</div>
               <div className="card-sub">{g.subtitle}</div>

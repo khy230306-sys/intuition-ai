@@ -1,6 +1,8 @@
 import { getSettings } from './store'
 
 let unlocked = false
+let lastText = ''
+let lastAt = 0
 
 export function unlockSpeech() {
   unlocked = true
@@ -19,6 +21,14 @@ export function speak(text: string, lang = 'ko-KR') {
   if (getSettings().muteSpeech) return
   const clean = text.replace(/[^\p{L}\p{N}\s.!?,~…·]/gu, '').trim()
   if (!clean) return
+
+  // Debounce identical/rapid chatter that causes lag on mobile
+  const now = Date.now()
+  if (clean === lastText && now - lastAt < 450) return
+  if (now - lastAt < 120) return
+  lastText = clean
+  lastAt = now
+
   try {
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(clean)

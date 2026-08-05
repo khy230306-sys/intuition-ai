@@ -24,7 +24,12 @@ export function isSfxMuted() {
   return getSettings().muteSfx
 }
 
+let lastBeep = 0
+
 function beep(freq: number, dur = 0.12, type: OscillatorType = 'square', gain = 0.08, slide = 0) {
+  const now = performance.now()
+  if (now - lastBeep < 40) return
+  lastBeep = now
   const c = ac()
   if (!c) return
   const t0 = c.currentTime

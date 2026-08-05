@@ -4,3 +4,5 @@ dist/
 *.local
 .env
 .env.*
+# Heavy source art — deploy uses public/assets WebP only
+asset-src/

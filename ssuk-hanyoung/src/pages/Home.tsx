@@ -23,7 +23,7 @@ export function Home() {
   return (
     <div>
       <section className="hero">
-        <img src="/assets/hero-cars.jpg" alt="" width={1600} height={800} />
+        <img src="/assets/hero-cars-sm.webp" alt="" width={960} height={480} fetchPriority="high" decoding="async" />
         <div className="hero-shade" aria-hidden />
         <div className="hero-body">
           <p className="hero-hi">안녕, {profile.name}!</p>
@@ -53,7 +53,7 @@ export function Home() {
               style={{ opacity: m.done ? 0.82 : 1, background: m.done ? '#d9fbe5' : '#FFFDF5' }}
             >
               <div className="art-wrap photo">
-                <GameArt id={m.id} size={110} />
+                <GameArt id={m.id} size={96} />
               </div>
               <div className="card-title">{g.title}</div>
               <div className="card-sub">{m.done ? '완료!' : '해 볼까요?'}</div>
@@ -75,7 +75,7 @@ export function Home() {
         {playNow.map((g, i) => (
           <Link key={g.id} to={`/games/${g.id}`} className="card art-card photo-card" style={{ animationDelay: `${i * 0.04}s` }}>
             <div className="art-wrap photo">
-              <GameArt id={g.id} size={128} />
+              <GameArt id={g.id} size={100} />
             </div>
             <div className="card-title">{g.title}</div>
             <div className="card-sub">{g.subtitle}</div>

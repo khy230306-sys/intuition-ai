@@ -1,7 +1,5 @@
-import { CHAR_IMG } from './GameArt'
+import { CHAR_IMG, CHAR_IMG_MD } from './GameArt'
 import { TintedChar } from './TintedChar'
-
-/** Recolorable characters — prefers illustrated PNGs over flat SVG */
 
 type Props = {
   kind: string
@@ -10,23 +8,22 @@ type Props = {
   className?: string
 }
 
-const KIND_SRC: Record<string, string> = {
-  car: CHAR_IMG.car,
-  sedan: CHAR_IMG.car,
-  bus: CHAR_IMG.bus,
-  fire: CHAR_IMG.fire,
-  police: CHAR_IMG.police,
-  ambulance: CHAR_IMG.ambulance,
-  truck: CHAR_IMG.dump,
-  dump: CHAR_IMG.dump,
-  tractor: CHAR_IMG.tractor,
-  star: CHAR_IMG.star,
-  paint: CHAR_IMG.paint,
-  sand: CHAR_IMG.sand,
-  drum: CHAR_IMG.drum,
+const KIND_KEY: Record<string, keyof typeof CHAR_IMG> = {
+  car: 'car',
+  sedan: 'car',
+  bus: 'bus',
+  fire: 'fire',
+  police: 'police',
+  ambulance: 'ambulance',
+  truck: 'dump',
+  dump: 'dump',
+  tractor: 'tractor',
+  star: 'star',
+  paint: 'paint',
+  sand: 'sand',
+  drum: 'drum',
 }
 
-/** Natural “showroom” colors so pickers don’t all look yellow */
 export const KIND_NATURAL: Record<string, string> = {
   car: '#FF2D55',
   sedan: '#FF2D55',
@@ -44,7 +41,8 @@ export const KIND_NATURAL: Record<string, string> = {
 }
 
 export function PaintSubject({ kind, color, size = 220, className }: Props) {
-  const src = KIND_SRC[kind] || CHAR_IMG.car
+  const key = KIND_KEY[kind] || 'car'
+  const src = size >= 140 ? CHAR_IMG_MD[key] : CHAR_IMG[key]
   return <TintedChar src={src} color={color} size={size} className={className ? `paint-subject ${className}` : 'paint-subject'} />
 }
 

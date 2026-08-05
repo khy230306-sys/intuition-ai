@@ -319,8 +319,7 @@ img {
   right: 0;
   bottom: 0;
   z-index: 40;
-  background: rgba(255, 253, 245, 0.92);
-  backdrop-filter: blur(10px);
+  background: #fffdf5;
   border-top: 3px solid var(--fg);
   padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom));
 }
@@ -1273,20 +1272,15 @@ img {
 }
 
 .art-wrap.photo .char-img {
-  width: min(132px, 38vw) !important;
-  height: min(132px, 38vw) !important;
-  filter: drop-shadow(0 8px 10px rgba(26, 21, 16, 0.18));
-  animation: char-bob 2.8s ease-in-out infinite;
+  width: min(108px, 34vw) !important;
+  height: min(108px, 34vw) !important;
+  /* Avoid animated filters — major mobile jank source */
+  transform: translateZ(0);
 }
 
-@keyframes char-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+.card.art-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px;
 }
 
 .sound-btn.photo-btn {
@@ -1297,12 +1291,10 @@ img {
   padding: 0.55rem 0.35rem 0.65rem;
 }
 
-.sound-btn.photo-btn .char-img {
-  filter: drop-shadow(0 4px 0 rgba(26, 21, 16, 0.12));
-}
-
+.sound-btn.photo-btn .char-img,
 .car-chip.photo .char-img {
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.12));
+  /* solid offset via box, not GPU filter */
+  transform: translateZ(0);
 }
 
 .brand-badge.photo,
@@ -1335,8 +1327,7 @@ img {
 }
 
 .stage-photo {
-  animation: float-y 2.4s ease-in-out infinite;
-  filter: drop-shadow(0 10px 0 rgba(26, 21, 16, 0.12));
+  transform: translateZ(0);
 }
 
 .paint-subject {
@@ -1345,18 +1336,17 @@ img {
   line-height: 0;
 }
 
-/* Illustrated PNG + live tint (grayscale → multiply color) */
+/* Illustrated WebP + live tint — keep cheap for mobile GPUs */
 .tinted-char {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
   line-height: 0;
   isolation: isolate;
-  filter: drop-shadow(0 8px 10px rgba(26, 21, 16, 0.16));
+  contain: layout paint style;
 }
 
 .tinted-char > .tinted-base,
-.tinted-char > .tinted-line,
 .tinted-char > .tinted-wash {
   position: absolute;
   inset: 0;
@@ -1370,13 +1360,14 @@ img {
 
 .tinted-char > .tinted-base {
   position: relative;
-  filter: grayscale(1) contrast(1.12) brightness(1.22);
+  filter: grayscale(1) contrast(1.1) brightness(1.18);
+  will-change: auto;
 }
 
 .tinted-char > .tinted-wash {
   background: var(--tint);
   mix-blend-mode: multiply;
-  opacity: 0.9;
+  opacity: 0.88;
   -webkit-mask-image: var(--char);
   mask-image: var(--char);
   -webkit-mask-size: contain;
@@ -1387,11 +1378,18 @@ img {
   mask-position: center;
 }
 
-/* Restore dark outlines / facial contrast without bringing back body hue */
-.tinted-char > .tinted-line {
-  mix-blend-mode: multiply;
-  opacity: 0.28;
-  filter: grayscale(1) contrast(1.4);
+@media (prefers-reduced-motion: reduce) {
+  .tinted-char > .tinted-base,
+  .char-img,
+  .stage-paint,
+  .paint-pop {
+    animation: none !important;
+    filter: none;
+  }
+
+  .tinted-char > .tinted-base {
+    filter: grayscale(1) contrast(1.1) brightness(1.18);
+  }
 }
 
 .builder-target {
@@ -1440,7 +1438,7 @@ img {
 }
 
 .stage-paint {
-  filter: drop-shadow(0 12px 0 rgba(26, 21, 16, 0.14));
+  /* no heavy drop-shadow on large tinted layers */
 }
 
 .paint-live {
@@ -1448,7 +1446,13 @@ img {
 }
 
 .paint-pop {
-  animation: paint-pop 0.35s ease;
+  animation: paint-pop 0.28s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paint-pop {
+    animation: none;
+  }
 }
 
 @keyframes paint-pop {
@@ -1515,8 +1519,7 @@ img {
 }
 
 .stage-art {
-  animation: float-y 2.2s ease-in-out infinite;
-  filter: drop-shadow(3px 4px 0 rgba(26, 21, 16, 0.25));
+  transform: translateZ(0);
 }
 
 .puzzle-part {

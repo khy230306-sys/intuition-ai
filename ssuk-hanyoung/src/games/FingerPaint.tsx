@@ -25,7 +25,8 @@ export function FingerPaint() {
     if (!c) return
     const resize = () => {
       const rect = c.getBoundingClientRect()
-      dpr.current = window.devicePixelRatio || 1
+      // Cap DPR — full retina canvases stutter on many phones
+      dpr.current = Math.min(2, window.devicePixelRatio || 1)
       c.width = Math.max(1, Math.floor(rect.width * dpr.current))
       c.height = Math.max(1, Math.floor(rect.height * dpr.current))
       const ctx = c.getContext('2d')

@@ -43,11 +43,12 @@ export function MazeDrive() {
   const [toast, setToast] = useState<string | null>(null)
   const dragging = useRef(false)
   const lastWarn = useRef(0)
+  const raf = useRef(0)
+  const pending = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
 
-  function onMove(e: PointerEvent<HTMLDivElement>) {
+  function applyMove(clientX: number, clientY: number, width: number, height: number) {
     if (!dragging.current || confetti) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const p = [((e.clientX - rect.left) / rect.width) * 100, ((e.clientY - rect.top) / rect.height) * 100]
+    const p = [((clientX / width) * 100), ((clientY / height) * 100)]
     const nextIdx = Math.min(progress + 1, road.length - 1)
     const target = road[nextIdx]!
     const d = dist(p, target)
@@ -88,6 +89,24 @@ export function MazeDrive() {
       const t = Math.min(1, dist(p, cur) / 20)
       setCar([cur[0]! + (target[0]! - cur[0]!) * t * 0.35, cur[1]! + (target[1]! - cur[1]!) * t * 0.35])
     }
+  }
+
+  function onMove(e: PointerEvent<HTMLDivElement>) {
+    if (!dragging.current || confetti) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    pending.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      w: rect.width,
+      h: rect.height,
+    }
+    if (raf.current) return
+    raf.current = requestAnimationFrame(() => {
+      raf.current = 0
+      const p = pending.current
+      if (!p) return
+      applyMove(p.x, p.y, p.w, p.h)
+    })
   }
 
   const pathD = road.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ')

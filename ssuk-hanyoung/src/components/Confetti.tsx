@@ -5,12 +5,12 @@ const COLORS = ['#FF4D6D', '#FFD60A', '#5B8CFF', '#3DDC84', '#A78BFA', '#FF8A3D'
 export function Confetti({ show }: { show: boolean }) {
   const bits = useMemo(
     () =>
-      Array.from({ length: 28 }, (_, i) => ({
+      Array.from({ length: 14 }, (_, i) => ({
         id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 0.4,
+        left: (i * 7.1) % 100,
+        delay: (i % 5) * 0.06,
         color: COLORS[i % COLORS.length]!,
-        rotate: Math.random() * 40,
+        rotate: (i * 17) % 40,
       })),
     [show],
   )

@@ -306,7 +306,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.5'
+const APP_VERSION = '1.20.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -3020,21 +3020,7 @@ function renderHomeV2View(): string {
       busy: state.busy,
       draft: state.draft,
     })
-    const mode = loadInterpretMode()
-    const lockBar = `
-    <details class="translate-bar ${mode.active ? 'on' : ''}" ${mode.active ? 'open' : ''}>
-      <summary class="translate-bar-head">
-        <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
-        <span class="ver">v${APP_VERSION}</span>
-      </summary>
-      <div class="translate-chips">
-        ${TRANSLATE_LANGS.map(
-          (l) =>
-            `<button type="button" class="${mode.active && mode.langB === l.code ? 'active' : ''}" data-translate-cmd="${escapeAttr(l.cmd)}">${escapeHtml(l.label)}</button>`,
-        ).join('')}
-        <button type="button" class="stop-btn" data-translate-stop="1">스톱</button>
-      </div>
-    </details>`
+    // Translate chips live behind the single badge (no duplicate 번역 잠금 + version bar)
     const wizard = shouldShowAiWizard() ? renderAiWizardHtml() : ''
     const tools =
       state.messages.length > 0
@@ -3055,7 +3041,7 @@ function renderHomeV2View(): string {
       listening: state.listening,
       appVersion: APP_VERSION,
       moreOpen: state.homeV2MoreOpen,
-      composerExtraHtml: `${lockBar}${renderMusicMiniPlayer(
+      composerExtraHtml: `${renderMusicMiniPlayer(
         state.musicSession || sessionSnapshot(),
         state.musicPlayerOpen,
       )}`,

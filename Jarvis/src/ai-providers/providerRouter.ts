@@ -87,46 +87,72 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
     const provider = getHybridProvider(id)
     if (!provider?.isConfigured()) continue
     attempted.push(id)
-    try {
-      const result = await provider.sendChat({
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        model: provider.getSlot().model,
-        signal: input.signal,
-      })
-      const validated = validateAiResponse(result.text)
-      if (!validated.ok) {
-        throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
+
+    const currentModel = provider.getSlot().model
+    const modelOrder = [
+      currentModel,
+      ...provider.recommendedModels.map((m) => m.id).filter((m) => m && m !== currentModel),
+    ].filter(Boolean)
+
+    let providerGaveUp = false
+    for (let mi = 0; mi < modelOrder.length; mi++) {
+      const model = modelOrder[mi]
+      try {
+        const result = await provider.sendChat({
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          model,
+          signal: input.signal,
+        })
+        const validated = validateAiResponse(result.text)
+        if (!validated.ok) {
+          throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
+        }
+        if (model !== currentModel) {
+          updateProviderSlot(id, { model, status: 'ok', lastError: '' })
+          fallbackUsed = true
+        } else {
+          updateProviderSlot(id, { status: 'ok', lastError: '' })
+        }
+        recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
+        return {
+          text: validated.text,
+          providerId: id,
+          model: result.model || model,
+          fallbackUsed,
+          attempted,
+        }
+      } catch (err) {
+        lastErr = err
+        const code = mapAiErrorToHybrid(err)
+        updateProviderSlot(id, {
+          status:
+            code === 'quota'
+              ? 'quota'
+              : code === 'rate_limit'
+                ? 'rate_limit'
+                : code === 'invalid_key' || code === 'payment_required'
+                  ? 'auth'
+                  : 'error',
+          lastError: err instanceof Error ? err.message : String(err),
+        })
+        recordUsage({ provider: id, ok: false, fallback: fallbackUsed })
+        // Dead model → try next recommended model on same provider
+        if (code === 'model_unavailable' && mi < modelOrder.length - 1) {
+          fallbackUsed = true
+          continue
+        }
+        if (!isFallbackableError(err)) {
+          providerGaveUp = true
+          break
+        }
+        fallbackUsed = true
+        break // try next provider
       }
-      recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
-      return {
-        text: validated.text,
-        providerId: id,
-        model: result.model,
-        fallbackUsed,
-        attempted,
-      }
-    } catch (err) {
-      lastErr = err
-      const code = mapAiErrorToHybrid(err)
-      updateProviderSlot(id, {
-        status:
-          code === 'quota'
-            ? 'quota'
-            : code === 'rate_limit'
-              ? 'rate_limit'
-              : code === 'invalid_key' || code === 'payment_required'
-                ? 'auth'
-                : 'error',
-        lastError: err instanceof Error ? err.message : String(err),
-      })
-      recordUsage({ provider: id, ok: false, fallback: fallbackUsed })
-      if (!isFallbackableError(err)) break
-      fallbackUsed = true
-      continue
     }
+    if (providerGaveUp) break
   }
 
   if (lastErr instanceof AiError && lastErr.kind === 'config') throw lastErr

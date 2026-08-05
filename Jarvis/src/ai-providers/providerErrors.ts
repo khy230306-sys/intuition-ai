@@ -62,7 +62,7 @@ export function hybridUserMessage(code: HybridErrorCode): string {
     case 'payment_required':
       return '이 제공자는 결제 설정이 필요합니다.'
     case 'model_unavailable':
-      return '선택한 모델을 현재 사용할 수 없습니다. 다른 모델을 선택해 주세요.'
+      return '선택한 AI 모델을 지금 쓸 수 없어요. 설정 → AI에서 다른 모델이나 무료 AI(OpenRouter·Gemini·Groq)로 바꿔 주세요. 로또·브리핑·날씨·할 일은 그대로 쓸 수 있습니다.'
     case 'network':
       return 'AI 서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.'
     case 'offline':

@@ -139,7 +139,9 @@ describe('smart card priority', () => {
       friendsUnread: 0,
     })
     expect(empty.title).toMatch(/여유로운 하루/)
-    expect(empty.items[0]?.label).toMatch(/브리핑/)
+    expect(empty.items.length).toBeGreaterThanOrEqual(2)
+    expect(empty.chatHint).toMatch(/브리프/)
+    expect(empty.items[0]?.label).toMatch(/브리프/)
   })
 })
 

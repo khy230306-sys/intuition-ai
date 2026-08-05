@@ -126,13 +126,14 @@ import {
 } from './spokenCommand'
 import { userGuideText, wantsUserGuide } from './userGuide'
 import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './weather'
+import { localFunReply } from './localFun'
 
 function helpText(name: string): string {
   return [
     `${name}, AIZIO 명령어 목록입니다.`,
     '앱이 뭔지 먼저 보고 싶으면 「사용설명서」를 입력하세요.',
     '',
-    '【일상】 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 할 일 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
+    '【일상】 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 할 일 · 로또 · 장바구니 · 지출 · 습관 · 일기 · 환율 · 로컬 알림 · 앱공유',
     '【가족】 단체대화 · 공지 · 일정 (하단 가족 탭 / 코드 공유)',
     '【친구】 단체대화 · 공지 · 일정 (하단 친구 탭 / 코드 공유)',
     '【투자】 시세 · 냉정 종목추천 · 관심종목 · 포트폴리오 · 포지션 · 적립식 · 장시간',
@@ -842,6 +843,13 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // Local fun (lotto / dice) — never blocked by a dead cloud model
+  {
+    const fun = localFunReply(text)
+    if (fun) return enrich({ text: fun, speak: true })
+  }
+
+
   // AI 길안내 v2 — internal map / candidates (never auto-open external apps)
   try {
     const nav2 = await tryHandleNavigationV2(text)
@@ -1373,7 +1381,21 @@ export async function think(
       const cloud = await callCloudLLM(text, settings, history)
       if (cloud) return enrich({ text: cloud, speak: true })
     } catch (err) {
-      return enrich({ text: aiEngineErrorText(err), speak: true })
+      // Never hard-stop the app on a dead model — local fun/casual still work
+      const fun = localFunReply(text)
+      if (fun) return enrich({ text: fun, speak: true })
+      const casual = localCasualReply(text)
+      if (casual) return enrich({ text: casual, speak: true })
+      return enrich({
+        text: [
+          aiEngineErrorText(err),
+          '',
+          '그동안 로컬로 바로 쓸 수 있는 예:',
+          '· 로또번호 추천해줘 · 주사위 · 브리핑 · 오늘 날씨 · 할 일 · 집중 시작',
+          '설정 → AI 에서 다른 모델/무료 AI(OpenRouter·Gemini·Groq)로 바꿔 보세요.',
+        ].join('\n'),
+        speak: true,
+      })
     }
   }
 

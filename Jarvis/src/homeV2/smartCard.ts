@@ -82,7 +82,12 @@ export function buildSmartCard(input: SmartCardInput): SmartCardModel {
   return {
     kind: 'empty',
     title: '여유로운 하루예요',
-    items: [{ id: 'cta-brief', label: '브리핑으로 하루를 시작해 보세요 · 탭해서 생활 열기' }],
-    targetView: 'life',
+    items: [
+      { id: 'cta-brief', label: '모닝 브리프 · 오늘 할 일 한눈에' },
+      { id: 'cta-weather', label: '날씨 물어보기 · 「오늘 날씨」' },
+      { id: 'cta-fun', label: '심심하면 · 「로또번호 추천해줘」' },
+    ],
+    targetView: 'chat',
+    chatHint: '모닝 브리프',
   }
 }

@@ -148,4 +148,37 @@ describe('hybrid AI router', () => {
     saveHybridAiConfig({ ...loadHybridAiConfig(), allowPaidFallback: false, mode: 'auto' })
     await expect(runHybridChat({ message: '안녕' })).rejects.toMatchObject({ kind: 'config' })
   })
+
+  it('falls back to next recommended model on model_unavailable', async () => {
+    updateProviderSlot('openrouter', {
+      apiKey: 'or-key',
+      model: 'meta-llama/dead-model:free',
+    })
+    saveHybridAiConfig({ ...loadHybridAiConfig(), allowPaidFallback: false, mode: 'fixed', fixedProvider: 'openrouter' })
+
+    const fetchMock = vi.fn(async (_url: string, init?: { body?: string }) => {
+      const body = typeof init?.body === 'string' ? init.body : ''
+      if (body.includes('dead-model')) {
+        return {
+          ok: false,
+          status: 404,
+          text: async () => 'model not found',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: 'ok from free router' }, finish_reason: 'stop' }],
+          model: 'openrouter/free',
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const out = await runHybridChat({ message: '안녕' })
+    expect(out.text).toMatch(/ok from free/)
+    expect(out.fallbackUsed).toBe(true)
+    expect(loadHybridAiConfig().providers.openrouter?.model).toBe('openrouter/free')
+  })
 })

@@ -76,10 +76,20 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Bump when shell routing changes so old SW caches cannot keep a platform 404.
+        cacheId: `aizio-shell-${APP_VERSION}`,
         // js/css/html/icons only — never precache build-meta.json (version checks must hit network)
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        globIgnores: ['**/build-meta.json', '**/quote-snapshot.json'],
+        globIgnores: ['**/build-meta.json', '**/quote-snapshot.json', '**/ship.json'],
         navigateFallback: 'index.html',
+        // Never treat APIs / map tiles / JSON probes as SPA navigations.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /\/build-meta\.json$/i,
+          /\/quote-snapshot\.json$/i,
+          /\/preview-config\.json$/i,
+          /\/ship\.json$/i,
+        ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,

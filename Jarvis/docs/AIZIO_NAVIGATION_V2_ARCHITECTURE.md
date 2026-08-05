@@ -16,7 +16,7 @@
 | Routing | `routingService.ts` — OSRM adapter + approximate fallback |
 | Privacy | `navigationPrivacy.ts` + diag snapshot without coordinates |
 
-HOME v2 **길안내** opens the internal Navigation view (`view=navigation` / `?nav=1`).
+HOME v2 **길안내** opens the internal Navigation view via **hash routing** (`#navigation`, optional `?q=`), never pathname `/navigation` (ShipStatic + `base:'./'` asset break / 404). Legacy deep links `?nav=1` / `?view=navigation` still work and are rewritten to `#navigation`.
 
 ## External map apps (secondary only)
 

@@ -79,6 +79,35 @@
     </div>
     <div id="flash" class="flash" role="status" aria-live="polite"></div>
     <script>
+      /* Pathname /navigation|/map breaks vite base:'./' assets on ShipStatic — force hash route. */
+      ;(function () {
+        try {
+          var path = String(location.pathname || '/')
+          if (!/\/(navigation|map)\/?$/i.test(path) && !/\/(navigation|map)\//i.test(path)) return
+          var sp = new URLSearchParams(location.search || '')
+          var q = sp.get('q') || sp.get('query') || ''
+          sp.delete('q')
+          sp.delete('query')
+          sp.delete('nav')
+          sp.delete('navigation')
+          sp.delete('navv2')
+          sp.delete('view')
+          var search = sp.toString()
+          var hash = '#navigation'
+          if (q) {
+            try {
+              hash = '#navigation?q=' + encodeURIComponent(q)
+            } catch (e) {
+              hash = '#navigation'
+            }
+          } else if (location.hash && /navigation/i.test(location.hash)) {
+            hash = location.hash.charAt(0) === '#' ? location.hash : '#' + location.hash
+          }
+          location.replace(location.origin + '/' + (search ? '?' + search : '') + hash)
+        } catch (e) {}
+      })()
+    </script>
+    <script>
       ;(function () {
         window.__aizioMarkBooted = function () {
           window.__aizioBooted = true

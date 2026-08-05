@@ -107,7 +107,7 @@ export function renderNavigationScreen(st: NavScreenState): string {
   return `
     <section class="panel navv2-panel" data-navv2="1">
       <header class="navv2-head">
-        <button type="button" class="ghost-btn tiny" data-view="chat" data-home-v2-pane="home">뒤로</button>
+        <button type="button" class="ghost-btn tiny" data-action="navv2-back" aria-label="뒤로">뒤로</button>
         <strong>AIZIO 길안내</strong>
         <button type="button" class="ghost-btn tiny" data-action="mic" aria-label="음성 검색">MIC</button>
       </header>

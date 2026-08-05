@@ -11,6 +11,16 @@ import {
   writePendingUpdate,
 } from './appUpdate'
 import {
+  buildAppHash,
+  hashScreenToView,
+  migratePathnameToHashUrl,
+  openInternalNavigation,
+  parseLocationHash,
+  sanitizeNavQuery,
+  viewToHashScreen,
+  writeAppHash,
+} from './appRouting'
+import {
   clearProviderKey,
   dismissAiWizard,
   hasAnyConfiguredProvider,
@@ -292,6 +302,7 @@ import {
   destroyNavigationScreen,
   getNavV2Context,
   loadNavV2Settings,
+  patchNavV2Context,
   renderNavigationScreen,
   saveNavV2Settings,
   type NavScreenState,
@@ -306,7 +317,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.8'
+const APP_VERSION = '1.20.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -667,34 +678,168 @@ async function refreshNavPermStatus(): Promise<void> {
   }
 }
 
-function openNavigationSheet(): void {
+/** Suppress hashchange → render loops while we write the hash ourselves. */
+let suppressHashSync = false
+let navRouteError: string | null = null
+
+function syncHashFromApp(opts?: { query?: string; replace?: boolean; view?: View }): void {
+  const view = opts?.view || state.view
+  const homeV2 = activeHomeVariant() === 'v2'
+  const screen = viewToHashScreen(view, {
+    homeV2,
+    homeV2Pane: state.homeV2Pane,
+  })
+  const query =
+    screen === 'navigation'
+      ? sanitizeNavQuery(opts?.query ?? state.navV2.query)
+      : ''
+  const hash = buildAppHash(screen, { query })
+  suppressHashSync = true
+  writeAppHash(hash, opts?.replace ? 'replace' : 'push')
+}
+
+/**
+ * Open AIZIO internal Navigation without pathname navigation.
+ * All 길안내 entry points should call this — never location.href='/navigation'.
+ */
+function openNavInternal(options?: {
+  query?: string
+  travelMode?: string
+  source?: string
+  preserveConversationContext?: boolean
+  pushHistory?: boolean
+  runSearchText?: boolean
+}): void {
+  const intent = openInternalNavigation({
+    query: options?.query,
+    travelMode: options?.travelMode,
+    source: options?.source,
+    preserveConversationContext: options?.preserveConversationContext,
+    pushHistory: options?.pushHistory,
+  })
+  navRouteError = null
   state.homeV2MoreOpen = false
   state.homeV2NavSheetOpen = false
   state.view = 'navigation'
   state.homeV2Pane = 'home'
   const ctx = getNavV2Context()
+  const q = intent.query || ctx.lastQuery || state.navV2.query
   state.navV2 = {
     ...state.navV2,
-    query: ctx.lastQuery || state.navV2.query,
-    candidates: ctx.candidates.length ? ctx.candidates : state.navV2.candidates,
+    query: q,
+    candidates:
+      options?.preserveConversationContext === false
+        ? state.navV2.candidates
+        : ctx.candidates.length
+          ? ctx.candidates
+          : state.navV2.candidates,
     selected: ctx.selected,
-    status: ctx.candidates.length ? `${ctx.candidates.length}곳 후보` : '목적지를 검색해 주세요.',
-    phase: ctx.candidates.length ? 'candidates' : 'idle',
+    status: q
+      ? state.navV2.status || '목적지를 검색해 주세요.'
+      : ctx.candidates.length
+        ? `${ctx.candidates.length}곳 후보`
+        : '목적지를 검색해 주세요.',
+    phase: ctx.candidates.length ? 'candidates' : q ? 'idle' : 'idle',
   }
+  syncHashFromApp({
+    query: q,
+    replace: options?.pushHistory === false,
+    view: 'navigation',
+  })
   render()
+  if (options?.runSearchText && q) void handleUserText(q)
 }
 
 async function runNavigationFromUi(dest: string, _nearby = false): Promise<void> {
-  state.homeV2NavSheetOpen = false
-  state.view = 'navigation'
+  const q = sanitizeNavQuery(dest)
+  openNavInternal({
+    query: q,
+    source: 'nav_ui',
+    pushHistory: true,
+    runSearchText: false,
+  })
   state.navV2 = {
     ...state.navV2,
-    query: dest,
+    query: q,
     phase: 'searching',
     status: '관련 장소를 찾고 있어요.',
   }
   render()
-  void handleUserText(dest)
+  void handleUserText(q)
+}
+
+function applyHashRouteFromLocation(opts?: { replace?: boolean }): void {
+  const parsed = parseLocationHash(window.location.hash)
+  const view = hashScreenToView(parsed.valid ? parsed.screen : 'home') as View
+  state.view = view
+  if (parsed.screen === 'home' || (!parsed.valid && view === 'chat')) {
+    state.homeV2Pane = 'home'
+  }
+  if (view === 'navigation') {
+    navRouteError = null
+    state.homeV2NavSheetOpen = false
+    state.homeV2Pane = 'home'
+    if (parsed.query) {
+      state.navV2 = {
+        ...state.navV2,
+        query: parsed.query,
+        phase: state.navV2.candidates.length ? state.navV2.phase : 'idle',
+        status: state.navV2.status || '목적지를 검색해 주세요.',
+      }
+    }
+  }
+  if (!parsed.valid && opts?.replace !== false) {
+    syncHashFromApp({ replace: true, view })
+  }
+}
+
+function handleNavV2Back(): void {
+  const phase = state.navV2.phase
+  const ctx = getNavV2Context()
+  if (ctx.guiding || phase === 'guiding') {
+    const ok = window.confirm('안내를 종료하고 경로 미리보기로 돌아갈까요?')
+    if (!ok) return
+    patchNavV2Context({ guiding: false })
+    state.navV2 = { ...state.navV2, phase: 'route_preview', status: '안내를 종료했어요.' }
+    render()
+    return
+  }
+  if (phase === 'route_preview') {
+    state.navV2 = {
+      ...state.navV2,
+      phase: state.navV2.selected ? 'place_detail' : 'candidates',
+      status: state.navV2.selected ? `${state.navV2.selected.name} 선택됨` : '목적지를 선택해 주세요.',
+    }
+    render()
+    return
+  }
+  if (phase === 'place_detail') {
+    state.navV2 = {
+      ...state.navV2,
+      selected: null,
+      phase: state.navV2.candidates.length ? 'candidates' : 'idle',
+      status: state.navV2.candidates.length
+        ? `${state.navV2.candidates.length}곳 후보`
+        : '목적지를 검색해 주세요.',
+    }
+    render()
+    return
+  }
+  if (phase === 'candidates' || phase === 'searching' || phase === 'error') {
+    state.navV2 = {
+      ...state.navV2,
+      candidates: [],
+      selected: null,
+      query: '',
+      phase: 'idle',
+      status: '목적지를 검색해 주세요.',
+    }
+    syncHashFromApp({ query: '', replace: true, view: 'navigation' })
+    render()
+    return
+  }
+  // Navigation idle → previous screen (HOME v2)
+  goToView('chat')
 }
 
 let arcade: ArcadeHandle | null = null
@@ -885,9 +1030,14 @@ function captureInviteFromUrl(): void {
   }
 }
 
-/** Open family/friends from notification click (?view=family|friends). */
+/** Open family/friends from notification click (?view=family|friends) or hash (#navigation). */
 function captureViewFromUrl(): void {
   try {
+    // Pathname /navigation|/map → root + #navigation (also handled in index.html).
+    const migrated = migratePathnameToHashUrl(window.location.href)
+    if (migrated) {
+      window.history.replaceState({}, '', migrated)
+    }
     const u = new URL(window.location.href)
     const v = u.searchParams.get('view')
     if (
@@ -903,8 +1053,17 @@ function captureViewFromUrl(): void {
     ) {
       state.view = v
       u.searchParams.delete('view')
-      const q = u.searchParams.toString()
-      window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+      // Prefer hash for navigation; keep other views on query-stripped URL.
+      if (v === 'navigation') {
+        window.history.replaceState(
+          {},
+          '',
+          `${u.pathname}${u.searchParams.toString() ? `?${u.searchParams}` : ''}${buildAppHash('navigation')}`,
+        )
+      } else {
+        const q = u.searchParams.toString()
+        window.history.replaceState({}, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`)
+      }
     }
     // Keep ?home= for shareable compare URLs; sync stored preference when present.
     const homeQ = u.searchParams.get('home')
@@ -928,6 +1087,21 @@ function captureViewFromUrl(): void {
       state.view = 'navigation'
       state.homeV2NavSheetOpen = false
       state.homeV2Pane = 'home'
+      u.searchParams.delete('nav')
+      u.searchParams.delete('navigation')
+      u.searchParams.delete('navv2')
+      const q = u.searchParams.toString()
+      window.history.replaceState(
+        {},
+        '',
+        `${u.pathname}${q ? `?${q}` : ''}${buildAppHash('navigation')}`,
+      )
+    }
+    // Hash is the canonical deep-link for SPA screens on ShipStatic.
+    if (window.location.hash && window.location.hash !== '#') {
+      applyHashRouteFromLocation({ replace: true })
+    } else if (state.view === 'navigation') {
+      syncHashFromApp({ replace: true, view: 'navigation' })
     }
   } catch {
     /* ignore */
@@ -1635,6 +1809,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
     if (reply.view) state.view = reply.view
     // Unified HOME already shows chat — keep pane on home.
     if (reply.view === 'navigation') {
+      navRouteError = null
       const ctx = getNavV2Context()
       state.navV2 = {
         ...state.navV2,
@@ -1655,6 +1830,13 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
           ? `${ctx.candidates.length}곳 후보`
           : state.navV2.status || '목적지를 검색해 주세요.',
       }
+      syncHashFromApp({
+        view: 'navigation',
+        query: state.navV2.query,
+        replace: false,
+      })
+    } else if (reply.view) {
+      syncHashFromApp({ view: reply.view, replace: false })
     }
     if (reply.arcadeId) state.arcadeId = reply.arcadeId
     if (reply.listenLang) state.listenLang = reply.listenLang
@@ -4379,14 +4561,20 @@ function goToView(next: View, ev?: MouseEvent): void {
     return
   }
   stopArcade()
+  stopSpeaking()
+  voice.stop()
+  state.listening = false
+  // Navigation must never use pathname routes — hash + view state only.
+  if (next === 'navigation') {
+    openNavInternal({ source: 'go_to_view', pushHistory: true })
+    return
+  }
   state.homeV2MoreOpen = false
   state.homeV2NavSheetOpen = false
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
-  stopSpeaking()
-  voice.stop()
-  state.listening = false
+  syncHashFromApp({ view: next, replace: false })
   render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
   if (state.view === 'invest') void refreshQuotes()
 }
@@ -4456,7 +4644,21 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                     : state.view === 'customers'
                       ? renderCustomers()
                       : state.view === 'navigation'
-                        ? renderNavigationScreen(state.navV2)
+                        ? navRouteError
+                          ? `<section class="panel navv2-panel" data-navv2-error="1">
+                              <header class="navv2-head">
+                                <button type="button" class="ghost-btn tiny" data-action="navv2-home">홈으로</button>
+                                <strong>AIZIO 길안내</strong>
+                                <span></span>
+                              </header>
+                              <p class="hint">길안내 화면을 불러오지 못했습니다.</p>
+                              <div class="row-btns">
+                                <button type="button" class="primary-btn" data-action="navv2-retry">다시 시도</button>
+                                <button type="button" class="ghost-btn" data-action="navv2-home">홈으로</button>
+                                <button type="button" class="ghost-btn" data-action="navv2-copy-diag">진단 복사</button>
+                              </div>
+                            </section>`
+                          : renderNavigationScreen(state.navV2)
                         : renderSettings()
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
@@ -4487,12 +4689,33 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   bind()
   void refreshNavPermStatus()
   if (state.view === 'navigation') {
-    const panel = document.querySelector('[data-navv2="1"]') as HTMLElement | null
-    if (panel) {
-      void bindNavigationScreen(panel, state.navV2, (next) => {
-        state.navV2 = { ...state.navV2, ...next }
-        render({ guardNav: false })
+    if (navRouteError) {
+      const panel = document.querySelector('[data-navv2-error="1"]')
+      panel?.querySelector('[data-action="navv2-retry"]')?.addEventListener('click', () => {
+        navRouteError = null
+        openNavInternal({ source: 'nav_retry', query: state.navV2.query, pushHistory: false })
       })
+      panel?.querySelector('[data-action="navv2-home"]')?.addEventListener('click', () => goToView('chat'))
+      panel?.querySelector('[data-action="navv2-copy-diag"]')?.addEventListener('click', () => {
+        const copied = copyTextNow(`nav_error:${navRouteError || 'unknown'}`)
+        showFlash(copied.ok ? '진단을 복사했습니다.' : '복사에 실패했습니다.')
+      })
+    } else {
+      const panel = document.querySelector('[data-navv2="1"]') as HTMLElement | null
+      if (panel) {
+        void bindNavigationScreen(panel, state.navV2, (next) => {
+          state.navV2 = { ...state.navV2, ...next }
+          if (typeof next.query === 'string') {
+            syncHashFromApp({ view: 'navigation', query: next.query, replace: true })
+          }
+          render({ guardNav: false })
+        }).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          navRouteError = msg.slice(0, 120)
+          recordDiagError(`navv2_bind_fail:${navRouteError}`)
+          render({ guardNav: false })
+        })
+      }
     }
   } else {
     destroyNavigationScreen()
@@ -5263,7 +5486,7 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const id = btn.dataset.quickId as HomeV2QuickId | undefined
       if (id === 'navigate') {
-        openNavigationSheet()
+        openNavInternal({ source: 'home_v2_quick' })
         return
       }
       const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
@@ -5275,7 +5498,10 @@ function bind(): void {
     })
   })
   document.querySelector('[data-action="home-v2-open-nav"]')?.addEventListener('click', () => {
-    openNavigationSheet()
+    openNavInternal({ source: 'home_v2_open_nav' })
+  })
+  document.querySelector('[data-action="navv2-back"]')?.addEventListener('click', () => {
+    handleNavV2Back()
   })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
@@ -5410,7 +5636,7 @@ function bind(): void {
     render()
   })
   document.querySelector('[data-navv2-chat-map="1"]')?.addEventListener('click', () => {
-    openNavigationSheet()
+    openNavInternal({ source: 'chat_map_card', query: state.navV2.query })
   })
   document.querySelector('[data-navv2-chat-dismiss="1"]')?.addEventListener('click', () => {
     try {
@@ -6565,6 +6791,19 @@ function bootAppCore(): void {
   }
   captureViewFromUrl()
   captureInviteFromUrl()
+  window.addEventListener('hashchange', () => {
+    if (suppressHashSync) {
+      suppressHashSync = false
+      return
+    }
+    applyHashRouteFromLocation({ replace: false })
+    render({ guardNav: 'async' })
+  })
+  window.addEventListener('popstate', () => {
+    if (suppressHashSync) return
+    applyHashRouteFromLocation({ replace: false })
+    render({ guardNav: 'async' })
+  })
   bindPwaInstallEvents()
   onPwaInstallChange(() => {
     refreshInstallHint()

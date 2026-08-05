@@ -207,6 +207,10 @@ function moreItem(label: string, attrs: string): string {
   return `<li><button type="button" ${attrs}>${esc(label)}</button></li>`
 }
 
+/**
+ * Menu sheet aligned to real `View` routes (types.ts / main.ts):
+ * chat · life · family · friends · navigation · customers · invest · games · actions · global · settings
+ */
 export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string {
   const inbox = getHomeSpaceInbox()
   const famBadge = inbox.family.unread > 0 ? ` (${inbox.family.unread > 99 ? '99+' : inbox.family.unread})` : ''
@@ -219,52 +223,61 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <strong>메뉴</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
-        <p class="hint home-v2-more-hint">하단 탭 대신 메뉴에서 모든 화면으로 이동합니다.</p>
+        <p class="hint home-v2-more-hint">앱에 있는 화면으로만 이동합니다. 채팅·MIC로도 같은 기능을 쓸 수 있습니다.</p>
+
         <div class="home-v2-more-group">
-          <h4>바로가기</h4>
+          <h4>대화</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('홈', 'data-action="home-v2-nav-home"')}
-            ${moreItem('생활', 'data-view="life"')}
+            ${moreItem('홈 · 채팅', 'data-action="home-v2-nav-home"')}
+            ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
+            ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
+            ${moreItem('음악', 'data-action="home-v2-music"')}
+          </ul>
+        </div>
+
+        <div class="home-v2-more-group">
+          <h4>공간</h4>
+          <ul class="home-v2-more-list">
             ${moreItem(`가족${famBadge}`, 'data-view="family"')}
             ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
           </ul>
         </div>
+
         <div class="home-v2-more-group">
-          <h4>주요 기능</h4>
+          <h4>일상</h4>
           <ul class="home-v2-more-list">
-            ${showInstall ? moreItem('홈 화면에 설치', 'data-action="install-home"') : ''}
+            ${moreItem('생활 · 할 일 · 알림', 'data-view="life"')}
             ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('손님관리', 'data-view="customers"')}
-            ${moreItem('번역', 'data-view="global"')}
-            ${moreItem('설정', 'data-view="settings"')}
+            ${moreItem('빠른 실행', 'data-view="actions"')}
           </ul>
         </div>
+
         <div class="home-v2-more-group">
-          <h4>생활</h4>
+          <h4>투자 · 여가</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
-            ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
-            ${moreItem('음악', 'data-action="home-v2-music"')}
-            ${moreItem('일정 · 할 일 · 알림', 'data-view="life"')}
-          </ul>
-        </div>
-        <div class="home-v2-more-group">
-          <h4>도구</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('투자', 'data-view="invest"')}
+            ${moreItem('투자 · 주식엔진', 'data-view="invest"')}
             ${moreItem('게임', 'data-view="games"')}
-            ${moreItem('실행(액션)', 'data-view="actions"')}
           </ul>
         </div>
+
         <div class="home-v2-more-group">
-          <h4>지원</h4>
+          <h4>설정</h4>
           <ul class="home-v2-more-list">
+            ${moreItem('설정 · AI · 업데이트', 'data-view="settings"')}
+            ${moreItem('번역 · 언어', 'data-view="global"')}
+            ${showInstall ? moreItem('홈 화면에 설치', 'data-action="install-home"') : ''}
             ${moreItem('사용설명서', 'data-action="home-v2-guide"')}
-            ${moreItem('API 키', 'data-view="settings"')}
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}
-            ${moreItem('푸시 실기기 테스트', 'data-action="home-v2-goto-push"')}
-            ${moreItem('디자인 전환 · 기존 홈', 'data-action="home-v2-set" data-home-variant="legacy"')}
-            ${moreItem('HOME v2로', 'data-action="home-v2-set" data-home-variant="v2"')}
+            ${moreItem('푸시 테스트', 'data-action="home-v2-goto-push"')}
+          </ul>
+        </div>
+
+        <div class="home-v2-more-group">
+          <h4>화면 모드</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('새 홈 (HOME v2)', 'data-action="home-v2-set" data-home-variant="v2"')}
+            ${moreItem('기존 홈', 'data-action="home-v2-set" data-home-variant="legacy"')}
           </ul>
         </div>
       </div>

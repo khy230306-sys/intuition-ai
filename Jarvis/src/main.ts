@@ -234,6 +234,7 @@ import {
   renderDesignLabSection,
   renderHomeV2MoreSheet,
   renderHomeV2NavWithPane,
+  renderTopNavActions,
   renderHomeV2Shell,
   renderNavigationSheet,
   resolveHomeVariant,
@@ -2140,6 +2141,11 @@ function renderBrand(): string {
         : state.online
           ? '대기'
           : '오프라인'
+  const inbox = getHomeSpaceInbox()
+  const topActions = renderTopNavActions({
+    moreOpen: state.homeV2MoreOpen,
+    unread: inbox.unreadTotal || 0,
+  })
   return `
     <header class="brand-bar">
       <div class="brand">
@@ -2149,7 +2155,10 @@ function renderBrand(): string {
           <p>${loadInterpretMode().active ? `실시간 통역 · MIC ${escapeHtml(state.listenLang)}` : `아이지오 · 만능·투자 AI 비서 · ${escapeHtml(state.settings.displayName)}`}</p>
         </div>
       </div>
-      <div class="status-pill">${status}</div>
+      <div class="brand-bar-right">
+        <div class="status-pill">${status}</div>
+        ${topActions}
+      </div>
     </header>
   `
 }
@@ -2286,42 +2295,9 @@ function renderLocationGate(): string {
   `
 }
 
+/** Bottom tabs removed — 홈/메뉴 are in the header; all destinations live in the 메뉴 sheet. */
 function renderNav(): string {
-  const inbox = getHomeSpaceInbox()
-  /** Primary tabs only — secondary screens live in the 메뉴 sheet. */
-  const items: Array<{ id: View; label: string; ico: string; badge?: number }> = [
-    { id: 'chat', label: t('nav.chat'), ico: 'CHAT', badge: inbox.unreadTotal || undefined },
-    { id: 'life', label: t('nav.life'), ico: 'LIFE' },
-    { id: 'family', label: t('nav.family'), ico: 'FAM', badge: inbox.family.unread || undefined },
-  ]
-  const menuBadge = inbox.friends.unread || 0
-  const menuActive =
-    state.homeV2MoreOpen ||
-    ['invest', 'friends', 'global', 'games', 'actions', 'settings', 'customers', 'navigation'].includes(state.view)
-  return `
-    <nav class="nav nav-compact" data-legacy-nav="1">
-      ${items
-        .map(
-          (i) => `
-        <button type="button" data-view="${i.id}" class="${!state.homeV2MoreOpen && state.view === i.id ? 'active' : ''}">
-          <span class="nav-ico">${i.ico}${
-            i.badge
-              ? `<span class="nav-badge">${i.badge > 99 ? '99+' : i.badge}</span>`
-              : ''
-          }</span>
-          <span>${i.label}</span>
-        </button>
-      `,
-        )
-        .join('')}
-      <button type="button" data-action="home-v2-nav-more" class="home-v2-menu-btn ${menuActive ? 'active' : ''}" aria-label="메뉴" aria-haspopup="dialog">
-        <span class="nav-ico"><span class="menu-burger" aria-hidden="true"><i></i><i></i><i></i></span>${
-          menuBadge > 0 ? `<span class="nav-badge">${menuBadge > 99 ? '99+' : menuBadge}</span>` : ''
-        }</span>
-        <span>메뉴</span>
-      </button>
-    </nav>
-  `
+  return ''
 }
 
 function renderGlobal(): string {
@@ -2788,6 +2764,7 @@ function renderHomeV2View(): string {
       busy: state.busy,
       listening: state.listening,
       appVersion: APP_VERSION,
+      moreOpen: state.homeV2MoreOpen,
       composerExtraHtml: `${lockBar}${renderMusicMiniPlayer(
         state.musicSession || sessionSnapshot(),
         state.musicPlayerOpen,
@@ -4079,29 +4056,21 @@ function softRefreshSpaceChat(kind: 'family' | 'friends', opts?: { badges?: bool
   if (opts?.badges !== false) patchNavBadges()
 }
 
-/** Update CHAT/FAM/FRD badges without remounting the shell. */
+/** Update unread badge on top 메뉴 buttons without remounting the shell. */
 function patchNavBadges(): void {
-  const nav = document.querySelector('nav.nav')
-  if (!nav) return
   invalidateSpaceInboxCache()
   const inbox = getHomeSpaceInbox()
-  const setBadge = (view: View, count: number) => {
-    const btn = nav.querySelector<HTMLButtonElement>(`[data-view="${view}"]`)
-    if (!btn) return
-    const ico = btn.querySelector('.nav-ico')
-    if (!ico) return
-    const existing = ico.querySelector('.nav-badge')
-    if (count > 0) {
-      const label = count > 99 ? '99+' : String(count)
+  const total = inbox.unreadTotal || 0
+  const label = total > 99 ? '99+' : String(total)
+  document.querySelectorAll<HTMLElement>('[data-action="home-v2-nav-more"]').forEach((btn) => {
+    const existing = btn.querySelector('.nav-badge, .header-menu-badge')
+    if (total > 0) {
       if (existing) existing.textContent = label
-      else ico.insertAdjacentHTML('beforeend', `<span class="nav-badge">${label}</span>`)
+      else btn.insertAdjacentHTML('beforeend', `<span class="nav-badge header-menu-badge">${label}</span>`)
     } else if (existing) {
       existing.remove()
     }
-  }
-  setBadge('chat', inbox.unreadTotal)
-  setBadge('family', inbox.family.unread)
-  setBadge('friends', inbox.friends.unread)
+  })
 }
 
 function goToView(next: View, ev?: MouseEvent): void {

@@ -36,6 +36,19 @@ export function renderHomeV2Chrome(active: HomeVariant): string {
   `
 }
 
+/** Top-right 홈 + 메뉴 (bottom tab bar removed — features live in the sheet). */
+export function renderTopNavActions(opts?: { moreOpen?: boolean; unread?: number }): string {
+  const unread = opts?.unread ?? 0
+  const badge =
+    unread > 0 ? `<span class="nav-badge header-menu-badge">${unread > 99 ? '99+' : unread}</span>` : ''
+  const menuActive = opts?.moreOpen ? ' active' : ''
+  return `
+    <div class="home-v2-header-actions" data-top-nav-actions="1">
+      <button type="button" class="ghost-btn tiny home-v2-home-btn" data-action="home-v2-nav-home" aria-label="홈">홈</button>
+      <button type="button" class="ghost-btn tiny home-v2-settings${menuActive}" data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog">메뉴${badge}</button>
+    </div>`
+}
+
 export function renderHomeV2Shell(
   model: HomeV2Model,
   opts: {
@@ -50,6 +63,7 @@ export function renderHomeV2Shell(
     /** AI wizard / tools above the thread */
     aboveThreadHtml?: string
     voiceHintHtml?: string
+    moreOpen?: boolean
   },
 ): string {
   const vs = model.voiceState
@@ -80,6 +94,12 @@ export function renderHomeV2Shell(
           <p class="home-v2-prompt" id="voice-caption" data-home-v2-prompt="1">${esc(model.prompt)}</p>
         </div>`
 
+  const inbox = getHomeSpaceInbox()
+  const topActions = renderTopNavActions({
+    unread: inbox.unreadTotal || 0,
+    moreOpen: !!opts.moreOpen,
+  })
+
   return `
     <section class="panel home-v2-panel home-v2-unified" data-home-v2="1">
       <header class="home-v2-header">
@@ -90,7 +110,7 @@ export function renderHomeV2Shell(
             ${weather}
           </p>
         </div>
-        <button type="button" class="ghost-btn tiny home-v2-settings" data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog">메뉴</button>
+        ${topActions}
       </header>
 
       <div class="home-v2-summary" role="group" aria-label="오늘 요약">
@@ -157,68 +177,16 @@ export function renderHomeV2Shell(
   `
 }
 
-/** Bottom nav — single 홈 tab (no separate 대화). */
+/**
+ * Bottom tab bar removed — 홈/생활/가족/메뉴 live in the top actions + 메뉴 sheet.
+ * Kept as a no-op export so call sites stay stable.
+ */
 export function renderHomeV2NavWithPane(
-  activeView: string,
+  _activeView: string,
   _pane: 'home' | 'thread',
-  moreOpen: boolean,
+  _moreOpen: boolean,
 ): string {
-  const inbox = getHomeSpaceInbox()
-  const famBadge = inbox.family.unread || 0
-  const friendsBadge = inbox.friends.unread || 0
-  const rows: Array<{ key: string; label: string; ico: string; badge?: number; attrs: string; active: boolean }> = [
-    {
-      key: 'home',
-      label: '홈',
-      ico: '홈',
-      attrs: 'data-action="home-v2-nav-home"',
-      active: activeView === 'chat' && !moreOpen,
-    },
-    {
-      key: 'life',
-      label: '생활',
-      ico: '생활',
-      attrs: 'data-view="life"',
-      active: activeView === 'life' && !moreOpen,
-    },
-    {
-      key: 'family',
-      label: '가족',
-      ico: '가족',
-      badge: famBadge || undefined,
-      attrs: 'data-view="family"',
-      active: activeView === 'family' && !moreOpen,
-    },
-    {
-      key: 'more',
-      label: '메뉴',
-      ico: '',
-      attrs: 'data-action="home-v2-nav-more" aria-label="메뉴" aria-haspopup="dialog"',
-      active: moreOpen,
-      badge: friendsBadge || undefined,
-    },
-  ]
-  return `
-    <nav class="nav home-v2-nav" data-home-v2-nav="1">
-      ${rows
-        .map((i) => {
-          const badge =
-            i.badge && i.badge > 0
-              ? `<span class="nav-badge">${i.badge > 99 ? '99+' : i.badge}</span>`
-              : ''
-          const ico =
-            i.key === 'more'
-              ? `<span class="menu-burger" aria-hidden="true"><i></i><i></i><i></i></span>${badge}`
-              : `${i.ico}${badge}`
-          return `
-          <button type="button" ${i.attrs} class="${i.active ? 'active' : ''}${i.key === 'more' ? ' home-v2-menu-btn' : ''}">
-            <span class="nav-ico">${ico}</span>
-            <span>${i.label}</span>
-          </button>`
-        })
-        .join('')}
-    </nav>
-  `
+  return ''
 }
 
 function moreItem(label: string, attrs: string): string {
@@ -226,6 +194,9 @@ function moreItem(label: string, attrs: string): string {
 }
 
 export function renderHomeV2MoreSheet(): string {
+  const inbox = getHomeSpaceInbox()
+  const famBadge = inbox.family.unread > 0 ? ` (${inbox.family.unread > 99 ? '99+' : inbox.family.unread})` : ''
+  const frBadge = inbox.friends.unread > 0 ? ` (${inbox.friends.unread > 99 ? '99+' : inbox.friends.unread})` : ''
   return `
     <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="메뉴">
       <div class="home-v2-more-sheet">
@@ -233,16 +204,22 @@ export function renderHomeV2MoreSheet(): string {
           <strong>메뉴</strong>
           <button type="button" class="ghost-btn tiny" data-action="home-v2-more-close">닫기</button>
         </div>
-        <p class="hint home-v2-more-hint">하나의 홈에서 메뉴로 모든 기능을 엽니다.</p>
+        <p class="hint home-v2-more-hint">하단 탭 대신 메뉴에서 모든 화면으로 이동합니다.</p>
+        <div class="home-v2-more-group">
+          <h4>바로가기</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('홈', 'data-action="home-v2-nav-home"')}
+            ${moreItem('생활', 'data-view="life"')}
+            ${moreItem(`가족${famBadge}`, 'data-view="family"')}
+            ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
+          </ul>
+        </div>
         <div class="home-v2-more-group">
           <h4>주요 기능</h4>
           <ul class="home-v2-more-list">
             ${moreItem('홈 화면에 설치', 'data-action="install-home"')}
             ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('손님관리', 'data-view="customers"')}
-            ${moreItem('일정 · 할 일', 'data-view="life"')}
-            ${moreItem('가족', 'data-view="family"')}
-            ${moreItem('친구', 'data-view="friends"')}
             ${moreItem('번역', 'data-view="global"')}
             ${moreItem('설정', 'data-view="settings"')}
           </ul>
@@ -253,7 +230,7 @@ export function renderHomeV2MoreSheet(): string {
             ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}
-            ${moreItem('알림', 'data-view="life"')}
+            ${moreItem('일정 · 할 일 · 알림', 'data-view="life"')}
           </ul>
         </div>
         <div class="home-v2-more-group">

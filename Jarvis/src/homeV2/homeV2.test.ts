@@ -15,6 +15,7 @@ import {
   renderHomeV2NavWithPane,
   renderHomeV2MoreSheet,
   renderNavigationSheet,
+  renderTopNavActions,
 } from './render'
 
 const store = new Map<string, string>()
@@ -174,16 +175,20 @@ describe('HOME v2 render', () => {
     expect(html).not.toContain('HOME v2 미리보기')
   })
 
-  it('nav has one 홈 tab (no separate 대화); menu holds features', () => {
+  it('top 홈+메뉴; bottom nav empty; sheet holds former tabs', () => {
+    const top = renderTopNavActions({ unread: 0 })
+    expect(top).toContain('data-action="home-v2-nav-home"')
+    expect(top).toContain('data-action="home-v2-nav-more"')
+    expect(top).toContain('홈')
+    expect(top).toContain('메뉴')
     const nav = renderHomeV2NavWithPane('chat', 'home', false)
-    expect(nav).toContain('홈')
-    expect(nav).toContain('메뉴')
-    expect(nav).toContain('home-v2-menu-btn')
-    expect(nav).not.toContain('home-v2-nav-thread')
-    expect(nav).not.toContain('>대화<')
-    expect(nav).not.toContain('>전체<')
+    expect(nav.trim()).toBe('')
     const more = renderHomeV2MoreSheet()
     expect(more).toContain('aria-label="메뉴"')
+    expect(more).toContain('바로가기')
+    expect(more).toContain('data-action="home-v2-nav-home"')
+    expect(more).toContain('data-view="life"')
+    expect(more).toContain('data-view="family"')
     expect(more).toContain('주요 기능')
     expect(more).toContain('data-action="install-home"')
     expect(more).toContain('길안내')
@@ -217,6 +222,9 @@ describe('HOME v2 render', () => {
     expect(html).toContain('home-v2-unified')
     expect(html).toContain('home-v2-thread')
     expect(html).toContain('msg-row')
+    expect(html).toContain('data-top-nav-actions')
+    expect(html).toContain('data-action="home-v2-nav-home"')
+    expect(html).toContain('data-action="home-v2-nav-more"')
   })
 
   it('navigation sheet and design lab', () => {

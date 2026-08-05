@@ -1,7 +1,10 @@
 # AIZIO Life OS 2.0 — Device Test (cards UI)
 
 **App version target:** 1.20.2+  
-**Channel:** Preview snapshot preferred (not production).  
+**Channel:** Preview snapshot preferred (not production).
+
+**Preview (v1.20.2):** https://pulsing-bloom-qk5a536.shipstatic.com  
+**Commit:** `1ec647b`  
 **Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
 
 ## Status legend

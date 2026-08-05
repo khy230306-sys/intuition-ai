@@ -3,9 +3,9 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**Preview (v1.20.4):** https://baseless-bolt-c37sgrn.shipstatic.com  
-**Commit:** `e6e0c3f`  
-**홈 화면 추가:** 버튼 → iOS 공유 창 자동 / Android 설치 창 · 정식 https://jarvis-app.shipstatic.com
+**Preview (v1.20.5):** https://charged-point-p549zwt.shipstatic.com  
+**Commit:** `48cb809`  
+**홈 화면:** 설치 버튼 제거 · 설치 방법 배너 · standalone 시 자동 숨김
 **Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
 
 ## Status legend

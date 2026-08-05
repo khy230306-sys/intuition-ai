@@ -4,7 +4,8 @@ const CHAR = '/assets/chars'
 export const CHAR_IMG = {
   bus: `${CHAR}/bus.png`,
   busFront: `${CHAR}/bus-front.png`,
-  car: `${CHAR}/car.png`,
+  /** Prefer illustrated front character when available */
+  car: `${CHAR}/char-car.png`,
   fire: `${CHAR}/fire.png`,
   police: `${CHAR}/police.png`,
   ambulance: `${CHAR}/ambulance.png`,

@@ -1340,8 +1340,105 @@ img {
 }
 
 .paint-subject {
-  display: block;
+  display: inline-block;
   overflow: visible;
+  line-height: 0;
+}
+
+/* Illustrated PNG + live tint */
+.tinted-char {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  line-height: 0;
+  filter: drop-shadow(0 8px 10px rgba(26, 21, 16, 0.16));
+}
+
+.tinted-char > .tinted-base,
+.tinted-char > .tinted-shade,
+.tinted-char > .tinted-gloss,
+.tinted-char > .tinted-wash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.tinted-char > .tinted-base {
+  position: relative;
+  filter: grayscale(1) contrast(1.08) brightness(1.14);
+}
+
+.tinted-char > .tinted-wash {
+  background: var(--tint);
+  mix-blend-mode: color;
+  -webkit-mask-image: var(--char);
+  mask-image: var(--char);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+.tinted-char > .tinted-shade {
+  mix-blend-mode: multiply;
+  opacity: 0.42;
+}
+
+.tinted-char > .tinted-gloss {
+  mix-blend-mode: soft-light;
+  opacity: 0.55;
+}
+
+.builder-target {
+  display: grid;
+  place-items: center;
+  margin-top: 0.45rem;
+}
+
+.builder-stage {
+  display: grid;
+  place-items: center;
+  min-height: 11rem;
+  border-radius: 1.4rem;
+  border: 4px solid #1a1510;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.builder-bodies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.builder-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.55rem 0.4rem 0.65rem;
+  border-radius: 1.2rem;
+  border: 4px solid #1a1510;
+  background: #fff;
+  box-shadow: 0 5px 0 #1a1510;
+  font-family: var(--font-display);
+}
+
+.builder-body.on {
+  background: #fff7cc;
+  outline: 4px solid var(--sunny);
+}
+
+.builder-body:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #1a1510;
 }
 
 .stage-paint {

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { PLAY_COLORS, pick } from '../data/colors'
 import { speak } from '../lib/speech'
+import { sfx } from '../lib/sfx'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { PaintSubject } from '../components/PaintSubject'
+import { KIND_NATURAL, NaturalSubject, PaintSubject } from '../components/PaintSubject'
 import { useRound } from './useRound'
 
 const BODIES = [
@@ -28,58 +29,59 @@ export function CarBuilder() {
   function check(nextBody = body, nextColor = color) {
     if (!nextBody || !nextColor) return
     if (nextBody.id === target.body.id && nextColor.id === target.color.id) {
+      sfx.win()
       speak('완성! 멋진 자동차예요!')
       round.win('조립 성공!')
       setBody(null)
       setColor(null)
     } else if (nextBody.id === target.body.id || nextColor.id === target.color.id) {
+      sfx.tap()
       speak('거의 다 왔어요!')
     } else {
+      sfx.wrong()
       speak('다시 골라 볼까요?')
     }
   }
 
-  const previewColor = color?.hex ?? '#d9d2c5'
-  const previewKind = body?.kind ?? 'car'
+  const previewKind = body?.kind ?? target.body.kind
+  const previewColor = color?.hex ?? KIND_NATURAL[previewKind] ?? '#d9d2c5'
 
   return (
-    <GameShell title="자동차 조립" subtitle="요청한 차와 색깔을 맞춰요" progress={round.progress}>
+    <GameShell title="자동차 만들기" subtitle="차랑 색깔을 맞춰요" progress={round.progress}>
       <Confetti show={round.confetti} />
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
         <div className="prompt-big">
-          {target.color.ko} {target.body.label}를 만들어요
+          {target.color.ko} {target.body.label}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-          <PaintSubject kind={target.body.kind} color={target.color.hex} size={64} />
+        <div className="builder-target">
+          <PaintSubject kind={target.body.kind} color={target.color.hex} size={88} />
         </div>
         <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(`${target.color.ko} ${target.body.label}`)}>
           다시 듣기
         </button>
       </div>
       <div className="play-area">
-        <div className="paint-car" style={{ background: `${previewColor}33` }} aria-label="조립 중인 자동차">
-          <div style={{ display: 'grid', placeItems: 'center', minHeight: '8rem' }}>
-            <PaintSubject kind={previewKind} color={previewColor} size={130} />
-          </div>
+        <div className="builder-stage" style={{ background: `radial-gradient(circle at 50% 80%, #fff 0 28%, ${previewColor}44 29% 100%)` }}>
+          <PaintSubject key={`${previewKind}-${previewColor}`} kind={previewKind} color={previewColor} size={168} className="paint-pop" />
         </div>
         <h3 className="section-title" style={{ marginTop: '0.8rem' }}>
           1. 차 고르기
         </h3>
-        <div className="parts">
+        <div className="builder-bodies">
           {BODIES.map((b) => (
             <button
               key={b.id}
               type="button"
-              className="part photo"
-              style={{ outline: body?.id === b.id ? '3px solid var(--sunny)' : undefined }}
+              className={`builder-body${body?.id === b.id ? ' on' : ''}`}
               onClick={() => {
                 setBody(b)
+                sfx.tap()
                 speak(b.label)
                 check(b, color)
               }}
             >
-              <PaintSubject kind={b.kind} color={color?.hex ?? '#FFD60A'} size={48} />
+              <NaturalSubject kind={b.kind} size={72} />
               <span>{b.label}</span>
             </button>
           ))}
@@ -98,6 +100,7 @@ export function CarBuilder() {
               }}
               onClick={() => {
                 setColor(c)
+                sfx.paint()
                 speak(c.ko)
                 check(body, c)
               }}
@@ -108,7 +111,7 @@ export function CarBuilder() {
         </div>
         {round.done && (
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.8rem' }} onClick={round.reset}>
-            또 조립!
+            또 만들기!
           </button>
         )}
       </div>

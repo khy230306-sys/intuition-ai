@@ -5,7 +5,7 @@ import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
-import { PaintSubject } from '../components/PaintSubject'
+import { KIND_NATURAL, PaintSubject } from '../components/PaintSubject'
 
 type Subject = { id: string; ko: string }
 
@@ -74,7 +74,11 @@ export function ColorBook() {
               className={`subject-chip photo${subject.id === s.id ? ' on' : ''}`}
               onClick={() => pickSubject(s)}
             >
-              <PaintSubject kind={s.id} color={subject.id === s.id ? color.hex : '#FFD60A'} size={48} />
+              <PaintSubject
+                kind={s.id}
+                color={subject.id === s.id ? color.hex : KIND_NATURAL[s.id] || '#FFD400'}
+                size={52}
+              />
               <span>{s.ko}</span>
             </button>
           ))}

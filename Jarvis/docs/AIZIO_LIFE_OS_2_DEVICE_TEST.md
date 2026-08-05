@@ -3,9 +3,7 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**Preview (v1.20.6):** ShipStatic deploy limit hit this run — code on branch `cursor/aizio-life-os-2-cards-6b16` @ `6c35f2b`  
-**홈/채팅 보완:** 로컬 로또 · 모델 failover · 중복 번역바 제거 · empty 카드 제안 강화
-**Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
+**App (v1.20.7):** encyclopedia Q&A + reminder false-positive fix @ `db2e2fb` — Preview ShipStatic limit; needs production deploy approval to ship to device
 
 ## Status legend
 

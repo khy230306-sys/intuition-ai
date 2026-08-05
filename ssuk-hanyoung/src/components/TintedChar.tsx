@@ -1,6 +1,10 @@
 import type { CSSProperties } from 'react'
 
-/** High-quality PNG character with live body tint (keeps face/detail) */
+/**
+ * Illustrated PNG tinted to `color`.
+ * Grayscale base + masked multiply wash keeps outlines/faces readable
+ * without the original baked body color fighting the tint.
+ */
 
 type Props = {
   src: string
@@ -22,8 +26,7 @@ export function TintedChar({ src, color, size = 120, className, alt = '' }: Prop
     <span className={`tinted-char${className ? ` ${className}` : ''}`} style={style} aria-hidden={alt ? undefined : true}>
       <img src={src} alt={alt} className="tinted-base" width={size} height={size} draggable={false} />
       <span className="tinted-wash" />
-      <img src={src} alt="" className="tinted-shade" width={size} height={size} draggable={false} />
-      <img src={src} alt="" className="tinted-gloss" width={size} height={size} draggable={false} />
+      <img src={src} alt="" className="tinted-line" width={size} height={size} draggable={false} />
     </span>
   )
 }

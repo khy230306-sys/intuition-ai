@@ -1345,18 +1345,18 @@ img {
   line-height: 0;
 }
 
-/* Illustrated PNG + live tint */
+/* Illustrated PNG + live tint (grayscale → multiply color) */
 .tinted-char {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
   line-height: 0;
+  isolation: isolate;
   filter: drop-shadow(0 8px 10px rgba(26, 21, 16, 0.16));
 }
 
 .tinted-char > .tinted-base,
-.tinted-char > .tinted-shade,
-.tinted-char > .tinted-gloss,
+.tinted-char > .tinted-line,
 .tinted-char > .tinted-wash {
   position: absolute;
   inset: 0;
@@ -1370,12 +1370,13 @@ img {
 
 .tinted-char > .tinted-base {
   position: relative;
-  filter: grayscale(1) contrast(1.08) brightness(1.14);
+  filter: grayscale(1) contrast(1.12) brightness(1.22);
 }
 
 .tinted-char > .tinted-wash {
   background: var(--tint);
-  mix-blend-mode: color;
+  mix-blend-mode: multiply;
+  opacity: 0.9;
   -webkit-mask-image: var(--char);
   mask-image: var(--char);
   -webkit-mask-size: contain;
@@ -1386,14 +1387,11 @@ img {
   mask-position: center;
 }
 
-.tinted-char > .tinted-shade {
+/* Restore dark outlines / facial contrast without bringing back body hue */
+.tinted-char > .tinted-line {
   mix-blend-mode: multiply;
-  opacity: 0.42;
-}
-
-.tinted-char > .tinted-gloss {
-  mix-blend-mode: soft-light;
-  opacity: 0.55;
+  opacity: 0.28;
+  filter: grayscale(1) contrast(1.4);
 }
 
 .builder-target {

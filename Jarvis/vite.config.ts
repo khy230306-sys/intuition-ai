@@ -34,7 +34,8 @@ export default defineConfig({
     },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/*.png', 'favicon.svg', 'splash.svg', 'quote-snapshot.json'],
+      // Do NOT precache build-meta / quote-snapshot — stale SW made "업데이트" think it was already latest.
+      includeAssets: ['icons/*.png', 'favicon.svg', 'splash.svg'],
       manifest: {
         name: 'AIZIO',
         short_name: 'AIZIO',
@@ -75,16 +76,51 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+        // js/css/html/icons only — never precache build-meta.json (version checks must hit network)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['**/build-meta.json', '**/quote-snapshot.json'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        // ShipStatic injects ?_ship=<snapshot>; hard-refresh uses _v/_t.
-        // Without this, precache misses → intermittent blank loads on iPhone.
-        ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^_ship$/, /^_v$/, /^_t$/, /^_check$/],
+        // ShipStatic injects ?_ship=<snapshot>; hard-refresh uses _v/_t/_bid.
+        // Do NOT ignore _nocache — version probes rely on a non-ignored param.
+        ignoreURLParametersMatching: [
+          /^utm_/,
+          /^fbclid$/,
+          /^_ship$/,
+          /^_v$/,
+          /^_t$/,
+          /^_check$/,
+          /^_bid$/,
+          /^_update$/,
+        ],
         importScripts: ['push-handler.js'],
         runtimeCaching: [
+          {
+            // Always fetch live version / build id from the network
+            urlPattern: ({ url }) => /\/build-meta\.json$/i.test(url.pathname),
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({ url }) => /\/quote-snapshot\.json$/i.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'quote-snapshot',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 6 },
+            },
+          },
+          {
+            // Prefer fresh HTML so home-screen PWAs pick up new hashed asset URLs
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'aizio-pages',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',

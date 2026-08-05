@@ -1,6 +1,16 @@
 import { registerSW } from 'virtual:pwa-register'
 import './style.css'
-import { FIXED_APP_URL, fetchRemoteAppVersion } from './appUpdate'
+import {
+  FIXED_APP_URL,
+  UPDATE_RETRY_KEY,
+  buildUpdateUrl,
+  clearPendingUpdate,
+  compareAppVersions,
+  fetchRemoteAppVersion,
+  fetchRemoteBuildMeta,
+  readPendingUpdate,
+  writePendingUpdate,
+} from './appUpdate'
 import {
   clearProviderKey,
   dismissAiWizard,
@@ -285,7 +295,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.18.1'
+const APP_VERSION = '1.18.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -349,6 +359,21 @@ async function clearAppCaches(): Promise<void> {
   }
 }
 
+/** Wait until SW controller is gone so the next navigation/fetch is not lied to by precache. */
+async function waitForServiceWorkerGone(maxMs = 2500): Promise<void> {
+  if (!('serviceWorker' in navigator)) return
+  const start = Date.now()
+  while (Date.now() - start < maxMs) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      if (!regs.length && !navigator.serviceWorker.controller) return
+    } catch {
+      return
+    }
+    await new Promise((r) => setTimeout(r, 120))
+  }
+}
+
 /** Minimal paint so version-upgrade refresh never leaves a blank white #app. */
 function paintBootSplash(message: string): void {
   const app = document.getElementById('app')
@@ -375,65 +400,70 @@ function markAppBooted(): void {
   if (app) app.setAttribute('data-boot-ready', '1')
 }
 
-async function hardRefreshApp(): Promise<void> {
+async function hardRefreshApp(opts?: { targetVersion?: string; targetBuildId?: string | null }): Promise<void> {
   // Stuck flag from a previous interrupted refresh — clear and force navigate
   const stuck = sessionStorage.getItem('jarvis.refreshing') === '1'
   sessionStorage.setItem('jarvis.refreshing', '1')
   paintBootSplash(stuck ? '앱을 다시 불러오는 중…' : '최신 버전으로 업데이트하는 중…')
-  // Mark version before cache wipe so a hung clear cannot loop forever on next boot
-  localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
   try {
-    await withTimeout(clearAppCaches(), 3500)
+    await withTimeout(clearAppCaches(), 5000)
+    await waitForServiceWorkerGone(2500)
   } catch {
     /* still reload */
   }
-  const bust = `_v=${encodeURIComponent(APP_VERSION)}&_t=${Date.now()}`
-  // Prefer the locked production host if user somehow opened a snapshot URL
-  if (/\.shipstatic\.com$/i.test(window.location.hostname) && window.location.hostname !== 'jarvis-app.shipstatic.com') {
-    window.location.replace(`${FIXED_APP_URL}/?${bust}`)
-    return
-  }
-  try {
-    const url = new URL(window.location.href)
-    url.searchParams.set('_v', APP_VERSION)
-    url.searchParams.set('_t', String(Date.now()))
-    window.location.replace(url.toString())
-  } catch {
-    window.location.replace(`${FIXED_APP_URL}/?${bust}`)
-  }
+  const targetVer = opts?.targetVersion || APP_VERSION
+  // Always land on the fixed production host (snapshot URLs stay stale after domain repoint)
+  window.location.replace(
+    buildUpdateUrl({
+      version: targetVer,
+      buildId: opts?.targetBuildId,
+      step: stuck ? 3 : 1,
+    }),
+  )
 }
 
 /**
- * Home-screen / Safari update: wipe SW caches, then load the fixed production URL
- * so the installed PWA always pulls the newest deployed build.
+ * Home-screen / Safari update: wipe SW first (so version check is not precache-lied),
+ * read live build-meta, then hard-navigate to the fixed production URL.
  */
 async function updateAppToLatest(): Promise<void> {
   showFlash('최신판을 확인하는 중…')
   sessionStorage.removeItem('jarvis.refreshing')
-  let remote: string | null = null
+  sessionStorage.removeItem('jarvis.buildReloaded')
+  paintBootSplash('캐시를 비우고 최신판을 확인하는 중…')
+
+  // 1) Kill SW/precache BEFORE asking the server — old SW served stale index/build-meta.
   try {
-    remote = await fetchRemoteAppVersion()
+    await withTimeout(clearAppCaches(), 5000)
+    await waitForServiceWorkerGone(2500)
+  } catch {
+    /* continue */
+  }
+
+  let remote = null as Awaited<ReturnType<typeof fetchRemoteBuildMeta>>
+  try {
+    remote = await fetchRemoteBuildMeta()
   } catch {
     remote = null
   }
-  state.remoteVersion = remote
-  const targetVer = remote || APP_VERSION
-  if (remote && remote === APP_VERSION) {
-    showFlash(`이미 최신입니다 (v${APP_VERSION}). 캐시를 비우고 다시 불러옵니다…`)
-  } else if (remote) {
-    showFlash(`서버 최신 v${remote}으로 업데이트합니다…`)
+  const remoteVer = remote?.version || (await fetchRemoteAppVersion().catch(() => null))
+  state.remoteVersion = remoteVer
+  const targetVer = remoteVer || APP_VERSION
+  const targetBid = remote?.buildId || null
+
+  if (remoteVer && remoteVer === APP_VERSION && (!targetBid || targetBid === localStorage.getItem(SEEN_BUILD_ID_KEY))) {
+    showFlash(`이미 최신입니다 (v${APP_VERSION}). 그래도 깨끗이 다시 불러옵니다…`)
+  } else if (remoteVer) {
+    showFlash(`서버 최신 v${remoteVer}으로 업데이트합니다…`)
   } else {
     showFlash('서버 확인 실패 · 캐시를 비우고 다시 불러옵니다…')
   }
-  paintBootSplash('최신판을 불러오는 중…')
-  try {
-    await withTimeout(clearAppCaches(), 3500)
-  } catch {
-    /* still navigate */
-  }
-  localStorage.setItem(SEEN_APP_VERSION_KEY, targetVer)
+
+  // Pending target — do NOT mark SEEN as remote until this bundle actually matches
+  writePendingUpdate(targetVer, targetBid)
   sessionStorage.setItem('jarvis.refreshing', '1')
-  window.location.replace(`${FIXED_APP_URL}/?_v=${encodeURIComponent(targetVer)}&_t=${Date.now()}&_update=1`)
+  paintBootSplash('최신판을 불러오는 중…')
+  window.location.replace(buildUpdateUrl({ version: targetVer, buildId: targetBid, step: 1 }))
 }
 
 /** Settings-only update controls (not shown on chat / games / other tabs). */
@@ -453,8 +483,8 @@ function renderUpdateCard(): string {
         <strong>앱 업데이트</strong>
         <span class="ver">이 기기 v${APP_VERSION}</span>
       </div>
-      <p class="hint">${status}. 홈 화면에 추가한 AIZIO도 이 버튼으로 최신판을 받을 수 있습니다.</p>
-      <button type="button" class="primary-btn update-btn" data-action="app-update">업데이트</button>
+      <p class="hint">${status}. 홈 화면 앱도 이 버튼으로 캐시를 지우고 공식 URL에서 다시 받습니다. 그래도 버전이 안 바뀌면 아래 «앱 캐시 새로고침»을 한 번 더 누르세요.</p>
+      <button type="button" class="primary-btn update-btn" data-action="app-update">최신 빌드로 업데이트</button>
       <button type="button" class="ghost-btn tiny" data-action="check-update">최신 버전만 확인</button>
     </div>`
 }
@@ -6243,25 +6273,54 @@ function boot(): void {
       swUpdateTimer = window.setInterval(() => void reg.update(), 60_000)
     },
   })
+  const pending = readPendingUpdate()
+  if (pending?.version) {
+    if (pending.version === APP_VERSION) {
+      // Update navigation landed on the intended bundle
+      clearPendingUpdate()
+    } else if (compareAppVersions(pending.version, APP_VERSION) > 0) {
+      // Still running an older bundle after "업데이트" — wipe + retry once
+      const retried = sessionStorage.getItem(UPDATE_RETRY_KEY) === '1'
+      if (!retried) {
+        sessionStorage.setItem(UPDATE_RETRY_KEY, '1')
+        paintBootSplash(`최신 v${pending.version}을 다시 받는 중…`)
+        void hardRefreshApp({ targetVersion: pending.version, targetBuildId: pending.buildId }).catch(() => {
+          sessionStorage.removeItem('jarvis.refreshing')
+          continueBootAfterRefresh()
+        })
+        window.setTimeout(() => {
+          if (document.getElementById('app')?.querySelector('[data-boot-splash="1"]')) {
+            sessionStorage.removeItem('jarvis.refreshing')
+            continueBootAfterRefresh()
+          }
+        }, 6000)
+        return
+      }
+      // Retry already used — boot old build rather than loop forever
+      clearPendingUpdate()
+      showFlash(`최신 v${pending.version} 수신 실패 · 현재 v${APP_VERSION}으로 실행`)
+    } else {
+      // Pending was older than this bundle — discard
+      clearPendingUpdate()
+    }
+  }
+
   const seen = localStorage.getItem(SEEN_APP_VERSION_KEY)
   const refreshing = sessionStorage.getItem('jarvis.refreshing') === '1'
-  if (seen && seen !== APP_VERSION) {
-    // Old build lingered — refresh caches, but never leave a blank white screen.
-    paintBootSplash('최신 버전으로 업데이트하는 중…')
-    void hardRefreshApp().catch(() => {
+  if (seen && seen !== APP_VERSION && compareAppVersions(seen, APP_VERSION) > 0) {
+    // Recorded a newer version but this process still has old JS — force production reload
+    paintBootSplash(`최신 v${seen}으로 업데이트하는 중…`)
+    void hardRefreshApp({ targetVersion: seen }).catch(() => {
       sessionStorage.removeItem('jarvis.refreshing')
-      localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
-      // Fall through to normal boot if navigation did not happen
       continueBootAfterRefresh()
     })
-    // Safety net: if replace never fires (iOS SW hang), continue boot after timeout
     window.setTimeout(() => {
       if (document.getElementById('app')?.querySelector('[data-boot-splash="1"]')) {
         sessionStorage.removeItem('jarvis.refreshing')
         localStorage.setItem(SEEN_APP_VERSION_KEY, APP_VERSION)
         continueBootAfterRefresh()
       }
-    }, 5000)
+    }, 6000)
     return
   }
   if (refreshing) {
@@ -6304,16 +6363,19 @@ function bootAppCore(): void {
   state.messages = loadChat()
   state.settings = loadSettings()
   void loadBuildMetaLite().then((meta) => {
-    // One soft reload when production buildId changes (version string may stay put).
+    // When production buildId changes, hard-navigate (reload alone often kept stale SW HTML).
     try {
       const buildId = meta.buildId
       if (buildId) {
         const seenBuild = localStorage.getItem(SEEN_BUILD_ID_KEY)
         if (seenBuild && seenBuild !== buildId && sessionStorage.getItem('jarvis.buildReloaded') !== '1') {
           sessionStorage.setItem('jarvis.buildReloaded', '1')
-          localStorage.setItem(SEEN_BUILD_ID_KEY, buildId)
+          writePendingUpdate(meta.version || APP_VERSION, buildId)
           paintBootSplash('최신 빌드를 불러오는 중…')
-          window.location.reload()
+          void hardRefreshApp({
+            targetVersion: meta.version || APP_VERSION,
+            targetBuildId: buildId,
+          })
           return
         }
         localStorage.setItem(SEEN_BUILD_ID_KEY, buildId)

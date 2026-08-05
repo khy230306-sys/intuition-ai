@@ -16,6 +16,20 @@ describe('boot / version refresh safety', () => {
     // Auto SW update must soft-apply; hard wipe caused intermittent blank screens.
     expect(src).toContain('updateSW(true)')
     expect(src).toContain('markAppBooted')
+    // Forced update must clear SW before version probe and land on fixed host
+    expect(src).toContain('waitForServiceWorkerGone')
+    expect(src).toContain('fetchRemoteBuildMeta')
+    expect(src).toContain('writePendingUpdate')
+    expect(src).toContain('buildUpdateUrl')
+  })
+
+  it('workbox does not precache build-meta (stale update checks)', async () => {
+    const fs = await import('node:fs')
+    const vite = fs.readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8')
+    expect(vite).toContain("globIgnores: ['**/build-meta.json'")
+    expect(vite).toContain("handler: 'NetworkOnly'")
+    expect(vite).toMatch(/build-meta\.json/)
+    expect(vite).not.toContain("ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^_ship$/, /^_v$/, /^_t$/, /^_check$/]")
   })
 
   it('index.html paints dark inline splash before modules load', async () => {

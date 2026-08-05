@@ -16,12 +16,20 @@ export function setCachedBuildMeta(meta: BuildMetaLite): void {
   cachedMeta = meta
 }
 
-export async function loadBuildMetaLite(): Promise<BuildMetaLite> {
-  if (cachedMeta) return cachedMeta
-  if (fetchPromise) return fetchPromise
+export async function loadBuildMetaLite(opts?: { force?: boolean }): Promise<BuildMetaLite> {
+  if (!opts?.force && cachedMeta) return cachedMeta
+  if (!opts?.force && fetchPromise) return fetchPromise
+  if (opts?.force) {
+    cachedMeta = null
+    fetchPromise = null
+  }
   fetchPromise = (async () => {
     try {
-      const res = await fetch(`./build-meta.json?_=${Date.now()}`, { cache: 'no-store' })
+      // _nocache is intentionally NOT ignored by the service worker match rules
+      const res = await fetch(`./build-meta.json?_=${Date.now()}&_nocache=1`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      })
       if (!res.ok) {
         cachedMeta = { channel: '' }
         return cachedMeta

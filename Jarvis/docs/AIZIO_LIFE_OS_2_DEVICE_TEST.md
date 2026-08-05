@@ -3,9 +3,8 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**Preview (v1.20.5):** https://charged-point-p549zwt.shipstatic.com  
-**Commit:** `48cb809`  
-**홈 화면:** 설치 버튼 제거 · 설치 방법 배너 · standalone 시 자동 숨김
+**Preview (v1.20.6):** ShipStatic deploy limit hit this run — code on branch `cursor/aizio-life-os-2-cards-6b16` @ `6c35f2b`  
+**홈/채팅 보완:** 로컬 로또 · 모델 failover · 중복 번역바 제거 · empty 카드 제안 강화
 **Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
 
 ## Status legend

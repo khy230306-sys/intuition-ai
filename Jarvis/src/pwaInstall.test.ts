@@ -1,14 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  clearPwaInstalledMark,
   copyAppUrl,
   detectInstallPlatform,
+  hasPwaInstalledMark,
   installGuideSteps,
   isIosNonSafari,
   isMobileInstallTarget,
   isRunningAsInstalledPwa,
+  markPwaInstalled,
   setDeferredInstallPromptForTests,
   shouldShowInstallButton,
 } from './pwaInstall'
+
+function memStore(): Storage {
+  const m = new Map<string, string>()
+  return {
+    get length() {
+      return m.size
+    },
+    clear: () => m.clear(),
+    getItem: (k: string) => (m.has(k) ? m.get(k)! : null),
+    setItem: (k: string, v: string) => {
+      m.set(k, String(v))
+    },
+    removeItem: (k: string) => {
+      m.delete(k)
+    },
+    key: (i: number) => [...m.keys()][i] ?? null,
+  }
+}
 
 function fakeWin(opts: {
   standaloneMq?: boolean
@@ -38,20 +59,34 @@ function fakeWin(opts: {
 }
 
 describe('pwaInstall', () => {
-  it('hides button when running as installed PWA', () => {
+  beforeEach(() => {
     setDeferredInstallPromptForTests(null)
+    clearPwaInstalledMark()
+  })
+
+  it('hides button when running as installed PWA', () => {
+    const store = memStore()
     expect(isRunningAsInstalledPwa(fakeWin({ standaloneMq: true }))).toBe(true)
-    expect(shouldShowInstallButton(fakeWin({ standaloneMq: true, ua: 'iPhone' }))).toBe(false)
+    expect(shouldShowInstallButton(fakeWin({ standaloneMq: true, ua: 'iPhone' }), store)).toBe(false)
+    expect(hasPwaInstalledMark(store)).toBe(true)
     expect(isRunningAsInstalledPwa(fakeWin({ iosStandalone: true, ua: 'iPhone' }))).toBe(true)
   })
 
+  it('hides button after installed mark even in Safari tab', () => {
+    const store = memStore()
+    markPwaInstalled(store)
+    expect(
+      shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }), store),
+    ).toBe(false)
+  })
+
   it('shows button on mobile browser when not installed', () => {
-    setDeferredInstallPromptForTests(null)
-    expect(shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }))).toBe(
-      true,
-    )
-    expect(shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (Linux; Android 14)' }))).toBe(true)
-    expect(shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (Windows NT 10.0)' }))).toBe(false)
+    const store = memStore()
+    expect(
+      shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }), store),
+    ).toBe(true)
+    expect(shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (Linux; Android 14)' }), store)).toBe(true)
+    expect(shouldShowInstallButton(fakeWin({ ua: 'Mozilla/5.0 (Windows NT 10.0)' }), store)).toBe(false)
   })
 
   it('detects platforms and guide copy', () => {

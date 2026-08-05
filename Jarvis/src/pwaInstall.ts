@@ -10,8 +10,47 @@ export type BeforeInstallPromptEventLike = Event & {
 
 export type InstallPlatform = 'ios' | 'android' | 'desktop' | 'ios-chrome'
 
+/** Shared Safari ↔ home-screen PWA storage — once seen as installed, hide CTA everywhere. */
+export const PWA_INSTALLED_STORAGE_KEY = 'aizio.pwa.installed.v1'
+
 let deferredPrompt: BeforeInstallPromptEventLike | null = null
 let changeListeners: Array<() => void> = []
+
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+
+function storage(): StorageLike | null {
+  try {
+    if (typeof localStorage === 'undefined') return null
+    return localStorage
+  } catch {
+    return null
+  }
+}
+
+/** Persist that this origin has been installed / launched as a home-screen app. */
+export function markPwaInstalled(store: StorageLike | null = storage()): void {
+  try {
+    store?.setItem(PWA_INSTALLED_STORAGE_KEY, '1')
+  } catch {
+    /* private mode */
+  }
+}
+
+export function clearPwaInstalledMark(store: StorageLike | null = storage()): void {
+  try {
+    store?.removeItem(PWA_INSTALLED_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hasPwaInstalledMark(store: StorageLike | null = storage()): boolean {
+  try {
+    return store?.getItem(PWA_INSTALLED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function notifyChange(): void {
   for (const fn of changeListeners) {
@@ -81,12 +120,17 @@ export function hasNativeInstallPrompt(): boolean {
 
 /**
  * Show the install button only when the user is in a browser tab
- * (not already launched from the home-screen icon).
+ * (not already launched from the home-screen icon, and not previously marked installed).
  */
 export function shouldShowInstallButton(
   win: Pick<Window, 'matchMedia'> & { navigator: Navigator; document?: Document } = window,
+  store: StorageLike | null = storage(),
 ): boolean {
-  if (isRunningAsInstalledPwa(win)) return false
+  if (isRunningAsInstalledPwa(win)) {
+    markPwaInstalled(store)
+    return false
+  }
+  if (hasPwaInstalledMark(store)) return false
   const ua = win.navigator.userAgent
   return isMobileInstallTarget(ua) || deferredPrompt != null
 }
@@ -109,6 +153,8 @@ export function onPwaInstallChange(fn: () => void): () => void {
 /** Call once at boot (browser only). */
 export function bindPwaInstallEvents(): void {
   if (typeof window === 'undefined') return
+  // Home-screen launch shares localStorage with Safari — remember and hide banner later.
+  if (isRunningAsInstalledPwa()) markPwaInstalled()
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     deferredPrompt = e as BeforeInstallPromptEventLike
@@ -116,11 +162,15 @@ export function bindPwaInstallEvents(): void {
   })
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null
+    markPwaInstalled()
     notifyChange()
   })
   try {
     const mq = window.matchMedia('(display-mode: standalone)')
-    const onMode = () => notifyChange()
+    const onMode = () => {
+      if (mq.matches) markPwaInstalled()
+      notifyChange()
+    }
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMode)
     else if (typeof mq.addListener === 'function') mq.addListener(onMode)
   } catch {
@@ -138,6 +188,10 @@ export type InstallAttemptResult =
 /** Try native install sheet; otherwise caller should show the step-by-step guide. */
 export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
   if (typeof window !== 'undefined' && isRunningAsInstalledPwa()) {
+    markPwaInstalled()
+    return { kind: 'already-installed' }
+  }
+  if (hasPwaInstalledMark()) {
     return { kind: 'already-installed' }
   }
   // Wait briefly for SW / beforeinstallprompt on Chromium Android after first visit
@@ -157,6 +211,7 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
       await promptEvent.prompt()
       const choice = await promptEvent.userChoice
       deferredPrompt = null
+      if (choice.outcome === 'accepted') markPwaInstalled()
       notifyChange()
       return choice.outcome === 'accepted' ? { kind: 'accepted' } : { kind: 'dismissed' }
     } catch {

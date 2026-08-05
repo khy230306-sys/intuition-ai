@@ -183,7 +183,7 @@ describe('HOME v2 render', () => {
     expect(top).toContain('메뉴')
     const nav = renderHomeV2NavWithPane('chat', 'home', false)
     expect(nav.trim()).toBe('')
-    const more = renderHomeV2MoreSheet()
+    const more = renderHomeV2MoreSheet({ showInstall: true })
     expect(more).toContain('aria-label="메뉴"')
     expect(more).toContain('바로가기')
     expect(more).toContain('data-action="home-v2-nav-home"')
@@ -199,6 +199,7 @@ describe('HOME v2 render', () => {
     expect(more).toContain('data-view="invest"')
     expect(more).toContain('디자인 전환')
     expect(more).toContain('브리핑')
+    expect(renderHomeV2MoreSheet({ showInstall: false })).not.toContain('data-action="install-home"')
   })
 
   it('unified shell includes thread slot', () => {

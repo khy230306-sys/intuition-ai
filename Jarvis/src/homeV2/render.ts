@@ -6,6 +6,7 @@
 import type { HomeV2Model } from './model'
 import type { HomeVariant } from './prefs'
 import { getHomeSpaceInbox } from '../spaceInbox'
+import { shouldShowInstallButton } from '../pwaInstall'
 
 /** @deprecated pane split removed — kept for type compat */
 export type HomeV2Pane = 'home' | 'thread'
@@ -193,10 +194,11 @@ function moreItem(label: string, attrs: string): string {
   return `<li><button type="button" ${attrs}>${esc(label)}</button></li>`
 }
 
-export function renderHomeV2MoreSheet(): string {
+export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string {
   const inbox = getHomeSpaceInbox()
   const famBadge = inbox.family.unread > 0 ? ` (${inbox.family.unread > 99 ? '99+' : inbox.family.unread})` : ''
   const frBadge = inbox.friends.unread > 0 ? ` (${inbox.friends.unread > 99 ? '99+' : inbox.friends.unread})` : ''
+  const showInstall = opts?.showInstall ?? shouldShowInstallButton()
   return `
     <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="메뉴">
       <div class="home-v2-more-sheet">
@@ -217,7 +219,7 @@ export function renderHomeV2MoreSheet(): string {
         <div class="home-v2-more-group">
           <h4>주요 기능</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('홈 화면에 설치', 'data-action="install-home"')}
+            ${showInstall ? moreItem('홈 화면에 설치', 'data-action="install-home"') : ''}
             ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('손님관리', 'data-view="customers"')}
             ${moreItem('번역', 'data-view="global"')}

@@ -145,6 +145,22 @@ body {
   min-width: 0;
 }
 
+.install-banner-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.install-banner-actions .ghost-btn.tiny,
+.install-already-btn {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .install-banner strong {
   color: var(--blue);
 }

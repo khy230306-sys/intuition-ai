@@ -39,6 +39,7 @@ import {
   hasNativeInstallPrompt,
   detectInstallPlatform,
   installGuideSteps,
+  markPwaInstalled,
   onPwaInstallChange,
   shouldShowInstallButton,
   type InstallPlatform,
@@ -278,7 +279,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.16.2'
+const APP_VERSION = '1.16.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -682,17 +683,15 @@ function renderHomeInstallButton(opts?: { compact?: boolean }): string {
 async function handleInstallHomeClick(): Promise<void> {
   state.homeV2MoreOpen = false
   const result = await attemptPwaInstall()
-  if (result.kind === 'accepted') {
+  if (result.kind === 'accepted' || result.kind === 'already-installed') {
+    markPwaInstalled()
     state.showInstall = false
     state.installGuideOpen = false
-    showFlash('홈 화면에 설치했습니다. 아이콘으로 열어 주세요.')
-    render()
-    return
-  }
-  if (result.kind === 'already-installed') {
-    state.showInstall = false
-    state.installGuideOpen = false
-    showFlash('이미 홈 화면 앱으로 실행 중입니다.')
+    showFlash(
+      result.kind === 'accepted'
+        ? '홈 화면에 설치했습니다. 아이콘으로 열어 주세요.'
+        : '이미 홈 화면에 설치되어 안내를 숨깁니다.',
+    )
     render()
     return
   }
@@ -2182,7 +2181,10 @@ function renderInstall(): string {
         <strong>홈 화면에 설치</strong>
         <span>${tip}</span>
       </div>
-      ${renderHomeInstallButton()}
+      <div class="install-banner-actions">
+        ${renderHomeInstallButton()}
+        <button type="button" class="ghost-btn tiny install-already-btn" data-action="install-already-done">이미 설치함</button>
+      </div>
     </div>
   `
 }
@@ -2204,6 +2206,7 @@ function renderInstallGuideModal(): string {
         <div class="row-btns install-guide-actions">
           ${native ? `<button type="button" class="primary-btn" data-action="install-home">설치 창 열기</button>` : ''}
           <button type="button" class="ghost-btn" data-action="install-copy-url">주소 복사</button>
+          <button type="button" class="ghost-btn" data-action="install-already-done">이미 설치함</button>
           <button type="button" class="primary-btn" data-action="close-install-guide">확인</button>
         </div>
       </div>
@@ -2242,6 +2245,17 @@ function bindInstallUi(): void {
       void copyAppUrl().then((ok) => {
         showFlash(ok ? '주소를 복사했습니다. Safari 주소창에 붙여넣으세요.' : '복사에 실패했습니다. 주소창의 링크를 길게 누르세요.')
       })
+    })
+  })
+  document.querySelectorAll('[data-action="install-already-done"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      markPwaInstalled()
+      state.showInstall = false
+      state.installGuideOpen = false
+      showFlash('홈 화면 설치 안내를 숨겼습니다.')
+      render()
     })
   })
 }
@@ -4181,7 +4195,7 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
-  const more = state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const more = state.homeV2MoreOpen ? renderHomeV2MoreSheet({ showInstall: state.showInstall }) : ''
   const navSheet =
     state.homeV2NavSheetOpen
       ? renderNavigationSheet({

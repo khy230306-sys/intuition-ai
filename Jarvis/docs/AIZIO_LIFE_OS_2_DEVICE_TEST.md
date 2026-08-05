@@ -3,9 +3,9 @@
 **App version target:** 1.20.2+  
 **Channel:** Preview snapshot preferred (not production).
 
-**Preview (v1.20.3):** https://melded-tide-8l99bvg.shipstatic.com  
-**Commit:** `d0fedb7`  
-**홈 화면 추가:** Preview가 아니라 https://jarvis-app.shipstatic.com (Safari 공유)
+**Preview (v1.20.4):** https://baseless-bolt-c37sgrn.shipstatic.com  
+**Commit:** `e6e0c3f`  
+**홈 화면 추가:** 버튼 → iOS 공유 창 자동 / Android 설치 창 · 정식 https://jarvis-app.shipstatic.com
 **Production URL (do not overwrite in this task):** https://jarvis-app.shipstatic.com
 
 ## Status legend

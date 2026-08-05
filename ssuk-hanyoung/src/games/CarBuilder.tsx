@@ -86,13 +86,14 @@ export function CarBuilder() {
         </div>
         <h3 className="section-title">2. 색깔 고르기</h3>
         <div className="grid-3">
-          {PLAY_COLORS.slice(0, 6).map((c) => (
+          {PLAY_COLORS.map((c) => (
             <button
               key={c.id}
               type="button"
               className="color-swatch"
               style={{
                 background: c.hex,
+                color: c.id === 'yellow' ? '#1a1510' : '#fff',
                 outline: color?.id === c.id ? '3px solid var(--sunny)' : undefined,
               }}
               onClick={() => {

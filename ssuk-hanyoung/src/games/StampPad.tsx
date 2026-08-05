@@ -54,7 +54,7 @@ export function StampPad() {
         ))}
       </div>
       <div className="grid-3" style={{ margin: '0.6rem 0' }}>
-        {PLAY_COLORS.slice(0, 6).map((c) => (
+        {PLAY_COLORS.map((c) => (
           <button
             key={c.id}
             type="button"

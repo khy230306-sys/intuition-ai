@@ -2,8 +2,8 @@
 
 **상태:** 실기기 검증 대기 (코드/서버 준비 후 사용자가 확인)
 
-**Preview URL:** https://keen-drifter-97nqfnk.shipstatic.com  
-(자세한 메타: `docs/AIZIO_PREVIEW_DEPLOY.md`)  
+**검증 URL:** https://jarvis-app.shipstatic.com (고정)  
+Preview가 필요하면 `docs/AIZIO_PREVIEW_DEPLOY.md` 의 REVIEW_URL 만 사용 (만료 스냅샷 금지).  
 **합격 조건:** 홈 화면에 추가된 PWA + 알림 허용 + 푸시 서버 연결 + **앱 완전 종료** 후 수신
 
 Safari 탭만으로는 합격 처리하지 않습니다.

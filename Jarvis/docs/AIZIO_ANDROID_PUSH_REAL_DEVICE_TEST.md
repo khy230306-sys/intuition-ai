@@ -1,11 +1,12 @@
 # Android Push Real Device Test (AIZIO)
 
 **상태:** 실기기 검증 대기  
-**Preview URL:** https://keen-drifter-97nqfnk.shipstatic.com
+**검증 URL:** https://jarvis-app.shipstatic.com (고정)  
+Preview: `docs/AIZIO_PREVIEW_DEPLOY.md` REVIEW_URL 만 (만료 스냅샷 금지)
 
 ## 순서
 
-1. Chrome에서 REVIEW_URL 열기  
+1. Chrome에서 검증 URL 열기  
 2. 메뉴 → **앱 설치** / 설치 배너  
 3. 런처에서 AIZIO 실행  
 4. 설정 → 푸시 실기기 테스트  

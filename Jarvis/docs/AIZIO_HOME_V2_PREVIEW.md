@@ -7,11 +7,14 @@
 
 ## Preview URLs
 
+옛 `airy-dome-…` 스냅샷은 만료되어 404입니다. 아래 주소를 사용하세요.
+
 | | URL |
 |--|--|
-| Preview (default = legacy home) | https://airy-dome-rpkmd84.shipstatic.com |
-| Legacy direct | https://airy-dome-rpkmd84.shipstatic.com/?home=legacy |
-| HOME v2 direct | https://airy-dome-rpkmd84.shipstatic.com/?home=v2 |
+| 고정 프로덕션 | https://jarvis-app.shipstatic.com |
+| Preview (현재) | https://electric-bead-noe597o.shipstatic.com |
+| Legacy direct | https://electric-bead-noe597o.shipstatic.com/?home=legacy |
+| HOME v2 direct | https://electric-bead-noe597o.shipstatic.com/?home=v2 |
 
 ## What this is
 

@@ -36,16 +36,18 @@ If HOME v2 render throws:
 3. Or 전체 → 디자인 전환 · 기존 홈  
 4. Or reset home prefs then set boot default  
 
-## Preview (this run)
+## Preview (current)
 
 | URL | Purpose |
 |-----|---------|
-| https://infused-whirl-dpn0rm4.shipstatic.com | Default HOME v2 |
-| https://infused-whirl-dpn0rm4.shipstatic.com/?home=v2 | HOME v2 direct |
-| https://infused-whirl-dpn0rm4.shipstatic.com/?home=legacy | Legacy recovery |
-| https://infused-whirl-dpn0rm4.shipstatic.com/?nav=1 | Open 길안내 sheet |
+| https://electric-bead-noe597o.shipstatic.com | Default HOME v2 (Preview v1.20.9) |
+| https://electric-bead-noe597o.shipstatic.com/?home=v2 | HOME v2 direct |
+| https://electric-bead-noe597o.shipstatic.com/?home=legacy | Legacy recovery |
+| https://electric-bead-noe597o.shipstatic.com/#navigation | 길안내 (hash — do not use `/navigation`) |
+
+`infused-whirl-…` 등 옛 Preview는 삭제되어 ShipStatic 404를 냅니다. 쓰지 마세요.
 
 ## Production
 
-Code defaults to v2, but this agent run does **not** execute `deploy:web`.  
-Production `https://jarvis-app.shipstatic.com` remains `adaptive-echo-t118nxm` until the user explicitly promotes a Preview.
+**고정 주소:** https://jarvis-app.shipstatic.com  
+길안내는 앱 메뉴에서 열거나 `/#navigation` 을 사용합니다.

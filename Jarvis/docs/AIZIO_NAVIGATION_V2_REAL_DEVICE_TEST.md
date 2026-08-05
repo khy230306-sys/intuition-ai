@@ -13,7 +13,8 @@
 - [ ] `두 번째` / `자동차로` context
 - [ ] 「다른 지도에서 열기」 only on explicit secondary action
 - [ ] Android back / iPhone safe area
-- [ ] `?nav=1` deep link
+- [ ] `/#navigation` deep link (never pathname `/navigation` — ShipStatic 404)
+- [ ] `?nav=1` migrates to `/#navigation`
 
 ## Moving vehicle / walking checks (required before “complete”)
 

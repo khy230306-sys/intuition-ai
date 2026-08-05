@@ -3,12 +3,16 @@ import {
   clearPwaInstalledMark,
   copyAppUrl,
   detectInstallPlatform,
+  getRecommendedInstallUrl,
   hasPwaInstalledMark,
+  installCtaLabel,
   installGuideSteps,
   isIosNonSafari,
   isMobileInstallTarget,
+  isPreviewInstallHost,
   isRunningAsInstalledPwa,
   markPwaInstalled,
+  PRODUCTION_INSTALL_URL,
   setDeferredInstallPromptForTests,
   shouldShowInstallButton,
 } from './pwaInstall'
@@ -98,8 +102,19 @@ describe('pwaInstall', () => {
     expect(detectInstallPlatform('Android 14')).toBe('android')
     expect(isMobileInstallTarget('iPad')).toBe(true)
     expect(installGuideSteps('ios').steps.length).toBeGreaterThan(2)
+    expect(installGuideSteps('ios').steps.join(' ')).toMatch(/Safari 공유/)
+    expect(installGuideSteps('ios', { previewHost: true }).steps.join(' ')).toMatch(/Preview/)
     expect(installGuideSteps('ios-chrome').title).toMatch(/Safari/)
     expect(installGuideSteps('android').title).toMatch(/안드로이드/)
+    expect(installCtaLabel('ios')).toMatch(/설치 방법/)
+    expect(isPreviewInstallHost('pulsing-bloom-qk5a536.shipstatic.com')).toBe(true)
+    expect(isPreviewInstallHost('jarvis-app.shipstatic.com')).toBe(false)
+    expect(getRecommendedInstallUrl('pulsing-bloom-qk5a536.shipstatic.com', 'https://pulsing-bloom-qk5a536.shipstatic.com')).toBe(
+      PRODUCTION_INSTALL_URL,
+    )
+    expect(getRecommendedInstallUrl('jarvis-app.shipstatic.com', 'https://jarvis-app.shipstatic.com')).toBe(
+      'https://jarvis-app.shipstatic.com',
+    )
   })
 
   it('copyAppUrl returns boolean without throwing', async () => {

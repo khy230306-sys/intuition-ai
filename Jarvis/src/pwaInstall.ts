@@ -13,6 +13,32 @@ export type InstallPlatform = 'ios' | 'android' | 'desktop' | 'ios-chrome'
 /** Shared Safari ↔ home-screen PWA storage — once seen as installed, hide CTA everywhere. */
 export const PWA_INSTALLED_STORAGE_KEY = 'aizio.pwa.installed.v1'
 
+/** Stable production host — prefer this for home-screen icons (preview hosts rotate). */
+export const PRODUCTION_INSTALL_URL = 'https://jarvis-app.shipstatic.com'
+
+export function isPreviewInstallHost(hostname = typeof location !== 'undefined' ? location.hostname : ''): boolean {
+  const host = String(hostname || '').toLowerCase()
+  if (!host) return false
+  if (host === 'localhost' || host === '127.0.0.1') return true
+  return host.endsWith('.shipstatic.com') && host !== 'jarvis-app.shipstatic.com'
+}
+
+/** URL to save on the home screen — production when browsing a preview snapshot. */
+export function getRecommendedInstallUrl(
+  hostname = typeof location !== 'undefined' ? location.hostname : '',
+  origin = typeof location !== 'undefined' ? location.origin : '',
+): string {
+  if (isPreviewInstallHost(hostname)) return PRODUCTION_INSTALL_URL
+  if (origin) return origin.replace(/\/$/, '')
+  return PRODUCTION_INSTALL_URL
+}
+
+export function installCtaLabel(platform: InstallPlatform = detectInstallPlatform()): string {
+  if (platform === 'ios' || platform === 'ios-chrome') return '설치 방법 보기'
+  if (platform === 'android' && !hasNativeInstallPrompt()) return '설치 방법 보기'
+  return '홈 화면에 설치'
+}
+
 let deferredPrompt: BeforeInstallPromptEventLike | null = null
 let changeListeners: Array<() => void> = []
 
@@ -223,27 +249,35 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
   return { kind: 'need-guide', platform: detectInstallPlatform() }
 }
 
-export function installGuideSteps(platform: InstallPlatform): { title: string; steps: string[] } {
+export function installGuideSteps(platform: InstallPlatform, opts?: { previewHost?: boolean }): { title: string; steps: string[] } {
+  const previewNote = opts?.previewHost
+    ? '지금 보시는 주소는 Preview입니다. 홈 화면에는 정식 주소(jarvis-app.shipstatic.com)를 추가하세요.'
+    : ''
   if (platform === 'ios-chrome') {
     return {
       title: '홈 화면에 추가 (Safari 필요)',
       steps: [
-        '아이폰에서는 Safari로만 홈 화면 아이콘을 만들 수 있습니다.',
-        '아래 「주소 복사」를 누른 뒤 Safari를 엽니다.',
-        '주소창에 붙여넣어 AIZIO를 엽니다.',
-        '하단 공유 버튼 → 「홈 화면에 추가」→ 추가.',
-      ],
+        '아이폰에서는 Chrome/인앱 브라우저로는 설치가 안 됩니다. Safari가 필요합니다.',
+        previewNote || '아래 「정식 주소 복사」를 누릅니다.',
+        'Safari를 연 뒤 주소창에 붙여넣어 AIZIO를 엽니다.',
+        'Safari 하단 공유(□↑) → 목록을 아래로 스크롤 → 「홈 화면에 추가」.',
+        '없으면 「편집」/「동작 편집」에서 「홈 화면에 추가」를 켠 뒤 다시 시도하세요.',
+        '오른쪽 위 「추가」→ 홈 화면 AIZIO 아이콘으로 실행 (주소창이 없어야 정상).',
+      ].filter(Boolean),
     }
   }
   if (platform === 'ios') {
     return {
-      title: '아이폰 · 홈 화면에 추가',
+      title: '아이폰 · Safari로 홈 화면에 추가',
       steps: [
-        'Safari 하단(또는 상단)의 공유 버튼을 누릅니다.',
-        '메뉴를 아래로 스크롤해 「홈 화면에 추가」를 선택합니다.',
-        '오른쪽 위 「추가」를 누르면 홈 화면에 AIZIO 아이콘이 생깁니다.',
-        '홈 화면 아이콘으로 실행하면 이 안내 버튼은 사라집니다.',
-      ],
+        '앱 안의 「설치」버튼은 아이폰에서 바로 설치하지 않습니다. Safari 공유가 필요합니다.',
+        previewNote || '가능하면 정식 주소(jarvis-app.shipstatic.com)에서 추가하세요.',
+        'Safari 하단(또는 상단) 공유 버튼(□↑)을 누릅니다.',
+        '시트를 아래로 스크롤해 「홈 화면에 추가」를 고릅니다. (위쪽에 「즐겨찾기」만 보이면 더 아래로)',
+        '목록에 없으면 「편집」또는 「동작 편집」→ 「홈 화면에 추가」켜기 → 완료 후 다시 공유.',
+        '오른쪽 위 「추가」를 누릅니다. 개인정보 보호 브라우징이면 일반 탭으로 바꿔 다시 시도하세요.',
+        '홈 화면 AIZIO 아이콘으로 실행하면 주소창이 사라지고 이 안내는 숨겨집니다.',
+      ].filter(Boolean),
     }
   }
   if (platform === 'android') {
@@ -267,16 +301,15 @@ export function installGuideSteps(platform: InstallPlatform): { title: string; s
   }
 }
 
-export async function copyAppUrl(): Promise<boolean> {
+async function writeClipboardText(text: string): Promise<boolean> {
   try {
-    const url = typeof location !== 'undefined' ? `${location.origin}${location.pathname}` : ''
-    if (!url) return false
+    if (!text) return false
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(text)
       return true
     }
     const ta = document.createElement('textarea')
-    ta.value = url
+    ta.value = text
     ta.setAttribute('readonly', '')
     ta.style.position = 'fixed'
     ta.style.left = '-9999px'
@@ -288,4 +321,17 @@ export async function copyAppUrl(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** Copy current page URL (legacy). Prefer copyRecommendedInstallUrl for A2HS. */
+export async function copyAppUrl(): Promise<boolean> {
+  const url =
+    typeof location !== 'undefined' ? `${location.origin}${location.pathname || '/'}`.replace(/\/$/, '/') : ''
+  return writeClipboardText(url || PRODUCTION_INSTALL_URL)
+}
+
+/** Copy the URL that should be saved on the home screen. */
+export async function copyRecommendedInstallUrl(): Promise<{ ok: boolean; url: string }> {
+  const url = getRecommendedInstallUrl()
+  return { ok: await writeClipboardText(url), url }
 }

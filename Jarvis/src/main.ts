@@ -52,11 +52,16 @@ import {
   attemptPwaInstall,
   bindPwaInstallEvents,
   copyAppUrl,
+  copyRecommendedInstallUrl,
+  getRecommendedInstallUrl,
   hasNativeInstallPrompt,
   detectInstallPlatform,
+  installCtaLabel,
   installGuideSteps,
+  isPreviewInstallHost,
   markPwaInstalled,
   onPwaInstallChange,
+  PRODUCTION_INSTALL_URL,
   shouldShowInstallButton,
   type InstallPlatform,
 } from './pwaInstall'
@@ -301,7 +306,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.2'
+const APP_VERSION = '1.20.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -714,10 +719,18 @@ function refreshInstallHint(): void {
 function renderHomeInstallButton(opts?: { compact?: boolean }): string {
   if (!state.showInstall) return ''
   const compact = opts?.compact
+  const platform = detectInstallPlatform()
+  const label = installCtaLabel(platform)
+  const short =
+    platform === 'ios' || platform === 'ios-chrome'
+      ? '설치 방법'
+      : compact
+        ? '홈 화면 설치'
+        : label
   return `
-    <button type="button" class="install-home-btn ${compact ? 'compact' : ''}" data-action="install-home" aria-label="홈 화면에 설치">
+    <button type="button" class="install-home-btn ${compact ? 'compact' : ''}" data-action="install-home" aria-label="${escapeAttr(label)}">
       <span class="install-home-ico" aria-hidden="true">↓</span>
-      <span class="install-home-label">${compact ? '홈 화면 설치' : '홈 화면에 설치'}</span>
+      <span class="install-home-label">${compact ? short : label}</span>
     </button>
   `
 }
@@ -745,6 +758,14 @@ async function handleInstallHomeClick(): Promise<void> {
   }
   // Native sheet unavailable — show platform steps (iPhone / Android)
   state.installGuideOpen = result.kind === 'need-guide' ? result.platform : detectInstallPlatform()
+  const platform = state.installGuideOpen
+  if (platform === 'ios' || platform === 'ios-chrome') {
+    showFlash(
+      isPreviewInstallHost()
+        ? '아이폰은 Safari 공유로만 추가됩니다. Preview가 아니라 정식 주소를 쓰세요.'
+        : '아이폰은 앱 버튼으로 설치되지 않습니다. Safari 공유 → 홈 화면에 추가',
+    )
+  }
   render()
 }
 
@@ -2389,11 +2410,14 @@ function renderBrand(): string {
 function renderInstall(): string {
   if (!state.showInstall) return ''
   const platform = detectInstallPlatform()
+  const preview = isPreviewInstallHost()
   const tip =
     platform === 'ios'
-      ? '아이폰 Safari: 공유 → 홈 화면에 추가'
+      ? preview
+        ? '이 주소는 Preview · 홈 화면은 정식 주소 + Safari 공유로 추가'
+        : '버튼은 안내만 합니다 · Safari 공유 → 홈 화면에 추가'
       : platform === 'ios-chrome'
-        ? 'Safari로 열어 홈 화면에 추가하세요'
+        ? 'Chrome에서는 불가 · Safari로 연 뒤 공유 → 홈 화면에 추가'
         : platform === 'android'
           ? hasNativeInstallPrompt()
             ? '버튼을 누르면 설치 창이 열립니다'
@@ -2415,9 +2439,14 @@ function renderInstall(): string {
 
 function renderInstallGuideModal(): string {
   if (!state.installGuideOpen) return ''
-  const guide = installGuideSteps(state.installGuideOpen)
+  const preview = isPreviewInstallHost()
+  const guide = installGuideSteps(state.installGuideOpen, { previewHost: preview })
   const steps = guide.steps.map((s, i) => `<li><span class="step-n">${i + 1}</span>${escapeHtml(s)}</li>`).join('')
   const native = hasNativeInstallPrompt()
+  const recUrl = getRecommendedInstallUrl()
+  const previewWarn = preview
+    ? `<p class="hint install-preview-warn">⚠ Preview 주소(${escapeHtml(location.hostname)})는 테스트용입니다. 홈 화면에는 <strong>${escapeHtml(PRODUCTION_INSTALL_URL)}</strong> 를 추가하세요.</p>`
+    : ''
   return `
     <div class="share-modal install-guide-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(guide.title)}" data-action="close-install-guide-backdrop">
       <div class="share-sheet" data-install-guide-sheet="1">
@@ -2425,13 +2454,17 @@ function renderInstallGuideModal(): string {
           <strong>${escapeHtml(guide.title)}</strong>
           <button type="button" class="ghost-btn tiny" data-action="close-install-guide">닫기</button>
         </div>
+        ${previewWarn}
         <ol class="install-guide-steps">${steps}</ol>
-        <p class="hint">이미 홈 화면 아이콘으로 실행 중이면 설치 버튼은 자동으로 숨겨집니다.</p>
+        <p class="hint">추가할 주소: <code>${escapeHtml(recUrl)}</code></p>
+        <p class="hint">홈 화면 아이콘으로 실행하면(주소창 없음) 이 안내는 자동으로 숨겨집니다.</p>
         <div class="row-btns install-guide-actions">
           ${native ? `<button type="button" class="primary-btn" data-action="install-home">설치 창 열기</button>` : ''}
-          <button type="button" class="ghost-btn" data-action="install-copy-url">주소 복사</button>
+          <button type="button" class="primary-btn" data-action="install-copy-prod-url">정식 주소 복사</button>
+          ${preview ? `<button type="button" class="ghost-btn" data-action="install-open-prod">정식 주소 열기</button>` : ''}
+          <button type="button" class="ghost-btn" data-action="install-copy-url">지금 주소 복사</button>
           <button type="button" class="ghost-btn" data-action="install-already-done">이미 설치함</button>
-          <button type="button" class="primary-btn" data-action="close-install-guide">확인</button>
+          <button type="button" class="ghost-btn" data-action="close-install-guide">확인</button>
         </div>
       </div>
     </div>
@@ -2467,8 +2500,28 @@ function bindInstallUi(): void {
       e.preventDefault()
       e.stopPropagation()
       void copyAppUrl().then((ok) => {
-        showFlash(ok ? '주소를 복사했습니다. Safari 주소창에 붙여넣으세요.' : '복사에 실패했습니다. 주소창의 링크를 길게 누르세요.')
+        showFlash(ok ? '지금 주소를 복사했습니다.' : '복사에 실패했습니다. 주소창의 링크를 길게 누르세요.')
       })
+    })
+  })
+  document.querySelectorAll('[data-action="install-copy-prod-url"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void copyRecommendedInstallUrl().then(({ ok, url }) => {
+        showFlash(
+          ok
+            ? `복사됨: ${url} — Safari에 붙여넣고 공유 → 홈 화면에 추가`
+            : '복사 실패. Safari에서 jarvis-app.shipstatic.com 을 직접 여세요.',
+        )
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="install-open-prod"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      window.location.href = PRODUCTION_INSTALL_URL
     })
   })
   document.querySelectorAll('[data-action="install-already-done"]').forEach((btn) => {

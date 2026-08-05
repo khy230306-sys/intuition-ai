@@ -13,6 +13,7 @@ import {
   wantsStockRecommend,
 } from './screen'
 import { wantsStockAnalysis } from './analyze'
+import { attractivenessFromScore, deriveTradeLevels } from './levels'
 import type { QuoteSnapshot } from '../types'
 
 const store = new Map<string, string>()
@@ -147,6 +148,24 @@ describe('stockEngine factors + score', () => {
     const weak = enriched.find((p) => p.factors.ret5dPct === -5)!
     expect(strong.rsPctile).toBeGreaterThan(weak.rsPctile!)
     expect(strong.score).toBeGreaterThanOrEqual(weak.score)
+  })
+})
+
+describe('stockEngine trade levels', () => {
+  it('derives attractiveness, target, stop, sell from quote', () => {
+    expect(attractivenessFromScore(78)).toBe(78)
+    const lv = deriveTradeLevels(100_000, 78, 'balanced', {
+      fiftyTwoHigh: 120_000,
+      fiftyTwoLow: 80_000,
+      dayVolAbs: 1.2,
+      currency: 'KRW',
+    })
+    expect(lv).not.toBeNull()
+    expect(lv!.attractivenessPct).toBe(78)
+    expect(lv!.targetPrice).toBeGreaterThan(100_000)
+    expect(lv!.stopPrice).toBeLessThan(100_000)
+    expect(lv!.sellPrice).toBeGreaterThan(100_000)
+    expect(lv!.sellPrice).toBeLessThanOrEqual(lv!.targetPrice)
   })
 })
 

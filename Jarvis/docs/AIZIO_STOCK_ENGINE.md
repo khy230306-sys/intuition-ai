@@ -27,6 +27,14 @@ Not a broker auto-trader — adopts **screening methodologies** used by many AI/
 
 Actions: `엔진추천` (≥68) · `관심` · `관망` · `회피`
 
+### Recommendation card (output)
+
+Each pick shows:
+
+- 투자 매력도 % (engine score)  
+- 목표가 / 손절가 / 매도가(1차 익절) — derived from spot, score, risk, 52w band  
+
+
 ## Data
 
 - Live: Yahoo Finance chart API (browser; CORS may fall back to proxy/snapshot)  

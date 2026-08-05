@@ -199,7 +199,7 @@ async function handleInvest(text: string): Promise<BrainReply | null> {
       text: [
         `【AIZIO 주식엔진 v${STOCK_ENGINE_VERSION}】`,
         '· AI퀀트 스크리닝: 모멘텀·평균회귀·상대강도·52주·거래량·섹터',
-        '· 엔진 추천 TOP / 종목분석 판정 / 포트폴리오',
+        '· 추천: 매력도% · 목표가 · 손절가 · 매도가 / 종목분석 / 포트폴리오',
         '· 한·미 광역 유동 유니버스 + 오프라인 스냅샷',
         '',
         '예: 「주식 종목 추천」 「반도체 종목 추천」 「삼성전자 종목분석」 「포트폴리오」',

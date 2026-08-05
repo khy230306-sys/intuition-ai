@@ -2,6 +2,7 @@ import { fetchQuote, formatMoney, sanitizeChangePct } from '../finance'
 import { loadHoldings, loadProfile, loadWatchlist } from '../storage'
 import type { QuoteSnapshot } from '../types'
 import { factorsFromQuote, type StockFactors } from './factors'
+import { deriveTradeLevels, formatPctSigned } from './levels'
 import {
   detectMarket,
   detectSectorFilter,
@@ -335,6 +336,7 @@ function structuralFallback(
   ]
   sorted.forEach((c, i) => {
     lines.push(`${i + 1}. ${c.name} (${c.symbol}) · ${c.sector}${c.kind === 'etf' ? ' · ETF' : ''}`)
+    lines.push('   투자 매력도·목표가·손절가: 시세 연결 후 표시')
   })
   lines.push('')
   lines.push('팁: 잠시 후 「종목 추천」 또는 「삼성전자 시세」를 다시 시도하세요.')
@@ -408,67 +410,94 @@ export async function buildColdRecommendations(text: string): Promise<string> {
       : `시세 ${scored.length}/${universe.length}종 · 5일모멘텀 ${with5d}종`
 
   const lines: string[] = [
-    '【AIZIO 주식엔진 v2.1 · AI퀀트 스크리닝】',
-    `범위: ${marketLabel}${sectorLabel} · 성향: ${riskLabel} · 유니버스 ${universe.length}종`,
-    sourceNote,
-    '모델: 모멘텀·평균회귀·상대강도·52주·거래량·섹터적합 (시세 기반 냉정 점수)',
+    '【AIZIO 추천 종목】',
+    `${marketLabel}${sectorLabel} · ${riskLabel} · ${sourceNote}`,
     '',
-    '— 엔진 추천 TOP —',
   ]
 
   top.forEach((p, i) => {
     const pct = sanitizeChangePct(p.quote.changePct)
-    const ch = pct == null ? '' : ` ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
-    const m5 =
-      p.factors.ret5dPct == null
-        ? ''
-        : ` · 5일 ${p.factors.ret5dPct >= 0 ? '+' : ''}${p.factors.ret5dPct.toFixed(1)}%`
-    const rs =
-      p.rsPctile == null ? '' : ` · RS ${p.rsPctile.toFixed(0)}%ile`
-    lines.push(
-      `${i + 1}. 【${p.action}】 ${p.candidate.name} (${p.candidate.symbol}) 점수 ${p.score.toFixed(0)}`,
-    )
-    lines.push(
-      `   ${formatMoney(p.quote.price, p.quote.currency)}${ch}${m5}${rs} · ${p.candidate.sector}`,
-    )
-    if (p.reasons.length) lines.push(`   근거: ${p.reasons.join(' / ')}`)
-    if (p.warnings.length) lines.push(`   주의: ${p.warnings.join(' / ')}`)
+    const ch = pct == null ? '' : ` (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`
+    const levels = deriveTradeLevels(p.quote.price, p.score, risk, {
+      fiftyTwoHigh: p.quote.fiftyTwoHigh,
+      fiftyTwoLow: p.quote.fiftyTwoLow,
+      dayVolAbs: p.factors.dayVolAbs,
+      currency: p.quote.currency,
+      leveraged: LEVERAGED.has(p.candidate.symbol),
+    })
+    lines.push(`${i + 1}. ${p.candidate.name} (${p.candidate.symbol}) · ${p.candidate.sector}`)
+    lines.push(`   현재가 ${formatMoney(p.quote.price, p.quote.currency)}${ch}`)
+    if (levels) {
+      lines.push(`   투자 매력도 ${levels.attractivenessPct}%`)
+      lines.push(
+        `   목표가 ${formatMoney(levels.targetPrice, p.quote.currency)} (${formatPctSigned(levels.targetUpsidePct)})`,
+      )
+      lines.push(
+        `   손절가 ${formatMoney(levels.stopPrice, p.quote.currency)} (${formatPctSigned(levels.stopDownsidePct)})`,
+      )
+      lines.push(
+        `   매도가 ${formatMoney(levels.sellPrice, p.quote.currency)} (${formatPctSigned(levels.sellUpsidePct)}) · 1차 익절`,
+      )
+    } else {
+      lines.push(`   투자 매력도 ${Math.round(Math.max(0, Math.min(100, p.score)))}%`)
+    }
+    if (p.reasons.length) lines.push(`   근거: ${p.reasons.slice(0, 2).join(' / ')}`)
+    if (p.warnings.length) lines.push(`   주의: ${p.warnings[0]}`)
+    lines.push('')
   })
 
   if (watch.length) {
-    lines.push('')
     lines.push('— 관심 (2순위) —')
     for (const p of watch) {
+      const lv = deriveTradeLevels(p.quote.price, p.score, risk, {
+        fiftyTwoHigh: p.quote.fiftyTwoHigh,
+        fiftyTwoLow: p.quote.fiftyTwoLow,
+        dayVolAbs: p.factors.dayVolAbs,
+        currency: p.quote.currency,
+        leveraged: LEVERAGED.has(p.candidate.symbol),
+      })
+      const attr = lv?.attractivenessPct ?? Math.round(p.score)
       lines.push(
-        `· ${p.candidate.name} (${p.candidate.symbol}) 점수 ${p.score.toFixed(0)} · ${p.candidate.sector}`,
+        `· ${p.candidate.name} · 매력도 ${attr}% · 현재 ${formatMoney(p.quote.price, p.quote.currency)}` +
+          (lv
+            ? ` · 목표 ${formatMoney(lv.targetPrice, p.quote.currency)} · 손절 ${formatMoney(lv.stopPrice, p.quote.currency)}`
+            : ''),
       )
     }
+    lines.push('')
   }
 
   const etf = scored.find(
     (s) => s.candidate.kind === 'etf' && !LEVERAGED.has(s.candidate.symbol) && s.score >= 55,
   )
   if (etf && !top.some((t) => t.candidate.symbol === etf.candidate.symbol)) {
-    lines.push('')
+    const lv = deriveTradeLevels(etf.quote.price, etf.score, risk, {
+      fiftyTwoHigh: etf.quote.fiftyTwoHigh,
+      fiftyTwoLow: etf.quote.fiftyTwoLow,
+      dayVolAbs: etf.factors.dayVolAbs,
+      currency: etf.quote.currency,
+    })
     lines.push(
-      `코어 대안: ${etf.candidate.name} (${etf.candidate.symbol}) 점수 ${etf.score.toFixed(0)} — 개별주 확신이 약할 때 엔진이 우선하는 분산축`,
+      `코어 ETF: ${etf.candidate.name} · 매력도 ${lv?.attractivenessPct ?? Math.round(etf.score)}%` +
+        (lv
+          ? ` · 목표 ${formatMoney(lv.targetPrice, etf.quote.currency)} · 손절 ${formatMoney(lv.stopPrice, etf.quote.currency)}`
+          : ''),
     )
+    lines.push('')
   }
 
   if (avoid.length) {
-    lines.push('')
     lines.push('— 지금은 회피 —')
     for (const p of avoid.slice(0, 2)) {
       lines.push(
-        `· ${p.candidate.name}: 점수 ${p.score.toFixed(0)}${p.warnings[0] ? ` · ${p.warnings[0]}` : ''}`,
+        `· ${p.candidate.name}: 매력도 ${Math.round(p.score)}%${p.warnings[0] ? ` · ${p.warnings[0]}` : ''}`,
       )
     }
+    lines.push('')
   }
 
-  lines.push('')
-  lines.push('운용: 단일 종목 ≤10~15% · 손절 사전 기입 · 레버리지·추격은 성향과 맞춰 축소')
-  lines.push('다음: 「삼성전자 종목분석」 · 「반도체 종목 추천」 · 「포트폴리오」')
-  lines.push('투자 여부는 본인 선택입니다. 엔진은 시세 팩터로 자신 있게 순위를 제시하며, 손실 책임은 본인에게 있습니다.')
+  lines.push('목표가·손절·매도가 = 엔진 시세 밴드(참고). 단일 종목 ≤10~15%.')
+  lines.push('최종 결정·손실 책임은 본인에게 있습니다.')
 
   return lines.join('\n')
 }

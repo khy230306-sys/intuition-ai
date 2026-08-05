@@ -9,6 +9,7 @@ import {
 import { loadHoldings, loadProfile, loadWatchlist } from '../storage'
 import { extractTickerFromText } from '../tickers'
 import { factorsFromQuote } from './factors'
+import { deriveTradeLevels, formatPctSigned } from './levels'
 import { actionFromScore, scorePick } from './screen'
 import { REC_UNIVERSE } from './universe'
 
@@ -95,7 +96,28 @@ export async function buildStockAnalysis(text: string): Promise<string | null> {
 
   lines.push('')
   if (verdictScore != null) {
-    lines.push(`— 엔진 판정: 【${verdictAction}】 점수 ${verdictScore.toFixed(0)} —`)
+    const levels = deriveTradeLevels(q.price, verdictScore, risk, {
+      fiftyTwoHigh: q.fiftyTwoHigh,
+      fiftyTwoLow: q.fiftyTwoLow,
+      dayVolAbs: factors.dayVolAbs,
+      currency: q.currency,
+      leveraged: q.symbol === 'QLD' || q.symbol === 'TQQQ',
+    })
+    lines.push(`— 엔진 판정: 【${verdictAction}】 —`)
+    if (levels) {
+      lines.push(`투자 매력도 ${levels.attractivenessPct}%`)
+      lines.push(
+        `목표가 ${formatMoney(levels.targetPrice, q.currency)} (${formatPctSigned(levels.targetUpsidePct)})`,
+      )
+      lines.push(
+        `손절가 ${formatMoney(levels.stopPrice, q.currency)} (${formatPctSigned(levels.stopDownsidePct)})`,
+      )
+      lines.push(
+        `매도가 ${formatMoney(levels.sellPrice, q.currency)} (${formatPctSigned(levels.sellUpsidePct)}) · 1차 익절`,
+      )
+    } else {
+      lines.push(`투자 매력도 ${Math.round(verdictScore)}%`)
+    }
     if (verdictReasons.length) lines.push(`근거: ${verdictReasons.join(' / ')}`)
     if (verdictWarnings.length) lines.push(`주의: ${verdictWarnings.join(' / ')}`)
   } else {

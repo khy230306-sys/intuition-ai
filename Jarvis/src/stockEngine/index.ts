@@ -30,5 +30,11 @@ export {
 } from './screen'
 export { wantsStockAnalysis, buildStockAnalysis } from './analyze'
 export { buildPortfolioReport } from './portfolio'
+export {
+  deriveTradeLevels,
+  attractivenessFromScore,
+  formatPctSigned,
+  type TradeLevels,
+} from './levels'
 
-export const STOCK_ENGINE_VERSION = '2.1.0'
+export const STOCK_ENGINE_VERSION = '2.2.0'

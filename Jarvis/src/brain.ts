@@ -94,6 +94,7 @@ import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
 import { handleTranslate, isTranslateEscapeCommand, loadInterpretMode, wantsTranslate } from './translateBrain'
+import { tryHandleRoutedCommand, routeCommand, getActiveMode } from './commandRouter'
 import { getLocationReport } from './location'
 import {
   addFamilyNotice,
@@ -749,6 +750,26 @@ export async function think(
   const raw = input.trim()
   if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // —— Central Command Router (owns translation session + intent priority) ——
+  // Runs before AIE / Life Assistant / Core Brain / weather so WEATHER cannot
+  // steal translation commands that merely mention 「날씨」.
+  {
+    const strippedEarly = stripWakeWord(raw).text || raw
+    try {
+      const routed = routeCommand({ text: strippedEarly, activeMode: getActiveMode() })
+      if (
+        routed.intent.startsWith('translation.') ||
+        routed.intent === 'vision.translation' ||
+        routed.intent === 'clarify'
+      ) {
+        const owned = await tryHandleRoutedCommand(strippedEarly, { source: opts?.source })
+        if (owned) return owned
+      }
+    } catch {
+      /* router must never block legacy */
+    }
+  }
+
   // Continuous translate lock owns the turn before AIE / Core Brain.
   // Prevents Core translation skill + legacy handleTranslate both answering
   // (online bubble + cached offline bubble) for the same utterance.
@@ -969,7 +990,17 @@ export async function think(
   // Everyday voice commands (weather/time/…) — API key not required
   const everyday = detectEverydayIntent(text)
   if (everyday?.kind === 'weather' || everyday?.kind === 'umbrella') {
-    return replyWeather(everyday.city, settings, everyday.kind === 'umbrella')
+    // Command Router veto: never run weather when translation owns the utterance.
+    try {
+      const gate = routeCommand({ text, activeMode: getActiveMode() })
+      if (gate.forbiddenActions.includes('weather') || gate.intent.startsWith('translation.')) {
+        /* fall through — do not weather */
+      } else if (gate.intent === 'weather.query' || !/번역|통역|translate/i.test(text)) {
+        return replyWeather(everyday.city, settings, everyday.kind === 'umbrella')
+      }
+    } catch {
+      return replyWeather(everyday.city, settings, everyday.kind === 'umbrella')
+    }
   }
   if (everyday?.kind === 'time') {
     return { text: `지금은 ${nowText()}입니다.`, speak: true }

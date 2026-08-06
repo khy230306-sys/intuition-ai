@@ -3,6 +3,8 @@
  * Handles spacing variants, filler words, and near-miss transcripts.
  */
 
+import { isClearWeatherQuery } from './commandRouter/weatherQuery'
+
 export type EverydayIntent =
   | { kind: 'weather'; city: string }
   | { kind: 'umbrella'; city: string }
@@ -127,10 +129,12 @@ function extractWeatherCity(text: string): string {
 
 export function wantsWeatherCommand(text: string): boolean {
   const t = normalizeCommandText(text)
-  if (/날씨|기온|우산|미세먼지|기상|체감\s*온도|비\s*올|비\s*오|비\s*와/.test(t)) return true
+  // Align with AizioCommandRouter — casual 「날씨가 좋네」「비 올 것 같아」 must not match.
+  if (isClearWeatherQuery(t)) return true
+  // Fuzzy STT rescue only for short clear weather-ish seeds (not narratives)
+  if (/(좋네|것\s*같아|같네|챙길게|춥다|덥다|번역|통역)/i.test(t)) return false
   const c = compactKo(t)
-  if (/날씨|기온|우산|미세먼지/.test(c)) return true
-  return bestSeedScore(c, WEATHER_SEEDS) >= 0.55
+  return bestSeedScore(c, WEATHER_SEEDS) >= 0.78
 }
 
 /**
@@ -142,7 +146,7 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
   if (!text) return null
   const c = compactKo(text)
 
-  if (wantsWeatherCommand(text) || /우산/.test(text)) {
+  if (wantsWeatherCommand(text) || (/우산/.test(text) && /(필요|챙길까|어때|알려)/.test(text))) {
     if (/우산/.test(text) && !/날씨|기온|비/.test(text)) {
       return { kind: 'umbrella', city: extractWeatherCity(text) }
     }

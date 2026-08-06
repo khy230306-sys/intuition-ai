@@ -26,6 +26,7 @@ export function renderChatShell(opts: {
   voiceHintHtml?: string
   composerExtraHtml?: string
   plusOpen?: boolean
+  activeModeHtml?: string
 }): string {
   const plus = opts.plusOpen
     ? `<div class="nav-chat-plus" data-chat-plus="1" role="menu">
@@ -43,6 +44,7 @@ export function renderChatShell(opts: {
         <h1 class="section-title">대화</h1>
         <p class="hint">생활비서 · 음성 · 번역 · 일정 명령을 여기에 말하세요 · v${esc(opts.appVersion)}</p>
       </header>
+      ${opts.activeModeHtml || ''}
       ${opts.aboveThreadHtml || ''}
       <div class="messages chat-thread home-v2-thread" id="chat-thread">${opts.threadHtml}</div>
       ${opts.voiceHintHtml || ''}

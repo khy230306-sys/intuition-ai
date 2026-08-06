@@ -215,6 +215,7 @@ import {
   syncVoiceCaptions,
 } from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
+import { activeModeChipHtml, endTranslationSession, renderRouteDiagPanel } from './commandRouter'
 import { nextChatSendGuard, shouldAcceptChatSend, type ChatSendGuardState } from './chatSendGuard'
 import { bcp47, detectLangCode, translateText } from './translate'
 import {
@@ -3887,6 +3888,7 @@ function renderNavChatView(): string {
     translateActive: model.translate.active,
     translateLabel: model.translate.label,
     appVersion: APP_VERSION,
+    activeModeHtml: activeModeChipHtml(),
     aboveThreadHtml: `${wizard}${renderBriefingStripHtml(buildLifeBriefing())}`,
     voiceHintHtml: voiceHint,
     composerExtraHtml: renderMusicMiniPlayer(state.musicSession || sessionSnapshot(), state.musicPlayerOpen),
@@ -4987,6 +4989,7 @@ function renderSettings(): string {
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
         ${renderReleaseHealthPanel(state.releaseHealthReport, { running: state.releaseHealthRunning })}
+        ${renderRouteDiagPanel(true)}
         ${renderFeatureDiagPanel({
           status: state.featureDiagStatus,
           report: state.featureDiagReport,
@@ -6245,6 +6248,11 @@ function bind(): void {
   })
   document.querySelector('[data-action="navv2-back"]')?.addEventListener('click', () => {
     handleNavV2Back()
+  })
+  document.querySelector('[data-action="end-translation-mode"]')?.addEventListener('click', () => {
+    endTranslationSession()
+    showFlash('번역 모드를 종료했어요.')
+    render({ guardNav: false })
   })
   // —— Translate pane (replaces main upper window) ——
   document.querySelector('[data-action="tr-sheet-close"]')?.addEventListener('click', () => {

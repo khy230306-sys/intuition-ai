@@ -74,7 +74,13 @@ export function wantsTranslate(text: string): boolean {
 export function isTranslateEscapeCommand(text: string): boolean {
   const t = text.trim()
   if (!t) return false
-  return /(?:으로\s*)?안내해\s*줘|길\s*안내|내비(?:게이션)?|네비|알림\s*(?:설정|해|등록)|일정\s*(?:추가|등록|잡아)|음악\s*(?:틀|재생|켜)|전화해|브리핑|날씨\s*(?:알려|어때)|로또|주사위|동전/i.test(
+  // Never escape when the user is asking to translate (including weather-related content).
+  if (/번역|통역|translate/i.test(t)) return false
+  // Weather escape only for clear weather *queries*, not narrative sentences.
+  if (/날씨\s*(?:알려|어때)|오늘\s*날씨\s*(?:알려|어때)|비\s*(?:와|올까)\s*\??$/i.test(t) && !/좋|같/i.test(t)) {
+    return true
+  }
+  return /(?:으로\s*)?안내해\s*줘|길\s*안내|내비(?:게이션)?|네비|알림\s*(?:설정|해|등록)|일정\s*(?:추가|등록|잡아)|음악\s*(?:틀|재생|켜)|전화해|브리핑|로또|주사위|동전/i.test(
     t,
   )
 }

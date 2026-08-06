@@ -19,6 +19,7 @@ export {
   hideQuickAction,
   resetQuickActions,
   saveQuickPrefs,
+  titleForQuickId,
   DEFAULT_QUICK_ACTIONS,
   QUICK_ACTION_CATALOG,
   QUICK_ACTION_MAX,

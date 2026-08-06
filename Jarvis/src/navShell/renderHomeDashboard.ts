@@ -144,8 +144,16 @@ export function renderHomeDashboard(opts: {
         ${
           editOpen
             ? `<div class="nav-quick-edit" data-quick-edit="1">
-                <p class="hint">홈에 표시 (${quick.length}/${QUICK_ACTION_MAX}). 원하는 기능을 아래에서 「추가」하세요.</p>
-                <ul class="nav-quick-edit-list">
+                <p class="nav-quick-edit-status" role="status">
+                  홈에 표시 <strong>${quick.length}/${QUICK_ACTION_MAX}</strong>
+                  ${
+                    quick.length >= QUICK_ACTION_MAX
+                      ? ' · 가득 참 — 「추가」하면 맨 아래 항목과 바꿉니다'
+                      : ' · 아래에서 「추가」하세요'
+                  }
+                </p>
+                <h3 class="subsection-title">지금 홈에 있는 항목</h3>
+                <ul class="nav-quick-edit-list" data-quick-visible-list="1">
                   ${
                     quick.length
                       ? quick
@@ -167,20 +175,15 @@ export function renderHomeDashboard(opts: {
                           .map(
                             (q) => `<li>
                               <span><strong>${esc(q.title)}</strong> <span class="hint">${esc(q.sub)}</span></span>
-                              <button type="button" class="primary-btn tiny" data-quick-add="${escAttr(q.id)}" ${
-                                quick.length >= QUICK_ACTION_MAX ? 'disabled' : ''
-                              }>추가</button>
+                              <button type="button" class="primary-btn tiny" data-quick-add="${escAttr(q.id)}">${
+                                quick.length >= QUICK_ACTION_MAX ? '교체 추가' : '추가'
+                              }</button>
                             </li>`,
                           )
                           .join('')
                       : '<li class="hint">추가할 수 있는 기능이 모두 홈에 있어요.</li>'
                   }
                 </ul>
-                ${
-                  quick.length >= QUICK_ACTION_MAX
-                    ? `<p class="hint">최대 ${QUICK_ACTION_MAX}개입니다. 위에서 하나를 제거한 뒤 추가해 주세요.</p>`
-                    : ''
-                }
                 <div class="row-btns">
                   <button type="button" class="ghost-btn tiny" data-action="reset-quick-actions">기본값으로 복원</button>
                   <button type="button" class="ghost-btn tiny" data-action="edit-quick-actions">편집 닫기</button>

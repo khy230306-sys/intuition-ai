@@ -151,15 +151,29 @@ export function toggleQuickHidden(id: QuickActionId): void {
   else void showQuickAction(id)
 }
 
-/** Add a catalog item to the quick bar. */
-export function showQuickAction(id: QuickActionId): { ok: boolean; reason?: string } {
+/** Add a catalog item to the quick bar. When full, optionally replace the last slot. */
+export function showQuickAction(
+  id: QuickActionId,
+  opts?: { replaceLastIfFull?: boolean },
+): { ok: boolean; reason?: string; replacedId?: QuickActionId } {
   if (!isQuickId(id)) return { ok: false, reason: 'unknown' }
   const visible = [...loadPrefs().visible]
   if (visible.includes(id)) return { ok: true }
-  if (visible.length >= QUICK_ACTION_MAX) return { ok: false, reason: 'full' }
+  if (visible.length >= QUICK_ACTION_MAX) {
+    if (!opts?.replaceLastIfFull) return { ok: false, reason: 'full' }
+    const replacedId = visible[visible.length - 1]
+    visible[visible.length - 1] = id
+    saveQuickPrefs({ visible })
+    return { ok: true, replacedId }
+  }
   visible.push(id)
   saveQuickPrefs({ visible })
   return { ok: true }
+}
+
+export function titleForQuickId(id: QuickActionId | string | undefined): string {
+  if (!id) return ''
+  return catalogById().get(id as QuickActionId)?.title || id
 }
 
 export function hideQuickAction(id: QuickActionId): void {

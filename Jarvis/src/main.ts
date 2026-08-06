@@ -133,6 +133,7 @@ import {
   resetQuickActions,
   runMenuAudit,
   showQuickAction,
+  titleForQuickId,
   type QuickActionId,
   type ScheduleHubTab,
 } from './navShell'
@@ -6639,15 +6640,25 @@ function bind(): void {
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-quick-add]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
       const id = (btn.dataset.quickAdd || '') as QuickActionId
-      const r = showQuickAction(id)
-      if (!r.ok && r.reason === 'full') {
-        showFlash('빠른 실행은 최대 6개입니다. 하나를 숨긴 뒤 추가해 주세요.')
+      if (!id) {
+        showFlash('추가할 기능을 찾지 못했어요.')
         return
       }
-      showFlash(r.ok ? '빠른 실행에 추가했어요.' : '추가하지 못했어요.')
-      render()
+      const r = showQuickAction(id, { replaceLastIfFull: true })
+      if (!r.ok) {
+        showFlash(r.reason === 'full' ? '빠른 실행은 최대 6개입니다. 위에서 하나를 제거해 주세요.' : '추가하지 못했어요.')
+        return
+      }
+      if (r.replacedId) {
+        showFlash(`「${titleForQuickId(r.replacedId)}」대신 「${titleForQuickId(id)}」을(를) 넣었어요.`)
+      } else {
+        showFlash('빠른 실행에 추가했어요.')
+      }
+      render({ pointer: { x: (ev as MouseEvent).clientX, y: (ev as MouseEvent).clientY } })
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-quick-hide]').forEach((btn) => {

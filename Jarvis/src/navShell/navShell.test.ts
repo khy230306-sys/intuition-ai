@@ -107,6 +107,20 @@ describe('quick + recent', () => {
     expect(QUICK_ACTION_CATALOG.length).toBeGreaterThan(6)
   })
 
+  it('replaces the last slot when adding while full', () => {
+    expect(listVisibleQuickActions()).toHaveLength(6)
+    const blocked = showQuickAction('navigate')
+    expect(blocked.ok).toBe(false)
+    expect(blocked.reason).toBe('full')
+    const r = showQuickAction('navigate', { replaceLastIfFull: true })
+    expect(r.ok).toBe(true)
+    expect(r.replacedId).toBe('todo-add')
+    const ids = listVisibleQuickActions().map((q) => q.id)
+    expect(ids).toContain('navigate')
+    expect(ids).not.toContain('todo-add')
+    expect(ids).toHaveLength(6)
+  })
+
   it('reset restores default six quick actions', () => {
     hideQuickAction('schedule-add')
     showQuickAction('games')
@@ -147,6 +161,32 @@ describe('quick + recent', () => {
     expect(html).toContain('data-quick-add="navigate"')
     expect(html).toContain('추가할 기능 고르기')
     expect(html).toContain('추가')
+    expect(html).not.toMatch(/data-quick-add="[^"]+"\s+disabled/)
+  })
+
+  it('shows replace label when quick bar is full', () => {
+    const html = renderHomeDashboard({
+      model: {
+        header: { greeting: '안녕하세요', dateLine: '8월 6일', weatherLine: null },
+        summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
+        smartCard: {
+          kind: 'empty',
+          title: '여유',
+          items: [],
+          targetView: 'chat',
+        },
+        translate: { active: false, label: '번역' },
+        voiceState: 'idle',
+        prompt: '무엇을',
+      },
+      scheduleLines: [],
+      alertLines: [],
+      appVersion: '1.23.0',
+      quickEditOpen: true,
+    })
+    expect(html).toContain('교체 추가')
+    expect(html).toContain('가득 참')
+    expect(html).not.toMatch(/data-quick-add="[^"]+"\s+disabled/)
   })
 
   it('records recent without settings/diag', () => {

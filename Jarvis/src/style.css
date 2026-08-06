@@ -3926,8 +3926,9 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   z-index: 40;
   margin-top: 8px;
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 18, 0.92) 18%, rgba(7, 11, 18, 0.98));
+  background: linear-gradient(180deg, rgba(7, 11, 18, 0.92), rgba(7, 11, 18, 0.99));
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
 }
 .aizio-primary-nav .nav-label {
   font-size: 0.62rem;
@@ -4059,7 +4060,20 @@ body.keyboard-open .aizio-primary-nav {
 .nav-quick-edit {
   display: grid;
   gap: 10px;
-  padding: 10px 0 4px;
+  padding: 10px 0 calc(88px + env(safe-area-inset-bottom, 0px));
+}
+.nav-quick-edit-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  background: rgba(0, 210, 190, 0.1);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.nav-quick-edit .subsection-title {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
 }
 .nav-quick-edit-list {
   list-style: none;
@@ -4083,6 +4097,7 @@ body.keyboard-open .aizio-primary-nav {
   width: auto;
   flex: 0 0 auto;
   padding: 8px 12px;
+  pointer-events: auto;
 }
 @media (min-width: 520px) {
   .nav-home-quick { grid-template-columns: repeat(3, minmax(0, 1fr)); }

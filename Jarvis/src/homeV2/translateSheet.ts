@@ -139,6 +139,31 @@ export function langNameForCode(code: string): string {
 }
 
 /**
+ * Language name shown next to 「원문」 as parentheses, e.g. 원문 (한국어).
+ * Prefer explicit 원문 언어 picker; else MIC speak lang; else detect from text; else 자동 감지.
+ */
+export function sourceLangDisplayName(st: Pick<TranslateSheetState, 'from' | 'speakLang' | 'sourceText' | 'lastInputSource'>): string {
+  const from = (st.from || 'auto').trim()
+  if (from && from !== 'auto') return langNameForCode(from)
+  if (st.lastInputSource === 'mic' && st.speakLang) return langNameForCode(st.speakLang)
+  const text = (st.sourceText || '').trim()
+  if (text) {
+    try {
+      return langNameForCode(detectLangCode(text))
+    } catch {
+      /* fall through */
+    }
+  }
+  if (st.speakLang) return langNameForCode(st.speakLang)
+  return '자동 감지'
+}
+
+/** Full source heading: `원문 (한국어)`. */
+export function sourceHeadingLabel(st: Pick<TranslateSheetState, 'from' | 'speakLang' | 'sourceText' | 'lastInputSource'>): string {
+  return `원문 (${sourceLangDisplayName(st)})`
+}
+
+/**
  * STT locale for sheet MIC.
  * Always uses explicit speakLang (world-language chip) — never guesses from target alone.
  */
@@ -206,7 +231,7 @@ export function renderTranslateSheet(
           <div class="home-v2-tr-speak-chips" role="group" aria-label="말할 언어 선택">${chips}</div>
         </div>
         <form id="tr-sheet-form" class="home-v2-tr-form">
-          <label class="home-v2-nav-label">원문
+          <label class="home-v2-nav-label"><span data-tr-source-heading="1">${esc(sourceHeadingLabel(st))}</span>
             <textarea id="tr-sheet-input" name="source" rows="4" maxlength="2000" placeholder="예: 안녕하세요 / Hello / Xin chào / こんにちは" ${st.busy || listening ? 'disabled' : ''}>${esc(st.sourceText)}</textarea>
           </label>
           <div class="home-v2-tr-langs">

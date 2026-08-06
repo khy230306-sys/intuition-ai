@@ -291,6 +291,7 @@ import {
   defaultTranslateSheetState,
   langNameForCode,
   resolveTranslateSheetFrom,
+  sourceHeadingLabel,
   sttLangForTranslateSheet,
   saveStoredSpeakLang,
   defaultSpeakLang,
@@ -5982,9 +5983,13 @@ function bind(): void {
   document.getElementById('tr-sheet-input')?.addEventListener('input', (e) => {
     const v = (e.target as HTMLTextAreaElement).value
     state.translateSheet = { ...state.translateSheet, sourceText: v, lastInputSource: 'type' }
+    // Keep 「원문 (언어)」 in sync without full re-render (preserves textarea focus).
+    const heading = document.querySelector<HTMLElement>('[data-tr-source-heading="1"]')
+    if (heading) heading.textContent = sourceHeadingLabel(state.translateSheet)
   })
   document.getElementById('tr-sheet-from')?.addEventListener('change', (e) => {
     state.translateSheet = { ...state.translateSheet, from: (e.target as HTMLSelectElement).value }
+    render()
   })
   document.getElementById('tr-sheet-to')?.addEventListener('change', (e) => {
     const to = (e.target as HTMLSelectElement).value
@@ -5993,6 +5998,7 @@ function bind(): void {
       to,
       speakLang: state.translateSheet.speakLang || defaultSpeakLang(to, loadStoredSpeakLang()),
     }
+    render()
   })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false

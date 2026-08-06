@@ -8,6 +8,8 @@ import {
   renderTranslateSheet,
   resolveTranslateSheetFrom,
   saveStoredSpeakLang,
+  sourceHeadingLabel,
+  sourceLangDisplayName,
   sttLangForTranslateSheet,
   TRANSLATE_SPEAK_CHIPS,
   TRANSLATE_SHEET_PICKS,
@@ -44,9 +46,30 @@ describe('HOME translate sheet', () => {
     expect(html).toContain('data-speak-lang="vi"')
     expect(html).toContain('data-speak-lang="ja"')
     expect(html).toContain('말할 언어')
+    expect(html).toContain('data-tr-source-heading="1"')
+    expect(html).toMatch(/원문 \([^)]+\)/)
     expect(TRANSLATE_SHEET_PICKS.some((p) => p.code === 'en')).toBe(true)
     expect(TRANSLATE_SPEAK_CHIPS.length).toBeGreaterThanOrEqual(10)
     expect(langNameForCode('ko')).toBe('한국어')
+  })
+
+  it('shows source language in parentheses under 원문', () => {
+    expect(sourceLangDisplayName({ from: 'ko', speakLang: 'en', sourceText: '' })).toBe('한국어')
+    expect(sourceHeadingLabel({ from: 'ko', speakLang: 'en', sourceText: '' })).toBe('원문 (한국어)')
+    expect(sourceHeadingLabel({ from: 'vi', speakLang: 'ko', sourceText: '' })).toBe('원문 (베트남어)')
+    expect(sourceHeadingLabel({ from: 'auto', speakLang: 'en', sourceText: 'Hello', lastInputSource: 'type' })).toBe(
+      '원문 (영어)',
+    )
+    expect(sourceHeadingLabel({ from: 'auto', speakLang: 'vi', sourceText: '', lastInputSource: 'mic' })).toBe(
+      '원문 (베트남어)',
+    )
+    const html = renderTranslateSheet({
+      ...defaultTranslateSheetState(),
+      from: 'ko',
+      to: 'vi',
+      speakLang: 'ko',
+    })
+    expect(html).toContain('원문 (한국어)')
   })
 
   it('marks active speak chip', () => {

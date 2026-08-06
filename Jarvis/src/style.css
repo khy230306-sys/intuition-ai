@@ -3297,8 +3297,22 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   font-weight: 600;
   margin: 6px 0 10px;
 }
-.home-v2-tr-sheet .home-v2-tr-panel {
-  max-height: min(88vh, 720px);
+/* Translate replaces the main (upper) pane — not a modal overlay */
+.home-v2-tr-panel[data-translate-pane="1"] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: min(70vh, 640px);
+}
+.home-v2-tr-panel .nav-hub-head {
+  align-items: flex-start;
+  gap: 10px;
+}
+.home-v2-tr-panel .nav-hub-head .section-title {
+  margin: 0 0 4px;
+}
+.home-v2-tr-panel .nav-hub-head .hint {
+  margin: 0;
 }
 .home-v2-tr-form {
   display: flex;

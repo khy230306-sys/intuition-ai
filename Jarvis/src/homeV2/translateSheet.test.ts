@@ -38,9 +38,12 @@ describe('HOME translate sheet', () => {
     expect(HOME_V2_QUICK_COMMANDS.translate).toBe('__open_translate_sheet__')
   })
 
-  it('renders speak-language chips and MIC', () => {
+  it('renders speak-language chips and MIC as main pane (not modal)', () => {
     const html = renderTranslateSheet(defaultTranslateSheetState())
     expect(html).toContain('data-tr-sheet="1"')
+    expect(html).toContain('data-translate-pane="1"')
+    expect(html).toContain('class="panel')
+    expect(html).not.toContain('aria-modal')
     expect(html).toContain('data-action="tr-sheet-mic"')
     expect(html).toContain('data-action="tr-sheet-speak-lang"')
     expect(html).toContain('data-speak-lang="vi"')

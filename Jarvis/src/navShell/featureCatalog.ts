@@ -91,11 +91,11 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   {
     id: 'translate',
     title: '번역',
-    description: '번역 창 · 통역 모드',
+    description: '상위 창을 번역 창으로 전환',
     group: 'ai',
     view: 'chat',
     action: 'home-v2-quick',
-    keywords: ['번역', '통역', 'translate'],
+    keywords: ['번역', '통역', '번역하기', 'translate'],
   },
   {
     id: 'life',

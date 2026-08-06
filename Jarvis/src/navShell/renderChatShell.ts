@@ -29,7 +29,7 @@ export function renderChatShell(opts: {
 }): string {
   const plus = opts.plusOpen
     ? `<div class="nav-chat-plus" data-chat-plus="1" role="menu">
-        <button type="button" role="menuitem" data-action="home-v2-quick" data-quick-id="translate">번역 창</button>
+        <button type="button" role="menuitem" data-action="home-v2-quick" data-quick-id="translate">번역하기</button>
         <button type="button" role="menuitem" data-view="schedule">일정</button>
         <button type="button" role="menuitem" data-view="family-helper">가족</button>
         <button type="button" role="menuitem" data-action="life-brief-open">브리핑</button>

@@ -1,5 +1,6 @@
 /**
- * Dedicated HOME translate window (not interpret-lock / chat).
+ * Dedicated translate pane — replaces the main (upper) window when opened from menu/quick actions.
+ * Not a modal overlay; not interpret-lock / chat.
  * Uses in-app translateText (MyMemory + offline dict) — no invented text.
  *
  * MIC + 자동 감지:
@@ -219,41 +220,41 @@ export function renderTranslateSheet(
     : ''
 
   return `
-    <div class="home-v2-nav-sheet home-v2-tr-sheet" data-tr-sheet="1" role="dialog" aria-label="번역하기" aria-modal="true">
-      <div class="home-v2-nav-sheet-panel home-v2-tr-panel">
-        <div class="home-v2-more-head">
-          <strong>번역하기</strong>
-          <button type="button" class="ghost-btn tiny" data-action="tr-sheet-close">닫기</button>
+    <section class="panel home-v2-panel home-v2-tr-panel view-scroll" data-tr-sheet="1" data-translate-pane="1" aria-label="번역하기">
+      <header class="home-v2-more-head nav-hub-head">
+        <div>
+          <h1 class="section-title">번역하기</h1>
+          <p class="hint">MIC는 브라우저가 <strong>말할 언어</strong>를 알아야 세계 언어를 정확히 듣습니다. 칩을 고른 뒤 MIC → 설정한 <strong>번역 언어</strong>로 바로 번역합니다.</p>
         </div>
-        <p class="hint">MIC는 브라우저가 <strong>말할 언어</strong>를 알아야 세계 언어를 정확히 듣습니다. 칩을 고른 뒤 MIC → 설정한 <strong>번역 언어</strong>로 바로 번역합니다.</p>
-        <div class="home-v2-tr-speak-block">
-          <p class="home-v2-tr-speak-label">말할 언어 · ${esc(langNameForCode(speak))}</p>
-          <div class="home-v2-tr-speak-chips" role="group" aria-label="말할 언어 선택">${chips}</div>
-        </div>
-        <form id="tr-sheet-form" class="home-v2-tr-form">
-          <label class="home-v2-nav-label"><span data-tr-source-heading="1">${esc(sourceHeadingLabel(st))}</span>
-            <textarea id="tr-sheet-input" name="source" rows="4" maxlength="2000" placeholder="예: 안녕하세요 / Hello / Xin chào / こんにちは" ${st.busy || listening ? 'disabled' : ''}>${esc(st.sourceText)}</textarea>
-          </label>
-          <div class="home-v2-tr-langs">
-            <label class="home-v2-nav-label">원문 언어 (입력 텍스트)
-              <select id="tr-sheet-from" name="from" ${st.busy || listening ? 'disabled' : ''}>${optionsHtml(st.from, true)}</select>
-            </label>
-            <button type="button" class="ghost-btn tiny home-v2-tr-swap" data-action="tr-sheet-swap" aria-label="언어 바꾸기" ${st.busy || listening ? 'disabled' : ''}>⇄</button>
-            <label class="home-v2-nav-label">번역 언어
-              <select id="tr-sheet-to" name="to" ${st.busy || listening ? 'disabled' : ''}>${optionsHtml(st.to, false)}</select>
-            </label>
-          </div>
-          <div class="row-btns home-v2-tr-actions">
-            <button type="button" class="icon-btn ${listening ? 'listening' : ''}" data-action="tr-sheet-mic" aria-label="음성으로 번역" aria-pressed="${listening ? 'true' : 'false'}" ${st.busy ? 'disabled' : ''}>${listening ? 'STOP' : 'MIC'}</button>
-            <button type="submit" class="primary-btn" ${st.busy || listening ? 'disabled' : ''}>${st.busy ? '번역 중…' : '번역하기'}</button>
-            <button type="button" class="ghost-btn" data-action="tr-sheet-clear" ${st.busy || listening ? 'disabled' : ''}>입력 지우기</button>
-          </div>
-        </form>
-        <p class="hint ${listening ? 'live' : ''}" data-tr-status="1" id="tr-sheet-status">${esc(
-          listening ? hint || `${langNameForCode(speak)}로 듣는 중…` : st.status,
-        )}</p>
-        ${resultBlock}
+        <button type="button" class="ghost-btn tiny" data-action="tr-sheet-close">닫기</button>
+      </header>
+      <div class="home-v2-tr-speak-block">
+        <p class="home-v2-tr-speak-label">말할 언어 · ${esc(langNameForCode(speak))}</p>
+        <div class="home-v2-tr-speak-chips" role="group" aria-label="말할 언어 선택">${chips}</div>
       </div>
-    </div>
+      <form id="tr-sheet-form" class="home-v2-tr-form">
+        <label class="home-v2-nav-label"><span data-tr-source-heading="1">${esc(sourceHeadingLabel(st))}</span>
+          <textarea id="tr-sheet-input" name="source" rows="4" maxlength="2000" placeholder="예: 안녕하세요 / Hello / Xin chào / こんにちは" ${st.busy || listening ? 'disabled' : ''}>${esc(st.sourceText)}</textarea>
+        </label>
+        <div class="home-v2-tr-langs">
+          <label class="home-v2-nav-label">원문 언어 (입력 텍스트)
+            <select id="tr-sheet-from" name="from" ${st.busy || listening ? 'disabled' : ''}>${optionsHtml(st.from, true)}</select>
+          </label>
+          <button type="button" class="ghost-btn tiny home-v2-tr-swap" data-action="tr-sheet-swap" aria-label="언어 바꾸기" ${st.busy || listening ? 'disabled' : ''}>⇄</button>
+          <label class="home-v2-nav-label">번역 언어
+            <select id="tr-sheet-to" name="to" ${st.busy || listening ? 'disabled' : ''}>${optionsHtml(st.to, false)}</select>
+          </label>
+        </div>
+        <div class="row-btns home-v2-tr-actions">
+          <button type="button" class="icon-btn ${listening ? 'listening' : ''}" data-action="tr-sheet-mic" aria-label="음성으로 번역" aria-pressed="${listening ? 'true' : 'false'}" ${st.busy ? 'disabled' : ''}>${listening ? 'STOP' : 'MIC'}</button>
+          <button type="submit" class="primary-btn" ${st.busy || listening ? 'disabled' : ''}>${st.busy ? '번역 중…' : '번역하기'}</button>
+          <button type="button" class="ghost-btn" data-action="tr-sheet-clear" ${st.busy || listening ? 'disabled' : ''}>입력 지우기</button>
+        </div>
+      </form>
+      <p class="hint ${listening ? 'live' : ''}" data-tr-status="1" id="tr-sheet-status">${esc(
+        listening ? hint || `${langNameForCode(speak)}로 듣는 중…` : st.status,
+      )}</p>
+      ${resultBlock}
+    </section>
   `
 }

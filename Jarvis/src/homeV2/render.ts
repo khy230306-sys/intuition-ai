@@ -163,7 +163,7 @@ export function renderHomeV2Shell(
           <span class="home-v2-q-ico" aria-hidden="true">文A</span>
           <span class="home-v2-q-copy">
             <span class="home-v2-q-title">번역하기</span>
-            <span class="home-v2-q-sub">별도 번역 창</span>
+            <span class="home-v2-q-sub">상위 창에서 번역</span>
           </span>
         </button>
       </div>

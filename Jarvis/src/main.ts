@@ -946,8 +946,16 @@ async function runNavigationFromUi(dest: string, _nearby = false): Promise<void>
 function openTranslateSheet(opts?: { seedText?: string }): void {
   state.homeV2MoreOpen = false
   state.homeV2NavSheetOpen = false
+  state.chatPlusOpen = false
   state.installGuideOpen = false
+  state.quickEditOpen = false
+  // Transform the main (upper) pane into the translate window — not a modal overlay.
   state.homeV2TranslateSheetOpen = true
+  try {
+    recordRecentFeature('translate')
+  } catch {
+    /* ignore */
+  }
   const storedSpeak = loadStoredSpeakLang()
   if (opts?.seedText?.trim()) {
     const to = state.translateSheet.to || 'en'
@@ -5211,8 +5219,15 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   }
   invalidateSpaceInboxCache()
   const homeV2On = activeHomeVariant() === 'v2'
+  const translatePane = state.homeV2TranslateSheetOpen
+    ? renderTranslateSheet(state.translateSheet, {
+        listening: state.listening && state.dictationTarget === 'translate-sheet',
+        voiceHint: state.dictationTarget === 'translate-sheet' ? state.voiceHint : '',
+      })
+    : ''
   const main =
-    state.view === 'home'
+    translatePane ||
+    (state.view === 'home'
       ? renderNavHomeView()
       : state.view === 'chat'
         ? renderChatOrHomeV2()
@@ -5280,7 +5295,7 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                                     })()
                                   : state.view === 'settings'
                                     ? renderSettings()
-                                    : renderNavMoreView()
+                                    : renderNavMoreView())
   const nav = renderNav()
   const more = state.homeV2MoreOpen ? renderHomeV2MoreSheet({ showInstall: state.showInstall }) : ''
   const navSheet =
@@ -5290,14 +5305,13 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
           defaultTravel: loadNavigationSettings().defaultTravelMode,
         })
       : ''
-  const translateSheet = state.homeV2TranslateSheetOpen
-    ? renderTranslateSheet(state.translateSheet, {
-        listening: state.listening && state.dictationTarget === 'translate-sheet',
-        voiceHint: state.dictationTarget === 'translate-sheet' ? state.voiceHint : '',
-      })
-    : ''
   const hideBrand =
-    homeV2On && (state.view === 'home' || state.view === 'chat' || state.view === 'schedule' || state.view === 'more')
+    homeV2On &&
+    (state.homeV2TranslateSheetOpen ||
+      state.view === 'home' ||
+      state.view === 'chat' ||
+      state.view === 'schedule' ||
+      state.view === 'more')
   // Install CTA stays visible on HOME — users must be able to add to home screen.
   refreshInstallHint()
   const installHtml = renderInstall()
@@ -5314,10 +5328,12 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
           .join('') || '',
       )
     : ''
-  app.innerHTML = `${hideBrand ? '' : renderBrand()}${offlineStrip}${installHtml}${main}${nav}${more}${navSheet}${translateSheet}${renderShareModal()}${renderInstallGuideModal()}${outboxHtml}`
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${offlineStrip}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}${outboxHtml}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? 'home' : ''
+  document.body.dataset.translatePane = state.homeV2TranslateSheetOpen ? '1' : ''
   document.body.classList.toggle('home-v2-active', homeV2On)
+  document.body.classList.toggle('translate-pane-open', state.homeV2TranslateSheetOpen)
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
       armNavGuard({ mode: 'async', ms: 260 })
@@ -6222,12 +6238,9 @@ function bind(): void {
   document.querySelector('[data-action="navv2-back"]')?.addEventListener('click', () => {
     handleNavV2Back()
   })
-  // —— Translate sheet ——
+  // —— Translate pane (replaces main upper window) ——
   document.querySelector('[data-action="tr-sheet-close"]')?.addEventListener('click', () => {
     closeTranslateSheet()
-  })
-  document.querySelector('[data-tr-sheet="1"]')?.addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeTranslateSheet()
   })
   document.getElementById('tr-sheet-form')?.addEventListener('submit', (e) => {
     e.preventDefault()

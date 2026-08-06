@@ -4,6 +4,7 @@ import { AboutPage } from '../pages/AboutPage'
 import { BrandPage } from '../pages/BrandPage'
 import { HomePage } from '../pages/HomePage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { PlayPage } from '../pages/PlayPage'
 import { SettingsPage } from '../pages/SettingsPage'
 
 export function AppRouter() {
@@ -12,6 +13,7 @@ export function AppRouter() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="play" element={<PlayPage />} />
           <Route path="brand" element={<BrandPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="settings" element={<SettingsPage />} />

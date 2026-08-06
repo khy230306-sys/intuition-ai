@@ -11,12 +11,15 @@ describe('ORBIS App', () => {
     expect(screen.getAllByRole('button', { name: '체험 시작' })[0]).toBeInTheDocument()
   })
 
-  it('opens Stage 2 preview modal', async () => {
+  it('starts playable Orbit Sync experience', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getAllByRole('button', { name: '체험 시작' })[0]!)
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText('게임 시스템은 Stage 2에서 연결됩니다.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'ORBIS 체험 라운드' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'BLUE' }))
+    expect(screen.getByRole('button', { name: '라운드 시작' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '라운드 시작' }))
+    expect(screen.getByRole('button', { name: 'SYNC' })).toBeInTheDocument()
   })
 
   it('navigates to settings and switches language', async () => {

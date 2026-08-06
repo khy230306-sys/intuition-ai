@@ -6,6 +6,7 @@ export const en: Dictionary = {
   tagline: 'Enter a new world',
   nav: {
     home: 'Home',
+    play: 'Play',
     brand: 'Brand',
     about: 'About',
     settings: 'Settings',
@@ -26,6 +27,26 @@ export const en: Dictionary = {
   home: {
     title: 'ORBIS',
     stageLabel: 'Orbital stage',
+  },
+  play: {
+    kicker: 'Orbit Sync',
+    title: 'ORBIS Experience Round',
+    subtitle: 'Choose an Orb, then SYNC when the marker reaches your target orbit.',
+    demoEnergy: 'Demo Energy',
+    freeNotice: 'This is free demo score only. No real money, deposits, withdrawals, exchange, or payments.',
+    stageLabel: 'ORBIS round stage',
+    chooseOrb: 'Choose Orb',
+    orbBlue: 'BLUE',
+    orbGold: 'GOLD',
+    orbViolet: 'VIOLET',
+    selectHint: 'Select BLUE, GOLD, or VIOLET first.',
+    readyHint: 'When ready, press Start Round.',
+    runningHint: 'SYNC when the glowing marker nears your Orb!',
+    startRound: 'Start Round',
+    syncNow: 'SYNC',
+    playAgain: 'Play Again',
+    roundLabel: 'Round',
+    energyUnit: 'Energy',
   },
   brand: {
     title: 'Brand Universe',
@@ -48,20 +69,20 @@ export const en: Dictionary = {
       'Instead of copying casino screens, ORBIS pursues futuristic minimal cosmic aesthetics. Light, orbit, and depth define its dignity.',
     futureTitle: 'Future direction',
     futureBody:
-      'After Stage 2, experiential rounds and brand expansion continue inside the ORBIS universe. Stage 1 focuses on brand and UI completion.',
+      'Experience rounds begin with Orbit Sync. Richer stories and presentation will follow.',
   },
   about: {
     title: 'About the Prototype',
     subtitle: 'Free ORBIS experience',
     purposeTitle: 'Purpose',
     purposeBody:
-      'ORBIS Prototype is a Stage 1 build for validating brand identity, responsive UI, animation, and PWA structure.',
+      'ORBIS Prototype validates brand identity and a playable free experience round called Orbit Sync.',
     freeTitle: 'Free experience notice',
     freeBody:
       'This project is for free experience only. It does not support real money deposits, withdrawals, exchange, or payments.',
     disclaimerTitle: 'Important notice',
     disclaimerBody:
-      'External betting connections, odds, game results, and score settlement are outside the Stage 1 scope.',
+      'Demo Energy is a local score only. There is no external betting connection or cash-out.',
   },
   settings: {
     title: 'Settings',
@@ -81,10 +102,10 @@ export const en: Dictionary = {
     savedHint: 'Settings are stored in this device localStorage.',
   },
   modal: {
-    stage2Title: 'Invitation to the next orbit',
-    stage2Body: 'The game system will connect in Stage 2.',
+    stage2Title: 'Experience round ready',
+    stage2Body: 'You can start the Orbit Sync experience now.',
     stage2Detail:
-      'You are currently in the ORBIS brand experience and UI prototype stage. The full experience continues in Stage 2.',
+      'Choose an Orb and sync the marker. Only free demo energy is stored — no real money transactions.',
   },
   notFound: {
     title: 'Out of orbit',

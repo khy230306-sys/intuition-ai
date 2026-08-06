@@ -4,6 +4,7 @@ export type Dictionary = {
   tagline: string
   nav: {
     home: string
+    play: string
     brand: string
     about: string
     settings: string
@@ -24,6 +25,26 @@ export type Dictionary = {
   home: {
     title: string
     stageLabel: string
+  }
+  play: {
+    kicker: string
+    title: string
+    subtitle: string
+    demoEnergy: string
+    freeNotice: string
+    stageLabel: string
+    chooseOrb: string
+    orbBlue: string
+    orbGold: string
+    orbViolet: string
+    selectHint: string
+    readyHint: string
+    runningHint: string
+    startRound: string
+    syncNow: string
+    playAgain: string
+    roundLabel: string
+    energyUnit: string
   }
   brand: {
     title: string
@@ -93,6 +114,7 @@ export const ko: Dictionary = {
   tagline: '새로운 세계를 체험하세요',
   nav: {
     home: '홈',
+    play: '체험',
     brand: '브랜드 소개',
     about: '소개',
     settings: '설정',
@@ -113,6 +135,26 @@ export const ko: Dictionary = {
   home: {
     title: 'ORBIS',
     stageLabel: '중앙 궤도 무대',
+  },
+  play: {
+    kicker: 'Orbit Sync',
+    title: 'ORBIS 체험 라운드',
+    subtitle: 'Orb를 선택하고, 마커가 목표 궤도에 왔을 때 SYNC 하세요.',
+    demoEnergy: '데모 에너지',
+    freeNotice: '무료 체험용 점수입니다. 실제 금전 거래, 입출금, 환전, 결제는 없습니다.',
+    stageLabel: 'ORBIS 라운드 무대',
+    chooseOrb: 'Orb 선택',
+    orbBlue: 'BLUE',
+    orbGold: 'GOLD',
+    orbViolet: 'VIOLET',
+    selectHint: '먼저 BLUE, GOLD, VIOLET 중 하나를 선택하세요.',
+    readyHint: '준비가 되면 라운드 시작을 누르세요.',
+    runningHint: '빛나는 마커가 선택한 Orb에 가까워지면 SYNC!',
+    startRound: '라운드 시작',
+    syncNow: 'SYNC',
+    playAgain: '다시 플레이',
+    roundLabel: '라운드',
+    energyUnit: 'Energy',
   },
   brand: {
     title: '브랜드 세계관',
@@ -135,20 +177,20 @@ export const ko: Dictionary = {
       '싸구려 카지노 복제 대신, 미래적이고 미니멀한 우주 미학을 추구합니다. 빛, 궤도, 깊이감으로 브랜드의 품격을 전달합니다.',
     futureTitle: '향후 확장 방향',
     futureBody:
-      'Stage 2 이후에는 ORBIS 세계관 안에서 체험형 라운드와 브랜드 확장이 이어질 예정입니다. 현재 Stage 1은 브랜드와 UI 완성 단계입니다.',
+      '체험 라운드는 Orbit Sync로 시작됩니다. 이후 더 풍부한 스토리와 연출이 이어질 예정입니다.',
   },
   about: {
     title: '프로토타입 소개',
     subtitle: '무료 체험용 ORBIS',
     purposeTitle: '목적',
     purposeBody:
-      'ORBIS Prototype은 브랜드 아이덴티티, 반응형 UI, 애니메이션, PWA 구조를 검증하기 위한 Stage 1 프로토타입입니다.',
+      'ORBIS Prototype은 브랜드 아이덴티티와 실행 가능한 무료 체험 라운드(Orbit Sync)를 검증하기 위한 프로토타입입니다.',
     freeTitle: '무료 체험 안내',
     freeBody:
       '본 프로젝트는 무료 체험용입니다. 실제 금전 거래, 입금, 출금, 환전, 결제를 지원하지 않습니다.',
     disclaimerTitle: '중요 안내',
     disclaimerBody:
-      '외부 베팅 사이트 연결, 배당, 게임 결과, 포인트 정산은 Stage 1 범위에 포함되지 않습니다.',
+      '데모 에너지는 로컬 점수일 뿐입니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
   },
   settings: {
     title: '설정',
@@ -168,10 +210,10 @@ export const ko: Dictionary = {
     savedHint: '설정은 이 기기의 localStorage에 저장됩니다.',
   },
   modal: {
-    stage2Title: '다음 궤도로의 초대',
-    stage2Body: '게임 시스템은 Stage 2에서 연결됩니다.',
+    stage2Title: '체험 라운드 안내',
+    stage2Body: 'Orbit Sync 체험을 바로 시작할 수 있습니다.',
     stage2Detail:
-      '현재는 ORBIS 브랜드 경험과 UI 프로토타입 단계입니다. 체험 시작은 Stage 2에서 본격적으로 이어집니다.',
+      'Orb를 선택하고 마커를 동기화하세요. 실제 금전 거래 없이 무료 데모 에너지만 쌓입니다.',
   },
   notFound: {
     title: '궤도를 벗어났습니다',

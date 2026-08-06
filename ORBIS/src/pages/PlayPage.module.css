@@ -1,0 +1,155 @@
+.page {
+  display: grid;
+  gap: 16px;
+  padding: 4px 0 28px;
+}
+
+.header {
+  display: grid;
+  gap: 6px;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--gold);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.energyBar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(16, 27, 51, 0.65);
+}
+
+.energyValue {
+  color: var(--neon-blue);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.notice {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.orbSelect {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.orbButton {
+  min-height: 56px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: rgba(244, 247, 255, 0.03);
+  color: var(--text-primary);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.orbButton:disabled {
+  opacity: 0.55;
+}
+
+.orbBlue {
+  border-color: rgba(58, 169, 255, 0.45);
+}
+
+.orbGold {
+  border-color: rgba(212, 178, 106, 0.45);
+}
+
+.orbViolet {
+  border-color: rgba(155, 107, 255, 0.45);
+}
+
+.orbActive {
+  box-shadow: 0 0 20px rgba(58, 169, 255, 0.2);
+  background: rgba(58, 169, 255, 0.12);
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+}
+
+.hint {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.resultCard {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(58, 169, 255, 0.3);
+  background:
+    radial-gradient(420px 160px at 50% 0%, rgba(58, 169, 255, 0.16), transparent 60%),
+    rgba(11, 18, 36, 0.92);
+  padding: 18px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.grade {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.12em;
+  font-weight: 750;
+}
+
+.gradePerfect {
+  color: #8fd0ff;
+}
+
+.gradeGreat {
+  color: var(--gold);
+}
+
+.gradeGood {
+  color: #c7b4ff;
+}
+
+.gradeMiss {
+  color: var(--text-muted);
+}
+
+.story {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+@media (min-width: 760px) {
+  .actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}

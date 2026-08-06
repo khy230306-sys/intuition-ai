@@ -37,15 +37,16 @@ npm run lint
 npm run test
 ```
 
-## 주요 기능 (Stage 1)
+## 주요 기능
 
 - ORBIS 브랜드 로고 / 색상 / 슬로건
 - Home 중앙 CORE + BLUE / GOLD / VIOLET Orb 궤도 애니메이션
+- **Orbit Sync 체험 라운드** (`/play`) — Orb 선택 후 SYNC 타이밍 게임
 - Brand / About / Settings / 404 페이지
 - 한국어 / 영어 전환
 - 사운드 토글 (Web Audio API, 기본 무음)
 - 애니메이션 품질 및 모션 감소 옵션
-- localStorage 설정 저장
+- localStorage 설정 및 데모 에너지 저장
 - PWA manifest + 서비스 워커
 
 ## 폴더 구조

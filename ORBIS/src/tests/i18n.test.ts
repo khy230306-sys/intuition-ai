@@ -17,8 +17,10 @@ describe('i18n dictionaries', () => {
     expect(collectKeys(en).sort()).toEqual(collectKeys(ko).sort())
   })
 
-  it('contains Stage 2 modal copy', () => {
-    expect(ko.modal.stage2Body).toContain('Stage 2')
-    expect(en.modal.stage2Body).toContain('Stage 2')
+  it('contains playable Orbit Sync copy', () => {
+    expect(ko.play.syncNow).toBe('SYNC')
+    expect(en.play.syncNow).toBe('SYNC')
+    expect(ko.nav.play).toBe('체험')
+    expect(en.nav.play).toBe('Play')
   })
 })

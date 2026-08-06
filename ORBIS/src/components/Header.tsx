@@ -12,6 +12,7 @@ type HeaderProps = {
 
 const navItems = [
   { to: '/', key: 'home' as const },
+  { to: '/play', key: 'play' as const },
   { to: '/brand', key: 'brand' as const },
   { to: '/about', key: 'about' as const },
   { to: '/settings', key: 'settings' as const },

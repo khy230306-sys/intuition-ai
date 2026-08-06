@@ -1,6 +1,6 @@
 {
   "channel": "preview",
-  "previewUrl": "https://light-lab.shipstatic.com",
+  "previewUrl": "https://lightlab-92m8bq7.shipstatic.com",
   "defaultPushServerUrl": "",
   "note": "Set PUSH_SERVER_URL when running deploy:preview to bake default server"
 }

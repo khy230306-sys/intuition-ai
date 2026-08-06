@@ -72,13 +72,34 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
     case 'calendar.create':
     case 'family.schedule.create': {
       const title = (r.title || r.extractedEntities.title || '일정').trim()
-      const date = r.date || r.extractedEntities.date || new Date().toISOString().slice(0, 10)
+      const date = r.date || r.extractedEntities.date
+      // Never invent a wall-clock time — only use what the user said.
       const time = r.time || r.extractedEntities.time
+      if (!date) {
+        return {
+          text: '날짜를 알려 주세요. 예: 「내일 오후 3시 병원 일정 추가해줘」',
+          speak: true,
+        }
+      }
       const person = r.person || r.extractedEntities.person
       const members = listFamilyMembers()
       const member = person
         ? members.find((m) => m.name.includes(person) || m.relation.includes(person))
         : undefined
+      const conflicts = listFamilyHelperSchedules({ days: 4000, includeDone: true }).filter(
+        (s) =>
+          s.date === date &&
+          s.title === title &&
+          (s.time || '') === (time || '') &&
+          !s.done,
+      )
+      if (conflicts.length) {
+        return {
+          text: `같은 일정이 이미 있어요.\n· ${date}${time ? ` ${time}` : ''} ${title}\n중복으로 넣지 않았어요.`,
+          speak: true,
+          view: 'family-helper',
+        }
+      }
       const sched = addFamilyHelperSchedule({
         title,
         date,
@@ -233,37 +254,50 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
     }
 
     case 'parking.save': {
-      const manual = (r.location || r.extractedEntities.location || r.extractedEntities.note || '').trim()
+      const manual = (r.location || r.extractedEntities.location || r.extractedEntities.note || '')
+        .trim()
+        .replace(/^(해줘|주세요)\s*/, '')
+      const prev = loadParkingMemory()
       let lat: number | null = null
       let lng: number | null = null
+      let accuracyM: number | null = null
       let source: 'gps' | 'manual' = 'manual'
+      // Only request GPS when user asked to save parking (not on screen open).
       try {
         const loc = await requestCurrentPosition({ timeoutMs: 5000 })
         if (loc.ok && loc.fix) {
           lat = loc.fix.coords.lat
           lng = loc.fix.coords.lng
+          accuracyM = loc.fix.accuracyM ?? null
           source = 'gps'
         }
       } catch {
-        /* manual ok */
+        /* manual ok — never wipe previous parking on GPS failure */
       }
       if (source === 'manual' && !manual) {
         return {
-          text: '위치 권한이 없거나 위치를 못 읽었어요. 장소명을 말해 주세요. 예: 「주차 위치 기억해줘 B2-15」',
+          text:
+            '위치 권한이 없거나 GPS를 못 읽었어요. 기존 주차 메모는 그대로 둡니다.\n' +
+            '장소·층·구역을 말해 주세요. 예: 「주차 위치 기억해줘 B2-15 기둥 옆」',
           speak: true,
         }
       }
       const saved = saveParkingMemory({
         label: manual || '현재 위치 주차',
-        note: manual,
-        lat,
-        lng,
-        source,
+        note: manual || prev?.note || '',
+        lat: lat ?? (manual ? null : prev?.lat ?? null),
+        lng: lng ?? (manual ? null : prev?.lng ?? null),
+        accuracyM,
+        source: lat != null ? source : 'manual',
       })
+      const acc =
+        saved.accuracyM != null
+          ? `\n· 정확도 약 ${Math.round(saved.accuracyM)}m${saved.accuracyM > 80 ? ' (다소 낮음)' : ''}`
+          : ''
       return {
         text: `주차 위치를 기억했어요.\n· ${saved.label}${
           saved.lat != null ? `\n· 좌표 ${saved.lat.toFixed(5)}, ${saved.lng?.toFixed(5)}` : ''
-        }`,
+        }${acc}`,
         speak: true,
       }
     }

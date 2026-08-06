@@ -3904,3 +3904,28 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
     border-color: rgba(0, 0, 0, 0.12);
   }
 }
+
+/* —— Feature diagnostics (Stage 7) —— */
+.fdiag-panel { margin-top: 12px; }
+.fdiag-list { padding-left: 1.1rem; margin: 6px 0 12px; line-height: 1.55; }
+.fdiag-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 40vh; overflow: auto; }
+.fdiag-steps li { padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); font-size: 0.86rem; }
+.fdiag-v { font-weight: 700; margin-right: 6px; }
+.fdiag-pass { border-color: rgba(16,185,129,.35); }
+.fdiag-warn { border-color: rgba(251,191,36,.4); }
+.fdiag-fail { border-color: rgba(248,113,113,.45); }
+.fdiag-needs_device { border-color: rgba(96,165,250,.4); }
+.fdiag-check { padding-left: 1.2rem; margin: 0; display: grid; gap: 10px; }
+.fdiag-check li { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.aicam-panel, .fh-panel, .fdiag-panel {
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+.aicam-preview { max-height: min(52vh, 420px); }
+.fh-form, .aicam-panel .row-btns { margin-bottom: 8px; }
+.fh-body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-height: none; }
+@media (max-width: 640px) {
+  .view-scroll { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  #composer, .home-v2-composer {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}

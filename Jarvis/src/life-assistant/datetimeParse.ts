@@ -8,27 +8,65 @@ export function ymd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+function nextWeekday(now: Date, targetDow: number, weekOffset: number): Date {
+  const d = new Date(now)
+  const day = d.getDay()
+  if (weekOffset === 1) {
+    // 「다음 주 X요일」: land on that weekday in the next Mon-start week
+    const daysUntilNextMonday = ((1 - day + 7) % 7) || 7
+    d.setDate(d.getDate() + daysUntilNextMonday)
+    const fromMon = (targetDow - 1 + 7) % 7
+    d.setDate(d.getDate() + fromMon)
+    return d
+  }
+  // nearest upcoming (including today)
+  const add = (targetDow - day + 7) % 7
+  d.setDate(d.getDate() + add)
+  return d
+}
+
+const DOW: Record<string, number> = {
+  일: 0,
+  월: 1,
+  화: 2,
+  수: 3,
+  목: 4,
+  금: 5,
+  토: 6,
+}
+
 export function extractKoreanDate(text: string, now = new Date()): string | undefined {
   const t = text.trim()
-  if (/오늘/.test(t)) return ymd(now)
-  if (/내일/.test(t)) {
-    const d = new Date(now)
-    d.setDate(d.getDate() + 1)
-    return ymd(d)
-  }
   if (/모레/.test(t)) {
     const d = new Date(now)
     d.setDate(d.getDate() + 2)
     return ymd(d)
   }
-  if (/이번\s*주/.test(t)) return ymd(now)
-  if (/다음\s*주\s*월요일|다음주\s*월요일/.test(t)) {
+  if (/내일/.test(t)) {
     const d = new Date(now)
-    const day = d.getDay()
-    const add = ((1 + 7 - day) % 7) + 7
-    d.setDate(d.getDate() + (add === 7 ? 7 : add))
+    d.setDate(d.getDate() + 1)
     return ymd(d)
   }
+  if (/오늘/.test(t)) return ymd(now)
+
+  const nextDow = t.match(/다음\s*주\s*([월화수목금토일])(?:요일)?/)
+  if (nextDow) {
+    const dow = DOW[nextDow[1]!]
+    if (dow != null) return ymd(nextWeekday(now, dow, 1))
+  }
+  const thisDow = t.match(/이번\s*주\s*([월화수목금토일])(?:요일)?/)
+  if (thisDow) {
+    const dow = DOW[thisDow[1]!]
+    if (dow != null) {
+      const d = new Date(now)
+      const day = d.getDay()
+      let add = (dow - day + 7) % 7
+      d.setDate(d.getDate() + add)
+      return ymd(d)
+    }
+  }
+  if (/이번\s*주/.test(t)) return ymd(now)
+
   const md = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/)
   if (md) {
     const m = Number(md[1])
@@ -44,15 +82,40 @@ export function extractKoreanDate(text: string, now = new Date()): string | unde
 
 export function extractKoreanTime(text: string): string | undefined {
   const t = text.trim()
-  const ampm = t.match(/(오전|오후|아침|저녁|밤)?\s*(\d{1,2})\s*시\s*(\d{1,2})?\s*분?/)
-  if (ampm) {
-    let h = Number(ampm[2])
-    const m = ampm[3] != null ? Number(ampm[3]) : 0
-    const period = ampm[1] || ''
+  // 4시 반 / 오후 4시 반 — 하원·하교는 오후로 해석
+  const half = t.match(/(오전|오후|아침|저녁|밤)?\s*(\d{1,2})\s*시\s*반/)
+  if (half) {
+    let h = Number(half[2])
+    const period = half[1] || ''
     if (/오후|저녁|밤/.test(period) && h < 12) h += 12
     if (/오전|아침/.test(period) && h === 12) h = 0
+    if (!period && /저녁/.test(t) && h < 12) h += 12
+    if (!period && /(하원|하교|학원)/.test(t) && h > 0 && h <= 8) h += 12
+    if (h >= 0 && h <= 23) return `${pad(h)}:30`
+  }
+
+  const ampm = t.match(/(오전|오후|아침|저녁|밤)?\s*(\d{1,2})\s*시\s*(\d{1,2})?\s*분?/)
+  if (ampm && /시/.test(t)) {
+    let h = Number(ampm[2])
+    const m = ampm[3] != null ? Number(ampm[3]) : 0
+    let period = ampm[1] || ''
+    if (!period && /저녁/.test(t)) period = '저녁'
+    if (!period && /아침/.test(t)) period = '아침'
+    if (/오후|저녁|밤/.test(period) && h < 12) h += 12
+    if (/오전|아침/.test(period) && h === 12) h = 0
+    if (!period && /(하원|하교|학원)/.test(t) && h > 0 && h <= 8 && m === 0) h += 12
+    if (!period && /(하원|하교|학원)/.test(t) && h > 0 && h <= 8 && m > 0) h += 12
     if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return `${pad(h)}:${pad(m)}`
   }
+
+  // 16시 30분
+  const mil = t.match(/\b(\d{1,2})\s*시\s*(\d{1,2})\s*분/)
+  if (mil) {
+    const h = Number(mil[1])
+    const m = Number(mil[2])
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) return `${pad(h)}:${pad(m)}`
+  }
+
   const hm = t.match(/\b(\d{1,2}):(\d{2})\b/)
   if (hm) {
     const h = Number(hm[1])

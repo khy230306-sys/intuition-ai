@@ -68,6 +68,7 @@ export function saveParkingMemory(input: Omit<ParkingMemory, 'id' | 'savedAt'> &
     note: String(input.note || '').trim(),
     lat: input.lat ?? null,
     lng: input.lng ?? null,
+    accuracyM: input.accuracyM ?? null,
     savedAt: Date.now(),
     source: input.source,
   }

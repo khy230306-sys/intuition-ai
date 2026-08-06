@@ -8,6 +8,7 @@ import {
   deleteFamilyMember,
   detectScheduleConflicts,
   getEmergencyCard,
+  getLastSelectedMemberId,
   listFamilyHelperSchedules,
   listFamilyHelperTasks,
   listFamilyMembers,
@@ -15,6 +16,7 @@ import {
   listMedications,
   listVaccinations,
   logMedication,
+  setLastSelectedMemberId,
   updateFamilyHelperSchedule,
   updateFamilyHelperTask,
   upsertEmergencyCard,
@@ -81,15 +83,21 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
   ]
 
   let body = ''
+  const lastMember = getLastSelectedMemberId()
   if (st.tab === 'overview') {
     body = `
       <p class="hint">구성원 ${members.filter((m) => m.active).length}명 · 다가오는 일정 ${schedules.filter((s) => !s.done).length}건 · 할 일 ${tasks.filter((t) => !t.done).length}건</p>
+      ${
+        !members.length
+          ? `<p class="hint">시작하기: 이름과 관계만 입력해도 구성원을 저장할 수 있어요. 「구성원」탭 → 추가.</p>`
+          : ''
+      }
       <ul class="fh-list">
         ${schedules
           .filter((s) => !s.done)
           .slice(0, 6)
           .map((s) => `<li><strong>${esc(s.date)}${s.time ? ' ' + esc(s.time) : ''}</strong> ${esc(s.title)}</li>`)
-          .join('') || '<li class="hint">일정이 없어요. 채팅으로 「내일 하원 알림」처럼 말해 보세요.</li>'}
+          .join('') || '<li class="hint">일정이 없어요. 채팅으로 「한영이 내일 4시 반 하원」처럼 말해 보세요.</li>'}
       </ul>
       <div class="row-btns">
         <button type="button" class="primary-btn" data-fh-tab="schedule">일정 관리</button>
@@ -99,18 +107,22 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
     `
   } else if (st.tab === 'members') {
     body = `
+      <p class="hint">이름·관계만 있어도 저장됩니다. 학교·연락처는 나중에 수정하세요.</p>
       <form id="fh-member-form" class="fh-form">
-        <input name="name" required placeholder="이름/별칭" />
+        <input name="name" required placeholder="이름/별칭 (필수)" autocomplete="name" />
         <select name="relation">
           ${Object.entries(REL_LABEL)
             .map(([k, v]) => `<option value="${k}">${v}</option>`)
             .join('')}
         </select>
-        <input name="birthDate" type="date" placeholder="생년월일" />
-        <input name="school" placeholder="학교/기관" />
-        <input name="grade" placeholder="학년/반" />
-        <input name="phone" placeholder="연락처" inputmode="tel" />
-        <input name="note" placeholder="메모" />
+        <details>
+          <summary class="hint">추가 정보 (선택)</summary>
+          <input name="birthDate" type="date" placeholder="생년월일" />
+          <input name="school" placeholder="학교/기관" />
+          <input name="grade" placeholder="학년/반" />
+          <input name="phone" placeholder="연락처" inputmode="tel" />
+          <input name="note" placeholder="메모" />
+        </details>
         <button class="primary-btn" type="submit">구성원 추가</button>
       </form>
       <ul class="fh-list">
@@ -121,11 +133,12 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
               ${m.school ? `<br/><span class="hint">${esc(m.school)} ${esc(m.grade || '')}</span>` : ''}
               ${st.showHealth && m.healthNote ? `<br/><span class="hint">건강메모: ${esc(m.healthNote)}</span>` : ''}
               <div class="row-btns">
-                <button type="button" class="ghost-btn tiny" data-fh-del-member="${esc(m.id)}">삭제</button>
+                <button type="button" class="ghost-btn tiny" data-fh-del-member="${esc(m.id)}" data-purge="0">삭제(기록 유지)</button>
+                <button type="button" class="ghost-btn tiny danger-btn" data-fh-del-member="${esc(m.id)}" data-purge="1">삭제+관련기록</button>
               </div>
             </li>`,
           )
-          .join('') || '<li class="hint">구성원을 추가해 주세요.</li>'}
+          .join('') || '<li class="hint">구성원을 추가해 주세요. 이름과 관계만 있으면 됩니다.</li>'}
       </ul>
       <label class="hint"><input type="checkbox" id="fh-show-health" ${st.showHealth ? 'checked' : ''}/> 건강 메모 표시 (기본 숨김)</label>
     `
@@ -143,7 +156,12 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
         <input name="time" type="time" />
         <select name="memberId">
           <option value="">구성원 선택(선택)</option>
-          ${members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}
+          ${members
+            .map(
+              (m) =>
+                `<option value="${esc(m.id)}" ${lastMember === m.id ? 'selected' : ''}>${esc(m.name)}</option>`,
+            )
+            .join('')}
         </select>
         <select name="category">
           ${(['pickup', 'dropoff', 'academy', 'hospital', 'vaccination', 'medication', 'homework', 'supplies', 'school_event', 'birthday', 'anniversary', 'parent', 'general'] as FamilyScheduleCategory[])
@@ -338,8 +356,13 @@ export function bindFamilyHelperScreen(
 
   root.querySelectorAll<HTMLButtonElement>('[data-fh-del-member]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      deleteFamilyMember(btn.dataset.fhDelMember || '')
-      redraw({ status: '구성원을 삭제했어요.' })
+      const purge = btn.dataset.purge === '1'
+      const msg = purge
+        ? '구성원과 관련 일정·준비물·약 기록을 함께 삭제할까요?'
+        : '구성원만 삭제할까요? (관련 일정 기록은 유지됩니다)'
+      if (!window.confirm(msg)) return
+      deleteFamilyMember(btn.dataset.fhDelMember || '', { purgeRelated: purge })
+      redraw({ status: purge ? '구성원과 관련 기록을 삭제했어요.' : '구성원을 삭제했어요. 관련 기록은 유지됩니다.' })
     })
   })
 
@@ -348,12 +371,14 @@ export function bindFamilyHelperScreen(
     const fd = new FormData(e.target as HTMLFormElement)
     const title = String(fd.get('title') || '')
     const date = String(fd.get('date') || '')
+    const memberId = String(fd.get('memberId') || '') || undefined
+    if (memberId) setLastSelectedMemberId(memberId)
     const conflicts = detectScheduleConflicts(date, title)
     addFamilyHelperSchedule({
       title,
       date,
       time: String(fd.get('time') || '') || undefined,
-      memberId: String(fd.get('memberId') || '') || undefined,
+      memberId,
       category: String(fd.get('category') || 'general') as FamilyScheduleCategory,
       note: String(fd.get('note') || '') || undefined,
       notifyMinutesBefore: 30,
@@ -367,11 +392,12 @@ export function bindFamilyHelperScreen(
   root.querySelectorAll<HTMLButtonElement>('[data-fh-done-sched]').forEach((btn) => {
     btn.addEventListener('click', () => {
       updateFamilyHelperSchedule(btn.dataset.fhDoneSched || '', { done: btn.dataset.done === '1' })
-      redraw({ status: '일정을 업데이트했어요.' })
+      redraw({ status: btn.dataset.done === '1' ? '완료로 표시했어요.' : '미완료로 되돌렸어요.' })
     })
   })
   root.querySelectorAll<HTMLButtonElement>('[data-fh-del-sched]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      if (!window.confirm('이 일정을 삭제할까요?')) return
       deleteFamilyHelperSchedule(btn.dataset.fhDelSched || '')
       redraw({ status: '일정을 삭제했어요.' })
     })

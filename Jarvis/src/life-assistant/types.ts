@@ -55,6 +55,8 @@ export type ParkingMemory = {
   note: string
   lat: number | null
   lng: number | null
+  /** meters, when GPS */
+  accuracyM?: number | null
   savedAt: number
   source: 'gps' | 'manual'
 }

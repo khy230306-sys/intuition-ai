@@ -112,6 +112,16 @@ import {
   type FamilyHelperState,
 } from './family-helper'
 import {
+  collectFeatureDiagStatus,
+  loadDeviceChecklist,
+  renderFeatureDiagPanel,
+  runFeatureAutoDiag,
+  sanitizeDiagExport,
+  setChecklistStatus,
+  type AutoDiagReport,
+  type FeatureDiagStatus,
+} from './featureDiag'
+import {
   attemptPwaInstall,
   bindPwaInstallEvents,
   copyAppUrl,
@@ -383,7 +393,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.22.0'
+const APP_VERSION = '1.22.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -764,6 +774,12 @@ const state = {
   aiCamera: defaultCameraState() as CameraScreenState,
   /** 부모·가족 도우미 */
   familyHelper: defaultFamilyHelperState() as FamilyHelperState,
+  /** Stage 7 feature diagnostics */
+  featureDiagStatus: null as FeatureDiagStatus | null,
+  featureDiagReport: null as AutoDiagReport | null,
+  featureDiagRunning: false,
+  featureDiagStatusText: '',
+  featureDiagChecklist: loadDeviceChecklist(),
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -4845,6 +4861,13 @@ function renderSettings(): string {
         </label>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
+        ${renderFeatureDiagPanel({
+          status: state.featureDiagStatus,
+          report: state.featureDiagReport,
+          checklist: state.featureDiagChecklist,
+          running: state.featureDiagRunning,
+          statusText: state.featureDiagStatusText,
+        })}
         <details class="device-test-panel" open>
           <summary><strong>실기기 테스트 모드 · 푸시</strong></summary>
           <p class="hint">버전·권한·푸시·스토리지 진단. API 키·VAPID 비밀키·endpoint 전체값은 표시하지 않습니다. 완전 종료 수신은 사용자가 확인하기 전까지 <strong>실기기 검증 대기</strong>입니다.</p>
@@ -5100,9 +5123,31 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                             </section>`
                           : renderNavigationScreen(state.navV2)
                         : state.view === 'ai-camera'
-                          ? renderCameraScreen(state.aiCamera)
+                          ? (() => {
+                              try {
+                                return renderCameraScreen(state.aiCamera)
+                              } catch (err) {
+                                recordDiagError(
+                                  `VISION-PROVIDER-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
+                                )
+                                return `<section class="panel"><p class="hint">카메라 화면을 불러오지 못했어요. (VISION-PROVIDER-001)</p>
+                                  <button type="button" class="primary-btn" data-view="chat">홈으로</button>
+                                  <button type="button" class="ghost-btn" data-view="ai-camera">다시 시도</button></section>`
+                              }
+                            })()
                           : state.view === 'family-helper'
-                            ? renderFamilyHelperScreen(state.familyHelper)
+                            ? (() => {
+                                try {
+                                  return renderFamilyHelperScreen(state.familyHelper)
+                                } catch (err) {
+                                  recordDiagError(
+                                    `FAMILY-STORAGE-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
+                                  )
+                                  return `<section class="panel"><p class="hint">가족 도우미를 불러오지 못했어요. (FAMILY-STORAGE-001)</p>
+                                    <button type="button" class="primary-btn" data-view="chat">홈으로</button>
+                                    <button type="button" class="ghost-btn" data-view="family-helper">다시 시도</button></section>`
+                                }
+                              })()
                             : renderSettings()
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
@@ -7079,6 +7124,94 @@ function bind(): void {
       const diag = await m.collectDeviceDiagnostics(APP_VERSION)
       m.downloadDiagnosticsJson(diag)
       showFlash('진단 JSON을 저장했습니다. (API 키 제외)')
+    })
+  })
+
+  const refreshFeatureDiagStatus = async () => {
+    try {
+      const meta = await fetch(`./build-meta.json?_=${Date.now()}`).then((r) => r.json()).catch(() => ({}))
+      state.featureDiagStatus = await collectFeatureDiagStatus({
+        version: APP_VERSION,
+        buildId: String(meta.buildId || ''),
+        commit: String(meta.commit || ''),
+        channel: String(meta.channel || ''),
+      })
+      state.featureDiagStatusText = '상태를 갱신했습니다.'
+    } catch (e) {
+      state.featureDiagStatusText = e instanceof Error ? e.message : '상태 갱신 실패'
+      recordDiagError(`LIFE-EXEC-001:${state.featureDiagStatusText.slice(0, 40)}`)
+    }
+    if (state.view === 'settings') render({ guardNav: false })
+  }
+
+  if (state.view === 'settings' && !state.featureDiagStatus && !state.featureDiagRunning) {
+    void refreshFeatureDiagStatus()
+  }
+
+  document.querySelector('[data-action="fdiag-refresh"]')?.addEventListener('click', () => {
+    void refreshFeatureDiagStatus()
+  })
+  document.querySelector('[data-action="fdiag-autorun"]')?.addEventListener('click', () => {
+    if (state.featureDiagRunning) return
+    state.featureDiagRunning = true
+    state.featureDiagStatusText = '3개 기능 자동 진단 중…'
+    render({ guardNav: false })
+    void runFeatureAutoDiag()
+      .then(async (report) => {
+        state.featureDiagReport = report
+        state.featureDiagStatusText = `자동 진단 완료 · 성공 ${report.summary.pass} · 실패 ${report.summary.fail}`
+        await refreshFeatureDiagStatus()
+      })
+      .catch((e) => {
+        state.featureDiagStatusText = e instanceof Error ? e.message : '자동 진단 실패'
+        recordDiagError(`LIFE-EXEC-001:${state.featureDiagStatusText.slice(0, 40)}`)
+      })
+      .finally(() => {
+        state.featureDiagRunning = false
+        if (state.view === 'settings') render({ guardNav: false })
+      })
+  })
+  document.querySelector('[data-action="fdiag-check-update"]')?.addEventListener('click', () => {
+    void updateAppToLatest()
+  })
+  document.querySelector('[data-action="fdiag-cache-refresh"]')?.addEventListener('click', () => {
+    // Cache-only refresh — keeps user data (family/parking/vision history)
+    void hardRefreshApp({ targetVersion: APP_VERSION })
+  })
+  document.querySelector('[data-action="fdiag-copy"]')?.addEventListener('click', () => {
+    const payload = sanitizeDiagExport({
+      status: state.featureDiagStatus,
+      report: state.featureDiagReport,
+      checklist: state.featureDiagChecklist,
+      version: APP_VERSION,
+    })
+    const text = JSON.stringify(payload, null, 2)
+    const copied = copyTextNow(text)
+    showFlash(copied.ok ? '진단 정보를 복사했습니다. (키·사진 제외)' : '복사에 실패했습니다.')
+  })
+  document.querySelector('[data-action="fdiag-export"]')?.addEventListener('click', () => {
+    const payload = sanitizeDiagExport({
+      app: 'AIZIO',
+      version: APP_VERSION,
+      status: state.featureDiagStatus,
+      report: state.featureDiagReport,
+      checklist: state.featureDiagChecklist,
+      exportedAt: new Date().toISOString(),
+    })
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `aizio-feature-diag-${APP_VERSION}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    showFlash('진단 JSON을 저장했습니다. (API 키·사진 제외)')
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-fdiag-check]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.fdiagCheck || ''
+      const status = (btn.dataset.status === 'issue' ? 'issue' : 'ok') as 'ok' | 'issue'
+      state.featureDiagChecklist = setChecklistStatus(id, status)
+      render({ guardNav: false })
     })
   })
 

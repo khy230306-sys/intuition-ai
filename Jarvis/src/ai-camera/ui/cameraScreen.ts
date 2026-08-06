@@ -127,9 +127,12 @@ export function renderCameraScreen(st: CameraScreenState): string {
             : `<p class="hint">미리보기 없음</p>`
         }
       </div>
-      <div class="row-btns">
-        <label class="primary-btn aicam-file-btn">촬영
+      <div class="row-btns aicam-capture-row">
+        <label class="primary-btn aicam-file-btn">후면 촬영
           <input type="file" id="aicam-capture" accept="image/*" capture="environment" hidden />
+        </label>
+        <label class="ghost-btn aicam-file-btn">전면 촬영
+          <input type="file" id="aicam-capture-user" accept="image/*" capture="user" hidden />
         </label>
         <label class="ghost-btn aicam-file-btn">보관함
           <input type="file" id="aicam-gallery" accept="image/*" multiple hidden />
@@ -170,6 +173,7 @@ export function renderCameraScreen(st: CameraScreenState): string {
 }
 
 let abort: AbortController | null = null
+let analyzeInFlight = false
 
 export async function bindCameraScreen(
   root: HTMLElement,
@@ -186,26 +190,64 @@ export async function bindCameraScreen(
     btn.addEventListener('click', () => redraw({ mode: btn.dataset.aicamMode as VisionMode }))
   })
 
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return
+  const resetInput = (el: HTMLInputElement | null) => {
+    if (el) el.value = ''
+  }
+
+  const onFiles = async (input: HTMLInputElement | null, files: FileList | null) => {
+    // Cancel / empty selection — keep current preview, never blank the screen
+    if (!files?.length) {
+      resetInput(input)
+      redraw({
+        status: st.previewUrl
+          ? '선택을 취소했어요. 이전 미리보기를 유지합니다.'
+          : '촬영·선택이 취소되었어요. 다시 시도해 주세요.',
+      })
+      return
+    }
     try {
       const optimized = await optimizeImageFile(files[0]!)
       redraw({
         previewUrl: optimized.dataUrl,
         result: null,
-        status: files.length > 1 ? `${files.length}장 중 첫 사진을 사용합니다.` : '미리보기 준비됨. 분석을 눌러 주세요.',
+        status:
+          files.length > 1
+            ? `${files.length}장 중 첫 사진을 사용합니다. 분석을 눌러 주세요.`
+            : '미리보기 준비됨. 분석을 눌러 주세요.',
       })
     } catch (e) {
-      redraw({ status: e instanceof Error ? e.message : '이미지를 불러오지 못했어요.' })
+      // HEIC / decode failures must not crash the Vision screen
+      redraw({
+        status: e instanceof Error ? e.message : '이미지를 불러오지 못했어요. JPEG/PNG로 다시 선택해 주세요.',
+      })
+    } finally {
+      // Allow re-selecting the same photo on iPhone Safari
+      resetInput(input)
     }
   }
 
   root.querySelector('#aicam-capture')?.addEventListener('change', (e) => {
-    void onFiles((e.target as HTMLInputElement).files)
+    const input = e.target as HTMLInputElement
+    void onFiles(input, input.files)
+  })
+  root.querySelector('#aicam-capture-user')?.addEventListener('change', (e) => {
+    const input = e.target as HTMLInputElement
+    void onFiles(input, input.files)
   })
   root.querySelector('#aicam-gallery')?.addEventListener('change', (e) => {
-    void onFiles((e.target as HTMLInputElement).files)
+    const input = e.target as HTMLInputElement
+    void onFiles(input, input.files)
   })
+
+  document.addEventListener(
+    'visibilitychange',
+    () => {
+      if (document.visibilityState === 'visible' && st.analyzing) {
+        redraw({ status: '앱으로 돌아왔어요. 분석이 계속 중이거나 취소 후 다시 시도할 수 있어요.' })
+      }
+    },
+    { once: true },
+  )
 
   root.querySelector('#aicam-save-hist')?.addEventListener('change', (e) => {
     redraw({ saveHistory: (e.target as HTMLInputElement).checked })
@@ -239,7 +281,8 @@ export async function bindCameraScreen(
   })
 
   root.querySelector('[data-aicam-action="analyze"]')?.addEventListener('click', () => {
-    if (!st.previewUrl || st.analyzing) return
+    if (!st.previewUrl || st.analyzing || analyzeInFlight) return
+    analyzeInFlight = true
     abort?.abort()
     abort = new AbortController()
     redraw({ analyzing: true, status: '이미지를 분석하는 중…', result: null })
@@ -250,24 +293,37 @@ export async function bindCameraScreen(
       question: st.question,
       targetLang: 'ko',
       signal: abort.signal,
-    }).then(async (result) => {
-      if (st.saveHistory) {
-        const thumb = await makeThumb(st.previewUrl)
-        saveVisionHistoryItem({
-          id: `vh_${Date.now().toString(36)}`,
-          savedAt: Date.now(),
-          mode: result.mode,
-          summary: result.summary,
-          thumbDataUrl: thumb || undefined,
-          result: { ...result, rawText: undefined },
-        })
-      }
-      redraw({
-        analyzing: false,
-        result,
-        status: result.ok ? '분석 완료' : result.summary,
-      })
     })
+      .then(async (result) => {
+        if (st.saveHistory) {
+          const thumb = await makeThumb(st.previewUrl)
+          saveVisionHistoryItem({
+            id: `vh_${Date.now().toString(36)}`,
+            savedAt: Date.now(),
+            mode: result.mode,
+            summary: result.summary,
+            thumbDataUrl: thumb || undefined,
+            result: { ...result, rawText: undefined },
+          })
+        }
+        redraw({
+          analyzing: false,
+          result,
+          status: result.ok ? '분석 완료' : result.summary,
+        })
+      })
+      .catch((e) => {
+        redraw({
+          analyzing: false,
+          status:
+            e instanceof Error && e.name === 'AbortError'
+              ? '분석을 취소했어요. 입력은 유지됩니다.'
+              : '분석을 끝내지 못했어요. 다시 시도해 주세요. (VISION-PROVIDER-001)',
+        })
+      })
+      .finally(() => {
+        analyzeInFlight = false
+      })
   })
 
   root.querySelector('[data-aicam-action="reanalyze"]')?.addEventListener('click', () => {

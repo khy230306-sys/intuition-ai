@@ -15,6 +15,23 @@ import type {
 export const FAMILY_HELPER_SCHEMA_VERSION = 1
 const STORE_KEY = 'aizio_family_helper_v1'
 const SCHEMA_KEY = 'aizio_family_helper_schema_v1'
+const LAST_MEMBER_KEY = 'aizio_family_helper_last_member_v1'
+
+export function getLastSelectedMemberId(): string {
+  try {
+    return localStorage.getItem(LAST_MEMBER_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setLastSelectedMemberId(id: string): void {
+  try {
+    if (id) localStorage.setItem(LAST_MEMBER_KEY, id)
+  } catch {
+    /* ignore */
+  }
+}
 
 const COLORS = ['#0d9488', '#2563eb', '#db2777', '#d97706', '#7c3aed', '#059669']
 
@@ -136,11 +153,29 @@ export function upsertFamilyMember(input: {
   return member
 }
 
-export function deleteFamilyMember(id: string): boolean {
+/**
+ * Remove member profile. Related schedules/tasks are kept by default (orphan memberId)
+ * unless purgeRelated=true.
+ */
+export function deleteFamilyMember(id: string, opts?: { purgeRelated?: boolean }): boolean {
   const b = loadFamilyHelperBundle()
   const before = b.members.length
   b.members = b.members.filter((m) => m.id !== id)
-  // Soft-clean related? keep schedules, just leave orphan memberId
+  if (opts?.purgeRelated) {
+    b.schedules = b.schedules.filter((s) => s.memberId !== id)
+    b.tasks = b.tasks.filter((t) => t.memberId !== id)
+    b.medications = b.medications.filter((m) => m.memberId !== id)
+    b.vaccinations = b.vaccinations.filter((v) => v.memberId !== id)
+    b.growth = b.growth.filter((g) => g.memberId !== id)
+    b.emergency = b.emergency.filter((e) => e.memberId !== id)
+  }
+  if (getLastSelectedMemberId() === id) {
+    try {
+      localStorage.removeItem(LAST_MEMBER_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
   saveBundle(b)
   return b.members.length < before
 }
@@ -429,7 +464,7 @@ export function detectScheduleConflicts(date: string, title: string): string[] {
   const local = loadFamilyHelperBundle().schedules.filter(
     (s) => s.date === date && s.title.replace(/\s+/g, '') === title.replace(/\s+/g, '') && !s.done,
   )
-  if (local.length > 1) conflicts.push('가족 도우미에 같은 날짜·제목 일정이 이미 있어요.')
+  if (local.length >= 1) conflicts.push('가족 도우미에 같은 날짜·제목 일정이 이미 있어요.')
   return conflicts
 }
 

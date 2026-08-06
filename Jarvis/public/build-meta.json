@@ -1,10 +1,10 @@
 {
   "app": "AIZIO",
-  "version": "1.24.0",
-  "buildId": "preview-1786053426695",
-  "commit": "e7a5c8e",
+  "version": "1.25.0",
+  "buildId": "preview-1786054224275",
+  "commit": "775d5fc",
   "channel": "preview",
-  "builtAt": "2026-08-06T21:57:06.700Z",
+  "builtAt": "2026-08-06T22:10:24.279Z",
   "previewUrl": "https://lightlab-92m8bq7.shipstatic.com",
   "productionUrl": "https://jarvis-app.shipstatic.com",
   "note": "Fixed Preview — https://lightlab-92m8bq7.shipstatic.com (production untouched)"

@@ -14,7 +14,6 @@ import {
   isRunningAsInstalledPwa,
   markPwaInstalled,
   openInstallShareSheet,
-  PRODUCTION_INSTALL_URL,
   setDeferredInstallPromptForTests,
   shouldShowInstallButton,
 } from './pwaInstall'

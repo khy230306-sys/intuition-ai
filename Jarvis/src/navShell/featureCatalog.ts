@@ -130,6 +130,14 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
     keywords: ['여행', '항공', '호텔', '비행기', 'travel', 'flight', 'hotel', '오사카', '제주'],
   },
   {
+    id: 'restaurant',
+    title: '맛집 · 예약',
+    description: '식당 검색 · 예약 (Demo)',
+    group: 'lifeos',
+    view: 'restaurant',
+    keywords: ['맛집', '식당', '예약', '외식', '레스토랑', 'restaurant', '삼산'],
+  },
+  {
     id: 'navigation',
     title: '길안내',
     description: '내부 지도 · 경로',

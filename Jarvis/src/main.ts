@@ -223,6 +223,13 @@ import {
   saveTravelConfig,
   loadTravelConfig,
 } from './travelAgent'
+import {
+  clearRestaurantSession,
+  renderRestaurantScreen,
+  renderRestaurantServicesSettingsHtml,
+  saveRestaurantConfig,
+  loadRestaurantConfig,
+} from './restaurantAgent'
 import { nextChatSendGuard, shouldAcceptChatSend, type ChatSendGuardState } from './chatSendGuard'
 import { bcp47, detectLangCode, translateText } from './translate'
 import {
@@ -419,7 +426,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.25.0'
+const APP_VERSION = '1.26.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -5039,6 +5046,7 @@ function renderSettings(): string {
         })}
         ${renderHybridAiSettingsHtml()}
         ${renderTravelServicesSettingsHtml()}
+        ${renderRestaurantServicesSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
           <input name="apiKey" type="password" value="" placeholder="${escapeAttr(s.apiKey ? '저장됨 · 변경 시에만 입력' : 'sk-...')}" autocomplete="off" />
@@ -5320,6 +5328,8 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                                     })()
                                   : state.view === 'travel'
                                     ? renderTravelScreen()
+                                  : state.view === 'restaurant'
+                                    ? renderRestaurantScreen()
                                   : state.view === 'settings'
                                     ? renderSettings()
                                     : renderNavMoreView())
@@ -6297,6 +6307,28 @@ function bind(): void {
     if (flightKey) flightKey.value = ''
     if (hotelKey) hotelKey.value = ''
     showFlash('Travel Services 설정을 저장했습니다.')
+    render({ guardNav: false })
+  })
+  document.querySelector('[data-action="restaurant-ask-aizio"]')?.addEventListener('click', () => {
+    goToView('chat')
+    void handleUserText('오늘 저녁 맛집 찾아줘')
+  })
+  document.querySelector('[data-action="restaurant-clear-session"]')?.addEventListener('click', () => {
+    clearRestaurantSession()
+    showFlash('새 맛집 검색을 시작할 수 있어요.')
+    render({ guardNav: false })
+  })
+  document.querySelector('[data-action="restaurant-services-save"]')?.addEventListener('click', () => {
+    const provEl = document.getElementById('restaurant-provider') as HTMLSelectElement | null
+    const keyEl = document.getElementById('restaurant-external-key') as HTMLInputElement | null
+    const cur = loadRestaurantConfig()
+    const patch: Parameters<typeof saveRestaurantConfig>[0] = {
+      provider: (provEl?.value as typeof cur.provider) || 'demo',
+    }
+    if (keyEl?.value.trim()) patch.externalKey = keyEl.value.trim()
+    saveRestaurantConfig(patch)
+    if (keyEl) keyEl.value = ''
+    showFlash('Restaurant Services 설정을 저장했습니다.')
     render({ guardNav: false })
   })
   // —— Translate pane (replaces main upper window) ——

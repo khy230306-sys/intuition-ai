@@ -5,6 +5,7 @@
  */
 
 import type { BrainReply } from '../types'
+import { handleRestaurantAgent } from '../restaurantAgent'
 import { handleTravelAgent } from '../travelAgent'
 import { bcp47, translateText } from '../translate'
 import { routeCommand } from './router'
@@ -149,6 +150,30 @@ export async function executeRoutedCommand(
       const forced = map[routed.intent]
       const tr = await handleTravelAgent(utterance, forced ? { forceIntent: forced } : undefined)
       return tr
+    }
+    case 'restaurant.search':
+    case 'restaurant.details':
+    case 'restaurant.filter':
+    case 'restaurant.select':
+    case 'restaurant.availability':
+    case 'restaurant.booking.prepare':
+    case 'restaurant.booking.confirm':
+    case 'restaurant.booking.status':
+    case 'restaurant.booking.cancel': {
+      const map: Record<string, string> = {
+        'restaurant.search': 'RESTAURANT_SEARCH',
+        'restaurant.details': 'RESTAURANT_DETAILS',
+        'restaurant.filter': 'RESTAURANT_FILTER',
+        'restaurant.select': 'RESTAURANT_SELECT',
+        'restaurant.availability': 'RESTAURANT_AVAILABILITY',
+        'restaurant.booking.prepare': 'RESTAURANT_BOOKING_PREPARE',
+        'restaurant.booking.confirm': 'RESTAURANT_BOOKING_CONFIRM',
+        'restaurant.booking.status': 'RESTAURANT_BOOKING_STATUS',
+        'restaurant.booking.cancel': 'RESTAURANT_BOOKING_CANCEL',
+      }
+      const forced = map[routed.intent]
+      const rr = await handleRestaurantAgent(utterance, forced ? { forceIntent: forced } : undefined)
+      return rr
     }
     case 'weather.query':
     case 'calendar.create':

@@ -26,6 +26,7 @@ export type QuickActionId =
   | 'life'
   | 'music'
   | 'travel'
+  | 'restaurant'
 
 export type QuickActionDef = {
   id: QuickActionId
@@ -58,6 +59,7 @@ export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
   { id: 'life', title: '생활', sub: '할 일 · 알림', ico: 'L', kind: 'view', payload: 'life' },
   { id: 'music', title: '음악', sub: '음악 찾기', ico: 'M', kind: 'action', payload: 'music' },
   { id: 'travel', title: '여행', sub: '항공 · 호텔', ico: '✈', kind: 'view', payload: 'travel' },
+  { id: 'restaurant', title: '맛집', sub: '식당 · 예약', ico: 'R', kind: 'view', payload: 'restaurant' },
 ]
 
 /** @deprecated alias — same as catalog defaults used for reset */

@@ -58,6 +58,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     'ai-camera': 'AI 카메라',
     'family-helper': '가족',
     travel: '여행',
+    restaurant: '맛집',
   }
   return {
     success: true,

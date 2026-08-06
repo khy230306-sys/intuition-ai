@@ -7,6 +7,12 @@
  * WEATHER must never win over translation when 번역/통역 cues exist.
  */
 
+import {
+  detectRestaurantIntent,
+  isRecipeOrCooking,
+  isRestaurantUtterance,
+} from '../restaurantAgent/detect'
+import { hasActiveRestaurantSession } from '../restaurantAgent/session'
 import { detectTravelIntent, isTravelUtterance } from '../travelAgent/detect'
 import { hasActiveTravelSession } from '../travelAgent/session'
 import { findTargetLanguage, langName } from './languages'
@@ -37,6 +43,21 @@ function mapTravelIntent(id: NonNullable<ReturnType<typeof detectTravelIntent>>)
     TRAVEL_UNKNOWN: 'travel.unknown',
   }
   return table[id] || 'travel.unknown'
+}
+
+function mapRestaurantIntent(id: NonNullable<ReturnType<typeof detectRestaurantIntent>>): AizioIntent {
+  const table: Record<string, AizioIntent> = {
+    RESTAURANT_SEARCH: 'restaurant.search',
+    RESTAURANT_DETAILS: 'restaurant.details',
+    RESTAURANT_FILTER: 'restaurant.filter',
+    RESTAURANT_SELECT: 'restaurant.select',
+    RESTAURANT_AVAILABILITY: 'restaurant.availability',
+    RESTAURANT_BOOKING_PREPARE: 'restaurant.booking.prepare',
+    RESTAURANT_BOOKING_CONFIRM: 'restaurant.booking.confirm',
+    RESTAURANT_BOOKING_STATUS: 'restaurant.booking.status',
+    RESTAURANT_BOOKING_CANCEL: 'restaurant.booking.cancel',
+  }
+  return table[id] || 'restaurant.search'
 }
 
 function result(
@@ -503,7 +524,38 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
     return r
   }
 
-  // 5) Travel Agent — before weather / general chat (never steal translation)
+  // 5a) Restaurant Agent — before travel/weather; never steal recipes / translation
+  if (!isRecipeOrCooking(normalized)) {
+    const restHit = detectRestaurantIntent(normalized, hasActiveRestaurantSession())
+    if (restHit || (hasActiveRestaurantSession() && isRestaurantUtterance(normalized))) {
+      // Don't steal clear flight/hotel travel commands
+      const travelClear = detectTravelIntent(normalized, false)
+      if (
+        travelClear &&
+        (travelClear.startsWith('FLIGHT') ||
+          travelClear.startsWith('HOTEL') ||
+          travelClear === 'TRAVEL_PLAN') &&
+        !/(맛집|식당|레스토랑|외식)/.test(normalized)
+      ) {
+        /* fall through to travel */
+      } else {
+        const intent = mapRestaurantIntent(restHit || 'RESTAURANT_SEARCH')
+        const r = result({
+          intent,
+          confidence: restHit ? 0.93 : 0.82,
+          entities: {},
+          action: intent,
+          reason: restHit ? `restaurant_${restHit}` : 'restaurant_session_followup',
+          normalized,
+          forbiddenActions: ['weather', 'general_chat', 'web_search', 'travel'],
+        })
+        pushRouteDiag(r, mode, false)
+        return r
+      }
+    }
+  }
+
+  // 5b) Travel Agent — before weather / general chat (never steal translation)
   {
     const travelHit = detectTravelIntent(normalized, hasActiveTravelSession())
     if (travelHit || (hasActiveTravelSession() && isTravelUtterance(normalized))) {

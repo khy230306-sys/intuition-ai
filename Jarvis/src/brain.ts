@@ -760,6 +760,7 @@ export async function think(
       if (
         routed.intent.startsWith('translation.') ||
         routed.intent.startsWith('travel.') ||
+        routed.intent.startsWith('restaurant.') ||
         routed.intent === 'vision.translation' ||
         routed.intent === 'clarify'
       ) {

@@ -3,12 +3,14 @@ import { AiError } from '../ai/errors'
 import { maskApiKey, mergeKeyInput, obfuscateSecret, deobfuscateSecret } from './keyVault'
 import {
   clearProviderKey,
+  getProviderSlot,
   hasAnyConfiguredProvider,
   HYBRID_AI_KEY,
   loadHybridAiConfig,
   saveHybridAiConfig,
   updateProviderSlot,
 } from './providerConfig'
+import { providerStatusLabelKo } from './settingsUi'
 import {
   classifyProviderBody,
   hybridUserMessage,
@@ -52,8 +54,26 @@ describe('hybrid AI config', () => {
     const raw = store.get(HYBRID_AI_KEY) || ''
     expect(raw).not.toContain('or-test-key')
     expect(loadHybridAiConfig().providers.openrouter?.apiKey).toBe('or-test-key')
+    expect(loadHybridAiConfig().providers.openrouter?.status).toBe('unknown')
     clearProviderKey('openrouter')
     expect(hasAnyConfiguredProvider()).toBe(false)
+  })
+
+  it('promotes gemini/groq status when a key is saved', () => {
+    updateProviderSlot('gemini', { apiKey: 'gem-key-12345678' })
+    updateProviderSlot('groq', { apiKey: 'gq-key-12345678' })
+    expect(loadHybridAiConfig().providers.gemini?.status).toBe('unknown')
+    expect(loadHybridAiConfig().providers.groq?.status).toBe('unknown')
+    expect(loadHybridAiConfig().providers.gemini?.apiKey).toBe('gem-key-12345678')
+  })
+
+  it('does not wipe openai hybrid key when legacy field is blank', () => {
+    updateProviderSlot('openai', { apiKey: 'sk-hybrid-keep', model: 'gpt-4o-mini' })
+    // Simulate settings-form sync: blank legacy input must merge with hybrid slot.
+    const merged = mergeKeyInput('', getProviderSlot('openai').apiKey)
+    expect(merged).toBe('sk-hybrid-keep')
+    updateProviderSlot('openai', { apiKey: merged })
+    expect(getProviderSlot('openai').apiKey).toBe('sk-hybrid-keep')
   })
 
   it('defaults paid fallback off and auto mode', () => {
@@ -180,5 +200,14 @@ describe('hybrid AI router', () => {
     expect(out.text).toMatch(/ok from free/)
     expect(out.fallbackUsed).toBe(true)
     expect(loadHybridAiConfig().providers.openrouter?.model).toBe('openrouter/free')
+  })
+})
+
+describe('provider status labels', () => {
+  it('shows saved vs unconfigured in Korean', () => {
+    expect(providerStatusLabelKo('unconfigured', false)).toBe('미설정')
+    expect(providerStatusLabelKo('unconfigured', true)).toBe('저장됨 · 연결 전')
+    expect(providerStatusLabelKo('unknown', true)).toBe('저장됨 · 연결 전')
+    expect(providerStatusLabelKo('ok', true)).toBe('연결됨')
   })
 })

@@ -119,6 +119,13 @@ export function updateProviderSlot(
   const cfg = loadHybridAiConfig()
   const nextSlot = { ...defaultSlot(id), ...cfg.providers[id], ...patch }
   if (patch.apiKey !== undefined) nextSlot.apiKey = patch.apiKey.trim()
+  // Key present but never tested → show "saved" rather than stuck "unconfigured".
+  if (nextSlot.apiKey.trim() && (!nextSlot.status || nextSlot.status === 'unconfigured')) {
+    nextSlot.status = 'unknown'
+  }
+  if (!nextSlot.apiKey.trim() && patch.apiKey !== undefined) {
+    nextSlot.status = 'unconfigured'
+  }
   const next: HybridAiConfig = {
     ...cfg,
     providers: { ...cfg.providers, [id]: nextSlot },

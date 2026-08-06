@@ -2,7 +2,7 @@ import { maskApiKey } from './keyVault'
 import { loadHybridAiConfig } from './providerConfig'
 import { listHybridProviders } from './providerRegistry'
 import { usageSummaryLine } from './providerUsage'
-import type { HybridProviderId } from './types'
+import type { HybridProviderId, ProviderHealthStatus } from './types'
 
 function esc(s: string): string {
   return s
@@ -10,6 +10,32 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/** Korean status for settings cards (never leave raw "unconfigured" with a stored key). */
+export function providerStatusLabelKo(
+  status: ProviderHealthStatus | string | undefined,
+  hasKey: boolean,
+): string {
+  const s = status || (hasKey ? 'unknown' : 'unconfigured')
+  if (!hasKey) return '미설정'
+  switch (s) {
+    case 'ok':
+      return '연결됨'
+    case 'unknown':
+    case 'unconfigured':
+      return '저장됨 · 연결 전'
+    case 'auth':
+      return '키 오류'
+    case 'rate_limit':
+      return '요청 한도'
+    case 'quota':
+      return '할당량 초과'
+    case 'error':
+      return '오류'
+    default:
+      return String(s)
+  }
 }
 
 export function renderHybridAiSettingsHtml(): string {
@@ -20,6 +46,7 @@ export function renderHybridAiSettingsHtml(): string {
       const slot = p.getSlot()
       const hasKey = Boolean(slot.apiKey.trim())
       const status = slot.status || (hasKey ? 'unknown' : 'unconfigured')
+      const statusKo = providerStatusLabelKo(status, hasKey)
       const cat =
         p.category === 'free' ? '무료 시작 가능' : p.category === 'paid' ? '사용량 기반 유료' : '로컬'
       const modelOptions = p.recommendedModels
@@ -35,7 +62,7 @@ export function renderHybridAiSettingsHtml(): string {
           <span class="hybrid-ai-badge ${p.category}">${cat}</span>
         </div>
         <p class="hint">${esc(p.docsHint)}</p>
-        <p class="hint">상태: <strong>${esc(status)}</strong>${
+        <p class="hint" data-hybrid-status="${p.id}">상태: <strong>${esc(statusKo)}</strong>${
           hasKey ? ` · 키 ${esc(maskApiKey(slot.apiKey))}` : ' · 키 없음'
         }${slot.lastSuccessAt ? ` · 성공 ${esc(slot.lastSuccessAt.slice(0, 16))}` : ''}</p>
         ${
@@ -47,8 +74,8 @@ export function renderHybridAiSettingsHtml(): string {
         }
         <label>API Key
           <input name="hybridKey_${p.id}" type="password" value="" placeholder="${
-            hasKey ? esc(maskApiKey(slot.apiKey)) : '키 입력'
-          }" autocomplete="off" />
+            hasKey ? esc(maskApiKey(slot.apiKey)) + ' · 저장됨' : '키 입력 후 자동 저장'
+          }" autocomplete="off" data-hybrid-key="${p.id}" />
         </label>
         <label>Model
           <select name="hybridModel_${p.id}">
@@ -64,6 +91,7 @@ export function renderHybridAiSettingsHtml(): string {
           <input name="hybridModelCustom_${p.id}" value="" placeholder="비우면 위 선택 사용" autocomplete="off" />
         </label>
         <div class="row-btns">
+          <button type="button" class="primary-btn" data-hybrid-save="${p.id}">키 저장</button>
           <button type="button" class="ghost-btn" data-hybrid-test="${p.id}">연결 테스트</button>
           <button type="button" class="ghost-btn" data-hybrid-default="${p.id}">기본으로 사용</button>
           <button type="button" class="ghost-btn danger-btn" data-hybrid-clear="${p.id}">키 삭제</button>
@@ -80,7 +108,7 @@ export function renderHybridAiSettingsHtml(): string {
 
   return `
     <h3 class="subsection-title">AI 연결 (Hybrid Provider)</h3>
-    <p class="hint">무료 AI를 먼저 연결하세요. 유료 Provider는 기본값으로 자동 사용되지 않습니다. 클라이언트 저장은 서버 비밀 보관과 다릅니다.</p>
+    <p class="hint">무료 AI를 먼저 연결하세요. 키를 입력하면 바로 저장됩니다. 「연결 테스트」·「키 저장」도 입력란의 키를 저장합니다.</p>
     <p class="hint">${esc(usageSummaryLine())}</p>
     <label>선택 모드
       <select name="hybridMode">

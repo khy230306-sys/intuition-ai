@@ -23,8 +23,10 @@ import {
 import {
   clearProviderKey,
   dismissAiWizard,
+  getProviderSlot,
   hasAnyConfiguredProvider,
   loadHybridAiConfig,
+  maskApiKey,
   mergeKeyInput,
   saveHybridAiConfig,
   shouldShowAiWizard,
@@ -32,7 +34,11 @@ import {
   updateProviderSlot,
   type HybridProviderId,
 } from './ai-providers'
-import { renderAiWizardHtml, renderHybridAiSettingsHtml } from './ai-providers/settingsUi'
+import {
+  providerStatusLabelKo,
+  renderAiWizardHtml,
+  renderHybridAiSettingsHtml,
+} from './ai-providers/settingsUi'
 import {
   copyTextNow,
   navigateHref,
@@ -317,7 +323,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.9'
+const APP_VERSION = '1.20.10'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -325,6 +331,51 @@ const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 let voiceSessionGen = 0
 /** Bumps when a newer chat request supersedes an in-flight think(). */
 let thinkGen = 0
+
+/**
+ * Persist one Hybrid Provider card from the live DOM (key/model/base).
+ * Used by 「키 저장」·「연결 테스트」·blur so users need not scroll to 「설정 저장」.
+ */
+function flushHybridProviderFromDom(id: HybridProviderId): { hasKey: boolean; apiKey: string } {
+  const form = document.getElementById('settings-form') as HTMLFormElement | null
+  const card = document.querySelector(`[data-provider="${id}"]`) as HTMLElement | null
+  const read = (name: string): string => {
+    const fromForm = form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
+    if (fromForm && 'value' in fromForm) return String(fromForm.value || '')
+    const fromCard = card?.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement | null
+    return String(fromCard?.value || '')
+  }
+  const existing = getProviderSlot(id)
+  const apiKey = mergeKeyInput(read(`hybridKey_${id}`), existing.apiKey)
+  const modelCustom = read(`hybridModelCustom_${id}`).trim()
+  const modelSel = read(`hybridModel_${id}`).trim()
+  const base = read(`hybridBase_${id}`).trim()
+  updateProviderSlot(id, {
+    apiKey,
+    model: modelCustom || modelSel || existing.model || '',
+    ...(base || id === 'openai' || id === 'custom' ? { apiBase: base || existing.apiBase } : {}),
+    enabled: true,
+  })
+  if (id === 'openai') {
+    state.settings = { ...state.settings, apiKey, apiBase: base || state.settings.apiBase, model: modelCustom || modelSel || state.settings.model }
+    saveSettings(state.settings)
+  }
+  const slot = getProviderSlot(id)
+  const hasKey = Boolean(slot.apiKey.trim())
+  const statusEl = document.querySelector(`[data-hybrid-status="${id}"]`)
+  if (statusEl) {
+    const ko = providerStatusLabelKo(slot.status, hasKey)
+    statusEl.innerHTML = `상태: <strong>${escapeHtml(ko)}</strong>${
+      hasKey ? ` · 키 ${escapeHtml(maskApiKey(slot.apiKey))}` : ' · 키 없음'
+    }`
+  }
+  const keyInput = document.querySelector(`[data-hybrid-key="${id}"]`) as HTMLInputElement | null
+  if (keyInput && hasKey) {
+    keyInput.value = ''
+    keyInput.placeholder = `${maskApiKey(slot.apiKey)} · 저장됨`
+  }
+  return { hasKey, apiKey: slot.apiKey }
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
   return new Promise((resolve) => {
@@ -6159,7 +6210,11 @@ function bind(): void {
       ...state.settings,
       displayName: String(fd.get('displayName') || '주인님').trim() || '주인님',
       speakReplies: Boolean(fd.get('speakReplies')),
-      apiKey: mergeKeyInput(String(fd.get('apiKey') || ''), state.settings.apiKey),
+      // Prefer hybrid OpenAI slot so a blank legacy field cannot wipe a just-saved key.
+      apiKey: mergeKeyInput(
+        String(fd.get('apiKey') || ''),
+        getProviderSlot('openai').apiKey || state.settings.apiKey,
+      ),
       apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
       model: String(fd.get('model') || 'gpt-4o-mini').trim(),
       city: String(fd.get('city') || '서울').trim() || '서울',
@@ -6275,12 +6330,40 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-test') as HybridProviderId | null
       if (!id) return
+      const flushed = flushHybridProviderFromDom(id)
+      if (!flushed.hasKey) {
+        showFlash('API 키를 먼저 입력해 주세요.')
+        return
+      }
       showFlash('연결 테스트 중…')
       void testProviderConnection(id).then((r) => {
         showFlash(r.ok ? `${id} 연결 성공${r.latencyMs ? ` (${r.latencyMs}ms)` : ''}` : `${id} 실패: ${r.message}`)
         render()
       })
     })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-hybrid-save]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-hybrid-save') as HybridProviderId | null
+      if (!id) return
+      const flushed = flushHybridProviderFromDom(id)
+      showFlash(
+        flushed.hasKey
+          ? `${id} 키를 저장했습니다. 연결 테스트로 확인할 수 있어요.`
+          : '저장할 키가 없습니다. 키를 입력해 주세요.',
+      )
+      if (flushed.hasKey) render()
+    })
+  })
+  document.querySelectorAll<HTMLInputElement>('[data-hybrid-key]').forEach((input) => {
+    const persist = () => {
+      const id = (input.getAttribute('data-hybrid-key') || '') as HybridProviderId
+      if (!id) return
+      if (!input.value.trim()) return
+      flushHybridProviderFromDom(id)
+    }
+    input.addEventListener('change', persist)
+    input.addEventListener('blur', persist)
   })
   document.querySelectorAll<HTMLButtonElement>('[data-hybrid-clear]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -6299,6 +6382,7 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-default') as HybridProviderId | null
       if (!id) return
+      flushHybridProviderFromDom(id)
       const cfg = loadHybridAiConfig()
       saveHybridAiConfig({ ...cfg, mode: 'fixed', fixedProvider: id })
       showFlash(`${id}를 기본 Provider로 고정했습니다.`)
@@ -6315,7 +6399,7 @@ function bind(): void {
   document.querySelector('[data-action="ai-wizard-openai"]')?.addEventListener('click', () => {
     dismissAiWizard()
     state.view = 'settings'
-    showFlash('OpenAI 키를 입력한 뒤 설정 저장을 누르세요. ChatGPT Plus와 API 결제는 별개입니다.')
+    showFlash('OpenAI 키를 입력한 뒤 「키 저장」또는 「연결 테스트」를 누르세요. ChatGPT Plus와 API 결제는 별개입니다.')
     render()
   })
   document.querySelector('[data-action="ai-wizard-later"]')?.addEventListener('click', () => {

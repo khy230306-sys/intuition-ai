@@ -199,10 +199,9 @@ export async function executeRoutedCommand(
       const isolated = await isolateFeature('travel', () =>
         handleTravelAgent(utterance, forced ? { forceIntent: forced } : undefined),
       )
-      if (!isolated.ok) {
-        const pol = providerFailurePolicy('travel')
-        return finish(replyFromExec(pol.userMessage), { success: false, errorCode: pol.errorCode })
-      }
+      // Infra/storage crashes must not block legacy lifestyle/nav fall-through.
+      // Soft provider failures are returned as BrainReply by the agent itself.
+      if (!isolated.ok) return null
       return finish(isolated.value)
     }
     case 'restaurant.search':
@@ -229,10 +228,7 @@ export async function executeRoutedCommand(
       const isolated = await isolateFeature('restaurant', () =>
         handleRestaurantAgent(utterance, forced ? { forceIntent: forced } : undefined),
       )
-      if (!isolated.ok) {
-        const pol = providerFailurePolicy('restaurant')
-        return finish(replyFromExec(pol.userMessage), { success: false, errorCode: pol.errorCode })
-      }
+      if (!isolated.ok) return null
       return finish(isolated.value)
     }
     case 'weather.query':

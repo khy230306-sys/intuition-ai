@@ -19,7 +19,8 @@ export const ERROR_CODES = {
 
 export type ErrorCode = keyof typeof ERROR_CODES
 
-export function userFacingError(code: ErrorCode | string, fallback: string): string {
+export function userFacingError(_code: ErrorCode | string, fallback: string): string {
+  void _code
   return fallback
 }
 

@@ -5,7 +5,7 @@ import { endTranslationSession } from '../commandRouter/session'
 import { clearTravelSession } from '../travelAgent/session'
 import { clearRestaurantSession } from '../restaurantAgent/session'
 import { ADVERSARIAL_COMMANDS } from './adversarial'
-import { GOLDEN_COMMAND_SET, goldenSetStats } from './goldenSet'
+import { goldenSetStats } from './goldenSet'
 import { MULTI_TURN_SCENARIOS, multiTurnCount } from './multiTurn'
 import {
   clearMetricEvents,

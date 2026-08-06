@@ -1,10 +1,10 @@
 {
   "app": "AIZIO",
-  "version": "1.21.0",
-  "buildId": "prod-1786027179307",
-  "commit": "8e6f349",
+  "version": "1.21.1",
+  "buildId": "prod-1786027753764",
+  "commit": "a3446a9",
   "channel": "production",
-  "builtAt": "2026-08-06T14:39:39.311Z",
+  "builtAt": "2026-08-06T14:49:13.767Z",
   "productionUrl": "https://jarvis-app.shipstatic.com",
   "note": "Fixed production — stable boot"
 }

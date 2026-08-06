@@ -6,7 +6,7 @@
 - React Router 기반 Home / Brand / About / Settings / 404
 - ORBIS 독창 로고(SVG), favicon, PWA 아이콘
 - CORE + BLUE/GOLD/VIOLET Orb 궤도 애니메이션
-- CORE TRINITY 체험 (`/play`) — 3 Orb 순차 공개, 다수/트리니티/VOID 규칙
+- ORBIS ALIGN 체험 (`/play`) — 궤도 회전 정렬 스킬 게임 (추첨/베팅 아님)
 - 모바일 햄버거 메뉴 / 데스크톱 내비게이션
 - 설정 localStorage 저장
 - 한국어/영어 i18n
@@ -14,7 +14,7 @@
 - PWA manifest + service worker
 - Vitest UI/설정/번역/엔진 테스트
 - ESLint + Oxlint
-- Orbit Sync / 바카라 복제 룰은 제거하고 ORBIS 독창 규칙으로 교체
+- 추첨형(바카라/트리니티) 방식을 제거하고 조작형 ALIGN으로 교체
 
 ## 테스트 결과
 

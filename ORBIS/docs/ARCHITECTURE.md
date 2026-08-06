@@ -54,18 +54,18 @@ src/
 - theme/background: `#05070f`
 - 오프라인 시 정적 브랜드 화면 제공을 위한 precache
 
-## 현재 게임: CORE TRINITY
+## 현재 게임: ORBIS ALIGN
 
 - 경로: `/play`
-- 엔진: `src/game/trinity/`
-- 흐름: 선택(BLUE/GOLD/VIOLET/VOID) → CORE 열기 → 3 Orb 순차 공개 → 정산
-- 결과 패턴: majority / trinity / void
-- 저장: 데모 에너지 + 공명 로드 (`localStorage`)
+- 엔진: `src/game/align/`
+- 흐름: 레벨 시작 → 궤도 선택 → 각도 회전 → CORE 광선 정렬 → 클리어/실패
+- 저장: 점수/해금 레벨 (`localStorage`)
+- 방식: 스킬/퍼즐 (베팅·추첨 아님)
 
 ## 확장 지점
 
-1. 특수 패턴(더블 공명, 연속 VOID 등) 추가
-2. 연출/스토리 레이어 강화
-3. 서버 시드 검증이 필요하면 `engine`과 API 계층 분리
+1. 스와이프/드래그 회전 제스처
+2. 4~5궤도, 장애 드리프트, 타임어택 모드
+3. 리플레이/고스트 기록
 
 실제 입출금, 환전, 결제, 외부 베팅 연결은 구현하지 않습니다.

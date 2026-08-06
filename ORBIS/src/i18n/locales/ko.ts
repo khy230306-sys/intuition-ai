@@ -30,35 +30,24 @@ export type Dictionary = {
     kicker: string
     title: string
     subtitle: string
-    balance: string
-    currentBet: string
+    level: string
+    time: string
+    score: string
+    bestScore: string
+    gain: string
     freeNotice: string
     rules: string
     stageLabel: string
-    blue: string
-    gold: string
-    violet: string
-    void: string
-    chooseSide: string
-    chooseChip: string
-    oddsColor: string
-    oddsVoid: string
-    selected: string
-    stake: string
-    openCore: string
-    needChips: string
-    drawing: string
-    nextRound: string
+    chooseRing: string
+    alignment: string
+    readyHint: string
+    playingHint: string
+    startAlign: string
+    nextLevel: string
+    retry: string
     reset: string
-    road: string
-    draws: string
-    patternMajority: string
-    patternTrinity: string
-    patternVoid: string
-    youWin: string
-    youLose: string
-    stakeReturned: string
-    payout: string
+    cleared: string
+    failed: string
   }
   brand: {
     title: string
@@ -128,7 +117,7 @@ export const ko: Dictionary = {
   tagline: '새로운 세계를 체험하세요',
   nav: {
     home: '홈',
-    play: '트리니티',
+    play: '정렬',
     brand: '브랜드 소개',
     about: '소개',
     settings: '설정',
@@ -151,75 +140,64 @@ export const ko: Dictionary = {
     stageLabel: '중앙 궤도 무대',
   },
   play: {
-    kicker: 'CORE TRINITY',
-    title: 'ORBIS 코어 트리니티',
-    subtitle: 'CORE가 세 개의 Orb를 공개합니다. 다수 색 또는 VOID를 예측하세요.',
-    balance: '데모 에너지',
-    currentBet: '현재 선택',
-    freeNotice: '무료 데모 에너지입니다. 실제 입금·출금·환전·결제는 없습니다.',
+    kicker: 'ORBIS ALIGN',
+    title: 'ORBIS 궤도 정렬',
+    subtitle: '세 궤도의 게이트를 CORE 광선에 직접 맞춰보세요.',
+    level: '레벨',
+    time: '남은 시간',
+    score: '점수',
+    bestScore: '최고 점수',
+    gain: '획득',
+    freeNotice: '스킬형 무료 체험입니다. 베팅/추첨이 아니라 직접 조작하는 게임입니다.',
     rules:
-      '규칙: 3개 Orb를 순서대로 공개합니다. 같은 색이 2개 이상이면 그 색 승리(x2). 3개 모두 같으면 TRINITY(x5). 세 색이 모두 다르면 VOID(x4).',
-    stageLabel: 'CORE TRINITY 추첨 무대',
-    blue: 'BLUE',
-    gold: 'GOLD',
-    violet: 'VIOLET',
-    void: 'VOID',
-    chooseSide: '공명 선택',
-    chooseChip: '에너지 선택',
-    oddsColor: '다수 x2 / 트리니티 x5',
-    oddsVoid: 'VOID x4',
-    selected: '선택',
-    stake: '에너지',
-    openCore: 'CORE 열기',
-    needChips: '에너지가 부족합니다',
-    drawing: 'CORE가 Orb를 정렬하는 중...',
-    nextRound: '다음 라운드',
-    reset: '에너지 초기화',
-    road: '공명 로드',
-    draws: '공개 결과',
-    patternMajority: 'MAJORITY',
-    patternTrinity: 'TRINITY',
-    patternVoid: 'VOID',
-    youWin: '획득',
-    youLose: '공명 실패',
-    stakeReturned: '에너지 반환',
-    payout: '정산',
+      '방법: BLUE/GOLD/VIOLET 궤도를 선택하고 각도를 돌려, 모든 게이트를 위쪽 CORE 광선에 정렬하세요. 시간이 끝나기 전에 맞추면 클리어합니다.',
+    stageLabel: '궤도 정렬 무대',
+    chooseRing: '궤도 선택',
+    alignment: '정렬 오차',
+    readyHint: '정렬 시작을 누른 뒤, 궤도를 선택하고 각도를 조정하세요.',
+    playingHint: '선택한 궤도를 돌려 게이트를 광선에 겹치세요.',
+    startAlign: '정렬 시작',
+    nextLevel: '다음 레벨',
+    retry: '다시 도전',
+    reset: '진행 초기화',
+    cleared: 'ALIGNMENT COMPLETE',
+    failed: 'TIME OVER',
   },
   brand: {
     title: '브랜드 세계관',
     subtitle: '궤도 위의 이야기',
     worldviewTitle: 'ORBIS의 세계관',
     worldviewBody:
-      'ORBIS는 매 라운드마다 새로운 궤도가 열리는 세계입니다. CORE TRINITY는 바카라 복제가 아닌, ORBIS만의 삼중 공명 추첨 규칙입니다.',
+      'ORBIS는 예측 게임이 아니라, 궤도를 직접 조율하는 세계입니다. ALIGN은 손끝으로 CORE와 공명하는 스킬 체험입니다.',
     coreTitle: 'CORE의 의미',
     coreBody:
-      'CORE는 세 개의 Orb를 정렬하는 중심입니다. 다수 공명, 완전 트리니티, 또는 공허(VOID)가 탄생합니다.',
-    orbsTitle: 'Orb의 상징',
+      'CORE 광선은 정렬의 기준축입니다. 모든 게이트가 이 축에 모일 때 새로운 라운드가 열립니다.',
+    orbsTitle: '궤도의 상징',
     blueTitle: 'BLUE',
-    blueBody: '집중과 흐름. 선명한 다수 공명을 상징합니다.',
+    blueBody: '외곽 궤도. 큰 흐름을 조정하는 감각을 상징합니다.',
     goldTitle: 'GOLD',
-    goldBody: '균형과 가치. 안정된 중심 공명을 상징합니다.',
+    goldBody: '중간 궤도. 균형과 정밀한 보정을 상징합니다.',
     violetTitle: 'VIOLET',
-    violetBody: '직관과 변화. 신비로운 전환 공명을 상징합니다.',
+    violetBody: '내곽 궤도. 미세한 직관적 조율을 상징합니다.',
     philosophyTitle: '디자인 철학',
     philosophyBody:
-      '기존 카지노 장르를 그대로 옮기지 않습니다. 익숙한 긴장감은 유지하되, ORBIS만의 규칙과 세계관으로 재창조합니다.',
+      '바카라/파워볼식 선택-공개 구조를 쓰지 않습니다. ORBIS는 조작과 정렬, 공간 감각으로 긴장감을 만듭니다.',
     futureTitle: '향후 확장 방향',
     futureBody:
-      'CORE TRINITY를 기반으로 특수 패턴, 연출, 스토리 레이어를 확장할 수 있습니다.',
+      '더 많은 궤도, 장애 드리프트, 스와이프 제스처, 도전 모드로 확장할 수 있습니다.',
   },
   about: {
     title: '프로토타입 소개',
     subtitle: '무료 체험용 ORBIS',
     purposeTitle: '목적',
     purposeBody:
-      'ORBIS Prototype은 브랜드 UI와 독창 규칙의 CORE TRINITY 무료 체험을 검증하기 위한 프로젝트입니다.',
+      'ORBIS Prototype은 브랜드 UI와 독창 스킬 게임 ALIGN을 검증하기 위한 프로젝트입니다.',
     freeTitle: '무료 체험 안내',
     freeBody:
       '본 프로젝트는 무료 체험용입니다. 실제 금전 거래, 입금, 출금, 환전, 결제를 지원하지 않습니다.',
     disclaimerTitle: '중요 안내',
     disclaimerBody:
-      '데모 에너지와 공명 로드는 로컬에만 저장됩니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
+      '점수와 레벨은 로컬에만 저장됩니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
   },
   settings: {
     title: '설정',
@@ -235,14 +213,13 @@ export const ko: Dictionary = {
     qualityMedium: '보통',
     qualityHigh: '높음',
     reduceMotion: '모션 감소',
-    reduceMotionHint: '움직임에 민감한 경우 애니메이션을 줄입니다.',
+    reduceMotionHint: '켜면 궤도 자동 드리프트를 줄입니다.',
     savedHint: '설정은 이 기기의 localStorage에 저장됩니다.',
   },
   modal: {
-    stage2Title: 'CORE TRINITY 안내',
-    stage2Body: 'ORBIS만의 신종 공명 추첨을 바로 시작할 수 있습니다.',
-    stage2Detail:
-      'BLUE / GOLD / VIOLET / VOID를 고르고 CORE를 여세요. 실제 돈이 오가지 않는 무료 데모입니다.',
+    stage2Title: 'ALIGN 체험 안내',
+    stage2Body: '궤도를 직접 돌려 CORE에 정렬하는 스킬 게임을 시작합니다.',
+    stage2Detail: '베팅이나 추첨이 아닙니다. 손맛과 정렬 정확도로 클리어하세요.',
   },
   notFound: {
     title: '궤도를 벗어났습니다',

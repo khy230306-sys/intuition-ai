@@ -30,7 +30,7 @@
 
 .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -38,13 +38,14 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   background: rgba(16, 27, 51, 0.7);
-  padding: 10px 12px;
+  padding: 10px 8px;
+  text-align: center;
 }
 
 .statLabel {
   display: block;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   margin-bottom: 4px;
 }
 
@@ -54,11 +55,12 @@
   color: var(--neon-blue);
 }
 
-.notice {
+.notice,
+.hint {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .rules {
@@ -72,87 +74,78 @@
   line-height: 1.55;
 }
 
-.sides {
+.ringTabs {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
-.sideButton {
-  min-height: 64px;
+.ringTab {
+  min-height: 48px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
   background: rgba(244, 247, 255, 0.03);
-  display: grid;
-  gap: 4px;
-  place-items: center;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
-.sideButton:disabled {
+.ringTab:disabled {
   opacity: 0.55;
 }
 
-.sideBlue {
+.tabBlue {
   border-color: rgba(58, 169, 255, 0.45);
 }
 
-.sideGold {
+.tabGold {
   border-color: rgba(212, 178, 106, 0.45);
 }
 
-.sideViolet {
+.tabViolet {
   border-color: rgba(155, 107, 255, 0.45);
 }
 
-.sideVoid {
-  border-color: rgba(244, 247, 255, 0.28);
+.tabActive {
+  background: rgba(58, 169, 255, 0.14);
+  box-shadow: 0 0 16px rgba(58, 169, 255, 0.18);
 }
 
-.sideActive {
-  box-shadow: 0 0 18px rgba(58, 169, 255, 0.22);
-  background: rgba(58, 169, 255, 0.12);
-}
-
-.odds {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.chips {
+.controls {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
-.chip {
-  min-height: 44px;
+.controlBtn {
+  min-height: 52px;
   border-radius: 999px;
-  border: 1px solid rgba(212, 178, 106, 0.4);
-  background: rgba(212, 178, 106, 0.08);
-  color: var(--text-primary);
+  border: 1px solid rgba(244, 247, 255, 0.2);
+  background: rgba(16, 27, 51, 0.75);
   font-weight: 700;
 }
 
-.chipActive {
-  background: rgba(212, 178, 106, 0.22);
-  box-shadow: 0 0 16px rgba(212, 178, 106, 0.25);
+.controlBtn:disabled {
+  opacity: 0.5;
 }
 
-.betLine {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  color: var(--text-muted);
-  font-size: 0.92rem;
-}
-
-.actions {
+.errors {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.errorItem {
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  padding: 8px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.errorOk {
+  color: #9fd4ff;
+  border-color: rgba(58, 169, 255, 0.45);
 }
 
 .resultCard {
@@ -167,7 +160,6 @@
 .resultTitle {
   margin: 0;
   font-size: 1.15rem;
-  letter-spacing: 0.05em;
 }
 
 .resultBody {
@@ -176,67 +168,12 @@
   line-height: 1.5;
 }
 
-.roadWrap {
+.actions {
   display: grid;
-  gap: 8px;
-}
-
-.roadTitle {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
-}
-
-.road {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.bead {
-  aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 0.7rem;
-  font-weight: 750;
-  border: 1px solid transparent;
-}
-
-.beadBlue {
-  background: rgba(58, 169, 255, 0.2);
-  border-color: rgba(58, 169, 255, 0.55);
-  color: #9fd4ff;
-}
-
-.beadGold {
-  background: rgba(212, 178, 106, 0.18);
-  border-color: rgba(212, 178, 106, 0.55);
-  color: #ecd29a;
-}
-
-.beadViolet {
-  background: rgba(155, 107, 255, 0.18);
-  border-color: rgba(155, 107, 255, 0.55);
-  color: #c7b0ff;
-}
-
-.beadVoid {
-  background: rgba(244, 247, 255, 0.08);
-  border-color: rgba(244, 247, 255, 0.28);
-  color: #d7deef;
-}
-
-.beadEmpty {
-  border: 1px dashed rgba(244, 247, 255, 0.12);
+  gap: 10px;
 }
 
 @media (min-width: 760px) {
-  .sides {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
   .actions {
     grid-template-columns: 1fr 1fr;
   }

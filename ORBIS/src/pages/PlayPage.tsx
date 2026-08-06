@@ -1,140 +1,181 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { playClickSound, playCoreSound, playResultSound, playSyncSound } from '../app/sound'
 import { Button } from '../components/Button'
-import { TrinityStage } from '../game/trinity/TrinityStage'
-import { drawTrinityRound, settleTrinityPayout, sideMark } from '../game/trinity/engine'
+import { AlignStage } from '../game/align/AlignStage'
 import {
-  STARTING_BALANCE,
-  loadBalance,
-  loadRoad,
-  resetTrinityProgress,
-  saveBalance,
-  saveRoad,
-} from '../game/trinity/storage'
-import type { BetSide, OrbColor, RoadBead, RoundOutcome, TablePhase } from '../game/trinity/types'
+  advanceDrift,
+  alignmentErrors,
+  createRings,
+  createStage,
+  isAligned,
+  nextPhaseAfterTick,
+  rotateRing,
+  scoreForClear,
+} from '../game/align/engine'
+import {
+  loadBestScore,
+  loadUnlockedLevel,
+  resetAlignProgress,
+  saveBestScore,
+  saveUnlockedLevel,
+} from '../game/align/storage'
+import type { AlignPhase, RingState } from '../game/align/types'
 import { useI18n } from '../i18n'
 import { useSettings } from '../storage/SettingsContext'
 import styles from './PlayPage.module.css'
-
-const CHIP_VALUES = [10, 50, 100, 250] as const
 
 export function PlayPage() {
   const t = useI18n()
   const navigate = useNavigate()
   const { settings } = useSettings()
 
-  const [phase, setPhase] = useState<TablePhase>('betting')
-  const [side, setSide] = useState<BetSide>('blue')
-  const [chip, setChip] = useState<(typeof CHIP_VALUES)[number]>(50)
-  const [balance, setBalance] = useState(() => loadBalance())
-  const [road, setRoad] = useState<RoadBead[]>(() => loadRoad())
-  const [revealed, setRevealed] = useState<Array<OrbColor | null>>([null, null, null])
-  const [outcome, setOutcome] = useState<RoundOutcome | null>(null)
-  const [payout, setPayout] = useState(0)
+  const [level, setLevel] = useState(() => loadUnlockedLevel())
+  const [bestScore, setBestScore] = useState(() => loadBestScore())
+  const [sessionScore, setSessionScore] = useState(0)
+  const [phase, setPhase] = useState<AlignPhase>('ready')
+  const [rings, setRings] = useState<RingState[]>(() => createRings(createStage(level)))
+  const [selected, setSelected] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(() => createStage(level).timeLimitSec)
+  const [tolerance, setTolerance] = useState(() => createStage(level).tolerance)
   const [flash, setFlash] = useState(false)
+  const [lastGain, setLastGain] = useState(0)
   const [message, setMessage] = useState('')
 
-  const betAmount = chip
-  const canDraw = phase === 'betting' && balance >= betAmount
+  const phaseRef = useRef<AlignPhase>('ready')
+  const ringsRef = useRef(rings)
+  const toleranceRef = useRef(tolerance)
+  const timeRef = useRef(timeLeft)
 
   useEffect(() => {
-    saveBalance(balance)
-  }, [balance])
-
+    phaseRef.current = phase
+  }, [phase])
   useEffect(() => {
-    saveRoad(road)
-  }, [road])
+    ringsRef.current = rings
+  }, [rings])
+  useEffect(() => {
+    toleranceRef.current = tolerance
+  }, [tolerance])
+  useEffect(() => {
+    timeRef.current = timeLeft
+  }, [timeLeft])
 
-  const sideLabel = (value: BetSide) => {
-    if (value === 'blue') return t.play.blue
-    if (value === 'gold') return t.play.gold
-    if (value === 'violet') return t.play.violet
-    return t.play.void
+  const errors = useMemo(() => alignmentErrors(rings), [rings])
+
+  const setupLevel = (nextLevel: number) => {
+    const config = createStage(nextLevel)
+    const nextRings = createRings(config)
+    setLevel(nextLevel)
+    setRings(nextRings)
+    setTolerance(config.tolerance)
+    setTimeLeft(config.timeLimitSec)
+    setSelected(0)
+    setFlash(false)
+    setLastGain(0)
+    setMessage('')
+    setPhase('ready')
   }
 
-  const startDraw = async () => {
-    if (!canDraw) return
+  const startLevel = () => {
     playCoreSound(settings.soundEnabled)
-    setPhase('drawing')
-    setOutcome(null)
-    setPayout(0)
-    setMessage(t.play.drawing)
-    setRevealed([null, null, null])
-    setBalance((prev) => prev - betAmount)
-
-    const next = drawTrinityRound()
-    const delay = settings.reduceMotion ? 90 : 420
-
-    for (let i = 0; i < 3; i += 1) {
-      await wait(delay)
-      playSyncSound(settings.soundEnabled)
-      setRevealed((prev) => {
-        const copy = [...prev] as Array<OrbColor | null>
-        copy[i] = next.draws[i]!
-        return copy
-      })
-    }
-
-    await wait(settings.reduceMotion ? 60 : 220)
-    setFlash(true)
-    window.setTimeout(() => setFlash(false), 480)
-
-    const won = settleTrinityPayout(side, betAmount, next)
-    setOutcome(next)
-    setPayout(won)
-    setBalance((prev) => prev + won)
-    setRoad((prev) =>
-      [
-        ...prev,
-        {
-          id: `${Date.now()}-${next.winner}-${prev.length}`,
-          winner: next.winner,
-          pattern: next.pattern,
-        },
-      ].slice(-48),
-    )
-
-    const patternText =
-      next.pattern === 'trinity'
-        ? t.play.patternTrinity
-        : next.pattern === 'void'
-          ? t.play.patternVoid
-          : t.play.patternMajority
-
-    if (won > betAmount) {
-      setMessage(`${patternText} · ${t.play.youWin} +${won - betAmount}`)
-      playResultSound(settings.soundEnabled, true)
-    } else if (won === betAmount) {
-      setMessage(`${patternText} · ${t.play.stakeReturned}`)
-      playResultSound(settings.soundEnabled, true)
-    } else {
-      setMessage(`${patternText} · ${t.play.youLose}`)
-      playResultSound(settings.soundEnabled, false)
-    }
-
-    setPhase('result')
+    setPhase('playing')
+    setMessage(t.play.playingHint)
   }
 
-  const nextRound = () => {
-    playClickSound(settings.soundEnabled)
-    setOutcome(null)
-    setRevealed([null, null, null])
-    setPayout(0)
-    setMessage('')
-    setPhase('betting')
+  useEffect(() => {
+    if (phase !== 'playing') return
+
+    let raf = 0
+    let last = performance.now()
+    let accTime = 0
+
+    const tick = (now: number) => {
+      if (phaseRef.current !== 'playing') return
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+
+      if (!settings.reduceMotion) {
+        const drifted = advanceDrift(ringsRef.current, dt)
+        ringsRef.current = drifted
+        setRings(drifted)
+      }
+
+      accTime += dt
+      if (accTime >= 0.2) {
+        accTime = 0
+        const nextTime = Math.max(0, timeRef.current - 0.2)
+        timeRef.current = nextTime
+        setTimeLeft(Number(nextTime.toFixed(1)))
+      }
+
+      const nextPhase = nextPhaseAfterTick(
+        'playing',
+        ringsRef.current,
+        toleranceRef.current,
+        timeRef.current,
+      )
+
+      if (nextPhase === 'cleared') {
+        const gain = scoreForClear(
+          level,
+          timeRef.current,
+          toleranceRef.current,
+          alignmentErrors(ringsRef.current),
+        )
+        setLastGain(gain)
+        setSessionScore((prev) => {
+          const total = prev + gain
+          setBestScore((best) => {
+            if (total > best) {
+              saveBestScore(total)
+              return total
+            }
+            return best
+          })
+          return total
+        })
+        const unlocked = Math.min(20, level + 1)
+        saveUnlockedLevel(unlocked)
+        setFlash(true)
+        window.setTimeout(() => setFlash(false), 500)
+        setMessage(`${t.play.cleared} · +${gain}`)
+        playResultSound(settings.soundEnabled, true)
+        setPhase('cleared')
+        return
+      }
+
+      if (nextPhase === 'failed') {
+        setMessage(t.play.failed)
+        playResultSound(settings.soundEnabled, false)
+        setPhase('failed')
+        return
+      }
+
+      raf = requestAnimationFrame(tick)
+    }
+
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [phase, level, settings.reduceMotion, settings.soundEnabled, t.play.cleared, t.play.failed])
+
+  const onRotate = (delta: number) => {
+    if (phase !== 'playing') return
+    playSyncSound(settings.soundEnabled)
+    setRings((prev) => {
+      const next = rotateRing(prev, selected, delta)
+      if (isAligned(next, tolerance)) {
+        // alignment will be caught on next animation frame
+      }
+      return next
+    })
   }
 
-  const onReset = () => {
+  const onResetProgress = () => {
     playClickSound(settings.soundEnabled)
-    resetTrinityProgress()
-    setBalance(STARTING_BALANCE)
-    setRoad([])
-    setOutcome(null)
-    setRevealed([null, null, null])
-    setPayout(0)
-    setMessage('')
-    setPhase('betting')
+    resetAlignProgress()
+    setBestScore(0)
+    setSessionScore(0)
+    setupLevel(1)
   }
 
   return (
@@ -147,130 +188,133 @@ export function PlayPage() {
 
       <div className={styles.stats}>
         <div className={styles.stat}>
-          <span className={styles.statLabel}>{t.play.balance}</span>
-          <span className={styles.statValue}>{balance}</span>
+          <span className={styles.statLabel}>{t.play.level}</span>
+          <span className={styles.statValue}>{level}</span>
         </div>
         <div className={styles.stat}>
-          <span className={styles.statLabel}>{t.play.currentBet}</span>
-          <span className={styles.statValue}>
-            {sideLabel(side)} · {betAmount}
-          </span>
+          <span className={styles.statLabel}>{t.play.time}</span>
+          <span className={styles.statValue}>{Math.ceil(timeLeft)}s</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statLabel}>{t.play.score}</span>
+          <span className={styles.statValue}>{sessionScore}</span>
         </div>
       </div>
 
       <p className={styles.notice}>{t.play.freeNotice}</p>
       <p className={styles.rules}>{t.play.rules}</p>
 
-      <TrinityStage
-        revealed={revealed}
-        drawing={phase === 'drawing'}
+      <AlignStage
+        rings={rings}
+        selectedIndex={selected}
         flash={flash}
-        reduceMotion={settings.reduceMotion}
         label={t.play.stageLabel}
       />
 
-      <div className={styles.sides} role="group" aria-label={t.play.chooseSide}>
-        {(
-          [
-            ['blue', t.play.blue, t.play.oddsColor, styles.sideBlue],
-            ['gold', t.play.gold, t.play.oddsColor, styles.sideGold],
-            ['violet', t.play.violet, t.play.oddsColor, styles.sideViolet],
-            ['void', t.play.void, t.play.oddsVoid, styles.sideVoid],
-          ] as Array<[BetSide, string, string, string]>
-        ).map(([value, label, odds, tone]) => (
+      <div className={styles.ringTabs} role="group" aria-label={t.play.chooseRing}>
+        {rings.map((ring, index) => (
           <button
-            key={value}
+            key={ring.id}
             type="button"
-            className={`${styles.sideButton} ${tone} ${side === value ? styles.sideActive : ''}`}
-            disabled={phase !== 'betting'}
-            aria-pressed={side === value}
+            className={`${styles.ringTab} ${
+              ring.color === 'blue'
+                ? styles.tabBlue
+                : ring.color === 'gold'
+                  ? styles.tabGold
+                  : styles.tabViolet
+            } ${selected === index ? styles.tabActive : ''}`}
+            disabled={phase !== 'playing' && phase !== 'ready'}
+            aria-pressed={selected === index}
             onClick={() => {
               playClickSound(settings.soundEnabled)
-              setSide(value)
+              setSelected(index)
             }}
           >
-            <span>{label}</span>
-            <span className={styles.odds}>{odds}</span>
+            {ring.color.toUpperCase()}
           </button>
         ))}
       </div>
 
-      <div className={styles.chips} role="group" aria-label={t.play.chooseChip}>
-        {CHIP_VALUES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={`${styles.chip} ${chip === value ? styles.chipActive : ''}`}
-            disabled={phase !== 'betting'}
-            aria-pressed={chip === value}
-            onClick={() => {
-              playClickSound(settings.soundEnabled)
-              setChip(value)
-            }}
+      <div className={styles.controls}>
+        <button
+          type="button"
+          className={styles.controlBtn}
+          disabled={phase !== 'playing'}
+          onClick={() => onRotate(-15)}
+        >
+          ⟪ -15°
+        </button>
+        <button
+          type="button"
+          className={styles.controlBtn}
+          disabled={phase !== 'playing'}
+          onClick={() => onRotate(-5)}
+        >
+          ⟨ -5°
+        </button>
+        <button
+          type="button"
+          className={styles.controlBtn}
+          disabled={phase !== 'playing'}
+          onClick={() => onRotate(5)}
+        >
+          +5° ⟩
+        </button>
+        <button
+          type="button"
+          className={styles.controlBtn}
+          disabled={phase !== 'playing'}
+          onClick={() => onRotate(15)}
+        >
+          +15° ⟫
+        </button>
+      </div>
+
+      <div className={styles.errors} aria-label={t.play.alignment}>
+        {errors.map((err, index) => (
+          <div
+            key={`err-${index}`}
+            className={`${styles.errorItem} ${err <= tolerance ? styles.errorOk : ''}`}
           >
-            {value}
-          </button>
+            {rings[index]?.color.toUpperCase()} Δ{err}° / {tolerance}°
+          </div>
         ))}
       </div>
 
-      <div className={styles.betLine}>
-        <span>
-          {t.play.selected}: {sideLabel(side)}
-        </span>
-        <span>
-          {t.play.stake}: {betAmount}
-        </span>
-      </div>
+      {phase === 'ready' ? <p className={styles.hint}>{t.play.readyHint}</p> : null}
+      {phase === 'playing' ? <p className={styles.hint}>{message || t.play.playingHint}</p> : null}
 
-      {phase === 'result' && outcome ? (
+      {phase === 'cleared' || phase === 'failed' ? (
         <section className={styles.resultCard} aria-live="polite">
           <h2 className={styles.resultTitle}>{message}</h2>
           <p className={styles.resultBody}>
-            {t.play.draws}: {outcome.draws.map((c) => sideLabel(c)).join(' · ')}
-            {payout > 0 ? ` · ${t.play.payout} ${payout}` : ''}
+            {t.play.bestScore}: {bestScore}
+            {lastGain > 0 ? ` · ${t.play.gain} +${lastGain}` : ''}
           </p>
         </section>
       ) : null}
 
-      {phase === 'drawing' ? <p className={styles.notice}>{t.play.drawing}</p> : null}
-
-      <div className={styles.roadWrap}>
-        <p className={styles.roadTitle}>{t.play.road}</p>
-        <div className={styles.road} aria-label={t.play.road}>
-          {Array.from({ length: 16 }, (_, index) => {
-            const bead = road[road.length - 16 + index]
-            if (!bead) {
-              return <span key={`empty-${index}`} className={`${styles.bead} ${styles.beadEmpty}`} />
-            }
-            const tone =
-              bead.winner === 'blue'
-                ? styles.beadBlue
-                : bead.winner === 'gold'
-                  ? styles.beadGold
-                  : bead.winner === 'violet'
-                    ? styles.beadViolet
-                    : styles.beadVoid
-            return (
-              <span key={bead.id} className={`${styles.bead} ${tone}`}>
-                {sideMark(bead.winner)}
-              </span>
-            )
-          })}
-        </div>
-      </div>
-
       <div className={styles.actions}>
-        {phase === 'betting' ? (
-          <Button variant="primary" disabled={!canDraw} onClick={() => void startDraw()}>
-            {balance < betAmount ? t.play.needChips : t.play.openCore}
+        {phase === 'ready' ? (
+          <Button variant="primary" onClick={startLevel}>
+            {t.play.startAlign}
           </Button>
         ) : null}
-        {phase === 'result' ? (
-          <Button variant="primary" onClick={nextRound}>
-            {t.play.nextRound}
+        {phase === 'cleared' ? (
+          <Button variant="primary" onClick={() => setupLevel(Math.min(20, level + 1))}>
+            {t.play.nextLevel}
           </Button>
         ) : null}
-        <Button variant="secondary" disabled={phase === 'drawing'} onClick={onReset}>
+        {phase === 'failed' ? (
+          <Button variant="primary" onClick={() => setupLevel(level)}>
+            {t.play.retry}
+          </Button>
+        ) : null}
+        <Button
+          variant="secondary"
+          disabled={phase === 'playing'}
+          onClick={onResetProgress}
+        >
           {t.play.reset}
         </Button>
         <Button variant="ghost" className={styles.cardWide} onClick={() => navigate('/')}>
@@ -279,10 +323,4 @@ export function PlayPage() {
       </div>
     </div>
   )
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
 }

@@ -41,7 +41,7 @@ npm run test
 
 - ORBIS 브랜드 로고 / 색상 / 슬로건
 - Home 중앙 CORE + BLUE / GOLD / VIOLET Orb 궤도 애니메이션
-- **CORE TRINITY** (`/play`) — ORBIS 독창 삼중 공명 추첨 (BLUE/GOLD/VIOLET/VOID)
+- **ORBIS ALIGN** (`/play`) — 궤도 게이트를 CORE 광선에 맞추는 스킬/퍼즐 게임
 - Brand / About / Settings / 404 페이지
 - 한국어 / 영어 전환
 - 사운드 토글 (Web Audio API, 기본 무음)

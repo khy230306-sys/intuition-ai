@@ -17,10 +17,10 @@ describe('i18n dictionaries', () => {
     expect(collectKeys(en).sort()).toEqual(collectKeys(ko).sort())
   })
 
-  it('contains CORE TRINITY copy', () => {
-    expect(ko.play.openCore).toBe('CORE 열기')
-    expect(en.play.openCore).toBe('Open CORE')
-    expect(ko.play.void).toBe('VOID')
-    expect(en.nav.play).toBe('Trinity')
+  it('contains ALIGN skill copy', () => {
+    expect(ko.play.startAlign).toBe('정렬 시작')
+    expect(en.play.startAlign).toBe('Start Align')
+    expect(ko.nav.play).toBe('정렬')
+    expect(en.nav.play).toBe('Align')
   })
 })

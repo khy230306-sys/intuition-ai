@@ -1,41 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateDraws, settleTrinityPayout, sideMark } from '../game/trinity/engine'
+import {
+  angleDelta,
+  createRings,
+  createStage,
+  isAligned,
+  normalizeAngle,
+  rotateRing,
+  scoreForClear,
+} from '../game/align/engine'
 
-describe('ORBIS CORE TRINITY engine', () => {
-  it('detects majority wins', () => {
-    const outcome = evaluateDraws(['blue', 'blue', 'gold'])
-    expect(outcome.pattern).toBe('majority')
-    expect(outcome.winner).toBe('blue')
+describe('ORBIS ALIGN engine', () => {
+  it('normalizes angles and deltas', () => {
+    expect(normalizeAngle(-30)).toBe(330)
+    expect(angleDelta(10, 350)).toBe(20)
   })
 
-  it('detects trinity wins', () => {
-    const outcome = evaluateDraws(['violet', 'violet', 'violet'])
-    expect(outcome.pattern).toBe('trinity')
-    expect(outcome.winner).toBe('violet')
+  it('creates harder stages at higher levels', () => {
+    const easy = createStage(1)
+    const hard = createStage(10)
+    expect(hard.tolerance).toBeLessThan(easy.tolerance)
+    expect(hard.timeLimitSec).toBeLessThanOrEqual(easy.timeLimitSec)
   })
 
-  it('detects void when all different', () => {
-    const outcome = evaluateDraws(['blue', 'gold', 'violet'])
-    expect(outcome.pattern).toBe('void')
-    expect(outcome.winner).toBe('void')
+  it('rotates a selected ring', () => {
+    const rings = createRings(createStage(1))
+    const next = rotateRing(rings, 0, 25)
+    expect(next[0]?.angle).toBe(normalizeAngle(rings[0]!.angle + 25))
+    expect(next[1]?.angle).toBe(rings[1]?.angle)
   })
 
-  it('settles demo payouts', () => {
-    const majority = evaluateDraws(['gold', 'gold', 'blue'])
-    expect(settleTrinityPayout('gold', 100, majority)).toBe(200)
-    expect(settleTrinityPayout('blue', 100, majority)).toBe(0)
-
-    const trinity = evaluateDraws(['blue', 'blue', 'blue'])
-    expect(settleTrinityPayout('blue', 100, trinity)).toBe(500)
-
-    const voidRound = evaluateDraws(['blue', 'gold', 'violet'])
-    expect(settleTrinityPayout('void', 100, voidRound)).toBe(400)
+  it('detects alignment within tolerance', () => {
+    const rings = createRings(createStage(1)).map((ring, index) => ({
+      ...ring,
+      angle: index === 0 ? 3 : index === 1 ? 358 : 2,
+    }))
+    expect(isAligned(rings, 8)).toBe(true)
+    expect(isAligned(rings, 1)).toBe(false)
   })
 
-  it('maps road marks', () => {
-    expect(sideMark('blue')).toBe('B')
-    expect(sideMark('gold')).toBe('G')
-    expect(sideMark('violet')).toBe('V')
-    expect(sideMark('void')).toBe('Ø')
+  it('scores clears with positive gain', () => {
+    expect(scoreForClear(2, 20, 12, [2, 3, 1])).toBeGreaterThan(20)
   })
 })

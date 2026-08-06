@@ -137,6 +137,7 @@ import {
   syncVoiceCaptions,
 } from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
+import { bcp47, detectLangCode, translateText } from './translate'
 import {
   canUseGeolocation,
   queryPermissionState,
@@ -281,12 +282,16 @@ import {
   renderTopNavActions,
   renderHomeV2Shell,
   renderNavigationSheet,
+  renderTranslateSheet,
+  defaultTranslateSheetState,
+  langNameForCode,
   resolveHomeVariant,
   writeBootDefaultHome,
   writeStoredHomeVariant,
   type HomeVariant,
   type HomeV2Pane,
   type HomeV2QuickId,
+  type TranslateSheetState,
 } from './homeV2'
 import {
   loadNavigationSettings,
@@ -323,7 +328,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.10'
+const APP_VERSION = '1.20.11'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -669,6 +674,9 @@ const state = {
   homeV2MoreOpen: false,
   /** AI 길안내 bottom sheet (legacy helper; v2 uses full Navigation view) */
   homeV2NavSheetOpen: false,
+  /** Dedicated translate window (HOME 번역하기) */
+  homeV2TranslateSheetOpen: false,
+  translateSheet: defaultTranslateSheetState() as TranslateSheetState,
   /** Navigation v2 UI state */
   navV2: {
     phase: 'idle',
@@ -771,6 +779,7 @@ function openNavInternal(options?: {
   navRouteError = null
   state.homeV2MoreOpen = false
   state.homeV2NavSheetOpen = false
+  state.homeV2TranslateSheetOpen = false
   state.view = 'navigation'
   state.homeV2Pane = 'home'
   const ctx = getNavV2Context()
@@ -817,6 +826,86 @@ async function runNavigationFromUi(dest: string, _nearby = false): Promise<void>
   }
   render()
   void handleUserText(q)
+}
+
+function openTranslateSheet(opts?: { seedText?: string }): void {
+  state.homeV2MoreOpen = false
+  state.homeV2NavSheetOpen = false
+  state.installGuideOpen = false
+  state.homeV2TranslateSheetOpen = true
+  if (opts?.seedText?.trim()) {
+    state.translateSheet = {
+      ...state.translateSheet,
+      sourceText: opts.seedText.trim().slice(0, 2000),
+      result: '',
+      status: '번역할 문장을 확인한 뒤 번역하기를 누르세요.',
+      busy: false,
+    }
+  } else if (!state.translateSheet.sourceText) {
+    state.translateSheet = {
+      ...defaultTranslateSheetState(),
+      from: state.translateSheet.from || 'auto',
+      to: state.translateSheet.to || 'en',
+    }
+  }
+  render()
+}
+
+function closeTranslateSheet(): void {
+  state.homeV2TranslateSheetOpen = false
+  state.translateSheet = { ...state.translateSheet, busy: false }
+  render()
+}
+
+async function runTranslateSheet(): Promise<void> {
+  const text = state.translateSheet.sourceText.trim()
+  if (!text) {
+    state.translateSheet = { ...state.translateSheet, status: '번역할 문장을 입력해 주세요.', result: '' }
+    render()
+    return
+  }
+  let from = state.translateSheet.from || 'auto'
+  let to = state.translateSheet.to || 'en'
+  if (from === to && from !== 'auto') {
+    state.translateSheet = {
+      ...state.translateSheet,
+      status: '원문 언어와 번역 언어가 같습니다. 다른 언어를 골라 주세요.',
+    }
+    render()
+    return
+  }
+  state.translateSheet = { ...state.translateSheet, busy: true, status: '번역 중…' }
+  render()
+  try {
+    if (from === 'auto') from = detectLangCode(text)
+    if (from === to) {
+      to = to === 'ko' ? 'en' : 'ko'
+    }
+    const result = await translateText(text, from, to)
+    state.translateSheet = {
+      ...state.translateSheet,
+      busy: false,
+      to,
+      result: result.ok ? result.text : '',
+      status: result.ok
+        ? result.offline
+          ? '오프라인 사전으로 번역했습니다.'
+          : '번역 완료'
+        : result.error || '번역에 실패했습니다.',
+      lastFrom: langNameForCode(from),
+      lastTo: langNameForCode(to),
+      offline: result.offline,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '번역 오류'
+    state.translateSheet = {
+      ...state.translateSheet,
+      busy: false,
+      result: '',
+      status: msg.slice(0, 120),
+    }
+  }
+  render()
 }
 
 function applyHashRouteFromLocation(opts?: { replace?: boolean }): void {
@@ -4594,6 +4683,7 @@ function goToView(next: View, ev?: MouseEvent): void {
       state.familyTab = 'chat'
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
+      state.homeV2TranslateSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
@@ -4601,12 +4691,14 @@ function goToView(next: View, ev?: MouseEvent): void {
       state.friendsTab = 'chat'
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
+      state.homeV2TranslateSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
-    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen) {
+    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen || state.homeV2TranslateSheetOpen) {
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
+      state.homeV2TranslateSheetOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
     }
     return
@@ -4617,11 +4709,13 @@ function goToView(next: View, ev?: MouseEvent): void {
   state.listening = false
   // Navigation must never use pathname routes — hash + view state only.
   if (next === 'navigation') {
+    state.homeV2TranslateSheetOpen = false
     openNavInternal({ source: 'go_to_view', pushHistory: true })
     return
   }
   state.homeV2MoreOpen = false
   state.homeV2NavSheetOpen = false
+  state.homeV2TranslateSheetOpen = false
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
@@ -4722,11 +4816,14 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
           defaultTravel: loadNavigationSettings().defaultTravelMode,
         })
       : ''
+  const translateSheet = state.homeV2TranslateSheetOpen
+    ? renderTranslateSheet(state.translateSheet)
+    : ''
   const hideBrand = homeV2On && state.view === 'chat'
   // Install CTA stays visible on HOME — users must be able to add to home screen.
   refreshInstallHint()
   const installHtml = renderInstall()
-  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${translateSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? 'home' : ''
   document.body.classList.toggle('home-v2-active', homeV2On)
@@ -5519,6 +5616,7 @@ function bind(): void {
   })
   document.querySelectorAll('[data-action="home-v2-nav-more"]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      state.homeV2TranslateSheetOpen = false
       state.homeV2MoreOpen = !state.homeV2MoreOpen
       render()
     })
@@ -5540,6 +5638,10 @@ function bind(): void {
         openNavInternal({ source: 'home_v2_quick' })
         return
       }
+      if (id === 'translate') {
+        openTranslateSheet()
+        return
+      }
       const cmd = id ? HOME_V2_QUICK_COMMANDS[id] : ''
       if (!cmd || cmd.startsWith('__')) return
       state.view = 'chat'
@@ -5553,6 +5655,84 @@ function bind(): void {
   })
   document.querySelector('[data-action="navv2-back"]')?.addEventListener('click', () => {
     handleNavV2Back()
+  })
+  // —— Translate sheet ——
+  document.querySelector('[data-action="tr-sheet-close"]')?.addEventListener('click', () => {
+    closeTranslateSheet()
+  })
+  document.querySelector('[data-tr-sheet="1"]')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeTranslateSheet()
+  })
+  document.getElementById('tr-sheet-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const input = document.getElementById('tr-sheet-input') as HTMLTextAreaElement | null
+    const fromEl = document.getElementById('tr-sheet-from') as HTMLSelectElement | null
+    const toEl = document.getElementById('tr-sheet-to') as HTMLSelectElement | null
+    state.translateSheet = {
+      ...state.translateSheet,
+      sourceText: input?.value || '',
+      from: fromEl?.value || 'auto',
+      to: toEl?.value || 'en',
+    }
+    void runTranslateSheet()
+  })
+  document.querySelector('[data-action="tr-sheet-swap"]')?.addEventListener('click', () => {
+    const fromEl = document.getElementById('tr-sheet-from') as HTMLSelectElement | null
+    const toEl = document.getElementById('tr-sheet-to') as HTMLSelectElement | null
+    const input = document.getElementById('tr-sheet-input') as HTMLTextAreaElement | null
+    let from = fromEl?.value || state.translateSheet.from
+    let to = toEl?.value || state.translateSheet.to
+    if (from === 'auto') from = detectLangCode(input?.value || state.translateSheet.sourceText || 'en')
+    state.translateSheet = {
+      ...state.translateSheet,
+      from: to,
+      to: from === 'auto' ? 'en' : from,
+      sourceText: input?.value ?? state.translateSheet.sourceText,
+      result: '',
+      status: '언어를 바꿨습니다. 다시 번역하기를 누르세요.',
+    }
+    render()
+  })
+  document.querySelector('[data-action="tr-sheet-clear"]')?.addEventListener('click', () => {
+    state.translateSheet = {
+      ...state.translateSheet,
+      sourceText: '',
+      result: '',
+      status: '번역할 문장을 입력하세요.',
+    }
+    render()
+  })
+  document.querySelector('[data-action="tr-sheet-clear-result"]')?.addEventListener('click', () => {
+    state.translateSheet = { ...state.translateSheet, result: '', status: '결과를 지웠습니다.' }
+    render()
+  })
+  document.querySelector('[data-action="tr-sheet-copy"]')?.addEventListener('click', () => {
+    const text = state.translateSheet.result
+    if (!text) {
+      showFlash('복사할 번역 결과가 없습니다.')
+      return
+    }
+    const r = copyTextNow(text)
+    showFlash(r.ok ? '번역 결과를 복사했습니다.' : '복사에 실패했습니다.')
+  })
+  document.querySelector('[data-action="tr-sheet-speak"]')?.addEventListener('click', () => {
+    const text = state.translateSheet.result
+    if (!text) {
+      showFlash('읽어줄 번역 결과가 없습니다.')
+      return
+    }
+    const lang = bcp47(state.translateSheet.to || 'en')
+    void speakAsync(text.slice(0, 400), lang)
+  })
+  document.getElementById('tr-sheet-input')?.addEventListener('input', (e) => {
+    const v = (e.target as HTMLTextAreaElement).value
+    state.translateSheet = { ...state.translateSheet, sourceText: v }
+  })
+  document.getElementById('tr-sheet-from')?.addEventListener('change', (e) => {
+    state.translateSheet = { ...state.translateSheet, from: (e.target as HTMLSelectElement).value }
+  })
+  document.getElementById('tr-sheet-to')?.addEventListener('change', (e) => {
+    state.translateSheet = { ...state.translateSheet, to: (e.target as HTMLSelectElement).value }
   })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
@@ -5784,7 +5964,7 @@ function bind(): void {
   })
   document.querySelector('[data-action="home-v2-translate"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
-    goToView('global')
+    openTranslateSheet()
   })
   document.querySelector('[data-action="home-v2-guide"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false

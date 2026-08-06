@@ -203,6 +203,7 @@ export const HOME_V2_QUICK_COMMANDS = {
   navigate: '__open_nav_sheet__',
   schedule: '일정 추가해줘',
   weather: '오늘 날씨 알려줘',
+  translate: '__open_translate_sheet__',
 } as const
 
 export type HomeV2QuickId = keyof typeof HOME_V2_QUICK_COMMANDS

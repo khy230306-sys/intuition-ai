@@ -159,6 +159,13 @@ export function renderHomeV2Shell(
             <span class="home-v2-q-sub">지금 기온</span>
           </span>
         </button>
+        <button type="button" class="home-v2-quick-btn home-v2-quick-translate" data-action="home-v2-quick" data-quick-id="translate">
+          <span class="home-v2-q-ico" aria-hidden="true">文A</span>
+          <span class="home-v2-q-copy">
+            <span class="home-v2-q-title">번역하기</span>
+            <span class="home-v2-q-sub">별도 번역 창</span>
+          </span>
+        </button>
       </div>
 
       <button type="button" class="home-v2-smart-card ${model.smartCard.kind === 'empty' ? 'is-empty' : ''} ${model.smartCard.kind === 'focus' ? 'is-focus' : ''}" data-action="home-v2-smart" data-smart-view="${escAttr(model.smartCard.targetView)}" data-smart-hint="${escAttr(model.smartCard.chatHint || '')}">
@@ -231,6 +238,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
             ${moreItem('홈 · 채팅', 'data-action="home-v2-nav-home"')}
             ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
+            ${moreItem('번역하기', 'data-action="home-v2-quick" data-quick-id="translate"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}
           </ul>
         </div>
@@ -265,7 +273,8 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <h4>설정</h4>
           <ul class="home-v2-more-list">
             ${moreItem('설정 · AI · 업데이트', 'data-view="settings"')}
-            ${moreItem('번역 · 언어', 'data-view="global"')}
+            ${moreItem('번역 · 언어 설정', 'data-view="global"')}
+            ${moreItem('번역하기 창', 'data-action="home-v2-quick" data-quick-id="translate"')}
             ${showInstall ? moreItem('홈 화면 설치 방법', 'data-action="install-show-guide"') : ''}
             ${moreItem('사용설명서', 'data-action="home-v2-guide"')}
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}

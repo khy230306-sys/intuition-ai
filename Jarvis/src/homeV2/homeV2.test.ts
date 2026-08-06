@@ -157,6 +157,7 @@ describe('voice + quick commands', () => {
     expect(HOME_V2_QUICK_COMMANDS.navigate).toBe('__open_nav_sheet__')
     expect(HOME_V2_QUICK_COMMANDS.schedule).toMatch(/일정/)
     expect(HOME_V2_QUICK_COMMANDS.weather).toMatch(/날씨/)
+    expect(HOME_V2_QUICK_COMMANDS.translate).toBe('__open_translate_sheet__')
   })
 
   it('hides weather when missing and avoids double 님', () => {
@@ -188,6 +189,8 @@ describe('HOME v2 render', () => {
     expect(html).toContain('AIZIO')
     expect(html).toContain('data-quick-id="navigate"')
     expect(html).toContain('길안내')
+    expect(html).toContain('data-quick-id="translate"')
+    expect(html).toContain('번역하기')
     expect(html).toContain('home-v2-quick-primary')
     expect(html).not.toContain('data-quick-id="music"')
     expect(html).toContain('is-empty')
@@ -229,7 +232,9 @@ describe('HOME v2 render', () => {
     expect(more).toContain('손님관리')
     expect(more).toContain('투자 · 주식엔진')
     expect(more).toContain('빠른 실행')
-    expect(more).toContain('번역 · 언어')
+    expect(more).toContain('번역 · 언어 설정')
+    expect(more).toContain('번역하기')
+    expect(more).toContain('data-quick-id="translate"')
     expect(more).toContain('브리핑')
     // No duplicate life entry / outdated labels
     expect(more).not.toContain('바로가기')

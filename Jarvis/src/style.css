@@ -4042,6 +4042,34 @@ body.keyboard-open .aizio-primary-nav {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+.nav-quick-edit {
+  display: grid;
+  gap: 10px;
+  padding: 10px 0 4px;
+}
+.nav-quick-edit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.nav-quick-edit-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.nav-quick-edit-list .primary-btn.tiny,
+.nav-quick-edit-list .ghost-btn.tiny {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
 @media (min-width: 520px) {
   .nav-home-quick { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

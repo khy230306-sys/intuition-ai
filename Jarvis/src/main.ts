@@ -123,15 +123,17 @@ import {
 import {
   clearRecentFeatures,
   exportMenuStructureJson,
-  listVisibleQuickActions,
+  hideQuickAction,
   recordRecentFeature,
   renderChatShell,
   renderHomeDashboard,
   renderMoreHub,
   renderPrimaryBottomNav,
   renderScheduleHub,
+  resetQuickActions,
   runMenuAudit,
-  toggleQuickHidden,
+  showQuickAction,
+  type QuickActionId,
   type ScheduleHubTab,
 } from './navShell'
 import { listFamilyHelperSchedules, listFamilyHelperTasks, listMedications } from './family-helper/store'
@@ -723,6 +725,8 @@ const state = {
   moreQuery: '',
   /** Chat + overflow menu */
   chatPlusOpen: false,
+  /** Home quick-actions editor open */
+  quickEditOpen: false,
   /** Where MIC dictation should land: main chat, space rooms, or translate sheet. */
   dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends' | 'translate-sheet',
   voiceHint: '',
@@ -3832,6 +3836,7 @@ function renderNavHomeView(): string {
       alertLines,
       updateBanner,
       appVersion: APP_VERSION,
+      quickEditOpen: state.quickEditOpen,
     })
   } catch (err) {
     recordDiagError(`nav_home_fail:${err instanceof Error ? err.message.slice(0, 40) : 'err'}`)
@@ -5131,6 +5136,7 @@ function goToView(next: View, ev?: MouseEvent): void {
   voice.stop()
   state.listening = false
   state.chatPlusOpen = false
+  if (next !== 'home') state.quickEditOpen = false
   // Navigation must never use pathname routes — hash + view state only.
   if (next === 'navigation') {
     state.homeV2TranslateSheetOpen = false
@@ -6580,14 +6586,26 @@ function bind(): void {
       const kind = btn.dataset.quickKind
       const payload = btn.dataset.quickPayload || ''
       const id = btn.dataset.navQuick || ''
-      if (id) recordRecentFeature(id === 'ai-camera' ? 'ai-camera' : id === 'family-schedule' ? 'family-helper' : 'schedule')
+      if (id === 'ai-camera') recordRecentFeature('ai-camera')
+      else if (id === 'family-schedule' || id === 'family') recordRecentFeature('family-helper')
+      else if (id === 'translate') recordRecentFeature('translate')
+      else if (id === 'chat') recordRecentFeature('chat')
+      else if (id === 'schedule' || id === 'schedule-add') recordRecentFeature('schedule')
       if (kind === 'view' && payload) {
         goToView(payload as View)
         return
       }
       if (kind === 'action' && payload === 'translate') {
         openTranslateSheet()
-        recordRecentFeature('translate')
+        return
+      }
+      if (kind === 'action' && payload === 'navigate') {
+        openNavInternal({ source: 'home_quick' })
+        return
+      }
+      if (kind === 'action' && payload === 'music') {
+        goToView('chat')
+        void handleUserText(HOME_V2_MUSIC_COMMAND)
         return
       }
       if (kind === 'cmd' && payload) {
@@ -6601,15 +6619,34 @@ function bind(): void {
     showFlash('최근 사용 기록을 지웠어요.')
     render()
   })
-  document.querySelector('[data-action="edit-quick-actions"]')?.addEventListener('click', () => {
-    const visible = listVisibleQuickActions().map((q) => q.id)
-    const id = window.prompt(
-      '숨길 빠른 실행 ID를 입력하세요 (다시 누르면 표시).\n가능: schedule-add, reminder-add, ai-camera, translate, family-schedule, todo-add',
-      visible[0] || 'translate',
-    )
-    if (!id) return
-    toggleQuickHidden(id as Parameters<typeof toggleQuickHidden>[0])
-    showFlash('빠른 실행을 저장했어요.')
+  document.querySelectorAll('[data-action="edit-quick-actions"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.quickEditOpen = !state.quickEditOpen
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-quick-add]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn.dataset.quickAdd || '') as QuickActionId
+      const r = showQuickAction(id)
+      if (!r.ok && r.reason === 'full') {
+        showFlash('빠른 실행은 최대 6개입니다. 하나를 숨긴 뒤 추가해 주세요.')
+        return
+      }
+      showFlash(r.ok ? '빠른 실행에 추가했어요.' : '추가하지 못했어요.')
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-quick-hide]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      hideQuickAction((btn.dataset.quickHide || '') as QuickActionId)
+      showFlash('빠른 실행에서 제거했어요. 아래에서 다시 추가할 수 있어요.')
+      render()
+    })
+  })
+  document.querySelector('[data-action="reset-quick-actions"]')?.addEventListener('click', () => {
+    resetQuickActions()
+    showFlash('빠른 실행을 기본값으로 복원했어요.')
     render()
   })
   document.querySelectorAll<HTMLButtonElement>('[data-sched-tab]').forEach((btn) => {

@@ -4,7 +4,7 @@
  */
 
 import type { HomeV2Model } from '../homeV2/model'
-import { listVisibleQuickActions } from './quickActions'
+import { listAddableQuickActions, listVisibleQuickActions, QUICK_ACTION_MAX } from './quickActions'
 import { listRecentFeatures } from './recentFeatures'
 
 function esc(s: string): string {
@@ -26,6 +26,7 @@ export function renderHomeDashboard(opts: {
   alertLines: Array<{ label: string }>
   updateBanner?: string
   appVersion: string
+  quickEditOpen?: boolean
 }): string {
   const { model } = opts
   const weather = model.header.weatherLine
@@ -33,7 +34,9 @@ export function renderHomeDashboard(opts: {
     : ''
 
   const quick = listVisibleQuickActions()
+  const addable = listAddableQuickActions()
   const recent = listRecentFeatures()
+  const editOpen = Boolean(opts.quickEditOpen)
 
   const hasSchedule = opts.scheduleLines.length > 0
   const hasAlerts = opts.alertLines.length > 0
@@ -134,12 +137,61 @@ export function renderHomeDashboard(opts: {
       <section class="nav-home-card" data-home-card="quick">
         <div class="nav-home-sec-head">
           <h2>빠른 실행</h2>
-          <button type="button" class="ghost-btn tiny" data-action="edit-quick-actions">편집</button>
+          <button type="button" class="ghost-btn tiny ${editOpen ? 'active' : ''}" data-action="edit-quick-actions">
+            ${editOpen ? '완료' : '편집'}
+          </button>
         </div>
-        <div class="home-v2-quick nav-home-quick" aria-label="빠른 실행">
-          ${quick
-            .map(
-              (q) => `<button type="button" class="home-v2-quick-btn" data-nav-quick="${escAttr(q.id)}"
+        ${
+          editOpen
+            ? `<div class="nav-quick-edit" data-quick-edit="1">
+                <p class="hint">홈에 표시 (${quick.length}/${QUICK_ACTION_MAX}). 원하는 기능을 아래에서 「추가」하세요.</p>
+                <ul class="nav-quick-edit-list">
+                  ${
+                    quick.length
+                      ? quick
+                          .map(
+                            (q) => `<li>
+                              <span><strong>${esc(q.title)}</strong> <span class="hint">${esc(q.sub)}</span></span>
+                              <button type="button" class="ghost-btn tiny" data-quick-hide="${escAttr(q.id)}">제거</button>
+                            </li>`,
+                          )
+                          .join('')
+                      : '<li class="hint">표시 중인 항목이 없어요. 아래에서 추가하세요.</li>'
+                  }
+                </ul>
+                <h3 class="subsection-title">추가할 기능 고르기</h3>
+                <ul class="nav-quick-edit-list nav-quick-add-list">
+                  ${
+                    addable.length
+                      ? addable
+                          .map(
+                            (q) => `<li>
+                              <span><strong>${esc(q.title)}</strong> <span class="hint">${esc(q.sub)}</span></span>
+                              <button type="button" class="primary-btn tiny" data-quick-add="${escAttr(q.id)}" ${
+                                quick.length >= QUICK_ACTION_MAX ? 'disabled' : ''
+                              }>추가</button>
+                            </li>`,
+                          )
+                          .join('')
+                      : '<li class="hint">추가할 수 있는 기능이 모두 홈에 있어요.</li>'
+                  }
+                </ul>
+                ${
+                  quick.length >= QUICK_ACTION_MAX
+                    ? `<p class="hint">최대 ${QUICK_ACTION_MAX}개입니다. 위에서 하나를 제거한 뒤 추가해 주세요.</p>`
+                    : ''
+                }
+                <div class="row-btns">
+                  <button type="button" class="ghost-btn tiny" data-action="reset-quick-actions">기본값으로 복원</button>
+                  <button type="button" class="ghost-btn tiny" data-action="edit-quick-actions">편집 닫기</button>
+                </div>
+              </div>`
+            : `<div class="home-v2-quick nav-home-quick" aria-label="빠른 실행">
+          ${
+            quick.length
+              ? quick
+                  .map(
+                    (q) => `<button type="button" class="home-v2-quick-btn" data-nav-quick="${escAttr(q.id)}"
                 data-quick-kind="${escAttr(q.kind)}" data-quick-payload="${escAttr(q.payload)}">
                 <span class="home-v2-q-ico" aria-hidden="true">${esc(q.ico)}</span>
                 <span class="home-v2-q-copy">
@@ -147,9 +199,18 @@ export function renderHomeDashboard(opts: {
                   <span class="home-v2-q-sub">${esc(q.sub)}</span>
                 </span>
               </button>`,
-            )
-            .join('')}
-        </div>
+                  )
+                  .join('')
+              : `<button type="button" class="home-v2-quick-btn" data-action="edit-quick-actions">
+                  <span class="home-v2-q-ico" aria-hidden="true">+</span>
+                  <span class="home-v2-q-copy">
+                    <span class="home-v2-q-title">항목 추가</span>
+                    <span class="home-v2-q-sub">빠른 실행 편집</span>
+                  </span>
+                </button>`
+          }
+        </div>`
+        }
       </section>
 
       ${recentHtml}

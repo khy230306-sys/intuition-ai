@@ -11,10 +11,17 @@ export { renderChatShell } from './renderChatShell'
 export { recordRecentFeature, listRecentFeatures, clearRecentFeatures } from './recentFeatures'
 export {
   listVisibleQuickActions,
+  listAddableQuickActions,
+  listHiddenQuickActions,
   getQuickPrefs,
   toggleQuickHidden,
+  showQuickAction,
+  hideQuickAction,
+  resetQuickActions,
   saveQuickPrefs,
   DEFAULT_QUICK_ACTIONS,
+  QUICK_ACTION_CATALOG,
+  QUICK_ACTION_MAX,
 } from './quickActions'
 export type { QuickActionId } from './quickActions'
 export { runMenuAudit, exportMenuStructureJson } from './menuAudit'

@@ -6,7 +6,17 @@ import { renderMoreHub } from './renderMoreHub'
 import { renderScheduleHub } from './renderScheduleHub'
 import { renderChatShell } from './renderChatShell'
 import { recordRecentFeature, listRecentFeatures, clearRecentFeatures } from './recentFeatures'
-import { listVisibleQuickActions, toggleQuickHidden, getQuickPrefs } from './quickActions'
+import {
+  listVisibleQuickActions,
+  listAddableQuickActions,
+  toggleQuickHidden,
+  getQuickPrefs,
+  showQuickAction,
+  hideQuickAction,
+  resetQuickActions,
+  QUICK_ACTION_CATALOG,
+} from './quickActions'
+import { renderHomeDashboard } from './renderHomeDashboard'
 import { runMenuAudit, exportMenuStructureJson } from './menuAudit'
 import { hashScreenToView, viewToHashScreen, parseLocationHash, APP_HASH_SCREENS } from '../appRouting/hashRoute'
 
@@ -78,6 +88,65 @@ describe('quick + recent', () => {
     toggleQuickHidden('translate')
     expect(getQuickPrefs().hidden).toContain('translate')
     expect(listVisibleQuickActions().every((q) => q.id !== 'translate')).toBe(true)
+  })
+
+  it('can add a removed quick action back', () => {
+    hideQuickAction('ai-camera')
+    expect(listAddableQuickActions().some((q) => q.id === 'ai-camera')).toBe(true)
+    const r = showQuickAction('ai-camera')
+    expect(r.ok).toBe(true)
+    expect(listVisibleQuickActions().some((q) => q.id === 'ai-camera')).toBe(true)
+    expect(listAddableQuickActions().every((q) => q.id !== 'ai-camera')).toBe(true)
+  })
+
+  it('can add catalog items beyond the default six', () => {
+    hideQuickAction('todo-add')
+    const r = showQuickAction('navigate')
+    expect(r.ok).toBe(true)
+    expect(listVisibleQuickActions().some((q) => q.id === 'navigate')).toBe(true)
+    expect(QUICK_ACTION_CATALOG.length).toBeGreaterThan(6)
+  })
+
+  it('reset restores default six quick actions', () => {
+    hideQuickAction('schedule-add')
+    showQuickAction('games')
+    resetQuickActions()
+    expect(listVisibleQuickActions().map((q) => q.id)).toEqual([
+      'schedule-add',
+      'reminder-add',
+      'ai-camera',
+      'translate',
+      'family-schedule',
+      'todo-add',
+    ])
+  })
+
+  it('edit panel lists addable catalog with add buttons', () => {
+    hideQuickAction('ai-camera')
+    const html = renderHomeDashboard({
+      model: {
+        header: { greeting: '안녕하세요', dateLine: '8월 6일', weatherLine: null },
+        summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
+        smartCard: {
+          kind: 'empty',
+          title: '여유',
+          items: [],
+          targetView: 'chat',
+        },
+        translate: { active: false, label: '번역' },
+        voiceState: 'idle',
+        prompt: '무엇을',
+      },
+      scheduleLines: [],
+      alertLines: [],
+      appVersion: '1.23.0',
+      quickEditOpen: true,
+    })
+    expect(html).toContain('data-quick-edit')
+    expect(html).toContain('data-quick-add="ai-camera"')
+    expect(html).toContain('data-quick-add="navigate"')
+    expect(html).toContain('추가할 기능 고르기')
+    expect(html).toContain('추가')
   })
 
   it('records recent without settings/diag', () => {

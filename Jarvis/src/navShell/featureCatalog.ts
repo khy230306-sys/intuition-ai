@@ -201,11 +201,11 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   {
     id: 'diag',
     title: '진단',
-    description: '기능·기기 진단',
+    description: '출시 준비 검사 · 기능·기기 진단',
     group: 'settings',
     view: 'settings',
     action: 'home-v2-goto-diag',
-    keywords: ['진단', '테스트', '오류'],
+    keywords: ['진단', '테스트', '오류', '출시', '헬스'],
     excludeFromRecent: true,
   },
 ]

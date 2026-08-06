@@ -8,3 +8,9 @@ export {
   type ChecklistItem,
 } from './checklist'
 export { FeatureDiagCodes, recordFeatureDiagError, loadFeatureDiagErrors } from './errorCodes'
+export {
+  runReleaseHealthCheck,
+  renderReleaseHealthPanel,
+  type ReleaseHealthReport,
+  type HealthVerdict,
+} from './releaseHealth'

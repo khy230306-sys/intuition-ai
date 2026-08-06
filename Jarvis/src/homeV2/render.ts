@@ -351,8 +351,8 @@ export function renderDesignLabSection(opts: {
         <button type="button" class="ghost-btn ${opts.active === 'legacy' ? 'active' : ''}" data-action="home-v2-set" data-home-variant="legacy">기존 홈 보기</button>
       </div>
       <div class="row-btns">
-        <button type="button" class="ghost-btn" data-action="home-v2-boot" data-home-boot="v2">실행 시 기본: v2</button>
-        <button type="button" class="ghost-btn" data-action="home-v2-boot" data-home-boot="legacy">실행 시 기본: 기존</button>
+        <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="v2">실행 시 기본: v2</button>
+        <button type="button" class="ghost-btn" data-action="home-v2-boot-default" data-home-variant="legacy">실행 시 기본: 기존</button>
       </div>
       <p class="hint">현재: ${opts.active === 'v2' ? 'HOME v2' : '기존 홈'} · 부트 기본: ${opts.bootDefault === 'v2' ? 'v2' : '기존'}</p>
       <div class="row-btns">

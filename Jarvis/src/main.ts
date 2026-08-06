@@ -114,11 +114,14 @@ import {
   collectFeatureDiagStatus,
   loadDeviceChecklist,
   renderFeatureDiagPanel,
+  renderReleaseHealthPanel,
   runFeatureAutoDiag,
+  runReleaseHealthCheck,
   sanitizeDiagExport,
   setChecklistStatus,
   type AutoDiagReport,
   type FeatureDiagStatus,
+  type ReleaseHealthReport,
 } from './featureDiag'
 import {
   clearRecentFeatures,
@@ -408,7 +411,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.23.0'
+const APP_VERSION = '1.23.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -803,6 +806,8 @@ const state = {
   featureDiagRunning: false,
   featureDiagStatusText: '',
   featureDiagChecklist: loadDeviceChecklist(),
+  releaseHealthReport: null as ReleaseHealthReport | null,
+  releaseHealthRunning: false,
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -1910,6 +1915,13 @@ function bootNavDelegation(): void {
         }
         const next = viewBtn.getAttribute('data-view') as View | null
         if (!next) return
+        const fhTab = viewBtn.getAttribute('data-fh-open-tab')
+        if (fhTab && next === 'family-helper') {
+          state.familyHelper = {
+            ...state.familyHelper,
+            tab: fhTab as FamilyHelperState['tab'],
+          }
+        }
         e.preventDefault()
         goToView(next, e)
       }
@@ -4974,6 +4986,7 @@ function renderSettings(): string {
         </label>
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
+        ${renderReleaseHealthPanel(state.releaseHealthReport, { running: state.releaseHealthRunning })}
         ${renderFeatureDiagPanel({
           status: state.featureDiagStatus,
           report: state.featureDiagReport,
@@ -5389,14 +5402,8 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
         {
           onBack: () => goToView('chat'),
           onSendTranslate: (text) => {
-            state.view = 'chat'
             state.homeV2MoreOpen = false
-            render()
-            void handleUserText(
-              text
-                ? `이 문장을 자연스럽게 답장해줘: ${text}`
-                : '지금부터 번역 모드로 바꿔줘',
-            )
+            openTranslateSheet({ seedText: text || undefined })
           },
         },
       )
@@ -6682,7 +6689,9 @@ function bind(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-fh-open-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.fhOpenTab
-      if (tab) state.familyHelper = { ...state.familyHelper, tab: tab as FamilyHelperState['tab'] }
+      if (!tab) return
+      state.familyHelper = { ...state.familyHelper, tab: tab as FamilyHelperState['tab'] }
+      if (state.view === 'family-helper') render({ guardNav: false })
     })
   })
   const moreQ = document.querySelector<HTMLInputElement>('[data-nav-more-q]')
@@ -7459,6 +7468,37 @@ function bind(): void {
     void refreshFeatureDiagStatus()
   }
 
+  document.querySelector('[data-action="release-health-run"]')?.addEventListener('click', () => {
+    if (state.releaseHealthRunning) return
+    state.releaseHealthRunning = true
+    render({ guardNav: false })
+    void runReleaseHealthCheck({ version: APP_VERSION })
+      .then((report) => {
+        state.releaseHealthReport = report
+        showFlash(`출시 준비도 ${report.readinessPercent}% · FAIL ${report.summary.FAIL}`)
+      })
+      .catch((e) => {
+        showFlash(e instanceof Error ? e.message : '출시 준비 검사 실패')
+      })
+      .finally(() => {
+        state.releaseHealthRunning = false
+        if (state.view === 'settings') render({ guardNav: false })
+      })
+  })
+  document.querySelector('[data-action="release-health-copy"]')?.addEventListener('click', () => {
+    if (!state.releaseHealthReport) {
+      showFlash('먼저 출시 준비 검사를 실행해 주세요.')
+      return
+    }
+    const payload = sanitizeDiagExport({
+      app: 'AIZIO',
+      kind: 'release-health',
+      version: APP_VERSION,
+      report: state.releaseHealthReport,
+    })
+    const copied = copyTextNow(JSON.stringify(payload, null, 2))
+    showFlash(copied.ok ? '출시 준비 결과를 복사했습니다.' : '복사에 실패했습니다.')
+  })
   document.querySelector('[data-action="fdiag-refresh"]')?.addEventListener('click', () => {
     void refreshFeatureDiagStatus()
   })

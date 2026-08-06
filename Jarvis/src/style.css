@@ -54,7 +54,8 @@ body {
   min-height: 100dvh;
   display: grid;
   grid-template-rows: auto auto 1fr;
-  padding: calc(10px + var(--safe-top)) 12px calc(10px + var(--safe-bottom));
+  /* Bottom safe-area is applied once on .aizio-primary-nav to avoid double inset */
+  padding: calc(10px + var(--safe-top)) 12px 10px;
   gap: 10px;
 }
 

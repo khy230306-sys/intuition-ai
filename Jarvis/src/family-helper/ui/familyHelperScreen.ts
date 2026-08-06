@@ -134,6 +134,7 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
     body = `
       <p class="hint">이름·관계만 있어도 저장됩니다. 학교·연락처는 나중에 수정하세요.</p>
       <form id="fh-member-form" class="fh-form">
+        <input type="hidden" name="id" value="" />
         <input name="name" required placeholder="이름/별칭 (필수)" autocomplete="name" />
         <select name="relation">
           ${Object.entries(REL_LABEL)
@@ -148,7 +149,7 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
           <input name="phone" placeholder="연락처" inputmode="tel" />
           <input name="note" placeholder="메모" />
         </details>
-        <button class="primary-btn" type="submit">구성원 추가</button>
+        <button class="primary-btn" type="submit" data-fh-member-submit="1">구성원 추가</button>
       </form>
       <ul class="fh-list">
         ${members
@@ -158,6 +159,7 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
               ${m.school ? `<br/><span class="hint">${esc(m.school)} ${esc(m.grade || '')}</span>` : ''}
               ${st.showHealth && m.healthNote ? `<br/><span class="hint">건강메모: ${esc(m.healthNote)}</span>` : ''}
               <div class="row-btns">
+                <button type="button" class="ghost-btn tiny" data-fh-edit-member="${esc(m.id)}">수정</button>
                 <button type="button" class="ghost-btn tiny" data-fh-del-member="${esc(m.id)}" data-purge="0">삭제(기록 유지)</button>
                 <button type="button" class="ghost-btn tiny danger-btn" data-fh-del-member="${esc(m.id)}" data-purge="1">삭제+관련기록</button>
               </div>
@@ -340,7 +342,7 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
           )
           .join('')}
       </div>
-      ${st.status ? `<p class="hint" data-fh-status>${esc(st.status)}</p>` : ''}
+      <p class="hint" data-fh-status ${st.status ? '' : 'hidden'}>${esc(st.status || '')}</p>
       <div class="fh-body">${body}</div>
     </section>
   `
@@ -374,7 +376,9 @@ export function bindFamilyHelperScreen(
   root.querySelector('#fh-member-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const fd = new FormData(e.target as HTMLFormElement)
+    const id = String(fd.get('id') || '').trim()
     upsertFamilyMember({
+      id: id || undefined,
       name: String(fd.get('name') || ''),
       relation: String(fd.get('relation') || 'other') as FamilyRelation,
       birthDate: String(fd.get('birthDate') || '') || undefined,
@@ -383,7 +387,36 @@ export function bindFamilyHelperScreen(
       phone: String(fd.get('phone') || '') || undefined,
       note: String(fd.get('note') || '') || undefined,
     })
-    redraw({ status: '구성원을 저장했어요.', tab: 'members' })
+    redraw({ status: id ? '구성원을 수정했어요.' : '구성원을 저장했어요.', tab: 'members' })
+  })
+
+  root.querySelectorAll<HTMLButtonElement>('[data-fh-edit-member]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.fhEditMember || ''
+      const m = listFamilyMembers().find((x) => x.id === id)
+      const form = root.querySelector('#fh-member-form') as HTMLFormElement | null
+      if (!m || !form) return
+      const set = (name: string, value: string) => {
+        const el = form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
+        if (el) el.value = value
+      }
+      set('id', m.id)
+      set('name', m.name)
+      set('relation', m.relation)
+      set('birthDate', m.birthDate || '')
+      set('school', m.school || '')
+      set('grade', m.grade || '')
+      set('phone', m.phone || '')
+      set('note', m.note || '')
+      const submit = form.querySelector('[data-fh-member-submit="1"]')
+      if (submit) submit.textContent = '구성원 수정 저장'
+      const statusEl = root.querySelector<HTMLElement>('[data-fh-status]')
+      if (statusEl) {
+        statusEl.hidden = false
+        statusEl.textContent = `${m.name} 정보를 위에서 수정한 뒤 저장하세요.`
+      }
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   })
 
   root.querySelectorAll<HTMLButtonElement>('[data-fh-del-member]').forEach((btn) => {

@@ -286,6 +286,8 @@ import {
   renderTranslateSheet,
   defaultTranslateSheetState,
   langNameForCode,
+  resolveTranslateSheetFrom,
+  sttLangForTranslateSheet,
   resolveHomeVariant,
   writeBootDefaultHome,
   writeStoredHomeVariant,
@@ -329,7 +331,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.13'
+const APP_VERSION = '1.20.14'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -628,8 +630,8 @@ const state = {
   draft: '',
   busy: false,
   listening: false,
-  /** Where MIC dictation should land: main Jarvis chat vs space rooms. */
-  dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends',
+  /** Where MIC dictation should land: main chat, space rooms, or translate sheet. */
+  dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends' | 'translate-sheet',
   voiceHint: '',
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   /** Latest version string from jarvis-app.shipstatic.com, if checked. */
@@ -853,6 +855,12 @@ function openTranslateSheet(opts?: { seedText?: string }): void {
 }
 
 function closeTranslateSheet(): void {
+  if (state.listening && state.dictationTarget === 'translate-sheet') {
+    voiceSessionGen += 1
+    voice.stop()
+    state.listening = false
+    state.voiceHint = ''
+  }
   state.homeV2TranslateSheetOpen = false
   state.translateSheet = { ...state.translateSheet, busy: false }
   render()
@@ -865,9 +873,10 @@ async function runTranslateSheet(): Promise<void> {
     render()
     return
   }
-  let from = state.translateSheet.from || 'auto'
+  const fromPicker = state.translateSheet.from || 'auto'
+  let from = resolveTranslateSheetFrom(text, fromPicker)
   let to = state.translateSheet.to || 'en'
-  if (from === to && from !== 'auto') {
+  if (fromPicker !== 'auto' && from === to) {
     state.translateSheet = {
       ...state.translateSheet,
       status: '원문 언어와 번역 언어가 같습니다. 다른 언어를 골라 주세요.',
@@ -878,22 +887,25 @@ async function runTranslateSheet(): Promise<void> {
   state.translateSheet = { ...state.translateSheet, busy: true, status: '번역 중…' }
   render()
   try {
-    if (from === 'auto') from = detectLangCode(text)
     if (from === to) {
       to = to === 'ko' ? 'en' : 'ko'
     }
     const result = await translateText(text, from, to)
+    const detectedNote =
+      fromPicker === 'auto' ? `자동 감지(${langNameForCode(from)})` : langNameForCode(from)
     state.translateSheet = {
       ...state.translateSheet,
       busy: false,
+      // Keep picker on 「자동 감지」 so the next MIC pass still auto-detects.
+      from: fromPicker === 'auto' ? 'auto' : from,
       to,
       result: result.ok ? result.text : '',
       status: result.ok
         ? result.offline
-          ? '오프라인 사전으로 번역했습니다.'
-          : '번역 완료'
+          ? `${detectedNote} → ${langNameForCode(to)} · 오프라인`
+          : `${detectedNote} → ${langNameForCode(to)} · 번역 완료`
         : result.error || '번역에 실패했습니다.',
-      lastFrom: langNameForCode(from),
+      lastFrom: detectedNote,
       lastTo: langNameForCode(to),
       offline: result.offline,
     }
@@ -907,6 +919,141 @@ async function runTranslateSheet(): Promise<void> {
     }
   }
   render()
+}
+
+/** MIC inside 번역하기 sheet — STT then auto-detect → selected target language. */
+function startTranslateSheetDictation(): void {
+  if (!state.homeV2TranslateSheetOpen) {
+    openTranslateSheet()
+  }
+  if (state.translateSheet.busy) {
+    showFlash('번역 중입니다. 잠시 후 MIC를 눌러 주세요.')
+    return
+  }
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    showFlash('음성 인식은 HTTPS(홈 화면 앱)에서만 됩니다.')
+    return
+  }
+  if (!canListen()) {
+    showFlash('이 브라우저는 음성 인식을 지원하지 않습니다. iPhone Safari를 사용해 주세요.')
+    return
+  }
+  if (state.listening && state.dictationTarget === 'translate-sheet') {
+    voiceSessionGen += 1
+    const partial = voice.consumeTranscript()
+    state.listening = false
+    state.voiceHint = ''
+    if (partial.trim()) {
+      state.translateSheet = {
+        ...state.translateSheet,
+        sourceText: partial.trim().slice(0, 2000),
+        result: '',
+        status: '인식 완료 · 번역 중…',
+      }
+      render()
+      void runTranslateSheet()
+    } else {
+      render()
+    }
+    return
+  }
+  if (state.listening) {
+    voiceSessionGen += 1
+    voice.stop()
+    state.listening = false
+  }
+  stopSpeaking()
+  // Sync lang pickers from DOM before listening
+  const fromEl = document.getElementById('tr-sheet-from') as HTMLSelectElement | null
+  const toEl = document.getElementById('tr-sheet-to') as HTMLSelectElement | null
+  if (fromEl?.value) state.translateSheet = { ...state.translateSheet, from: fromEl.value }
+  if (toEl?.value) state.translateSheet = { ...state.translateSheet, to: toEl.value }
+  // Default voice path: auto-detect source
+  if (!state.translateSheet.from) {
+    state.translateSheet = { ...state.translateSheet, from: 'auto' }
+  }
+
+  const session = ++voiceSessionGen
+  state.dictationTarget = 'translate-sheet'
+  const listenLang = sttLangForTranslateSheet(state.translateSheet.from, state.translateSheet.to)
+  state.listenLang = listenLang
+  state.voiceHint =
+    state.translateSheet.from === 'auto'
+      ? `자동 감지 듣는 중 (${listenLang}) · 말하면 → ${langNameForCode(state.translateSheet.to)}`
+      : `듣는 중 (${listenLang}) · 끝나면 바로 번역`
+  state.listening = true
+  render()
+  void (async () => {
+    const micOk = await ensureMicPermission()
+    if (session !== voiceSessionGen || state.dictationTarget !== 'translate-sheet' || !state.listening)
+      return
+    if (!micOk) {
+      state.listening = false
+      state.voiceHint = ''
+      showFlash('마이크 권한이 필요합니다. 설정 → AIZIO/Safari → 마이크 허용')
+      render()
+      return
+    }
+    const ok = voice.start(
+      {
+        onInterim: (text) => {
+          if (session !== voiceSessionGen || state.dictationTarget !== 'translate-sheet') return
+          state.draft = text
+          state.voiceHint = text || state.voiceHint
+          const ta = document.getElementById('tr-sheet-input') as HTMLTextAreaElement | null
+          if (ta) ta.value = text
+          const status = document.getElementById('tr-sheet-status')
+          if (status) status.textContent = text || '듣고 있습니다…'
+          const mic = document.querySelector<HTMLButtonElement>('[data-action="tr-sheet-mic"]')
+          if (mic) {
+            mic.classList.add('listening')
+            mic.textContent = 'STOP'
+            mic.setAttribute('aria-pressed', 'true')
+          }
+        },
+        onFinal: (text) => {
+          if (session !== voiceSessionGen || state.dictationTarget !== 'translate-sheet') return
+          state.listening = false
+          state.voiceHint = ''
+          const cleaned = text.trim().slice(0, 2000)
+          state.translateSheet = {
+            ...state.translateSheet,
+            sourceText: cleaned,
+            result: '',
+            status: cleaned ? '인식 완료 · 번역 중…' : '음성을 이해하지 못했습니다. 다시 MIC를 눌러 주세요.',
+          }
+          render()
+          if (cleaned) void runTranslateSheet()
+        },
+        onState: (s) => {
+          if (session !== voiceSessionGen) return
+          state.listening = s === 'listening' || s === 'processing'
+          if (s === 'idle' && !state.translateSheet.busy) state.listening = false
+          const mic = document.querySelector<HTMLButtonElement>('[data-action="tr-sheet-mic"]')
+          if (mic) {
+            const on = state.listening
+            mic.classList.toggle('listening', on)
+            mic.textContent = on ? 'STOP' : 'MIC'
+            mic.setAttribute('aria-pressed', on ? 'true' : 'false')
+          }
+        },
+        onError: (err) => {
+          if (session !== voiceSessionGen) return
+          state.listening = false
+          state.voiceHint = ''
+          showFlash(err)
+          render()
+        },
+      },
+      listenLang,
+    )
+    if (!ok) {
+      state.listening = false
+      state.voiceHint = ''
+      showFlash('음성 인식을 시작하지 못했습니다. 다시 MIC를 눌러 주세요.')
+      render()
+    }
+  })()
 }
 
 function applyHashRouteFromLocation(opts?: { replace?: boolean }): void {
@@ -2018,6 +2165,18 @@ function patchVoiceUi(): void {
     syncJarvisMicButtons(document, false)
     syncSpaceMicButtons(document, { listening: false, space: null })
   }
+  document.querySelectorAll<HTMLButtonElement>('[data-action="tr-sheet-mic"]').forEach((mic) => {
+    const on = state.listening && target === 'translate-sheet'
+    mic.classList.toggle('listening', on)
+    mic.textContent = on ? 'STOP' : 'MIC'
+    mic.setAttribute('aria-pressed', on ? 'true' : 'false')
+  })
+  if (target === 'translate-sheet') {
+    const ta = document.getElementById('tr-sheet-input') as HTMLTextAreaElement | null
+    if (ta && state.listening) ta.value = state.draft || ta.value
+    const status = document.getElementById('tr-sheet-status')
+    if (status && state.listening) status.textContent = state.voiceHint || '듣고 있습니다…'
+  }
   document.querySelectorAll<HTMLElement>('[data-home-v2-orb]').forEach((orb) => {
     orb.classList.toggle('listening', state.listening && target === 'jarvis')
     orb.classList.toggle('busy', state.busy && !state.listening)
@@ -2035,6 +2194,10 @@ function patchVoiceUi(): void {
         : state.online
           ? '대기'
           : '오프라인'
+  }
+  if (target === 'translate-sheet') {
+    // Sheet has its own status line — skip main chat captions while dictating here.
+    return
   }
   const captionId =
     target === 'family' ? 'family-voice-caption' : target === 'friends' ? 'friends-voice-caption' : 'voice-caption'
@@ -4825,7 +4988,10 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
         })
       : ''
   const translateSheet = state.homeV2TranslateSheetOpen
-    ? renderTranslateSheet(state.translateSheet)
+    ? renderTranslateSheet(state.translateSheet, {
+        listening: state.listening && state.dictationTarget === 'translate-sheet',
+        voiceHint: state.dictationTarget === 'translate-sheet' ? state.voiceHint : '',
+      })
     : ''
   const hideBrand = homeV2On && state.view === 'chat'
   // Install CTA stays visible on HOME — users must be able to add to home screen.
@@ -5716,9 +5882,12 @@ function bind(): void {
       ...state.translateSheet,
       sourceText: '',
       result: '',
-      status: '번역할 문장을 입력하세요.',
+      status: '번역할 문장을 입력하거나 MIC로 말하세요.',
     }
     render()
+  })
+  document.querySelector('[data-action="tr-sheet-mic"]')?.addEventListener('click', () => {
+    startTranslateSheetDictation()
   })
   document.querySelector('[data-action="tr-sheet-clear-result"]')?.addEventListener('click', () => {
     state.translateSheet = { ...state.translateSheet, result: '', status: '결과를 지웠습니다.' }

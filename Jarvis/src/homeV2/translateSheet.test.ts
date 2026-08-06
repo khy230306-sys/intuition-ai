@@ -3,6 +3,8 @@ import {
   defaultTranslateSheetState,
   langNameForCode,
   renderTranslateSheet,
+  resolveTranslateSheetFrom,
+  sttLangForTranslateSheet,
   TRANSLATE_SHEET_PICKS,
 } from './translateSheet'
 import { HOME_V2_QUICK_COMMANDS } from './model'
@@ -14,7 +16,7 @@ describe('HOME translate sheet', () => {
     expect(HOME_V2_QUICK_COMMANDS.translate).toBe('__open_translate_sheet__')
   })
 
-  it('renders dedicated translate dialog markup', () => {
+  it('renders dedicated translate dialog markup with MIC', () => {
     const html = renderTranslateSheet(defaultTranslateSheetState())
     expect(html).toContain('data-tr-sheet="1"')
     expect(html).toContain('aria-label="번역하기"')
@@ -22,8 +24,35 @@ describe('HOME translate sheet', () => {
     expect(html).toContain('번역하기')
     expect(html).toContain('data-action="tr-sheet-close"')
     expect(html).toContain('data-action="tr-sheet-swap"')
+    expect(html).toContain('data-action="tr-sheet-mic"')
+    expect(html).toContain('자동 감지')
     expect(TRANSLATE_SHEET_PICKS.some((p) => p.code === 'en')).toBe(true)
     expect(langNameForCode('ko')).toBe('한국어')
+  })
+
+  it('shows listening chrome on MIC while dictating', () => {
+    const html = renderTranslateSheet(defaultTranslateSheetState(), {
+      listening: true,
+      voiceHint: '안녕하세요',
+    })
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('>STOP<')
+    expect(html).toContain('안녕하세요')
+  })
+
+  it('defaults from=auto and resolves detect for Korean / English / Japanese', () => {
+    expect(defaultTranslateSheetState().from).toBe('auto')
+    expect(resolveTranslateSheetFrom('오늘은 날씨가 참 좋아요', 'auto')).toBe('ko')
+    expect(resolveTranslateSheetFrom('Hello world', 'auto')).toBe('en')
+    expect(resolveTranslateSheetFrom('こんにちは', 'auto')).toBe('ja')
+    expect(resolveTranslateSheetFrom('Hello', 'en')).toBe('en')
+  })
+
+  it('picks STT locale from picker / auto heuristic', () => {
+    expect(sttLangForTranslateSheet('auto', 'en')).toBe('ko-KR')
+    expect(sttLangForTranslateSheet('auto', 'ko')).toBe('en-US')
+    expect(sttLangForTranslateSheet('ja', 'en')).toBe('ja-JP')
+    expect(sttLangForTranslateSheet('vi', 'ko')).toBe('vi-VN')
   })
 
   it('shows result actions when result present', () => {
@@ -49,7 +78,7 @@ describe('HOME translate sheet', () => {
       draft: '',
       busy: false,
       listening: false,
-      appVersion: '1.20.11',
+      appVersion: '1.20.14',
       threadHtml: '<div></div>',
     })
     expect(html).toContain('data-quick-id="translate"')

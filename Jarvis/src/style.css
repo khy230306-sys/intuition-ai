@@ -3247,6 +3247,15 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   background:
     linear-gradient(145deg, rgba(80, 140, 220, 0.18), rgba(14, 28, 42, 0.92));
 }
+.home-v2-tr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.home-v2-tr-actions .icon-btn {
+  min-width: 52px;
+}
 .home-v2-tr-sheet .home-v2-tr-panel {
   max-height: min(88vh, 720px);
 }

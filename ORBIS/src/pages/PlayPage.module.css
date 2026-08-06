@@ -1,6 +1,6 @@
 .page {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   padding: 4px 0 28px;
 }
 
@@ -19,7 +19,7 @@
 
 .title {
   margin: 0;
-  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-size: clamp(1.55rem, 5vw, 2.15rem);
 }
 
 .subtitle {
@@ -28,65 +28,171 @@
   line-height: 1.5;
 }
 
-.energyBar {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  padding: 10px 14px;
-  background: rgba(16, 27, 51, 0.65);
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.energyValue {
-  color: var(--neon-blue);
+.stat {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: rgba(16, 27, 51, 0.7);
+  padding: 10px 12px;
+}
+
+.statLabel {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.statValue {
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  color: var(--neon-blue);
 }
 
 .notice {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.5;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
-.orbSelect {
+.table {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(58, 169, 255, 0.25);
+  background:
+    radial-gradient(700px 240px at 50% 0%, rgba(58, 169, 255, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(10, 18, 34, 0.95), rgba(5, 7, 15, 0.98));
+  padding: 16px 12px 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.hands {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hand {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  padding: 10px;
+  min-height: 150px;
+  background: rgba(5, 7, 15, 0.35);
+}
+
+.handTitle {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.handTotal {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 92px;
+}
+
+.winnerPlayer .handTitle,
+.winnerPlayer .handTotal {
+  color: var(--neon-blue);
+}
+
+.winnerBanker .handTitle,
+.winnerBanker .handTotal {
+  color: var(--gold);
+}
+
+.winnerTie .handTitle,
+.winnerTie .handTotal {
+  color: var(--violet);
+}
+
+.sides {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
-.orbButton {
-  min-height: 56px;
+.sideButton {
+  min-height: 64px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
   background: rgba(244, 247, 255, 0.03);
-  color: var(--text-primary);
-  font-weight: 650;
-  letter-spacing: 0.08em;
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
-.orbButton:disabled {
+.sideButton:disabled {
   opacity: 0.55;
 }
 
-.orbBlue {
+.sidePlayer {
   border-color: rgba(58, 169, 255, 0.45);
 }
 
-.orbGold {
+.sideBanker {
   border-color: rgba(212, 178, 106, 0.45);
 }
 
-.orbViolet {
+.sideTie {
   border-color: rgba(155, 107, 255, 0.45);
 }
 
-.orbActive {
-  box-shadow: 0 0 20px rgba(58, 169, 255, 0.2);
+.sideActive {
+  box-shadow: 0 0 18px rgba(58, 169, 255, 0.22);
   background: rgba(58, 169, 255, 0.12);
+}
+
+.odds {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.chip {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 178, 106, 0.4);
+  background: rgba(212, 178, 106, 0.08);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.chipActive {
+  background: rgba(212, 178, 106, 0.22);
+  box-shadow: 0 0 16px rgba(212, 178, 106, 0.25);
+}
+
+.betLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.92rem;
 }
 
 .actions {
@@ -94,62 +200,83 @@
   gap: 10px;
 }
 
-.hint {
+.resultCard {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(58, 169, 255, 0.28);
+  background: rgba(11, 18, 36, 0.9);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.resultTitle {
   margin: 0;
-  text-align: center;
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
+}
+
+.resultBody {
+  margin: 0;
   color: var(--text-muted);
-  font-size: 0.92rem;
   line-height: 1.5;
 }
 
-.resultCard {
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(58, 169, 255, 0.3);
-  background:
-    radial-gradient(420px 160px at 50% 0%, rgba(58, 169, 255, 0.16), transparent 60%),
-    rgba(11, 18, 36, 0.92);
-  padding: 18px 16px;
+.roadWrap {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.grade {
+.roadTitle {
   margin: 0;
-  font-size: 1.4rem;
-  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.road {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bead {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
   font-weight: 750;
+  border: 1px solid transparent;
 }
 
-.gradePerfect {
-  color: #8fd0ff;
+.beadPlayer {
+  background: rgba(58, 169, 255, 0.2);
+  border-color: rgba(58, 169, 255, 0.55);
+  color: #9fd4ff;
 }
 
-.gradeGreat {
-  color: var(--gold);
+.beadBanker {
+  background: rgba(212, 178, 106, 0.18);
+  border-color: rgba(212, 178, 106, 0.55);
+  color: #ecd29a;
 }
 
-.gradeGood {
-  color: #c7b4ff;
+.beadTie {
+  background: rgba(155, 107, 255, 0.18);
+  border-color: rgba(155, 107, 255, 0.55);
+  color: #c7b0ff;
 }
 
-.gradeMiss {
-  color: var(--text-muted);
-}
-
-.story {
-  margin: 0;
-  line-height: 1.6;
-  color: var(--text-primary);
-}
-
-.meta {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.92rem;
+.beadEmpty {
+  border: 1px dashed rgba(244, 247, 255, 0.12);
 }
 
 @media (min-width: 760px) {
   .actions {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cardWide {
+    grid-column: 1 / -1;
   }
 }

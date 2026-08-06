@@ -1,0 +1,66 @@
+.card {
+  width: 64px;
+  height: 92px;
+  border-radius: 10px;
+  border: 1px solid rgba(244, 247, 255, 0.2);
+  background: linear-gradient(180deg, #f8fbff 0%, #e7eefc 100%);
+  color: #121826;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 6px 7px;
+  position: relative;
+  transform-origin: center;
+  animation: dealIn 320ms ease;
+}
+
+.back {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(58, 169, 255, 0.45), transparent 45%),
+    linear-gradient(145deg, #101b33, #05070f 70%);
+  color: transparent;
+  border-color: rgba(58, 169, 255, 0.4);
+}
+
+.rank {
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.suitCenter {
+  display: grid;
+  place-items: center;
+  font-size: 1.45rem;
+}
+
+.rankBottom {
+  justify-self: end;
+  transform: rotate(180deg);
+}
+
+.red {
+  color: #c62828;
+}
+
+.black {
+  color: #142033;
+}
+
+@keyframes dealIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 374px) {
+  .card {
+    width: 56px;
+    height: 82px;
+  }
+}

@@ -30,21 +30,32 @@ export type Dictionary = {
     kicker: string
     title: string
     subtitle: string
-    demoEnergy: string
+    balance: string
+    currentBet: string
     freeNotice: string
-    stageLabel: string
-    chooseOrb: string
-    orbBlue: string
-    orbGold: string
-    orbViolet: string
-    selectHint: string
-    readyHint: string
-    runningHint: string
-    startRound: string
-    syncNow: string
-    playAgain: string
-    roundLabel: string
-    energyUnit: string
+    player: string
+    banker: string
+    tie: string
+    chooseSide: string
+    chooseChip: string
+    oddsPlayer: string
+    oddsBanker: string
+    oddsTie: string
+    selected: string
+    stake: string
+    deal: string
+    needChips: string
+    dealing: string
+    nextRound: string
+    reset: string
+    road: string
+    resultPlayer: string
+    resultBanker: string
+    resultTie: string
+    youWin: string
+    youLose: string
+    stakeReturned: string
+    payout: string
   }
   brand: {
     title: string
@@ -114,7 +125,7 @@ export const ko: Dictionary = {
   tagline: '새로운 세계를 체험하세요',
   nav: {
     home: '홈',
-    play: '체험',
+    play: '테이블',
     brand: '브랜드 소개',
     about: '소개',
     settings: '설정',
@@ -137,24 +148,35 @@ export const ko: Dictionary = {
     stageLabel: '중앙 궤도 무대',
   },
   play: {
-    kicker: 'Orbit Sync',
-    title: 'ORBIS 체험 라운드',
-    subtitle: 'Orb를 선택하고, 마커가 목표 궤도에 왔을 때 SYNC 하세요.',
-    demoEnergy: '데모 에너지',
-    freeNotice: '무료 체험용 점수입니다. 실제 금전 거래, 입출금, 환전, 결제는 없습니다.',
-    stageLabel: 'ORBIS 라운드 무대',
-    chooseOrb: 'Orb 선택',
-    orbBlue: 'BLUE',
-    orbGold: 'GOLD',
-    orbViolet: 'VIOLET',
-    selectHint: '먼저 BLUE, GOLD, VIOLET 중 하나를 선택하세요.',
-    readyHint: '준비가 되면 라운드 시작을 누르세요.',
-    runningHint: '빛나는 마커가 선택한 Orb에 가까워지면 SYNC!',
-    startRound: '라운드 시작',
-    syncNow: 'SYNC',
-    playAgain: '다시 플레이',
-    roundLabel: '라운드',
-    energyUnit: 'Energy',
+    kicker: 'ORBIS Table',
+    title: 'ORBIS 바카라 테이블',
+    subtitle: 'Player / Banker / Tie를 선택하고 카드를 공개하세요.',
+    balance: '데모 칩',
+    currentBet: '현재 베팅',
+    freeNotice: '무료 데모 칩입니다. 실제 입금·출금·환전·결제는 없습니다.',
+    player: 'PLAYER',
+    banker: 'BANKER',
+    tie: 'TIE',
+    chooseSide: '사이드 선택',
+    chooseChip: '칩 선택',
+    oddsPlayer: '1 : 1',
+    oddsBanker: '1 : 0.95',
+    oddsTie: '1 : 8',
+    selected: '선택',
+    stake: '금액',
+    deal: '카드 공개',
+    needChips: '칩이 부족합니다',
+    dealing: '카드를 공개하는 중...',
+    nextRound: '다음 라운드',
+    reset: '칩 초기화',
+    road: '로드맵',
+    resultPlayer: 'PLAYER 승리',
+    resultBanker: 'BANKER 승리',
+    resultTie: 'TIE',
+    youWin: '획득',
+    youLose: '패배',
+    stakeReturned: '원금 반환',
+    payout: '정산',
   },
   brand: {
     title: '브랜드 세계관',
@@ -164,33 +186,33 @@ export const ko: Dictionary = {
       'ORBIS는 매 라운드마다 새로운 궤도가 열리는 세계입니다. 우아한 에너지와 깊은 우주감으로, 단순한 게임 화면이 아닌 브랜드 경험 경험을 만듭니다.',
     coreTitle: 'CORE의 의미',
     coreBody:
-      'CORE는 ORBIS의 중심 에너지입니다. 느리게 호흡하며 빛나고, 모든 Orb가 돌아오는 기준점 역할을 합니다.',
-    orbsTitle: 'Orb의 상징',
-    blueTitle: 'BLUE',
-    blueBody: '집중과 흐름. 차분한 통찰과 선명한 궤도를 상징합니다.',
-    goldTitle: 'GOLD',
-    goldBody: '균형과 가치. 고급스러운 리듬과 안정된 중심을 상징합니다.',
-    violetTitle: 'VIOLET',
-    violetBody: '직관과 변화. 신비로운 전환과 새로운 가능성을 상징합니다.',
+      'CORE는 ORBIS의 중심 에너지입니다. 느리게 호흡하며 빛나고, 모든 라운드가 돌아오는 기준점 역할을 합니다.',
+    orbsTitle: '테이블의 상징',
+    blueTitle: 'PLAYER',
+    blueBody: '흐름과 도전. 플레이어 사이드의 선명한 궤도를 상징합니다.',
+    goldTitle: 'BANKER',
+    goldBody: '균형과 안정. 뱅커 사이드의 중심 리듬을 상징합니다.',
+    violetTitle: 'TIE',
+    violetBody: '공명과 희귀 순간. 무승부의 신비로운 정렬을 상징합니다.',
     philosophyTitle: '디자인 철학',
     philosophyBody:
-      '싸구려 카지노 복제 대신, 미래적이고 미니멀한 우주 미학을 추구합니다. 빛, 궤도, 깊이감으로 브랜드의 품격을 전달합니다.',
+      '싸구려 카지노 복제 대신, 미래적이고 미니멀한 우주 미학을 추구합니다. 바카라형 라운드를 ORBIS 감성으로 재해석합니다.',
     futureTitle: '향후 확장 방향',
     futureBody:
-      '체험 라운드는 Orbit Sync로 시작됩니다. 이후 더 풍부한 스토리와 연출이 이어질 예정입니다.',
+      '현재는 무료 데모 테이블입니다. 이후 연출과 스토리 레이어를 더 풍부하게 확장할 수 있습니다.',
   },
   about: {
     title: '프로토타입 소개',
     subtitle: '무료 체험용 ORBIS',
     purposeTitle: '목적',
     purposeBody:
-      'ORBIS Prototype은 브랜드 아이덴티티와 실행 가능한 무료 체험 라운드(Orbit Sync)를 검증하기 위한 프로토타입입니다.',
+      'ORBIS Prototype은 브랜드 UI와 실행 가능한 바카라형 무료 데모 테이블을 검증하기 위한 프로젝트입니다.',
     freeTitle: '무료 체험 안내',
     freeBody:
       '본 프로젝트는 무료 체험용입니다. 실제 금전 거래, 입금, 출금, 환전, 결제를 지원하지 않습니다.',
     disclaimerTitle: '중요 안내',
     disclaimerBody:
-      '데모 에너지는 로컬 점수일 뿐입니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
+      '데모 칩과 로드맵은 로컬에만 저장됩니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
   },
   settings: {
     title: '설정',
@@ -210,10 +232,9 @@ export const ko: Dictionary = {
     savedHint: '설정은 이 기기의 localStorage에 저장됩니다.',
   },
   modal: {
-    stage2Title: '체험 라운드 안내',
-    stage2Body: 'Orbit Sync 체험을 바로 시작할 수 있습니다.',
-    stage2Detail:
-      'Orb를 선택하고 마커를 동기화하세요. 실제 금전 거래 없이 무료 데모 에너지만 쌓입니다.',
+    stage2Title: '테이블 체험 안내',
+    stage2Body: 'ORBIS 바카라 테이블을 바로 시작할 수 있습니다.',
+    stage2Detail: 'Player / Banker / Tie를 고르고 카드를 공개하세요. 실제 돈이 오가지 않는 무료 데모입니다.',
   },
   notFound: {
     title: '궤도를 벗어났습니다',

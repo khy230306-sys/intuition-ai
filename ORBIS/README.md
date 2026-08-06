@@ -41,7 +41,7 @@ npm run test
 
 - ORBIS 브랜드 로고 / 색상 / 슬로건
 - Home 중앙 CORE + BLUE / GOLD / VIOLET Orb 궤도 애니메이션
-- **Orbit Sync 체험 라운드** (`/play`) — Orb 선택 후 SYNC 타이밍 게임
+- **ORBIS 바카라 테이블** (`/play`) — Player/Banker/Tie 선택, 카드 공개, 데모 칩 정산
 - Brand / About / Settings / 404 페이지
 - 한국어 / 영어 전환
 - 사운드 토글 (Web Audio API, 기본 무음)

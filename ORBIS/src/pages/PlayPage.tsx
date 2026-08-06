@@ -1,99 +1,159 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { playClickSound, playCoreSound, playResultSound, playSyncSound } from '../app/sound'
 import { Button } from '../components/Button'
-import { RoundStage } from '../game/RoundStage'
-import { evaluateSync, gradeLabel, loadDemoEnergy, saveDemoEnergy } from '../game/score'
-import { getStoryText } from '../game/stories'
-import type { OrbId, RoundPhase, RoundResult } from '../game/types'
+import { PlayingCard } from '../components/PlayingCard'
+import { createShoe, dealBaccaratRound, settlePayout } from '../game/baccarat/engine'
+import {
+  STARTING_BALANCE,
+  loadBalance,
+  loadRoad,
+  resetTableProgress,
+  saveBalance,
+  saveRoad,
+} from '../game/baccarat/storage'
+import type {
+  Card,
+  RoadBead,
+  RoundOutcome,
+  Side,
+  TablePhase,
+} from '../game/baccarat/types'
 import { useI18n } from '../i18n'
 import { useSettings } from '../storage/SettingsContext'
 import styles from './PlayPage.module.css'
 
-const BASE_SPEED = 160 // degrees per second
+const CHIP_VALUES = [10, 50, 100, 250] as const
+
+type VisibleHands = {
+  player: Card[]
+  banker: Card[]
+}
 
 export function PlayPage() {
   const t = useI18n()
   const navigate = useNavigate()
   const { settings } = useSettings()
-  const [phase, setPhase] = useState<RoundPhase>('select')
-  const [selected, setSelected] = useState<OrbId | null>(null)
-  const [markerAngle, setMarkerAngle] = useState(0)
-  const [result, setResult] = useState<RoundResult | null>(null)
-  const [energyTotal, setEnergyTotal] = useState(() => loadDemoEnergy())
-  const [flash, setFlash] = useState(false)
-  const [round, setRound] = useState(1)
 
-  const angleRef = useRef(0)
-  const rafRef = useRef(0)
-  const lastTsRef = useRef(0)
-  const phaseRef = useRef<RoundPhase>('select')
+  const shoeRef = useRef<Card[]>(createShoe(6))
+  const [phase, setPhase] = useState<TablePhase>('betting')
+  const [side, setSide] = useState<Side>('player')
+  const [chip, setChip] = useState<(typeof CHIP_VALUES)[number]>(50)
+  const [balance, setBalance] = useState(() => loadBalance())
+  const [road, setRoad] = useState<RoadBead[]>(() => loadRoad())
+  const [outcome, setOutcome] = useState<RoundOutcome | null>(null)
+  const [visible, setVisible] = useState<VisibleHands>({ player: [], banker: [] })
+  const [payout, setPayout] = useState(0)
+  const [message, setMessage] = useState('')
+
+  const betAmount = chip
+  const canDeal = phase === 'betting' && balance >= betAmount && betAmount > 0
+
+  const winnerClass = useMemo(() => {
+    if (!outcome || phase !== 'result') return ''
+    if (outcome.winner === 'player') return styles.winnerPlayer
+    if (outcome.winner === 'banker') return styles.winnerBanker
+    return styles.winnerTie
+  }, [outcome, phase])
 
   useEffect(() => {
-    phaseRef.current = phase
-  }, [phase])
+    saveBalance(balance)
+  }, [balance])
 
-  const stopLoop = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = 0
+  useEffect(() => {
+    saveRoad(road)
+  }, [road])
+
+  const sideLabel = (value: Side) => {
+    if (value === 'player') return t.play.player
+    if (value === 'banker') return t.play.banker
+    return t.play.tie
+  }
+
+  const revealHands = async (next: RoundOutcome) => {
+    setVisible({ player: [], banker: [] })
+    const sequence: Array<['player' | 'banker', Card]> = []
+    next.player.cards.forEach((card, index) => {
+      if (index < 2) sequence.push(['player', card])
+    })
+    next.banker.cards.forEach((card, index) => {
+      if (index < 2) sequence.push(['banker', card])
+    })
+    if (next.player.cards[2]) sequence.push(['player', next.player.cards[2]])
+    if (next.banker.cards[2]) sequence.push(['banker', next.banker.cards[2]])
+
+    for (const [hand, card] of sequence) {
+      await wait(settings.reduceMotion ? 80 : 280)
+      playSyncSound(settings.soundEnabled)
+      setVisible((prev) => ({
+        ...prev,
+        [hand]: [...prev[hand], card],
+      }))
     }
-    lastTsRef.current = 0
-  }, [])
+  }
 
-  useEffect(() => () => stopLoop(), [stopLoop])
-
-  const startRunning = useCallback(() => {
-    if (!selected) return
-    stopLoop()
-    setResult(null)
-    phaseRef.current = 'running'
-    setPhase('running')
+  const startDeal = async () => {
+    if (!canDeal) return
     playCoreSound(settings.soundEnabled)
+    setPhase('dealing')
+    setOutcome(null)
+    setPayout(0)
+    setMessage(t.play.dealing)
+    setBalance((prev) => prev - betAmount)
 
-    const speed = BASE_SPEED + Math.min(80, (round - 1) * 12)
-    const tick = (ts: number) => {
-      if (phaseRef.current !== 'running') return
-      if (!lastTsRef.current) lastTsRef.current = ts
-      const delta = Math.min(0.05, (ts - lastTsRef.current) / 1000)
-      lastTsRef.current = ts
-      angleRef.current = (angleRef.current + speed * delta) % 360
-      setMarkerAngle(angleRef.current)
-      rafRef.current = requestAnimationFrame(tick)
+    const next = dealBaccaratRound(shoeRef.current)
+    setOutcome(next)
+    await revealHands(next)
+
+    const won = settlePayout(side, betAmount, next.winner)
+    setPayout(won)
+    setBalance((prev) => prev + won)
+    setRoad((prev) => [
+      ...prev,
+      { winner: next.winner, id: `${Date.now()}-${next.winner}-${prev.length}` },
+    ].slice(-48))
+
+    const winText =
+      next.winner === 'tie'
+        ? t.play.resultTie
+        : next.winner === 'player'
+          ? t.play.resultPlayer
+          : t.play.resultBanker
+
+    if (won > betAmount) {
+      setMessage(`${winText} · ${t.play.youWin} +${won - betAmount}`)
+      playResultSound(settings.soundEnabled, true)
+    } else if (won === betAmount) {
+      setMessage(`${winText} · ${t.play.stakeReturned}`)
+      playResultSound(settings.soundEnabled, true)
+    } else {
+      setMessage(`${winText} · ${t.play.youLose}`)
+      playResultSound(settings.soundEnabled, false)
     }
-    rafRef.current = requestAnimationFrame(tick)
-  }, [round, selected, settings.soundEnabled, stopLoop])
 
-  const onSync = () => {
-    if (phaseRef.current !== 'running' || !selected) return
-    phaseRef.current = 'result'
-    stopLoop()
-    playSyncSound(settings.soundEnabled)
-    const next = evaluateSync(selected, angleRef.current)
-    setResult(next)
     setPhase('result')
-    setFlash(true)
-    window.setTimeout(() => setFlash(false), 420)
-
-    const total = energyTotal + next.energy
-    setEnergyTotal(total)
-    saveDemoEnergy(total)
-    playResultSound(settings.soundEnabled, next.grade === 'perfect' || next.grade === 'great')
   }
 
-  const chooseOrb = (orb: OrbId) => {
-    if (phase === 'running') return
+  const nextRound = () => {
     playClickSound(settings.soundEnabled)
-    setSelected(orb)
-    setResult(null)
-    setPhase('ready')
+    setOutcome(null)
+    setVisible({ player: [], banker: [] })
+    setPayout(0)
+    setMessage('')
+    setPhase('betting')
   }
 
-  const playAgain = () => {
+  const onReset = () => {
     playClickSound(settings.soundEnabled)
-    setResult(null)
-    setRound((value) => value + 1)
-    setPhase(selected ? 'ready' : 'select')
+    resetTableProgress()
+    shoeRef.current = createShoe(6)
+    setBalance(STARTING_BALANCE)
+    setRoad([])
+    setOutcome(null)
+    setVisible({ player: [], banker: [] })
+    setPayout(0)
+    setMessage('')
+    setPhase('betting')
   }
 
   return (
@@ -104,91 +164,177 @@ export function PlayPage() {
         <p className={styles.subtitle}>{t.play.subtitle}</p>
       </header>
 
-      <div className={styles.energyBar}>
-        <span>{t.play.demoEnergy}</span>
-        <span className={styles.energyValue}>{energyTotal}</span>
+      <div className={styles.stats}>
+        <div className={styles.stat}>
+          <span className={styles.statLabel}>{t.play.balance}</span>
+          <span className={styles.statValue}>{balance}</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statLabel}>{t.play.currentBet}</span>
+          <span className={styles.statValue}>
+            {sideLabel(side)} · {betAmount}
+          </span>
+        </div>
       </div>
       <p className={styles.notice}>{t.play.freeNotice}</p>
 
-      <RoundStage
-        selected={selected}
-        markerAngle={markerAngle}
-        running={phase === 'running'}
-        flash={flash}
-        reduceMotion={settings.reduceMotion}
-        label={t.play.stageLabel}
-      />
+      <section className={styles.table}>
+        <div className={styles.hands}>
+          <article className={`${styles.hand} ${winnerClass}`}>
+            <h2 className={styles.handTitle}>{t.play.player}</h2>
+            <p className={styles.handTotal}>
+              {visible.player.length
+                ? visible.player.reduce((sum, card) => sum + baccaratValue(card), 0) % 10
+                : '-'}
+            </p>
+            <div className={styles.cards}>
+              {visible.player.map((card) => (
+                <PlayingCard key={card.id} card={card} />
+              ))}
+              {phase === 'dealing' && visible.player.length === 0 ? (
+                <PlayingCard hidden />
+              ) : null}
+            </div>
+          </article>
 
-      <div className={styles.orbSelect} role="group" aria-label={t.play.chooseOrb}>
-        {(
-          [
-            ['blue', t.play.orbBlue, styles.orbBlue],
-            ['gold', t.play.orbGold, styles.orbGold],
-            ['violet', t.play.orbViolet, styles.orbViolet],
-          ] as Array<[OrbId, string, string]>
-        ).map(([orb, label, tone]) => (
-          <button
-            key={orb}
-            type="button"
-            className={`${styles.orbButton} ${tone} ${selected === orb ? styles.orbActive : ''}`}
-            aria-pressed={selected === orb}
-            disabled={phase === 'running'}
-            onClick={() => chooseOrb(orb)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+          <article className={`${styles.hand} ${winnerClass}`}>
+            <h2 className={styles.handTitle}>{t.play.banker}</h2>
+            <p className={styles.handTotal}>
+              {visible.banker.length
+                ? visible.banker.reduce((sum, card) => sum + baccaratValue(card), 0) % 10
+                : '-'}
+            </p>
+            <div className={styles.cards}>
+              {visible.banker.map((card) => (
+                <PlayingCard key={card.id} card={card} />
+              ))}
+              {phase === 'dealing' && visible.banker.length === 0 ? (
+                <PlayingCard hidden />
+              ) : null}
+            </div>
+          </article>
+        </div>
 
-      {phase === 'select' ? <p className={styles.hint}>{t.play.selectHint}</p> : null}
-      {phase === 'ready' ? <p className={styles.hint}>{t.play.readyHint}</p> : null}
-      {phase === 'running' ? <p className={styles.hint}>{t.play.runningHint}</p> : null}
+        <div className={styles.sides} role="group" aria-label={t.play.chooseSide}>
+          {(
+            [
+              ['player', t.play.player, t.play.oddsPlayer, styles.sidePlayer],
+              ['banker', t.play.banker, t.play.oddsBanker, styles.sideBanker],
+              ['tie', t.play.tie, t.play.oddsTie, styles.sideTie],
+            ] as Array<[Side, string, string, string]>
+          ).map(([value, label, odds, tone]) => (
+            <button
+              key={value}
+              type="button"
+              className={`${styles.sideButton} ${tone} ${side === value ? styles.sideActive : ''}`}
+              disabled={phase !== 'betting'}
+              aria-pressed={side === value}
+              onClick={() => {
+                playClickSound(settings.soundEnabled)
+                setSide(value)
+              }}
+            >
+              <span>{label}</span>
+              <span className={styles.odds}>{odds}</span>
+            </button>
+          ))}
+        </div>
 
-      {result ? (
+        <div className={styles.chips} role="group" aria-label={t.play.chooseChip}>
+          {CHIP_VALUES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`${styles.chip} ${chip === value ? styles.chipActive : ''}`}
+              disabled={phase !== 'betting'}
+              aria-pressed={chip === value}
+              onClick={() => {
+                playClickSound(settings.soundEnabled)
+                setChip(value)
+              }}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+
+        <div className={styles.betLine}>
+          <span>
+            {t.play.selected}: {sideLabel(side)}
+          </span>
+          <span>
+            {t.play.stake}: {betAmount}
+          </span>
+        </div>
+      </section>
+
+      {phase === 'result' && outcome ? (
         <section className={styles.resultCard} aria-live="polite">
-          <p
-            className={`${styles.grade} ${
-              result.grade === 'perfect'
-                ? styles.gradePerfect
-                : result.grade === 'great'
-                  ? styles.gradeGreat
-                  : result.grade === 'good'
-                    ? styles.gradeGood
-                    : styles.gradeMiss
-            }`}
-          >
-            {gradeLabel(result.grade, settings.language)}
-          </p>
-          <p className={styles.story}>
-            {getStoryText(result.orb, result.grade, settings.language)}
-          </p>
-          <p className={styles.meta}>
-            {t.play.roundLabel} {round} · +{result.energy} {t.play.energyUnit} · Δ
-            {result.angleError}°
+          <h2 className={styles.resultTitle}>{message}</h2>
+          <p className={styles.resultBody}>
+            {t.play.player} {outcome.player.total} : {t.play.banker} {outcome.banker.total}
+            {payout > 0 ? ` · ${t.play.payout} ${payout}` : ''}
           </p>
         </section>
       ) : null}
 
+      {phase === 'dealing' ? <p className={styles.notice}>{t.play.dealing}</p> : null}
+
+      <div className={styles.roadWrap}>
+        <p className={styles.roadTitle}>{t.play.road}</p>
+        <div className={styles.road} aria-label={t.play.road}>
+          {Array.from({ length: 16 }, (_, index) => {
+            const bead = road[road.length - 16 + index]
+            if (!bead) {
+              return <span key={`empty-${index}`} className={`${styles.bead} ${styles.beadEmpty}`} />
+            }
+            const tone =
+              bead.winner === 'player'
+                ? styles.beadPlayer
+                : bead.winner === 'banker'
+                  ? styles.beadBanker
+                  : styles.beadTie
+            const mark =
+              bead.winner === 'player' ? 'P' : bead.winner === 'banker' ? 'B' : 'T'
+            return (
+              <span key={bead.id} className={`${styles.bead} ${tone}`}>
+                {mark}
+              </span>
+            )
+          })}
+        </div>
+      </div>
+
       <div className={styles.actions}>
-        {phase === 'ready' ? (
-          <Button variant="primary" onClick={startRunning}>
-            {t.play.startRound}
-          </Button>
-        ) : null}
-        {phase === 'running' ? (
-          <Button variant="primary" onClick={onSync}>
-            {t.play.syncNow}
+        {phase === 'betting' ? (
+          <Button variant="primary" disabled={!canDeal} onClick={() => void startDeal()}>
+            {balance < betAmount ? t.play.needChips : t.play.deal}
           </Button>
         ) : null}
         {phase === 'result' ? (
-          <Button variant="primary" onClick={playAgain}>
-            {t.play.playAgain}
+          <Button variant="primary" onClick={nextRound}>
+            {t.play.nextRound}
           </Button>
         ) : null}
-        <Button variant="ghost" onClick={() => navigate('/')}>
+        <Button variant="secondary" disabled={phase === 'dealing'} onClick={onReset}>
+          {t.play.reset}
+        </Button>
+        <Button variant="ghost" className={styles.cardWide} onClick={() => navigate('/')}>
           {t.actions.backHome}
         </Button>
       </div>
     </div>
   )
+}
+
+function baccaratValue(card: Card): number {
+  if (card.rank === 'A') return 1
+  if (card.rank === '10' || card.rank === 'J' || card.rank === 'Q' || card.rank === 'K') return 0
+  return Number(card.rank)
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 }

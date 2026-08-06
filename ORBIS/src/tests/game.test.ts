@@ -1,34 +1,62 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSync } from '../game/score'
-import { angleDelta, gradeFromError, normalizeAngle } from '../game/types'
+import {
+  dealBaccaratRound,
+  handTotal,
+  resolveWinner,
+  settlePayout,
+  shouldBankerDraw,
+} from '../game/baccarat/engine'
+import type { Card } from '../game/baccarat/types'
 
-describe('ORBIS Orbit Sync scoring', () => {
-  it('normalizes angles', () => {
-    expect(normalizeAngle(-30)).toBe(330)
-    expect(normalizeAngle(400)).toBe(40)
+function card(rank: Card['rank'], suit: Card['suit'] = 'S'): Card {
+  return { rank, suit, id: `${rank}-${suit}-${Math.random()}` }
+}
+
+describe('ORBIS Baccarat engine', () => {
+  it('computes baccarat totals', () => {
+    expect(handTotal([card('A'), card('8')])).toBe(9)
+    expect(handTotal([card('K'), card('5')])).toBe(5)
+    expect(handTotal([card('9'), card('9')])).toBe(8)
   })
 
-  it('computes shortest angle delta', () => {
-    expect(angleDelta(10, 350)).toBe(20)
-    expect(angleDelta(0, 120)).toBe(120)
+  it('resolves winners', () => {
+    expect(resolveWinner(7, 5)).toBe('player')
+    expect(resolveWinner(4, 9)).toBe('banker')
+    expect(resolveWinner(6, 6)).toBe('tie')
   })
 
-  it('grades timing windows', () => {
-    expect(gradeFromError(8)).toBe('perfect')
-    expect(gradeFromError(20)).toBe('great')
-    expect(gradeFromError(40)).toBe('good')
-    expect(gradeFromError(80)).toBe('miss')
+  it('applies banker third-card rules', () => {
+    expect(shouldBankerDraw(2, null)).toBe(true)
+    expect(shouldBankerDraw(6, null)).toBe(false)
+    expect(shouldBankerDraw(3, card('8'))).toBe(false)
+    expect(shouldBankerDraw(5, card('4'))).toBe(true)
+    expect(shouldBankerDraw(6, card('6'))).toBe(true)
   })
 
-  it('evaluates sync against orb targets', () => {
-    const perfectBlue = evaluateSync('blue', 0)
-    expect(perfectBlue.grade).toBe('perfect')
-    expect(perfectBlue.energy).toBe(100)
+  it('settles demo payouts', () => {
+    expect(settlePayout('player', 100, 'player')).toBe(200)
+    expect(settlePayout('banker', 100, 'banker')).toBe(195)
+    expect(settlePayout('tie', 100, 'tie')).toBe(800)
+    expect(settlePayout('player', 100, 'tie')).toBe(100)
+    expect(settlePayout('player', 100, 'banker')).toBe(0)
+  })
 
-    const goldNear = evaluateSync('gold', 130)
-    expect(goldNear.grade).toBe('perfect')
-
-    const violetMiss = evaluateSync('violet', 40)
-    expect(violetMiss.grade).toBe('miss')
+  it('deals a complete round from a shoe', () => {
+    const shoe = [
+      card('2'),
+      card('3'),
+      card('4'),
+      card('5'),
+      card('6'),
+      card('7'),
+      card('8'),
+      card('9'),
+    ]
+    // deal draws with pop: last cards come first
+    const packed = [...shoe].reverse()
+    const round = dealBaccaratRound(packed)
+    expect(round.player.cards.length).toBeGreaterThanOrEqual(2)
+    expect(round.banker.cards.length).toBeGreaterThanOrEqual(2)
+    expect(['player', 'banker', 'tie']).toContain(round.winner)
   })
 })

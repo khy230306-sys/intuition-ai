@@ -6,13 +6,15 @@
 - React Router 기반 Home / Brand / About / Settings / 404
 - ORBIS 독창 로고(SVG), favicon, PWA 아이콘
 - CORE + BLUE/GOLD/VIOLET Orb 궤도 애니메이션
+- ORBIS 바카라 테이블 체험 (`/play`) — Player/Banker/Tie, 카드 공개, 데모 칩
 - 모바일 햄버거 메뉴 / 데스크톱 내비게이션
 - 설정 localStorage 저장
 - 한국어/영어 i18n
 - Web Audio API 효과음 (기본 무음)
 - PWA manifest + service worker
-- Vitest UI/설정/번역 테스트
+- Vitest UI/설정/번역/엔진 테스트
 - ESLint + Oxlint
+- 기존 Orbit Sync 타이밍 게임은 제거하고 바카라형 테이블로 교체
 
 ## 테스트 결과
 

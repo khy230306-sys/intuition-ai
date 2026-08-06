@@ -17,10 +17,10 @@ describe('i18n dictionaries', () => {
     expect(collectKeys(en).sort()).toEqual(collectKeys(ko).sort())
   })
 
-  it('contains playable Orbit Sync copy', () => {
-    expect(ko.play.syncNow).toBe('SYNC')
-    expect(en.play.syncNow).toBe('SYNC')
-    expect(ko.nav.play).toBe('체험')
-    expect(en.nav.play).toBe('Play')
+  it('contains baccarat table copy', () => {
+    expect(ko.play.deal).toBe('카드 공개')
+    expect(en.play.deal).toBe('Reveal Cards')
+    expect(ko.play.player).toBe('PLAYER')
+    expect(en.play.banker).toBe('BANKER')
   })
 })

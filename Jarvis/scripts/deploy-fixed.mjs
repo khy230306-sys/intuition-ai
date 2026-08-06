@@ -18,15 +18,16 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
+import { PRODUCTION_HOST, PROTECTED_DOMAIN_HOSTS } from './ship-fixed-hosts.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const dist = join(root, 'dist')
 
 /** Locked public hostname — do not change without an explicit user request. */
-const FIXED_DOMAIN = 'jarvis-app.shipstatic.com'
+const FIXED_DOMAIN = PRODUCTION_HOST
 
-/** Keep this many recent unlinked snapshots as rollback cushion (plus the live one). */
+/** Keep this many recent unlinked snapshots as rollback cushion (plus live ones). */
 const KEEP_EXTRA_SNAPSHOTS = 2
 
 function loadApiKey() {
@@ -102,6 +103,23 @@ function normalizeDeployId(raw) {
     .replace(/\.shipstatic\.com\/?$/, '')
 }
 
+function linkedDeploymentIds() {
+  const protectedIds = new Set()
+  try {
+    const domains = parseJson(runShip(['domains', 'list']))
+    for (const d of domains?.domains || []) {
+      const host = String(d.domain || '')
+      // Always protect production + fixed Preview; also protect the active deploy target host.
+      if (!PROTECTED_DOMAIN_HOSTS.includes(host) && host !== domainHost) continue
+      const id = normalizeDeployId(d.deployment)
+      if (id) protectedIds.add(id)
+    }
+  } catch {
+    /* ignore */
+  }
+  return protectedIds
+}
+
 function linkedDeploymentId() {
   try {
     const domains = parseJson(runShip(['domains', 'list']))
@@ -120,8 +138,9 @@ function pruneOldDeployments() {
     console.log(`Snapshots: ${deps.length} (no prune needed)`)
     return
   }
+  const protectedIds = linkedDeploymentIds()
   const live = linkedDeploymentId()
-  const protectedIds = new Set([live].filter(Boolean))
+  if (live) protectedIds.add(live)
   let keptExtra = 0
   const remove = []
   for (const d of deps) {
@@ -136,7 +155,7 @@ function pruneOldDeployments() {
     remove.push(d.deployment)
   }
   console.log(
-    `Pruning ${remove.length} old snapshot(s); keeping live=${live || '(none)'} + ${keptExtra} recent`,
+    `Pruning ${remove.length} old snapshot(s); keeping protected=${[...linkedDeploymentIds()].join(',') || '(none)'} + ${keptExtra} recent`,
   )
   for (const dep of remove) {
     try {
@@ -242,10 +261,10 @@ SHIP_API_KEY 가 없습니다.
     if (/Deployment limit reached/i.test(msg)) {
       console.warn('Upload hit limit — force-pruning all unlinked snapshots and retrying once…')
       const listed = parseJson(runShip(['deployments', 'list']))
-      const live = linkedDeploymentId()
+      const live = linkedDeploymentIds()
       for (const d of listed?.deployments || []) {
         const id = normalizeDeployId(d.deployment)
-        if (!id || id === live) continue
+        if (!id || live.has(id)) continue
         try {
           runShip(['deployments', 'remove', d.deployment])
           console.log(`  force-removed ${d.deployment}`)

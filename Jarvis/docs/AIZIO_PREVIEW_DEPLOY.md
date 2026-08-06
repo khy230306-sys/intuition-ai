@@ -2,18 +2,16 @@
 
 **Does not change:** https://jarvis-app.shipstatic.com
 
-## Navigation v2 Preview (this branch)
+## Fixed Preview URL (always)
 
 | Field | Value |
 | --- | --- |
-| REVIEW_URL | https://galactic-neon-v761qix.shipstatic.com |
-| HOME v2 (default) | https://galactic-neon-v761qix.shipstatic.com |
-| Navigation direct | https://galactic-neon-v761qix.shipstatic.com/?nav=1 |
-| Legacy home | https://galactic-neon-v761qix.shipstatic.com/?home=legacy |
-| 손님관리 | https://galactic-neon-v761qix.shipstatic.com/?customers=1 |
-| Production | https://jarvis-app.shipstatic.com → still `adaptive-echo-t118nxm` (unchanged) |
+| REVIEW_URL (fixed) | https://light-lab.shipstatic.com |
+| Production | https://jarvis-app.shipstatic.com (untouched by `deploy:preview`) |
 
-Previous previews: https://spatial-pulse-m3o6tgj.shipstatic.com · https://hyper-cluster-i63ofol.shipstatic.com · https://encoded-mesh-r5a5fkf.shipstatic.com
+`npm run deploy:preview` uploads a new snapshot, then **repoints** `light-lab.shipstatic.com` to it — the public Preview address never changes.
+
+> ShipStatic rejects deployment-ID hostnames (e.g. `light-lab-92m8bq7.shipstatic.com`) as platform domains. That bookmark is a one-shot snapshot; in-app **앱 업데이트** on that host migrates to `https://light-lab.shipstatic.com` in one shot.
 
 ## Commands
 
@@ -23,7 +21,7 @@ cd Jarvis
 PUSH_SERVER_URL=https://<your-render>.onrender.com npm run deploy:preview
 ```
 
-**Forbidden for this task:** `npm run deploy:web` (production).
+**Forbidden for this task:** `npm run deploy:web` (production) unless the owner explicitly approves.
 
 ## Feature flags on Preview
 

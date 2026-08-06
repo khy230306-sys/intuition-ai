@@ -1,6 +1,10 @@
-/** Home-screen PWA update helpers — always target the fixed production host. */
+/** Home-screen PWA update helpers — always target the fixed host for the current channel. */
 
 export const FIXED_APP_URL = 'https://jarvis-app.shipstatic.com'
+export const FIXED_PREVIEW_URL = 'https://light-lab.shipstatic.com'
+
+/** Snapshot URL the user originally bookmarked — not claimable as a ShipStatic domain. */
+export const LEGACY_PREVIEW_HOST = 'light-lab-92m8bq7.shipstatic.com'
 
 export const PENDING_UPDATE_KEY = 'jarvis.app.pendingUpdate'
 export const UPDATE_RETRY_KEY = 'jarvis.updateRetry'
@@ -9,6 +13,24 @@ export type RemoteBuildInfo = {
   version: string
   buildId: string | null
   commit: string | null
+}
+
+/**
+ * Resolve which fixed origin "앱 업데이트" should hit.
+ * - On fixed Preview (or the legacy light-lab-92m8bq7 snapshot): stay on Preview.
+ * - Everywhere else (production / random snapshots / local): production.
+ */
+export function resolveUpdateBaseUrl(hostname?: string): string {
+  const host = (
+    hostname ??
+    (typeof location !== 'undefined' && location?.hostname ? location.hostname : '')
+  )
+    .trim()
+    .toLowerCase()
+  if (host === 'light-lab.shipstatic.com' || host === LEGACY_PREVIEW_HOST) {
+    return FIXED_PREVIEW_URL
+  }
+  return FIXED_APP_URL
 }
 
 /** Parse version from deployed index.html (meta or title). */
@@ -48,14 +70,18 @@ function parseBuildMetaJson(raw: unknown): RemoteBuildInfo | null {
 }
 
 /**
- * Read live production build-meta (preferred).
+ * Read live build-meta from the channel's fixed host.
  * Call after SW unregister when possible — SW used to precache this file and lie.
  */
-export async function fetchRemoteBuildMeta(timeoutMs = 8000): Promise<RemoteBuildInfo | null> {
+export async function fetchRemoteBuildMeta(
+  timeoutMs = 8000,
+  baseUrl?: string,
+): Promise<RemoteBuildInfo | null> {
+  const base = (baseUrl || resolveUpdateBaseUrl()).replace(/\/$/, '')
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const url = `${FIXED_APP_URL}/build-meta.json?_=${Date.now()}&_nocache=1`
+    const url = `${base}/build-meta.json?_=${Date.now()}&_nocache=1`
     const res = await fetch(url, {
       cache: 'no-store',
       signal: ctrl.signal,
@@ -74,13 +100,16 @@ export async function fetchRemoteBuildMeta(timeoutMs = 8000): Promise<RemoteBuil
   }
 }
 
-/** Fallback: parse version from production HTML. */
-export async function fetchRemoteAppVersionFromHtml(timeoutMs = 6000): Promise<string | null> {
+/** Fallback: parse version from the channel's fixed HTML. */
+export async function fetchRemoteAppVersionFromHtml(
+  timeoutMs = 6000,
+  baseUrl?: string,
+): Promise<string | null> {
+  const base = (baseUrl || resolveUpdateBaseUrl()).replace(/\/$/, '')
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    // Use _nocache (NOT in SW ignore list) so precache cannot match by stripping params
-    const res = await fetch(`${FIXED_APP_URL}/?_nocache=${Date.now()}`, {
+    const res = await fetch(`${base}/?_nocache=${Date.now()}`, {
       cache: 'no-store',
       signal: ctrl.signal,
       headers: { Accept: 'text/html', 'Cache-Control': 'no-cache' },
@@ -94,19 +123,22 @@ export async function fetchRemoteAppVersionFromHtml(timeoutMs = 6000): Promise<s
   }
 }
 
-/** Read jarvis-version from the live production site. */
+/** Read jarvis-version from the live fixed host for this channel. */
 export async function fetchRemoteAppVersion(timeoutMs = 8000): Promise<string | null> {
-  const meta = await fetchRemoteBuildMeta(timeoutMs)
+  const base = resolveUpdateBaseUrl()
+  const meta = await fetchRemoteBuildMeta(timeoutMs, base)
   if (meta?.version) return meta.version
-  return fetchRemoteAppVersionFromHtml(Math.min(timeoutMs, 6000))
+  return fetchRemoteAppVersionFromHtml(Math.min(timeoutMs, 6000), base)
 }
 
 export function buildUpdateUrl(opts: {
   version?: string
   buildId?: string | null
   step?: number
+  baseUrl?: string
 }): string {
-  const u = new URL(`${FIXED_APP_URL}/`)
+  const base = (opts.baseUrl || resolveUpdateBaseUrl()).replace(/\/$/, '')
+  const u = new URL(`${base}/`)
   if (opts.version) u.searchParams.set('_v', opts.version)
   u.searchParams.set('_t', String(Date.now()))
   u.searchParams.set('_update', String(opts.step ?? 1))

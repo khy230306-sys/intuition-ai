@@ -508,7 +508,8 @@ async function hardRefreshApp(opts?: { targetVersion?: string; targetBuildId?: s
 
 /**
  * Home-screen / Safari update: wipe SW first (so version check is not precache-lied),
- * read live build-meta, then hard-navigate to the fixed production URL.
+ * read live build-meta, then hard-navigate to the fixed host for this channel
+ * (production → jarvis-app, fixed/legacy Preview → light-lab).
  */
 async function updateAppToLatest(): Promise<void> {
   showFlash('최신판을 확인하는 중…')

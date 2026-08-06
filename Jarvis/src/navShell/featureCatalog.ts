@@ -107,11 +107,11 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   },
   {
     id: 'family-room',
-    title: '가족 공간',
-    description: '가족방 채팅 · 공지 · 공유 일정',
+    title: '멤버',
+    description: '멤버 채팅 · 공지 · 공유 일정',
     group: 'space',
     view: 'family',
-    keywords: ['가족방', '가족공간', '가족채팅'],
+    keywords: ['멤버', '맴버', '가족방', '가족공간', '가족채팅', 'family'],
   },
   {
     id: 'friends',

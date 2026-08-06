@@ -47,7 +47,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     more: '더보기',
     invest: '투자',
     life: '생활',
-    family: '가족 공간',
+    family: '멤버',
     friends: '친구',
     games: '게임',
     actions: '빠른 실행',

@@ -454,7 +454,7 @@ export function detectScheduleConflicts(date: string, title: string): string[] {
           e.date === date &&
           String(e.title || '').replace(/\s+/g, '') === title.replace(/\s+/g, '')
         ) {
-          conflicts.push(`가족 공간 일정과 중복: ${e.title} (${e.date})`)
+          conflicts.push(`멤버 일정과 중복: ${e.title} (${e.date})`)
         }
       }
     }

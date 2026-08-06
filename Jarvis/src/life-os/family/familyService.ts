@@ -64,7 +64,7 @@ export function upsertFamilyMember(name: string, relation: string): FamilyMember
 
 export function formatFamilyOverview(): string {
   const s = loadFamilySpace()
-  const lines = ['【가족 공간 · 로컬】', s.note]
+  const lines = ['【멤버 · 로컬】', s.note]
   if (!s.members.length) lines.push('등록된 로컬 프로필이 없습니다. 「가족 프로필에 엄마 추가」처럼 말해 주세요.')
   else lines.push(...s.members.map((m) => `• ${m.name} (${m.relation}) · 언어 ${m.language}`))
   lines.push('기존 가족 탭의 대화·일정·관계 기억은 그대로 유지됩니다.')

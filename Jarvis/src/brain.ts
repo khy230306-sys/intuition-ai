@@ -146,7 +146,7 @@ function helpText(name: string): string {
     '• 오늘 날씨 알려줘 / 서울 날씨 / 우산 챙길까',
     '• 브리핑 / 오늘 뭐하지 / 지금 몇 시야',
     '• 대화 초기화 / 지난 대화 삭제 / 대화 삭제해줘',
-    '• 가족 공간 / 가족 공지 / 가족 일정',
+    '• 멤버 / 가족 공지 / 가족 일정',
     '• 친구 공간 / 친구 공지 / 친구 일정',
     '• 앱 공유 / QR / 백업 공유',
     '• 100달러 환율 / 엔화 10000엔 / 환율',
@@ -1127,12 +1127,12 @@ export async function think(
     }
   }
 
-  if (/가족\s*(공간|채팅|대화|탭)|패밀리|family\s*space/i.test(text)) {
+  if (/멤버|맴버|가족\s*(공간|채팅|대화|탭)|패밀리|family\s*space/i.test(text)) {
     const room = loadFamilyRoom()
     return {
       text: room
-        ? `가족 공간「${room.name}」코드 ${room.code}로 이동합니다.\n멤버 ${room.members.length}명 · 메시지 ${room.messages.length} · 공지 ${room.notices.length} · 일정 ${room.events.length}`
-        : '가족 탭으로 이동합니다. 새 공간을 만들거나 초대 코드로 참여하세요.',
+        ? `멤버「${room.name}」코드 ${room.code}로 이동합니다.\n참여자 ${room.members.length}명 · 메시지 ${room.messages.length} · 공지 ${room.notices.length} · 일정 ${room.events.length}`
+        : '멤버로 이동합니다. 새로 만들거나 초대 코드로 참여하세요.',
       speak: true,
       view: 'family',
     }
@@ -1141,7 +1141,7 @@ export async function think(
   if (/가족\s*공지/.test(text)) {
     const room = loadFamilyRoom()
     if (!room) {
-      return { text: '먼저 가족 공간을 만들어 주세요.', view: 'family', speak: true }
+      return { text: '먼저 멤버를 만들어 주세요.', view: 'family', speak: true }
     }
     const m = text.match(/가족\s*공지\s*(.+)$/)
     if (m) {
@@ -1163,7 +1163,7 @@ export async function think(
 
   if (/가족\s*일정/.test(text)) {
     const room = loadFamilyRoom()
-    if (!room) return { text: '먼저 가족 공간을 만들어 주세요.', view: 'family', speak: true }
+    if (!room) return { text: '먼저 멤버를 만들어 주세요.', view: 'family', speak: true }
     const upcoming = upcomingFamilyEvents(5)
     return {
       text: upcoming.length
@@ -1179,14 +1179,14 @@ export async function think(
     const existing = loadFamilyRoom()
     if (existing) {
       return {
-        text: `이미 가족 공간「${existing.name}」코드 ${existing.code}이 있습니다. 새로 만들려면 가족 탭에서 «나가기» 후 다시 만드세요.`,
+        text: `이미 멤버「${existing.name}」코드 ${existing.code}이 있습니다. 새로 만들려면 멤버에서 «나가기» 후 다시 만드세요.`,
         speak: true,
         view: 'family',
       }
     }
-    const room = createFamilyRoom('우리 가족', settings.displayName)
+    const room = createFamilyRoom('멤버', settings.displayName)
     return {
-      text: `가족 공간 생성: ${room.name}\n초대 코드: ${room.code}\n가족 탭 → 초대 공유로 알려 주세요.`,
+      text: `멤버 생성: ${room.name}\n초대 코드: ${room.code}\n멤버 → 초대 공유로 알려 주세요.`,
       speak: true,
       view: 'family',
     }

@@ -1398,7 +1398,7 @@ async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> 
 async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
   if (!room) {
-    showFlash(kind === 'family' ? '먼저 가족 공간을 만들어 주세요.' : '먼저 친구 공간을 만들어 주세요.')
+    showFlash(kind === 'family' ? '먼저 멤버를 만들어 주세요.' : '먼저 친구 공간을 만들어 주세요.')
     return
   }
   const link = buildSpaceInviteUrl(kind, room.code, appShareUrl())
@@ -1593,12 +1593,12 @@ function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
       showFlash(`초대 ${pending.code} 수신 · 가족 탭에서 «전환 참여»`)
       return 'needs-switch'
     }
-    joinFamilyRoomLocal(pending.code, '가족 공간', member)
+    joinFamilyRoomLocal(pending.code, '멤버', member)
     state.view = 'family'
     state.familyTab = 'chat'
     state.prefillJoinCode = ''
     postJoinPresence('family')
-    showFlash(`가족 초대 승인 · 코드 ${pending.code} 입장 완료`)
+    showFlash(`멤버 초대 승인 · 코드 ${pending.code} 입장 완료`)
     void ensureFamilySyncOnce(true)
     return 'joined'
   } catch (err) {
@@ -1616,11 +1616,11 @@ function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
 function inviteSwitchBanner(kind: SpaceKind, currentCode: string): string {
   const code = state.prefillJoinCode.trim().toUpperCase()
   if (!code || code === currentCode) return ''
-  const label = kind === 'friends' ? '친구' : '가족'
+  const label = kind === 'friends' ? '친구' : '멤버'
   return `
     <div class="invite-switch" role="status">
       <p><strong>새 ${label} 초대</strong> · 코드 <span class="invite-switch-code">${escapeHtml(code)}</span></p>
-      <p class="hint">지금 공간(${escapeHtml(currentCode)})과 다릅니다. 전환하면 현재 공간에서 나갑니다.</p>
+      <p class="hint">지금 ${label}(${escapeHtml(currentCode)})과 다릅니다. 전환하면 현재 ${label}에서 나갑니다.</p>
       <div class="row-btns">
         <button type="button" class="primary-btn" data-action="switch-${kind}-invite">전환 참여</button>
         <button type="button" class="ghost-btn" data-action="dismiss-${kind}-invite">무시</button>
@@ -1662,7 +1662,7 @@ async function switchToInvite(kind: SpaceKind): Promise<void> {
     } else {
       await disconnectFamilySync()
       leaveFamilyRoom()
-      joinFamilyRoomLocal(code, '가족 공간', member)
+      joinFamilyRoomLocal(code, '멤버', member)
       state.familyTab = 'chat'
       state.view = 'family'
       postJoinPresence('family')
@@ -1990,7 +1990,7 @@ function persistMemberName(memberName: string): void {
 async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): Promise<void> {
   const detected = detectInviteKind(raw)
   if (detected && detected !== kind) {
-    showFlash(`${detected === 'friends' ? '친구' : '가족'} 초대로 전환합니다…`)
+    showFlash(`${detected === 'friends' ? '친구' : '멤버'} 초대로 전환합니다…`)
     kind = detected
   }
   const code = parseInviteCode(raw)
@@ -2022,20 +2022,20 @@ async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: str
       const current = loadFamilyRoom()
       if (current && current.code !== code) {
         const ok = window.confirm(
-          `지금 가족 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+          `지금 멤버 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
         await disconnectFamilySync()
         leaveFamilyRoom()
       }
       const wasSame = Boolean(current && current.code === code)
-      joinFamilyRoomLocal(code, '가족 공간', memberName)
+      joinFamilyRoomLocal(code, '멤버', memberName)
       state.familyTab = 'chat'
       state.view = 'family'
       state.prefillJoinCode = ''
       if (!wasSame) postJoinPresence('family')
       else void ensureFamilySyncOnce(true)
-      showFlash(`가족 초대 승인 · 코드 ${code} 입장 완료`)
+      showFlash(`멤버 초대 승인 · 코드 ${code} 입장 완료`)
     }
     render()
   } catch (err) {
@@ -3179,8 +3179,8 @@ function renderLocationGate(): string {
     : ''
   const invite = state.pendingInvite
   const inviteBlock = invite
-    ? `<p class="loc-invite"><strong>${invite.kind === 'friends' ? '친구' : '가족'} 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
-        <p class="loc-body">한 번만 승인하면 AIZIO ${invite.kind === 'friends' ? '친구' : '가족'} 공간으로 바로 입장합니다.</p>
+    ? `<p class="loc-invite"><strong>${invite.kind === 'friends' ? '친구' : '멤버'} 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
+        <p class="loc-body">한 번만 승인하면 AIZIO ${invite.kind === 'friends' ? '친구 공간으로' : '멤버로'} 바로 입장합니다.</p>
         <button type="button" class="primary-btn loc-invite-go" data-action="accept-invite-start" ${
           state.locationBusy ? 'disabled' : ''
         }>승인하고 입장</button>`
@@ -3429,10 +3429,10 @@ function renderHomeRoomCard(box: SpaceInboxSummary): string {
     return `
       <button type="button" class="home-room-card empty" data-view="${box.kind}">
         <div class="home-room-head">
-          <strong>${box.kind === 'family' ? '가족 방' : '친구 방'}</strong>
+          <strong>${box.kind === 'family' ? '멤버' : '친구 방'}</strong>
           <span class="home-room-count">없음</span>
         </div>
-        <p class="hint">${box.kind === 'family' ? '가족' : '친구'} 탭에서 방을 만들거나 참여하세요.</p>
+        <p class="hint">${box.kind === 'family' ? '멤버' : '친구'}를 만들거나 참여하세요.</p>
       </button>`
   }
   const recent =
@@ -3532,7 +3532,7 @@ function renderShareModal(): string {
         ? '게임 기록 공유'
         : state.shareModal === 'invite'
           ? state.shareInviteKind === 'family'
-            ? '가족 초대'
+            ? '멤버 초대'
             : '친구 초대'
           : '백업 QR / 공유'
   const actions =
@@ -4454,13 +4454,13 @@ function renderFamily(): string {
   if (!room) {
     return `
       <section class="panel view-scroll family-panel">
-        <h2 class="section-title">FAMILY</h2>
-        <p class="hint">가족 단체 대화 · 공지 · 일정을 한곳에서. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다.</p>
+        <h2 class="section-title">멤버</h2>
+        <p class="hint">멤버 단체 대화 · 공지 · 일정을 한곳에서. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다.</p>
         <div class="family-setup">
-          <h3>새 가족 공간</h3>
+          <h3>새 멤버</h3>
           <form id="family-create" class="settings-form">
-            <label>공간 이름
-              <input name="name" value="우리 가족" maxlength="40" required />
+            <label>멤버 이름
+              <input name="name" value="멤버" maxlength="40" required />
             </label>
             <label>내 이름
               <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
@@ -4510,7 +4510,7 @@ function renderFamily(): string {
       .join('')
     body = `
       <div class="space-chat-shell">
-        <div class="fam-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">가족이 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+        <div class="fam-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">멤버가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
         <div id="family-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'family' ? 'live' : ''}" ${
           state.listening && state.dictationTarget === 'family' || state.voiceHint && state.dictationTarget === 'family' ? '' : 'hidden'
         }>${escapeHtml(
@@ -4526,7 +4526,7 @@ function renderFamily(): string {
             <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="family" hidden />
             </label>
-            <input id="family-draft" name="text" type="text" placeholder="가족에게 메시지…" maxlength="500" autocomplete="off" />
+            <input id="family-draft" name="text" type="text" placeholder="멤버에게 메시지…" maxlength="500" autocomplete="off" />
             <button class="primary-btn send-btn" type="submit">${escapeHtml(t('common.send'))}</button>
           </form>
           <div class="row-btns space-chat-tools">
@@ -4611,15 +4611,15 @@ function renderFamily(): string {
           <button type="button" class="ghost-btn" data-action="family-join-share">내 참여 확인 보내기</button>
         </div>
         <form id="family-join-receipt" class="settings-form">
-          <label>가족이 보낸 참여 확인 문구
-            <textarea name="receipt" rows="3" placeholder="AIZIO 가족 참여 확인 … 붙여넣기" required></textarea>
+          <label>멤버가 보낸 참여 확인 문구
+            <textarea name="receipt" rows="3" placeholder="AIZIO 멤버 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
         <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다.</p>
         <form id="family-switch" class="settings-form">
           <label>다른 코드로 전환
-            <textarea name="code" rows="2" placeholder="새 가족 코드 또는 링크" required></textarea>
+            <textarea name="code" rows="2" placeholder="새 멤버 코드 또는 링크" required></textarea>
           </label>
           <button class="primary-btn" type="submit">전환 참여</button>
         </form>
@@ -4640,7 +4640,7 @@ function renderFriends(): string {
         <div class="family-setup">
           <h3>새 친구 공간</h3>
           <form id="friends-create" class="settings-form">
-            <label>공간 이름
+            <label>멤버 이름
               <input name="name" value="우리 친구" maxlength="40" required />
             </label>
             <label>내 이름
@@ -4940,7 +4940,7 @@ function renderSettings(): string {
         })()}
         <h3 class="subsection-title">채팅 알림</h3>
         <div class="toggle-row">
-          <span>가족 대화 알림</span>
+          <span>멤버 대화 알림</span>
           <input type="checkbox" name="notifyFamilyChat" ${s.notifyFamilyChat !== false ? 'checked' : ''} />
         </div>
         <div class="toggle-row">
@@ -5633,7 +5633,7 @@ function bind(): void {
       const existing = loadFamilyRoom()
       if (existing) {
         const ok = window.confirm(
-          `이미 가족 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+          `이미 멤버 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
         await disconnectFamilySync()
@@ -5644,7 +5644,7 @@ function bind(): void {
       persistMemberName(member)
       createFamilyRoom(String(fd.get('name') || ''), member)
       state.familyTab = 'chat'
-      showFlash('가족 공간을 만들었습니다. «초대 공유»로 가족을 초대하세요.')
+      showFlash('멤버를 만들었습니다. «초대 공유»로 초대하세요.')
       render()
     })()
   })
@@ -5732,7 +5732,7 @@ function bind(): void {
       memberId: room.memberId,
       memberName: room.memberName,
     })
-    void shareText(built.message, { title: 'AIZIO 가족 참여 확인' }).then((r) => {
+    void shareText(built.message, { title: 'AIZIO 멤버 참여 확인' }).then((r) => {
       if (r.ok) {
         showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
@@ -5755,7 +5755,7 @@ function bind(): void {
     void (async () => {
       await disconnectFamilySync()
       leaveFamilyRoom()
-      showFlash('가족 공간에서 나갔습니다.')
+      showFlash('멤버에서 나갔습니다.')
       render()
     })()
   })
@@ -5764,12 +5764,12 @@ function bind(): void {
     const room = loadFamilyRoom()
     if (!room) return
     const ok = window.confirm(
-      `가족 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+      `멤버 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
     )
     if (!ok) return
     const clearedAt = Date.now()
     if (clearFamilyChat(clearedAt)) {
-      showFlash('가족 대화를 초기화했습니다.')
+      showFlash('멤버 대화를 초기화했습니다.')
       render()
       scrollSpaceChat('family')
       void (async () => {
@@ -5988,7 +5988,7 @@ function bind(): void {
     }
     // WebView / blocked clipboard → select visible text, then try native share
     selectVisibleInviteText(kind === 'text' ? text : `${label}\n${payload}`)
-    const title = space === 'family' ? 'AIZIO 가족 초대' : 'AIZIO 친구 초대'
+    const title = space === 'family' ? 'AIZIO 멤버 초대' : 'AIZIO 친구 초대'
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       void navigator
         .share({ title, text: payload, url: kind === 'text' ? link : undefined })
@@ -6009,7 +6009,7 @@ function bind(): void {
       setShareStatus('초대 문구가 없습니다.', false)
       return
     }
-    const title = kind === 'family' ? 'AIZIO 가족 초대' : 'AIZIO 친구 초대'
+    const title = kind === 'family' ? 'AIZIO 멤버 초대' : 'AIZIO 친구 초대'
     const url = buildSpaceInviteUrl(kind, code, appShareUrl())
     void shareText(text, { title, url }).then((r) => setShareStatus(r.message, r.ok))
   })

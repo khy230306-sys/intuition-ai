@@ -104,7 +104,7 @@ function executeLocalAction(id: RoutineActionId): {
     case 'today_todos':
       return { actionId: id, ok: true, detail: '할 일은 생활 탭에서 확인하세요.' }
     case 'family_schedule':
-      return { actionId: id, ok: true, detail: '가족 일정은 로컬 가족 공간 기준입니다(서버 실시간 공유 미연결).' }
+      return { actionId: id, ok: true, detail: '가족 일정은 로컬 멤버 기준입니다(서버 실시간 공유 미연결).' }
     case 'goal_next_actions': {
       const next = nextActions(3)
       return {

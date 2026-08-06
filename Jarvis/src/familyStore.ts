@@ -78,7 +78,7 @@ export function createFamilyRoom(name: string, memberName: string): FamilyRoom {
   const member: FamilyMember = { id: memberId, name: memberName.trim() || '나', joinedAt: now }
   const room: FamilyRoom = {
     code: generateFamilyCode(),
-    name: name.trim() || '우리 가족',
+    name: name.trim() || '멤버',
     createdAt: now,
     memberId,
     memberName: member.name,
@@ -95,7 +95,7 @@ export function createFamilyRoom(name: string, memberName: string): FamilyRoom {
 export function joinFamilyRoomLocal(code: string, name: string, memberName: string): FamilyRoom {
   const normalized = normalizeFamilyCode(code)
   if (!normalized) {
-    throw new Error('유효한 가족 초대 코드가 아닙니다.')
+    throw new Error('유효한 멤버 초대 코드가 아닙니다.')
   }
   const memberId = getOrCreateMemberId()
   const now = Date.now()
@@ -113,7 +113,7 @@ export function joinFamilyRoomLocal(code: string, name: string, memberName: stri
   }
   const room: FamilyRoom = {
     code: normalized,
-    name: name.trim() || '가족 공간',
+    name: name.trim() || '멤버',
     createdAt: now,
     memberId,
     memberName: member.name,
@@ -319,8 +319,8 @@ export function upsertMember(room: FamilyRoom, member: FamilyMember): FamilyRoom
 export function familyInviteText(room: FamilyRoom, appUrl: string): string {
   const link = buildSpaceInviteUrl('family', room.code, appUrl)
   return [
-    `AIZIO 가족 초대`,
-    `공간: ${room.name}`,
+    `AIZIO 멤버 초대`,
+    `멤버: ${room.name}`,
     `코드: ${room.code}`,
     '',
     '링크를 열고 «승인하고 입장»만 누르면 끝입니다.',
@@ -334,18 +334,18 @@ export function applyFamilyJoinReceipt(raw: string): { ok: true; message: string
   const parsed = parseJoinReceipt(raw)
   if (!parsed.ok) return parsed
   const { receipt } = parsed
-  if (receipt.kind !== 'family') return { ok: false, message: '가족 참여 확인이 아닙니다.' }
+  if (receipt.kind !== 'family') return { ok: false, message: '멤버 참여 확인이 아닙니다.' }
   const room = loadFamilyRoom()
-  if (!room) return { ok: false, message: '먼저 가족 공간을 만들어 주세요.' }
+  if (!room) return { ok: false, message: '먼저 멤버를 만들어 주세요.' }
   if (room.code !== receipt.code) {
-    return { ok: false, message: `코드가 다릅니다. 이 공간은 ${room.code}, 확인은 ${receipt.code}입니다.` }
+    return { ok: false, message: `코드가 다릅니다. 이 멤버는 ${room.code}, 확인은 ${receipt.code}입니다.` }
   }
   if (receipt.memberId === room.memberId) {
     return { ok: false, message: '본인 참여 확인은 추가할 수 없습니다.' }
   }
   upsertMember(room, { id: receipt.memberId, name: receipt.memberName, joinedAt: receipt.at })
   saveFamilyRoom(room)
-  return { ok: true, message: `${receipt.memberName}님을 가족 멤버로 등록했습니다.` }
+  return { ok: true, message: `${receipt.memberName}님을 멤버로 등록했습니다.` }
 }
 
 export function upcomingFamilyEvents(limit = 5): FamilyEvent[] {

@@ -41,7 +41,7 @@ export function buildSystemPrompt(req: AiRequest, mode: AiMode): string {
     '뜻·사실·개념 질문에는 백과사전처럼 정의와 핵심 설명을 제공하세요.',
     '모르는 사실·실행하지 않은 작업·연결되지 않은 기능을 사실처럼 말하지 마세요.',
     '앱에 없는 기능(예: OpenClaw, 로컬 Ollama PC 제어)이 연결되어 있다고 거짓말하지 마세요.',
-    '기존 앱 기능(가족방·친구방·게임·생활·투자 UI)을 임의로 바꾸라고 유도하지 마세요.',
+    '기존 앱 기능(멤버·친구방·게임·생활·투자 UI)을 임의로 바꾸라고 유도하지 마세요.',
     '주식/투자: 시세·팩터에 근거해 자신 있게 후보·우선순위를 제시하세요. 가격을 지어내지 마세요. 마지막에 「최종 결정·손실 책임은 본인」 한 줄만 넣으세요. 과도한 면책 반복·매수 강요는 금지.',
     req.riskTolerance || req.investHorizon
       ? `투자 성향: ${req.riskTolerance || '-'}, horizon: ${req.investHorizon || '-'}.`

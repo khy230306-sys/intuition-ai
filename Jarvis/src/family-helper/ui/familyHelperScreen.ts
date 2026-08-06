@@ -123,7 +123,7 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
             <button type="button" class="ghost-btn" data-fh-tab="meds">약·접종</button>
             <button type="button" class="ghost-btn" data-fh-tab="growth">성장 기록</button>
             <button type="button" class="ghost-btn" data-fh-tab="emergency">긴급 정보</button>
-            <button type="button" class="ghost-btn" data-view="family">가족 공간</button>
+            <button type="button" class="ghost-btn" data-view="family">멤버</button>
             <button type="button" class="ghost-btn" data-action="open-ai-camera">안내문 촬영</button>
           </div>
         </details>
@@ -329,9 +329,9 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
       <header class="navv2-head">
         <button type="button" class="ghost-btn tiny" data-action="fh-back">홈</button>
         <strong>가족</strong>
-        <button type="button" class="ghost-btn tiny" data-view="family">가족 공간</button>
+        <button type="button" class="ghost-btn tiny" data-view="family">멤버</button>
       </header>
-      <p class="hint">로컬 우선 저장 · 기존 가족 채팅 공간과 별도로 구성원·일정·준비물을 관리합니다.</p>
+      <p class="hint">로컬 우선 저장 · 멤버 채팅과 별도로 구성원·일정·준비물을 관리합니다.</p>
       <div class="fh-tabs" role="tablist">
         ${tabs
           .map(

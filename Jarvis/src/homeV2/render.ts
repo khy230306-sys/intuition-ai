@@ -248,7 +248,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <ul class="home-v2-more-list">
             ${moreItem('AI 카메라', 'data-view="ai-camera"')}
             ${moreItem('번역하기', 'data-action="home-v2-quick" data-quick-id="translate"')}
-            ${moreItem(`가족 공간${famBadge}`, 'data-view="family"')}
+            ${moreItem(`멤버${famBadge}`, 'data-view="family"')}
             ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
             ${moreItem('설정', 'data-view="settings"')}
             ${showInstall ? moreItem('홈 화면 설치 방법', 'data-action="install-show-guide"') : ''}

@@ -37,7 +37,7 @@ export function buildJoinReceipt(input: {
     receipt.memberName.replace(/\|/g, ' '),
     String(receipt.at),
   ].join('|')
-  const label = receipt.kind === 'family' ? '가족' : '친구'
+  const label = receipt.kind === 'family' ? '멤버' : '친구'
   const message = [
     `AIZIO ${label} 참여 확인 (오프라인용)`,
     `${receipt.memberName} · 코드 ${receipt.code}`,

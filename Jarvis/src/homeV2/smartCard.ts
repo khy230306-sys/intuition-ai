@@ -63,7 +63,7 @@ export function buildSmartCard(input: SmartCardInput): SmartCardModel {
     if (fam > 0) {
       items.push({
         id: 'msg-fam',
-        label: `${input.familyName || '가족방'} · 새 메시지 ${fam}개`,
+        label: `${input.familyName || '멤버'} · 새 메시지 ${fam}개`,
       })
     }
     if (fr > 0) {

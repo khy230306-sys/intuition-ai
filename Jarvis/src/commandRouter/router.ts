@@ -127,9 +127,15 @@ export function isTranslationStart(text: string): boolean {
 
 export function isTranslationOneShot(text: string): boolean {
   const t = text.trim()
-  if (!/번역|통역|translate/i.test(t)) return false
-  if (isTranslationStart(t) && !hasTranslatableContent(t)) return false
+  // 「… 영어로 말해줘」is translation, not calendar/weather narrative
+  const speakAsTranslate =
+    /.+\s+(?:영어로|일본어로|중국어로|베트남어로|스페인어로|프랑스어로|독일어로|태국어로|한국어로)\s*(?:말해|말해줘|말씀해)/i.test(
+      t,
+    )
+  if (!/번역|통역|translate/i.test(t) && !speakAsTranslate) return false
+  if (isTranslationStart(t) && !hasTranslatableContent(t) && !speakAsTranslate) return false
   if (isVisionTranslation(t)) return false
+  if (speakAsTranslate) return true
   // Quoted or 「X를 영어로 번역」
   if (/['"「『].+['"」』]\s*(?:을|를)?\s*.*(?:로|으로)\s*(?:번역|통역)/i.test(t)) return true
   if (/.+(?:을|를|라고|다고)\s*.*(?:로|으로)\s*(?:번역|통역)/i.test(t) && !/지금부터|이제부터|앞으로|계속|모드/i.test(t)) {
@@ -154,7 +160,7 @@ export function extractTranslateContent(text: string): string {
     t.match(/^(.+?)(?:을|를)\s*.+?(?:로|으로)\s*(?:번역|통역)/i) ||
     // 「엄마 병원 일정 영어로 번역해줘」— content + language + 번역 (no 을/를)
     t.match(
-      /^(.+?)\s+(?:영어로|일본어로|중국어로|베트남어로|스페인어로|프랑스어로|독일어로|태국어로|한국어로|(?:베트남|일본|중국)?말\s*(?:로|으로)|[가-힣]+어\s*(?:로|으로))\s*(?:번역|통역)/i,
+      /^(.+?)\s+(?:영어로|일본어로|중국어로|베트남어로|스페인어로|프랑스어로|독일어로|태국어로|한국어로|(?:베트남|일본|중국)?말\s*(?:로|으로)|[가-힣]+어\s*(?:로|으로))\s*(?:번역|통역|말해|말해줘|말씀해)/i,
     )
   if (m) {
     let c = m[1].trim()
@@ -177,20 +183,25 @@ export function isVisionTranslation(text: string): boolean {
 export function isVisionOpen(text: string): boolean {
   const t = text.trim()
   if (isVisionTranslation(t)) return false
-  return /카메라\s*(열어|켜|켜줘)|사진\s*(찍어|분석)|(?:이\s*)?(문서|사진|안내문)\s*읽어|문서\s*읽어|OCR|비전/i.test(t)
+  return /카메라\s*(열어|켜|켜줘)|사진\s*(찍어|분석)|(?:이\s*)?(문서|사진|이미지|안내문)\s*읽어|문서\s*읽어|OCR|비전|이미지\s*(분석|읽어)/i.test(
+    t,
+  )
 }
 
 function isCalendarCreate(text: string): boolean {
   const t = text.trim()
   if (/번역|통역/i.test(t)) return false
+  if (/(영어|일본어|중국어).*(말해|번역)|말해줘/i.test(t)) return false
   return /(일정|예약)\s*(추가|등록|잡아|넣어|만들어)|캘린더에\s*넣|(병원|미팅|회의).*(일정|예약|잡아)/i.test(t)
 }
 
 function isCalendarRead(text: string): boolean {
   const t = text.trim()
-  if (/번역|통역/i.test(t)) return false
+  if (/번역|통역|말해줘/i.test(t) && /영어|일본어|중국어/.test(t)) return false
   if (/가족/.test(t)) return false
-  return /(오늘|내일|모레|이번\s*주)?\s*일정\s*(알려|보여|있어|뭐)|다가오는\s*일정|캘린더\s*(보여|알려)/i.test(t)
+  return /(오늘|내일|모레|이번\s*주)?\s*일정\s*(알려|보여|있어|뭐|확인)|다가오는\s*일정|캘린더\s*(보여|알려)|스케줄\s*(보여|확인)/i.test(
+    t,
+  )
 }
 
 function isReminderCreate(text: string): boolean {
@@ -524,6 +535,24 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
     return r
   }
 
+  // How-to / explanation questions stay GENERAL_CHAT (never book/search)
+  if (/(예약하는\s*법|어떻게\s*예약|예약\s*방법|만드는\s*법|왜\s*비싸)/i.test(normalized)) {
+    if (!/(비행기\s*찾아|항공권\s*검색|맛집\s*찾아)/i.test(normalized)) {
+      const r = result({
+        intent: 'general.chat',
+        confidence: 0.88,
+        entities: {},
+        action: 'general.chat',
+        reason: 'howto_or_explanation',
+        normalized,
+        requiresAI: true,
+        forbiddenActions: ['travel.booking', 'restaurant.booking', 'weather'],
+      })
+      pushRouteDiag(r, mode, false)
+      return r
+    }
+  }
+
   // 5a) Restaurant Agent — before travel/weather; never steal recipes / translation
   if (!isRecipeOrCooking(normalized)) {
     const restHit = detectRestaurantIntent(normalized, hasActiveRestaurantSession())
@@ -534,8 +563,9 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
         travelClear &&
         (travelClear.startsWith('FLIGHT') ||
           travelClear.startsWith('HOTEL') ||
-          travelClear === 'TRAVEL_PLAN') &&
-        !/(맛집|식당|레스토랑|외식)/.test(normalized)
+          travelClear === 'TRAVEL_PLAN' ||
+          travelClear === 'BOOKING_PREPARE') &&
+        !/(맛집|식당|레스토랑|외식|한식집|일식집)/.test(normalized)
       ) {
         /* fall through to travel */
       } else {

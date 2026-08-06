@@ -7,6 +7,9 @@
 import type { BrainReply } from '../types'
 import { handleRestaurantAgent } from '../restaurantAgent'
 import { handleTravelAgent } from '../travelAgent'
+import { isolateFeature } from '../reliability/crashIsolation'
+import { makeExecutionResult } from '../reliability/execution'
+import { providerFailurePolicy } from '../reliability/providerPolicy'
 import { bcp47, translateText } from '../translate'
 import { routeCommand } from './router'
 import {
@@ -18,6 +21,10 @@ import {
 } from './session'
 import { describeTarget } from './router'
 import type { CommandRouterResult } from './types'
+
+function replyFromExec(text: string, extra?: Partial<BrainReply>): BrainReply {
+  return { text, speak: true, ...extra }
+}
 
 export async function tryHandleRoutedCommand(
   text: string,
@@ -33,95 +40,136 @@ export async function executeRoutedCommand(
   originalText?: string,
 ): Promise<BrainReply | null> {
   const utterance = originalText || routed.normalized || ''
+  const t0 = performance.now()
+
+  const finish = (
+    reply: BrainReply | null,
+    opts?: { success?: boolean; status?: 'success' | 'partial' | 'needs_input' | 'failed'; errorCode?: string; provider?: string; fallback?: boolean },
+  ): BrainReply | null => {
+    if (reply) {
+      makeExecutionResult({
+        success: opts?.success !== false,
+        action: routed.action,
+        intent: routed.intent,
+        status: opts?.status || (opts?.success === false ? 'failed' : 'success'),
+        userMessage: reply.text,
+        errorCode: opts?.errorCode,
+        provider: opts?.provider,
+        fallback: opts?.fallback,
+        durationMs: Math.round(performance.now() - t0),
+      })
+    }
+    return reply
+  }
+
   switch (routed.intent) {
     case 'translation.session.start': {
       const code = routed.targetLanguage || 'en'
       const name = describeTarget(code)
       startTranslationSession(code, name)
-      return {
-        text: `${name} 번역 모드를 시작했어요. 이제 보내는 내용을 ${name}로 번역할게요.`,
-        speak: true,
-        speakLang: 'ko-KR',
-        listenLang: 'ko-KR',
-      }
+      return finish(
+        replyFromExec(`${name} 번역 모드를 시작했어요. 이제 보내는 내용을 ${name}로 번역할게요.`, {
+          speakLang: 'ko-KR',
+          listenLang: 'ko-KR',
+        }),
+      )
     }
     case 'translation.session.end': {
       endTranslationSession()
-      return {
-        text: '번역 모드를 종료했어요.',
-        speak: true,
-        speakLang: 'ko-KR',
-        listenLang: 'ko-KR',
-      }
+      return finish(
+        replyFromExec('번역 모드를 종료했어요.', {
+          speakLang: 'ko-KR',
+          listenLang: 'ko-KR',
+        }),
+      )
     }
     case 'translation.session.change_target': {
       const code = routed.targetLanguage || 'en'
       const name = describeTarget(code)
       changeTranslationTarget(code, name)
-      return {
-        text: `이제 ${name}로 번역할게요.`,
-        speak: true,
-        speakLang: 'ko-KR',
-        listenLang: 'ko-KR',
-      }
+      return finish(
+        replyFromExec(`이제 ${name}로 번역할게요.`, {
+          speakLang: 'ko-KR',
+          listenLang: 'ko-KR',
+        }),
+      )
     }
     case 'translation.oneshot': {
       const content = (routed.content || '').trim()
       const to = routed.targetLanguage || 'en'
       if (!content) {
         startTranslationSession(to, describeTarget(to))
-        return {
-          text: `${describeTarget(to)} 번역 모드를 시작했어요. 이제 보내는 내용을 번역할게요.`,
-          speak: true,
-          listenLang: 'ko-KR',
-        }
+        return finish(
+          replyFromExec(`${describeTarget(to)} 번역 모드를 시작했어요. 이제 보내는 내용을 번역할게요.`, {
+            listenLang: 'ko-KR',
+          }),
+        )
       }
-      const result = await translateText(content, 'auto', to)
+      const isolated = await isolateFeature('translation', () => translateText(content, 'auto', to))
+      if (!isolated.ok) {
+        const pol = providerFailurePolicy('translation')
+        return finish(replyFromExec(pol.userMessage, { listenLang: 'ko-KR' }), {
+          success: false,
+          errorCode: pol.errorCode,
+          status: 'failed',
+        })
+      }
+      const result = isolated.value
       if (!result.ok) {
-        return {
-          text: result.error || '번역에 실패했습니다. 네트워크를 확인해 주세요.',
-          speak: true,
-        }
+        const pol = providerFailurePolicy('translation')
+        return finish(
+          replyFromExec(result.error || pol.userMessage, { listenLang: 'ko-KR' }),
+          { success: false, errorCode: 'TRANSLATE-001', status: 'failed' },
+        )
       }
-      // Clean: translation only
-      return {
-        text: result.text,
-        speak: true,
-        speakLang: bcp47(to),
-        listenLang: 'ko-KR',
-      }
+      return finish(
+        replyFromExec(result.text, {
+          speakLang: bcp47(to),
+          listenLang: 'ko-KR',
+        }),
+        { provider: 'translation' },
+      )
     }
     case 'translation.active_utterance': {
       const content = (routed.content || routed.normalized || '').trim()
       const to = routed.targetLanguage || 'en'
-      if (!content) return { text: '번역할 문장을 보내 주세요.', speak: true }
-      const result = await translateText(content, 'ko', to)
+      if (!content) return finish(replyFromExec('번역할 문장을 보내 주세요.'), { status: 'needs_input', success: false })
+      const isolated = await isolateFeature('translation', () => translateText(content, 'ko', to))
+      if (!isolated.ok) {
+        const pol = providerFailurePolicy('translation')
+        return finish(replyFromExec(pol.userMessage, { listenLang: 'ko-KR' }), {
+          success: false,
+          errorCode: pol.errorCode,
+        })
+      }
+      const result = isolated.value
       if (!result.ok) {
-        return {
-          text: result.error || '번역에 실패했습니다.',
-          speak: true,
+        const pol = providerFailurePolicy('translation')
+        return finish(replyFromExec(result.error || pol.userMessage, { listenLang: 'ko-KR' }), {
+          success: false,
+          errorCode: 'TRANSLATE-001',
+        })
+      }
+      return finish(
+        replyFromExec(result.text, {
+          speakLang: bcp47(to),
           listenLang: 'ko-KR',
-        }
-      }
-      return {
-        text: result.text,
-        speak: true,
-        speakLang: bcp47(to),
-        listenLang: 'ko-KR',
-      }
+        }),
+        { provider: 'translation' },
+      )
     }
     case 'clarify': {
-      return {
-        text: '어떤 작업을 원하시는지 조금만 더 알려주세요. 예: 「영어로 번역해줘」또는 「오늘 날씨 알려줘」',
-        speak: true,
-      }
+      return finish(
+        replyFromExec(
+          '어떤 작업을 원하시는지 조금만 더 알려주세요. 예: 「영어로 번역해줘」또는 「오늘 날씨 알려줘」',
+        ),
+        { status: 'needs_input', success: true },
+      )
     }
     case 'vision.translation':
-      return {
-        text: '사진·메뉴판 번역은 카메라 화면에서 할게요.',
-        speak: true,
-        view: 'ai-camera',
-      }
+      return finish(
+        replyFromExec('사진·메뉴판 번역은 카메라 화면에서 할게요.', { view: 'ai-camera' }),
+      )
     case 'travel.plan':
     case 'travel.flight.search':
     case 'travel.flight.select':
@@ -148,8 +196,14 @@ export async function executeRoutedCommand(
         'travel.trip.summary': 'TRIP_SUMMARY',
       }
       const forced = map[routed.intent]
-      const tr = await handleTravelAgent(utterance, forced ? { forceIntent: forced } : undefined)
-      return tr
+      const isolated = await isolateFeature('travel', () =>
+        handleTravelAgent(utterance, forced ? { forceIntent: forced } : undefined),
+      )
+      if (!isolated.ok) {
+        const pol = providerFailurePolicy('travel')
+        return finish(replyFromExec(pol.userMessage), { success: false, errorCode: pol.errorCode })
+      }
+      return finish(isolated.value)
     }
     case 'restaurant.search':
     case 'restaurant.details':
@@ -172,8 +226,14 @@ export async function executeRoutedCommand(
         'restaurant.booking.cancel': 'RESTAURANT_BOOKING_CANCEL',
       }
       const forced = map[routed.intent]
-      const rr = await handleRestaurantAgent(utterance, forced ? { forceIntent: forced } : undefined)
-      return rr
+      const isolated = await isolateFeature('restaurant', () =>
+        handleRestaurantAgent(utterance, forced ? { forceIntent: forced } : undefined),
+      )
+      if (!isolated.ok) {
+        const pol = providerFailurePolicy('restaurant')
+        return finish(replyFromExec(pol.userMessage), { success: false, errorCode: pol.errorCode })
+      }
+      return finish(isolated.value)
     }
     case 'weather.query':
     case 'calendar.create':

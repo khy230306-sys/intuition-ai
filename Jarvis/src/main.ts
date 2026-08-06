@@ -124,6 +124,14 @@ import {
   type ReleaseHealthReport,
 } from './featureDiag'
 import {
+  clearMetricEvents,
+  formatSuiteReport,
+  renderReliabilityCenterPanel,
+  runFullReliabilitySuite,
+  setReliabilityOptIn,
+  type SuiteReport,
+} from './reliability'
+import {
   clearRecentFeatures,
   exportMenuStructureJson,
   hideQuickAction,
@@ -426,7 +434,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.26.0'
+const APP_VERSION = '1.27.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -823,6 +831,8 @@ const state = {
   featureDiagChecklist: loadDeviceChecklist(),
   releaseHealthReport: null as ReleaseHealthReport | null,
   releaseHealthRunning: false,
+  reliabilityReport: null as SuiteReport | null,
+  reliabilityRunning: false,
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -5003,6 +5013,7 @@ function renderSettings(): string {
         <button type="button" class="primary-btn" data-action="enable-chat-push">알림 권한 · 백그라운드 푸시 켜기</button>
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
         ${renderReleaseHealthPanel(state.releaseHealthReport, { running: state.releaseHealthRunning })}
+        ${renderReliabilityCenterPanel(state.reliabilityReport, { running: state.reliabilityRunning })}
         ${renderRouteDiagPanel(true)}
         ${renderFeatureDiagPanel({
           status: state.featureDiagStatus,
@@ -7583,6 +7594,61 @@ function bind(): void {
     })
     const copied = copyTextNow(JSON.stringify(payload, null, 2))
     showFlash(copied.ok ? '출시 준비 결과를 복사했습니다.' : '복사에 실패했습니다.')
+  })
+  document.querySelector('[data-action="reliability-run"]')?.addEventListener('click', () => {
+    if (state.reliabilityRunning) return
+    state.reliabilityRunning = true
+    render({ guardNav: false })
+    void runFullReliabilitySuite()
+      .then((report) => {
+        state.reliabilityReport = report
+        showFlash(
+          `신뢰성 · Golden ${report.goldenPassRate}% · Multi-turn ${report.multiTurnPass}/${report.multiTurnTotal}`,
+        )
+      })
+      .catch((e) => {
+        showFlash(e instanceof Error ? e.message : '신뢰성 테스트 실패')
+      })
+      .finally(() => {
+        state.reliabilityRunning = false
+        if (state.view === 'settings') render({ guardNav: false })
+      })
+  })
+  document.querySelector('[data-action="reliability-clear"]')?.addEventListener('click', () => {
+    clearMetricEvents()
+    state.reliabilityReport = null
+    showFlash('신뢰성 기록을 모두 삭제했습니다.')
+    if (state.view === 'settings') render({ guardNav: false })
+  })
+  document.querySelector('[data-action="reliability-copy"]')?.addEventListener('click', () => {
+    if (!state.reliabilityReport) {
+      showFlash('먼저 전체 명령 신뢰성 테스트를 실행해 주세요.')
+      return
+    }
+    const payload = sanitizeDiagExport({
+      app: 'AIZIO',
+      kind: 'reliability-center',
+      version: APP_VERSION,
+      summary: formatSuiteReport(state.reliabilityReport),
+      report: {
+        at: state.reliabilityReport.at,
+        goldenPassRate: state.reliabilityReport.goldenPassRate,
+        adversarialPass: state.reliabilityReport.adversarialPass,
+        multiTurnPass: state.reliabilityReport.multiTurnPass,
+        avgRoutingMs: state.reliabilityReport.avgRoutingMs,
+        collisionViolations: state.reliabilityReport.collisionViolations,
+        intentPassRate: state.reliabilityReport.intentPassRate,
+        // Never export raw utterances — failures keep input for local debug only in-app
+        failureIds: state.reliabilityReport.failures.map((f) => f.id),
+      },
+    })
+    const copied = copyTextNow(JSON.stringify(payload, null, 2))
+    showFlash(copied.ok ? '신뢰성 결과를 복사했습니다.' : '복사에 실패했습니다.')
+  })
+  document.querySelector('[data-reliability-opt-in]')?.addEventListener('change', (ev) => {
+    const on = Boolean((ev.target as HTMLInputElement | null)?.checked)
+    setReliabilityOptIn(on)
+    showFlash(on ? '실사용 테스트 기록을 켰습니다 (메타데이터만).' : '실사용 테스트 기록을 껐습니다.')
   })
   document.querySelector('[data-action="fdiag-refresh"]')?.addEventListener('click', () => {
     void refreshFeatureDiagStatus()

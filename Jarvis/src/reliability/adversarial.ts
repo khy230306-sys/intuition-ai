@@ -1,0 +1,116 @@
+/** Adversarial / collision-prone utterances — must not first-match wrong domain. */
+
+import type { GoldenCase } from './types'
+
+export const ADVERSARIAL_COMMANDS: GoldenCase[] = [
+  {
+    id: 'adv-weather-in-translate',
+    category: 'adversarial',
+    input: '오늘 날씨 좋다고 영어로 번역해줘',
+    expectedIntent: 'translation.oneshot',
+    forbiddenActions: ['weather', 'calendar'],
+  },
+  {
+    id: 'adv-quoted-weather-translate',
+    category: 'adversarial',
+    input: '"오늘 날씨 어때?"를 영어로 번역해줘',
+    expectedIntent: 'translation.oneshot',
+    forbiddenActions: ['weather'],
+  },
+  {
+    id: 'adv-mom-hospital-translate',
+    category: 'adversarial',
+    input: '엄마 병원 일정 영어로 말해줘',
+    expectedIntent: /translation\./,
+    forbiddenActions: ['family', 'calendar', 'weather'],
+  },
+  {
+    id: 'adv-mom-hospital-when',
+    category: 'adversarial',
+    input: '엄마 병원 일정 언제야?',
+    expectedIntent: 'family.schedule.read',
+    forbiddenActions: ['translation', 'weather'],
+  },
+  {
+    id: 'adv-hospital-calendar',
+    category: 'adversarial',
+    input: '내일 병원 일정 추가해줘',
+    expectedIntent: 'calendar.create',
+    forbiddenActions: ['translation'],
+  },
+  {
+    id: 'adv-hospital-translate',
+    category: 'adversarial',
+    input: '내일 병원 간다고 영어로 번역해줘',
+    expectedIntent: 'translation.oneshot',
+    forbiddenActions: ['calendar'],
+  },
+  {
+    id: 'adv-jeju-flight-weather-time',
+    category: 'adversarial',
+    input: '제주도 비행기 날씨 좋은 시간으로 찾아줘',
+    expectedIntent: /travel\.flight/,
+    forbiddenActions: ['weather'],
+  },
+  {
+    id: 'adv-restaurant-booking-translate',
+    category: 'adversarial',
+    input: '식당 예약 얘기를 영어로 번역해줘',
+    expectedIntent: /translation\./,
+    forbiddenActions: ['restaurant'],
+  },
+  {
+    id: 'adv-how-to-hotel-book',
+    category: 'adversarial',
+    input: '호텔 예약하는 법 알려줘',
+    expectedIntent: /general\.chat|clarify/,
+    forbiddenActions: ['travel.booking'],
+  },
+  {
+    id: 'adv-hotel-book',
+    category: 'adversarial',
+    input: '호텔 예약해줘',
+    expectedIntent: /travel\./,
+    forbiddenActions: ['restaurant.search'],
+  },
+  {
+    id: 'adv-food-reco',
+    category: 'adversarial',
+    input: '맛집 추천해줘',
+    expectedIntent: /restaurant\.search|general/,
+  },
+  {
+    id: 'adv-recipe',
+    category: 'adversarial',
+    input: '김치찌개 만드는 법 알려줘',
+    expectedIntent: 'general.chat',
+    forbiddenActions: ['restaurant'],
+  },
+  {
+    id: 'adv-flight-price-why',
+    category: 'adversarial',
+    input: '비행기표 가격이 왜 비싸?',
+    expectedIntent: /general\.chat|travel\./,
+  },
+  {
+    id: 'adv-find-flight',
+    category: 'adversarial',
+    input: '비행기 찾아줘',
+    expectedIntent: /travel\.flight/,
+    forbiddenActions: ['weather', 'restaurant'],
+  },
+  {
+    id: 'adv-jeju-weather',
+    category: 'adversarial',
+    input: '제주도 날씨 알려줘',
+    expectedIntent: 'weather.query',
+    forbiddenActions: ['travel', 'translation'],
+  },
+  {
+    id: 'adv-clear-weather',
+    category: 'adversarial',
+    input: '오늘 날씨 알려줘',
+    expectedIntent: 'weather.query',
+    forbiddenActions: ['translation'],
+  },
+]

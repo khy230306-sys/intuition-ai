@@ -3,6 +3,7 @@
  * Backed by existing interpret-mode storage for compatibility.
  */
 
+import { resolveActiveMode } from '../reliability/activeMode'
 import {
   clearInterpretMode,
   loadInterpretMode,
@@ -19,7 +20,7 @@ export type TranslationSession = {
 }
 
 export function getActiveMode(): ActiveMode {
-  return loadInterpretMode().active ? 'translation' : 'normal'
+  return resolveActiveMode()
 }
 
 export function getTranslationSession(): TranslationSession {

@@ -46,7 +46,7 @@ export type AizioIntent =
   | 'general.chat'
   | 'clarify'
 
-export type ActiveMode = 'normal' | 'translation'
+export type ActiveMode = 'normal' | 'translation' | 'travel' | 'restaurant'
 
 export type CommandRouterInput = {
   text: string

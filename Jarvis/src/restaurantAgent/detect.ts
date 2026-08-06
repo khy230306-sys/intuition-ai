@@ -18,14 +18,17 @@ export function isRecipeOrCooking(text: string): boolean {
 export function isRestaurantUtterance(text: string): boolean {
   const t = text.trim()
   if (!t || isRecipeOrCooking(t)) return false
-  if (/번역|통역|날씨\s*(알려|어때)|비행기|항공|호텔\s*예약/.test(t) && !/(맛집|식당|레스토랑)/.test(t))
+  if (/번역|통역|날씨\s*(알려|어때)|비행기|항공|호텔\s*예약/.test(t) && !/(맛집|식당|레스토랑|한식집|일식집)/.test(t))
     return false
+  // Bare booking without restaurant context must not steal travel booking
+  if (/^(이걸로\s*)?예약해\s*줘$/.test(t) && !/(맛집|식당|레스토랑|한식|일식)/.test(t)) return false
   return (
     /(맛집|식당|레스토랑|밥집|외식|가게\s*추천)/.test(t) ||
-    /(예약\s*가능|예약해|예약\s*잡아).*(식당|맛집|한식|고기)?/.test(t) ||
-    /(한식집|고깃집|술집).*(찾|알아|추천)/.test(t) ||
-    /(주차되는\s*(식당|곳)|아이랑\s*갈|룸\s*있는\s*식당)/.test(t) ||
-    /(오늘\s*저녁\s*뭐\s*먹|가족들이랑\s*외식)/.test(t)
+    /(예약\s*가능|예약해|예약\s*잡아).*(식당|맛집|한식|고기|일식|스테이크)/.test(t) ||
+    /(한식집|고깃집|일식집|중식집|술집|스테이크집|카페)/.test(t) ||
+    /(주차되는\s*(식당|곳|한식집)|아이랑\s*갈|룸\s*있는\s*식당|부모님\s*모시고)/.test(t) ||
+    /(오늘\s*저녁\s*뭐\s*먹|가족들이랑\s*외식|가족\s*외식)/.test(t) ||
+    /(카페|한식|일식|중식|양식)\s*(추천|맛집|집)/.test(t)
   )
 }
 

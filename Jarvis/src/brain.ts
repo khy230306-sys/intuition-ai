@@ -94,7 +94,12 @@ import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
 import { handleTranslate, isTranslateEscapeCommand, loadInterpretMode, wantsTranslate } from './translateBrain'
-import { tryHandleRoutedCommand, routeCommand, getActiveMode } from './commandRouter'
+import {
+  tryHandleRoutedCommand,
+  routeCommand,
+  getActiveMode,
+  isClearWeatherQuery,
+} from './commandRouter'
 import { getLocationReport } from './location'
 import {
   addFamilyNotice,
@@ -1374,9 +1379,30 @@ export async function think(
   }
 
   if (wantsWeatherCommand(text)) {
-    const intent = detectEverydayIntent(text)
-    const city = intent && (intent.kind === 'weather' || intent.kind === 'umbrella') ? intent.city : ''
-    return replyWeather(city, settings, intent?.kind === 'umbrella')
+    // Late weather path must still respect central Command Router ownership.
+    try {
+      const gate = routeCommand({ text, activeMode: getActiveMode() })
+      if (
+        gate.forbiddenActions.includes('weather') ||
+        gate.intent.startsWith('translation.') ||
+        gate.intent.startsWith('travel.') ||
+        gate.intent.startsWith('restaurant.')
+      ) {
+        /* do not weather — fall through */
+      } else if (
+        gate.intent === 'weather.query' ||
+        isClearWeatherQuery(text) ||
+        !/번역|통역|translate/i.test(text)
+      ) {
+        const intent = detectEverydayIntent(text)
+        const city = intent && (intent.kind === 'weather' || intent.kind === 'umbrella') ? intent.city : ''
+        return replyWeather(city, settings, intent?.kind === 'umbrella')
+      }
+    } catch {
+      const intent = detectEverydayIntent(text)
+      const city = intent && (intent.kind === 'weather' || intent.kind === 'umbrella') ? intent.city : ''
+      return replyWeather(city, settings, intent?.kind === 'umbrella')
+    }
   }
 
   const searchMatch = text.match(/^(?:검색|찾아|구글)\s*(.+)$/i)

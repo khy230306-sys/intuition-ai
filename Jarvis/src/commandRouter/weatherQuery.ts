@@ -24,6 +24,7 @@ export function isClearWeatherQuery(text: string): boolean {
   )
     return true
   if (/울산\s*오늘\s*기온|오늘\s*우산\s*필요|우산\s*(필요해|챙길까)|이번\s*주\s*날씨/i.test(t)) return true
-  if (/(오늘|내일|모레|지금)?\s*비\s*(와\s*\?|와\?|와$|올까|오나\s*\?)/i.test(t)) return true
+  if (/(오늘|내일|모레|지금)?\s*비\s*(와\s*\?|와\?|와$|올까|오나)/i.test(t)) return true
+  if (/(모레|내일|오늘)\s*(비|우산)/i.test(t) && /(오|와|올|필요|챙)/i.test(t)) return true
   return false
 }

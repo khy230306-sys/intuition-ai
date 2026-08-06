@@ -166,6 +166,26 @@ export const KOREA_PLACE_CATALOG: CatalogPlace[] = [
     lng: 127.0463,
     tags: ['병원', '응급실', '강남'],
   },
+  {
+    id: 'ulsan-deoksin-park',
+    name: '덕신소공원',
+    aliases: ['덕신 소공원', '덕신공원', '온산 덕신소공원', '울주 덕신소공원', '덕신소 공원'],
+    category: '공원',
+    address: '울산 울주군 온산읍 덕남로 4',
+    lat: 35.432872,
+    lng: 129.3111532,
+    tags: ['공원', '울산', '온산', '덕신'],
+  },
+  {
+    id: 'ulsan-onsan-eup',
+    name: '온산읍',
+    aliases: ['온산', '울주 온산', '온산읍사무소'],
+    category: '지역',
+    address: '울산 울주군 온산읍',
+    lat: 35.4335,
+    lng: 129.3132,
+    tags: ['울산', '온산'],
+  },
 ]
 
 export const NEARBY_CATEGORY_KEYS: Record<string, string[]> = {

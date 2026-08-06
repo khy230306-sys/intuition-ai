@@ -54,34 +54,38 @@ async function originOrNull() {
 async function runSearch(query: string): Promise<NavV2HandleResult> {
   const origin = await originOrNull()
   if (origin) patchNavV2Context({ origin })
-  const result = await searchPlaces(query, { origin, limit: 7, allowRemote: false })
+  const result = await searchPlaces(query, { origin, limit: 7, allowRemote: true })
   pushRecentSearch(query)
   if (!result.ok && result.errorCode === 'empty') {
     return { handled: true, text: '장소를 입력해 주세요.', speak: true }
   }
   if (!result.candidates.length) {
+    const mapsQ = result.externalMapsQuery || query
     const foodish = /맛집|식당|음식점|밥집|카페|술집|먹을\s*곳|브런치|분식/.test(query)
     if (foodish) {
       return {
         handled: true,
         text:
           `「${query}」로 지도·웹 검색을 열게요.\n` +
-          `미리보기 목록에는 아직 이 지역 식당이 없어요. 지도에서 바로 고르거나, 「한식」「고기집」처럼 메뉴를 더해 주세요.`,
+          `AIZIO 목록에 아직 이 지역 식당이 없어요. 카카오맵·T맵에서 바로 고르거나, 「한식」「고기집」처럼 메뉴를 더해 주세요.`,
         speak: true,
         candidates: [],
         query,
         catalogOnly: true,
-        mapsQuery: query,
+        mapsQuery: mapsQ,
         searchQuery: `${query} 추천`,
       }
     }
     return {
       handled: true,
-      text: `「${query}」관련 장소를 찾지 못했어요. 검색어를 조금 더 구체적으로 입력하거나 「지도에서 보기」로 다시 검색해 보세요.`,
+      text:
+        `「${query}」관련 장소를 찾지 못했어요.\n` +
+        `검색어를 바꿔 보시거나, 카카오맵·T맵에서 「${mapsQ}」로 바로 찾아보세요.`,
       speak: true,
       candidates: [],
       query,
       catalogOnly: true,
+      mapsQuery: mapsQ,
     }
   }
   setCandidates(query, result.candidates, origin)

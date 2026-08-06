@@ -74,6 +74,8 @@ export type PlaceSearchResult = {
   errorCode?: string
   /** When true, results are Preview seed catalog — must be labeled in UI */
   catalogOnly: boolean
+  /** Kakao / TMAP / Naver handoff when catalog+Photon miss Korean POIs */
+  externalMapsQuery?: string
 }
 
 export type RouteCalcResult = {

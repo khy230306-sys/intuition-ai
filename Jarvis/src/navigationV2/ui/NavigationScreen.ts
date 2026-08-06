@@ -17,6 +17,7 @@ import {
 } from '../navigationStorage'
 import type { NavScreenPhase, NavTravelMode, PlaceCandidate } from '../types'
 import { buildMapLinks, isSafeMapUrl } from '../../navigation/navigationUrlBuilder'
+import type { MapProviderId } from '../../navigation/navigationTypes'
 import { navigateHref, openUrl } from '../../actions'
 
 function esc(s: string): string {
@@ -67,8 +68,15 @@ export function renderNavigationScreen(st: NavScreenState): string {
             )
             .join('')
         : st.query
-          ? `<p class="hint">검색 결과가 없어요. 검색어를 바꿔 보세요.</p>`
-          : `<p class="hint">목적지를 검색하거나 말해 주세요. 예: 역삼동, 근처 약국</p>`
+          ? `<div class="navv2-empty">
+              <p class="hint">검색 결과가 없어요. 검색어를 바꿔 보거나, 아래 지도 앱에서 바로 찾아보세요.</p>
+              <div class="row-btns navv2-ext-maps">
+                <button type="button" class="primary-btn" data-navv2-ext="kakao">카카오맵</button>
+                <button type="button" class="ghost-btn" data-navv2-ext="tmap">T맵</button>
+                <button type="button" class="ghost-btn" data-navv2-ext="naver">네이버지도</button>
+              </div>
+            </div>`
+          : `<p class="hint">목적지를 검색하거나 말해 주세요. 예: 덕신 소공원, 역삼동, 근처 약국</p>`
 
   const recentHtml =
     !st.query && recent.length
@@ -126,7 +134,13 @@ export function renderNavigationScreen(st: NavScreenState): string {
       </div>
       <div id="navv2-map" class="navv2-map" role="application" aria-label="지도"></div>
       <p class="navv2-attr hint">© OpenStreetMap · OpenFreeMap · AIZIO Navigation v2</p>
-      ${st.catalogOnly && st.candidates.length ? `<p class="hint navv2-catalog-note">로컬 카탈로그(Preview) 결과 · 전국 실시간 검색이 아닙니다.</p>` : ''}
+      ${
+        st.catalogOnly && st.candidates.length
+          ? `<p class="hint navv2-catalog-note">로컬 카탈로그 결과 · 전국 검색은 검색 버튼으로 실행됩니다.</p>`
+          : !st.catalogOnly && st.candidates.length
+            ? `<p class="hint navv2-catalog-note">전국 장소 검색(Photon/OSM) · 필요 시 카카오맵·T맵으로 이어갈 수 있어요.</p>`
+            : ''
+      }
       <p class="hint" data-navv2-status>${esc(st.status)}</p>
       <div class="navv2-sheet">
         ${guideHtml || routeHtml}
@@ -181,7 +195,7 @@ export async function bindNavigationScreen(
   root.querySelector('#navv2-search-form')?.addEventListener('submit', (e) => {
     e.preventDefault()
     const q = (root.querySelector('#navv2-q') as HTMLInputElement | null)?.value || ''
-    void doSearch(q, redraw)
+    void doSearch(q, redraw, true)
   })
 
   const input = root.querySelector('#navv2-q') as HTMLInputElement | null
@@ -208,7 +222,16 @@ export async function bindNavigationScreen(
 
   root.querySelectorAll<HTMLButtonElement>('[data-navv2-recent]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      void doSearch(btn.dataset.navv2Recent || '', redraw)
+      void doSearch(btn.dataset.navv2Recent || '', redraw, true)
+    })
+  })
+
+  root.querySelectorAll<HTMLButtonElement>('[data-navv2-ext]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const provider = (btn.dataset.navv2Ext || 'kakao') as Exclude<MapProviderId, 'system'>
+      const q = st.query.trim()
+      if (!q) return
+      openExternalSearch(q, provider, redraw)
     })
   })
 
@@ -255,16 +278,38 @@ export async function bindNavigationScreen(
   })
 }
 
+function openExternalSearch(
+  query: string,
+  preferred: Exclude<MapProviderId, 'system'>,
+  redraw: (next: Partial<NavScreenState>) => void,
+): void {
+  const links = buildMapLinks({
+    query,
+    travelMode: 'unspecified',
+    preferredMap: preferred,
+    nearby: true,
+    origin: getNavV2Context().origin,
+  })
+  if (links.appUrl && isSafeMapUrl(links.appUrl)) navigateHref(links.appUrl, { newTab: false })
+  if (isSafeMapUrl(links.webUrl)) openUrl(links.webUrl, links.label)
+  redraw({ status: `${links.label}에서 「${query}」검색을 열었어요.` })
+}
+
 async function doSearch(
   query: string,
   redraw: (next: Partial<NavScreenState>) => void,
-  allowRemote = false,
+  allowRemote = true,
 ): Promise<void> {
   const q = query.trim()
   if (!q) return
   abort?.abort()
   abort = new AbortController()
-  redraw({ query: q, phase: 'searching', status: '관련 장소를 찾고 있어요.', selected: null })
+  redraw({
+    query: q,
+    phase: 'searching',
+    status: allowRemote ? '전국 장소를 찾고 있어요…' : '관련 장소를 찾고 있어요.',
+    selected: null,
+  })
   const loc = await requestCurrentPosition({ timeoutMs: 5000 })
   const origin = loc.ok && loc.fix ? loc.fix.coords : null
   if (origin) {
@@ -281,14 +326,20 @@ async function doSearch(
   setCandidates(q, result.candidates, origin)
   mapCtl?.setCandidates(result.candidates, null)
   if (result.candidates.length) mapCtl?.fitPlaces(result.candidates)
+  const providerNote =
+    result.provider.includes('photon') || result.provider.includes('remote')
+      ? ' · 전국 검색'
+      : result.catalogOnly
+        ? ' · 로컬'
+        : ''
   redraw({
     query: q,
     candidates: result.candidates,
     catalogOnly: result.catalogOnly,
     phase: result.candidates.length ? 'candidates' : 'error',
     status: result.candidates.length
-      ? `${result.candidates.length}곳 후보`
-      : '검색 결과가 없어요. 검색어를 바꿔 보세요.',
+      ? `${result.candidates.length}곳 후보${providerNote}`
+      : '검색 결과가 없어요. 카카오맵·T맵에서 바로 찾아보세요.',
     showAll: false,
     selected: null,
   })

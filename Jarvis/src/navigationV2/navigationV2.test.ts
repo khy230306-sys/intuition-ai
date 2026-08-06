@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { classifyNavV2Intent, isPlaceLikeQuery } from './navigationIntent'
-import { searchPlaces } from './placeSearchService'
+import {
+  buildSearchQueryVariants,
+  clearPlaceSearchCache,
+  searchPlaces,
+} from './placeSearchService'
 import {
   clearNavV2Context,
   hasActiveNavContext,
@@ -58,6 +62,10 @@ describe('nav v2 intent', () => {
 })
 
 describe('place search catalog', () => {
+  beforeEach(() => {
+    clearPlaceSearchCache()
+  })
+
   it('returns multiple yeoksam candidates', async () => {
     const r = await searchPlaces('역삼동', {
       origin: { lat: 37.5, lng: 127.03 },
@@ -75,6 +83,72 @@ describe('place search catalog', () => {
   it('handles partial 역삼동 주', async () => {
     const r = await searchPlaces('역삼동 주', { limit: 5 })
     expect(r.candidates.some((c) => c.name.includes('주민센터'))).toBe(true)
+  })
+
+  it('finds 덕신 소공원 via spaced query (catalog)', async () => {
+    const r = await searchPlaces('덕신 소공원', { limit: 5 })
+    expect(r.candidates.some((c) => c.name.includes('덕신'))).toBe(true)
+    expect(r.externalMapsQuery).toBe('덕신 소공원')
+  })
+
+  it('builds compact-first query variants for Korean POIs', () => {
+    const v = buildSearchQueryVariants('덕신 소공원')
+    expect(v[0]).toBe('덕신소공원')
+    expect(v).toContain('덕신 소공원')
+  })
+
+  it('merges Photon remote hits when allowRemote', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (!url.includes('photon.komoot.io')) {
+        return new Response('[]', { status: 404 })
+      }
+      const q = new URL(url).searchParams.get('q') || ''
+      if (q.replace(/\s+/g, '') !== '덕신소공원') {
+        return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(
+        JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: {
+                osm_id: 8447890720,
+                name: '덕신소공원',
+                street: '덕남로',
+                city: '울산광역시',
+                countrycode: 'KR',
+                osm_value: 'park',
+              },
+              geometry: { type: 'Point', coordinates: [129.3111532, 35.432872] },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    })
+    const prevFetch = globalThis.fetch
+    const prevNav = globalThis.navigator
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('navigator', { ...(prevNav || {}), onLine: true })
+    clearPlaceSearchCache()
+    try {
+      const r = await searchPlaces('덕신 소공원', {
+        allowRemote: true,
+        limit: 5,
+        origin: { lat: 37.5, lng: 127.03 },
+      })
+      expect(r.ok).toBe(true)
+      expect(r.candidates.some((c) => /덕신/.test(c.name))).toBe(true)
+      expect(fetchMock).toHaveBeenCalled()
+    } finally {
+      vi.stubGlobal('fetch', prevFetch)
+      vi.stubGlobal('navigator', prevNav)
+    }
   })
 
   it('nearby pharmacy sorted by distance when origin present', async () => {
@@ -113,11 +187,24 @@ describe('food / venue place intent', () => {
   })
 
   it('empty catalog food search offers mapsQuery', async () => {
-    const r = await tryHandleNavigationV2('지리산 맛집 찾아줘')
-    expect(r?.handled).toBe(true)
-    expect(r?.mapsQuery).toMatch(/지리산/)
-    expect(r?.text).toMatch(/지도/)
-    expect(r?.text).not.toMatch(/한식 집밥 스타일/)
+    const prevFetch = globalThis.fetch
+    const prevNav = globalThis.navigator
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ features: [] }), { status: 200 })),
+    )
+    vi.stubGlobal('navigator', { ...(prevNav || {}), onLine: true, geolocation: undefined })
+    clearPlaceSearchCache()
+    try {
+      const r = await tryHandleNavigationV2('지리산 맛집 찾아줘')
+      expect(r?.handled).toBe(true)
+      expect(r?.mapsQuery).toMatch(/지리산/)
+      expect(r?.text).toMatch(/지도/)
+      expect(r?.text).not.toMatch(/한식 집밥 스타일/)
+    } finally {
+      vi.stubGlobal('fetch', prevFetch)
+      vi.stubGlobal('navigator', prevNav)
+    }
   })
 })
 

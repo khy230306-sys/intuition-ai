@@ -93,7 +93,7 @@ import {
 import { extractTickerFromText, resolveTicker } from './tickers'
 import { handleGeo } from './geo'
 import { handleStats } from './statsBrain'
-import { handleTranslate, loadInterpretMode } from './translateBrain'
+import { handleTranslate, isTranslateEscapeCommand, loadInterpretMode, wantsTranslate } from './translateBrain'
 import { getLocationReport } from './location'
 import {
   addFamilyNotice,
@@ -843,6 +843,17 @@ export async function think(
   }
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
+
+  // Continuous translate lock + enable commands beat localFun / greetings / AI.
+  // Clear app commands (길안내 등) escape the lock and continue below.
+  {
+    const locked = loadInterpretMode().active
+    const escape = locked && isTranslateEscapeCommand(text)
+    if (!escape && (locked || wantsTranslate(text))) {
+      const tr = await handleTranslate(text)
+      if (tr) return enrich(tr)
+    }
+  }
 
   // Local fun (lotto / dice) — never blocked by a dead cloud model
   {

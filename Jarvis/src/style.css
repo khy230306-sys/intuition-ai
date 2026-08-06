@@ -2917,18 +2917,22 @@ body[data-jarvis-view='friends'] .orb::after {
   display: block;
   width: 100%;
   appearance: none;
-  border: none;
+  border: 1px solid transparent;
   background: rgba(90, 200, 255, 0.08);
-  color: var(--muted);
-  font-size: 0.72rem;
+  color: rgba(200, 214, 230, 0.92);
+  font-size: 0.78rem;
+  font-weight: 550;
   text-align: left;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 10px;
   margin-bottom: 6px;
 }
 
 .home-v2-translate-badge.on {
-  color: var(--blue);
+  color: var(--cyan-bright, #5ef0d8);
+  border-color: rgba(0, 210, 190, 0.45);
+  background: rgba(0, 210, 190, 0.14);
+  font-weight: 650;
 }
 
 .home-v2-composer {

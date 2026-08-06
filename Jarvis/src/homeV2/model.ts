@@ -6,7 +6,7 @@ import { loadReminders, loadSettings } from '../storage'
 import { loadAlarms } from '../notify'
 import { loadCachedWeather, type WeatherSnap } from '../weather'
 import { getHomeSpaceInbox } from '../spaceInbox'
-import { loadInterpretMode } from '../translateBrain'
+import { interpretModeBadgeLabel, loadInterpretMode } from '../translateBrain'
 import { buildSmartCard, type SmartCardModel } from './smartCard'
 import { getActiveFocus } from '../life-os-2/focus/focusSession'
 import { isLifeOs2Enabled } from '../life-os-2/featureFlags'
@@ -189,9 +189,7 @@ export function buildHomeV2Model(opts: {
     }),
     translate: {
       active: Boolean(mode.active),
-      label: mode.active
-        ? `번역 잠금 켜짐 · 한국어 → ${String(mode.langB || '').toUpperCase() || '…'}`
-        : '번역 잠금 꺼짐',
+      label: interpretModeBadgeLabel(mode),
     },
     voiceState,
     prompt,

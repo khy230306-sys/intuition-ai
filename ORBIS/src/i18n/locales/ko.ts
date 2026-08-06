@@ -33,25 +33,28 @@ export type Dictionary = {
     balance: string
     currentBet: string
     freeNotice: string
-    player: string
-    banker: string
-    tie: string
+    rules: string
+    stageLabel: string
+    blue: string
+    gold: string
+    violet: string
+    void: string
     chooseSide: string
     chooseChip: string
-    oddsPlayer: string
-    oddsBanker: string
-    oddsTie: string
+    oddsColor: string
+    oddsVoid: string
     selected: string
     stake: string
-    deal: string
+    openCore: string
     needChips: string
-    dealing: string
+    drawing: string
     nextRound: string
     reset: string
     road: string
-    resultPlayer: string
-    resultBanker: string
-    resultTie: string
+    draws: string
+    patternMajority: string
+    patternTrinity: string
+    patternVoid: string
     youWin: string
     youLose: string
     stakeReturned: string
@@ -125,7 +128,7 @@ export const ko: Dictionary = {
   tagline: '새로운 세계를 체험하세요',
   nav: {
     home: '홈',
-    play: '테이블',
+    play: '트리니티',
     brand: '브랜드 소개',
     about: '소개',
     settings: '설정',
@@ -148,34 +151,38 @@ export const ko: Dictionary = {
     stageLabel: '중앙 궤도 무대',
   },
   play: {
-    kicker: 'ORBIS Table',
-    title: 'ORBIS 바카라 테이블',
-    subtitle: 'Player / Banker / Tie를 선택하고 카드를 공개하세요.',
-    balance: '데모 칩',
-    currentBet: '현재 베팅',
-    freeNotice: '무료 데모 칩입니다. 실제 입금·출금·환전·결제는 없습니다.',
-    player: 'PLAYER',
-    banker: 'BANKER',
-    tie: 'TIE',
-    chooseSide: '사이드 선택',
-    chooseChip: '칩 선택',
-    oddsPlayer: '1 : 1',
-    oddsBanker: '1 : 0.95',
-    oddsTie: '1 : 8',
+    kicker: 'CORE TRINITY',
+    title: 'ORBIS 코어 트리니티',
+    subtitle: 'CORE가 세 개의 Orb를 공개합니다. 다수 색 또는 VOID를 예측하세요.',
+    balance: '데모 에너지',
+    currentBet: '현재 선택',
+    freeNotice: '무료 데모 에너지입니다. 실제 입금·출금·환전·결제는 없습니다.',
+    rules:
+      '규칙: 3개 Orb를 순서대로 공개합니다. 같은 색이 2개 이상이면 그 색 승리(x2). 3개 모두 같으면 TRINITY(x5). 세 색이 모두 다르면 VOID(x4).',
+    stageLabel: 'CORE TRINITY 추첨 무대',
+    blue: 'BLUE',
+    gold: 'GOLD',
+    violet: 'VIOLET',
+    void: 'VOID',
+    chooseSide: '공명 선택',
+    chooseChip: '에너지 선택',
+    oddsColor: '다수 x2 / 트리니티 x5',
+    oddsVoid: 'VOID x4',
     selected: '선택',
-    stake: '금액',
-    deal: '카드 공개',
-    needChips: '칩이 부족합니다',
-    dealing: '카드를 공개하는 중...',
+    stake: '에너지',
+    openCore: 'CORE 열기',
+    needChips: '에너지가 부족합니다',
+    drawing: 'CORE가 Orb를 정렬하는 중...',
     nextRound: '다음 라운드',
-    reset: '칩 초기화',
-    road: '로드맵',
-    resultPlayer: 'PLAYER 승리',
-    resultBanker: 'BANKER 승리',
-    resultTie: 'TIE',
+    reset: '에너지 초기화',
+    road: '공명 로드',
+    draws: '공개 결과',
+    patternMajority: 'MAJORITY',
+    patternTrinity: 'TRINITY',
+    patternVoid: 'VOID',
     youWin: '획득',
-    youLose: '패배',
-    stakeReturned: '원금 반환',
+    youLose: '공명 실패',
+    stakeReturned: '에너지 반환',
     payout: '정산',
   },
   brand: {
@@ -183,36 +190,36 @@ export const ko: Dictionary = {
     subtitle: '궤도 위의 이야기',
     worldviewTitle: 'ORBIS의 세계관',
     worldviewBody:
-      'ORBIS는 매 라운드마다 새로운 궤도가 열리는 세계입니다. 우아한 에너지와 깊은 우주감으로, 단순한 게임 화면이 아닌 브랜드 경험 경험을 만듭니다.',
+      'ORBIS는 매 라운드마다 새로운 궤도가 열리는 세계입니다. CORE TRINITY는 바카라 복제가 아닌, ORBIS만의 삼중 공명 추첨 규칙입니다.',
     coreTitle: 'CORE의 의미',
     coreBody:
-      'CORE는 ORBIS의 중심 에너지입니다. 느리게 호흡하며 빛나고, 모든 라운드가 돌아오는 기준점 역할을 합니다.',
-    orbsTitle: '테이블의 상징',
-    blueTitle: 'PLAYER',
-    blueBody: '흐름과 도전. 플레이어 사이드의 선명한 궤도를 상징합니다.',
-    goldTitle: 'BANKER',
-    goldBody: '균형과 안정. 뱅커 사이드의 중심 리듬을 상징합니다.',
-    violetTitle: 'TIE',
-    violetBody: '공명과 희귀 순간. 무승부의 신비로운 정렬을 상징합니다.',
+      'CORE는 세 개의 Orb를 정렬하는 중심입니다. 다수 공명, 완전 트리니티, 또는 공허(VOID)가 탄생합니다.',
+    orbsTitle: 'Orb의 상징',
+    blueTitle: 'BLUE',
+    blueBody: '집중과 흐름. 선명한 다수 공명을 상징합니다.',
+    goldTitle: 'GOLD',
+    goldBody: '균형과 가치. 안정된 중심 공명을 상징합니다.',
+    violetTitle: 'VIOLET',
+    violetBody: '직관과 변화. 신비로운 전환 공명을 상징합니다.',
     philosophyTitle: '디자인 철학',
     philosophyBody:
-      '싸구려 카지노 복제 대신, 미래적이고 미니멀한 우주 미학을 추구합니다. 바카라형 라운드를 ORBIS 감성으로 재해석합니다.',
+      '기존 카지노 장르를 그대로 옮기지 않습니다. 익숙한 긴장감은 유지하되, ORBIS만의 규칙과 세계관으로 재창조합니다.',
     futureTitle: '향후 확장 방향',
     futureBody:
-      '현재는 무료 데모 테이블입니다. 이후 연출과 스토리 레이어를 더 풍부하게 확장할 수 있습니다.',
+      'CORE TRINITY를 기반으로 특수 패턴, 연출, 스토리 레이어를 확장할 수 있습니다.',
   },
   about: {
     title: '프로토타입 소개',
     subtitle: '무료 체험용 ORBIS',
     purposeTitle: '목적',
     purposeBody:
-      'ORBIS Prototype은 브랜드 UI와 실행 가능한 바카라형 무료 데모 테이블을 검증하기 위한 프로젝트입니다.',
+      'ORBIS Prototype은 브랜드 UI와 독창 규칙의 CORE TRINITY 무료 체험을 검증하기 위한 프로젝트입니다.',
     freeTitle: '무료 체험 안내',
     freeBody:
       '본 프로젝트는 무료 체험용입니다. 실제 금전 거래, 입금, 출금, 환전, 결제를 지원하지 않습니다.',
     disclaimerTitle: '중요 안내',
     disclaimerBody:
-      '데모 칩과 로드맵은 로컬에만 저장됩니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
+      '데모 에너지와 공명 로드는 로컬에만 저장됩니다. 외부 베팅 사이트 연결이나 현금화는 없습니다.',
   },
   settings: {
     title: '설정',
@@ -232,9 +239,10 @@ export const ko: Dictionary = {
     savedHint: '설정은 이 기기의 localStorage에 저장됩니다.',
   },
   modal: {
-    stage2Title: '테이블 체험 안내',
-    stage2Body: 'ORBIS 바카라 테이블을 바로 시작할 수 있습니다.',
-    stage2Detail: 'Player / Banker / Tie를 고르고 카드를 공개하세요. 실제 돈이 오가지 않는 무료 데모입니다.',
+    stage2Title: 'CORE TRINITY 안내',
+    stage2Body: 'ORBIS만의 신종 공명 추첨을 바로 시작할 수 있습니다.',
+    stage2Detail:
+      'BLUE / GOLD / VIOLET / VOID를 고르고 CORE를 여세요. 실제 돈이 오가지 않는 무료 데모입니다.',
   },
   notFound: {
     title: '궤도를 벗어났습니다',

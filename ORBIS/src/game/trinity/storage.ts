@@ -1,7 +1,7 @@
 import type { RoadBead } from './types'
 
-const BALANCE_KEY = 'orbis.table.balance.v1'
-const ROAD_KEY = 'orbis.table.road.v1'
+const BALANCE_KEY = 'orbis.trinity.balance.v1'
+const ROAD_KEY = 'orbis.trinity.road.v1'
 export const STARTING_BALANCE = 1000
 const MAX_ROAD = 48
 
@@ -37,7 +37,7 @@ export function saveRoad(road: RoadBead[]): void {
   window.localStorage.setItem(ROAD_KEY, JSON.stringify(road.slice(-MAX_ROAD)))
 }
 
-export function resetTableProgress(): void {
+export function resetTrinityProgress(): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(BALANCE_KEY, String(STARTING_BALANCE))
   window.localStorage.setItem(ROAD_KEY, JSON.stringify([]))

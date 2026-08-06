@@ -1,0 +1,157 @@
+.stage {
+  position: relative;
+  width: min(100%, 440px);
+  aspect-ratio: 1.05;
+  margin: 0 auto;
+  border-radius: 28px;
+  border: 1px solid rgba(58, 169, 255, 0.22);
+  background:
+    radial-gradient(500px 220px at 50% 15%, rgba(58, 169, 255, 0.16), transparent 55%),
+    radial-gradient(420px 200px at 20% 80%, rgba(155, 107, 255, 0.12), transparent 50%),
+    radial-gradient(420px 200px at 80% 75%, rgba(212, 178, 106, 0.1), transparent 50%),
+    linear-gradient(180deg, rgba(11, 18, 36, 0.95), rgba(5, 7, 15, 0.98));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.core {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fff 0%, #8fd0ff 28%, #3aa9ff 50%, #9b6bff 72%, transparent 78%);
+  box-shadow: 0 0 34px rgba(58, 169, 255, 0.45);
+  animation: pulse 2.8s ease-in-out infinite;
+  z-index: 2;
+}
+
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 78%;
+  height: 58%;
+  margin-left: -39%;
+  margin-top: -29%;
+  border-radius: 50%;
+  border: 1px solid rgba(244, 247, 255, 0.1);
+  z-index: 1;
+}
+
+.slots {
+  position: absolute;
+  inset: auto 8% 14%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  z-index: 3;
+}
+
+.slot {
+  aspect-ratio: 0.78;
+  border-radius: 18px;
+  border: 1px dashed rgba(244, 247, 255, 0.18);
+  background: rgba(5, 7, 15, 0.45);
+  display: grid;
+  place-items: center;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.slotActive {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.orb {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  box-shadow: 0 0 18px currentColor;
+  animation: pop 320ms ease;
+}
+
+.orbBlue {
+  color: var(--neon-blue);
+  background: radial-gradient(circle at 30% 30%, #fff, var(--neon-blue) 55%, #145a96);
+}
+
+.orbGold {
+  color: var(--gold);
+  background: radial-gradient(circle at 30% 30%, #fff8e8, var(--gold) 55%, #8a6a2c);
+}
+
+.orbViolet {
+  color: var(--violet);
+  background: radial-gradient(circle at 30% 30%, #fff, var(--violet) 55%, #4d2f96);
+}
+
+.placeholder {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(244, 247, 255, 0.25);
+  opacity: 0.7;
+}
+
+.drawing .core {
+  animation-duration: 1.1s;
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.22), transparent 55%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.flashOn {
+  animation: flash 480ms ease;
+}
+
+.reduced .core {
+  animation: none;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0.2;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

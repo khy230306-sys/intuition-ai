@@ -61,69 +61,20 @@
   line-height: 1.45;
 }
 
-.table {
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(58, 169, 255, 0.25);
-  background:
-    radial-gradient(700px 240px at 50% 0%, rgba(58, 169, 255, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(10, 18, 34, 0.95), rgba(5, 7, 15, 0.98));
-  padding: 16px 12px 14px;
-  display: grid;
-  gap: 14px;
-}
-
-.hands {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.hand {
+.rules {
+  margin: 0;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
-  padding: 10px;
-  min-height: 150px;
-  background: rgba(5, 7, 15, 0.35);
-}
-
-.handTitle {
-  margin: 0 0 8px;
-  font-size: 0.85rem;
-  letter-spacing: 0.08em;
+  background: rgba(16, 27, 51, 0.55);
   color: var(--text-muted);
-}
-
-.handTotal {
-  margin: 0 0 10px;
-  font-size: 1.35rem;
-  font-weight: 750;
-}
-
-.cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 92px;
-}
-
-.winnerPlayer .handTitle,
-.winnerPlayer .handTotal {
-  color: var(--neon-blue);
-}
-
-.winnerBanker .handTitle,
-.winnerBanker .handTotal {
-  color: var(--gold);
-}
-
-.winnerTie .handTitle,
-.winnerTie .handTotal {
-  color: var(--violet);
+  font-size: 0.9rem;
+  line-height: 1.55;
 }
 
 .sides {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
@@ -136,23 +87,27 @@
   gap: 4px;
   place-items: center;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .sideButton:disabled {
   opacity: 0.55;
 }
 
-.sidePlayer {
+.sideBlue {
   border-color: rgba(58, 169, 255, 0.45);
 }
 
-.sideBanker {
+.sideGold {
   border-color: rgba(212, 178, 106, 0.45);
 }
 
-.sideTie {
+.sideViolet {
   border-color: rgba(155, 107, 255, 0.45);
+}
+
+.sideVoid {
+  border-color: rgba(244, 247, 255, 0.28);
 }
 
 .sideActive {
@@ -211,8 +166,8 @@
 
 .resultTitle {
   margin: 0;
-  font-size: 1.2rem;
-  letter-spacing: 0.06em;
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
 }
 
 .resultBody {
@@ -249,22 +204,28 @@
   border: 1px solid transparent;
 }
 
-.beadPlayer {
+.beadBlue {
   background: rgba(58, 169, 255, 0.2);
   border-color: rgba(58, 169, 255, 0.55);
   color: #9fd4ff;
 }
 
-.beadBanker {
+.beadGold {
   background: rgba(212, 178, 106, 0.18);
   border-color: rgba(212, 178, 106, 0.55);
   color: #ecd29a;
 }
 
-.beadTie {
+.beadViolet {
   background: rgba(155, 107, 255, 0.18);
   border-color: rgba(155, 107, 255, 0.55);
   color: #c7b0ff;
+}
+
+.beadVoid {
+  background: rgba(244, 247, 255, 0.08);
+  border-color: rgba(244, 247, 255, 0.28);
+  color: #d7deef;
 }
 
 .beadEmpty {
@@ -272,6 +233,10 @@
 }
 
 @media (min-width: 760px) {
+  .sides {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
   .actions {
     grid-template-columns: 1fr 1fr;
   }

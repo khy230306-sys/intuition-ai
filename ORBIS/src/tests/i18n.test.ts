@@ -17,10 +17,10 @@ describe('i18n dictionaries', () => {
     expect(collectKeys(en).sort()).toEqual(collectKeys(ko).sort())
   })
 
-  it('contains baccarat table copy', () => {
-    expect(ko.play.deal).toBe('카드 공개')
-    expect(en.play.deal).toBe('Reveal Cards')
-    expect(ko.play.player).toBe('PLAYER')
-    expect(en.play.banker).toBe('BANKER')
+  it('contains CORE TRINITY copy', () => {
+    expect(ko.play.openCore).toBe('CORE 열기')
+    expect(en.play.openCore).toBe('Open CORE')
+    expect(ko.play.void).toBe('VOID')
+    expect(en.nav.play).toBe('Trinity')
   })
 })

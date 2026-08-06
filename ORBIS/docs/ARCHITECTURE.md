@@ -54,11 +54,18 @@ src/
 - theme/background: `#05070f`
 - 오프라인 시 정적 브랜드 화면 제공을 위한 precache
 
-## Stage 2 확장 지점
+## 현재 게임: CORE TRINITY
 
-1. `HomePage`의 Stage 2 모달 자리에 실제 체험/라운드 진입 연결
-2. `src/game/` (신규) 영역에 라운드 상태, 결과, 포인트 로직 추가
-3. 설정에 게임 관련 옵션 확장
-4. 서버/상태 관리가 필요해질 경우 `storage`와 분리된 API 계층 추가
+- 경로: `/play`
+- 엔진: `src/game/trinity/`
+- 흐름: 선택(BLUE/GOLD/VIOLET/VOID) → CORE 열기 → 3 Orb 순차 공개 → 정산
+- 결과 패턴: majority / trinity / void
+- 저장: 데모 에너지 + 공명 로드 (`localStorage`)
 
-Stage 1에서는 베팅, 입출금, 환전, 결제, 배당, 결과 생성, 관리자 조작을 구현하지 않습니다.
+## 확장 지점
+
+1. 특수 패턴(더블 공명, 연속 VOID 등) 추가
+2. 연출/스토리 레이어 강화
+3. 서버 시드 검증이 필요하면 `engine`과 API 계층 분리
+
+실제 입출금, 환전, 결제, 외부 베팅 연결은 구현하지 않습니다.

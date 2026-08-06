@@ -11,15 +11,16 @@ describe('ORBIS App', () => {
     expect(screen.getAllByRole('button', { name: '체험 시작' })[0]).toBeInTheDocument()
   })
 
-  it('opens baccarat table experience', async () => {
+  it('opens CORE TRINITY experience', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getAllByRole('button', { name: '체험 시작' })[0]!)
-    expect(screen.getByRole('heading', { name: 'ORBIS 바카라 테이블' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /PLAYER/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /BANKER/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /TIE/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '카드 공개' })).toBeEnabled()
+    expect(screen.getByRole('heading', { name: 'ORBIS 코어 트리니티' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /BLUE/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /GOLD/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /VIOLET/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /VOID/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'CORE 열기' })).toBeEnabled()
   })
 
   it('navigates to settings and switches language', async () => {

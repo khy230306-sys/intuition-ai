@@ -1,7 +1,7 @@
 {
   "name": "aizio-iphone",
   "private": true,
-  "version": "1.21.1",
+  "version": "1.22.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,6 +37,7 @@
     "jsqr": "^1.4.0",
     "maplibre-gl": "^4.7.1",
     "mqtt": "^5.15.2",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "zod": "^4.4.3"
   }
 }

@@ -247,13 +247,17 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <h4>공간</h4>
           <ul class="home-v2-more-list">
             ${moreItem(`가족${famBadge}`, 'data-view="family"')}
+            ${moreItem('가족 도우미', 'data-view="family-helper"')}
             ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
           </ul>
         </div>
 
         <div class="home-v2-more-group">
-          <h4>일상</h4>
+          <h4>일상 · AI 도우미</h4>
           <ul class="home-v2-more-list">
+            ${moreItem('생활비서 브리핑', 'data-action="life-brief-open"')}
+            ${moreItem('AI 만능 카메라', 'data-view="ai-camera"')}
+            ${moreItem('가족 도우미', 'data-view="family-helper"')}
             ${moreItem('생활 · 할 일 · 알림', 'data-view="life"')}
             ${moreItem('길안내', 'data-view="navigation"')}
             ${moreItem('손님관리', 'data-view="customers"')}

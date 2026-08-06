@@ -92,6 +92,7 @@ async function runSearch(query: string): Promise<NavV2HandleResult> {
   const locNote = origin
     ? ''
     : '\n위치 권한을 허용하면 가까운 순서로 볼 수 있어요.'
+  const foodish = /맛집|식당|음식점|밥집|카페|술집|먹을\s*곳|브런치|분식/.test(query)
   return {
     handled: true,
     text: `「${query}」관련 장소를 ${result.candidates.length}곳 찾았어요.\n${cardsPreview(result.candidates, result.catalogOnly)}${locNote}`,
@@ -101,6 +102,9 @@ async function runSearch(query: string): Promise<NavV2HandleResult> {
     candidates: result.candidates,
     query,
     catalogOnly: result.catalogOnly,
+    // Food searches always expose maps handoff (Kakao/TMAP) even when Photon hits exist.
+    mapsQuery: foodish ? query : undefined,
+    searchQuery: foodish ? `${query} 추천` : undefined,
   }
 }
 

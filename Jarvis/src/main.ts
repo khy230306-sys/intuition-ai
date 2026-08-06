@@ -93,6 +93,25 @@ import {
 } from './life-os-2/ui/uiActions'
 import { buildHomeLos2Signals, renderHomeLos2StripHtml } from './life-os-2/ui/homeStrip'
 import {
+  buildLifeBriefing,
+  ensureLifeAssistantSchema,
+  renderBriefingStripHtml,
+} from './life-assistant'
+import {
+  bindCameraScreen,
+  defaultCameraState,
+  ensureVisionSchema,
+  renderCameraScreen,
+  type CameraScreenState,
+} from './ai-camera'
+import {
+  bindFamilyHelperScreen,
+  defaultFamilyHelperState,
+  ensureFamilyHelperSchema,
+  renderFamilyHelperScreen,
+  type FamilyHelperState,
+} from './family-helper'
+import {
   attemptPwaInstall,
   bindPwaInstallEvents,
   copyAppUrl,
@@ -364,7 +383,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.21.1'
+const APP_VERSION = '1.22.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -741,6 +760,10 @@ const state = {
     status: '목적지를 검색해 주세요.',
     showAll: false,
   } as NavScreenState,
+  /** AI 만능 카메라 */
+  aiCamera: defaultCameraState() as CameraScreenState,
+  /** 부모·가족 도우미 */
+  familyHelper: defaultFamilyHelperState() as FamilyHelperState,
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -3634,7 +3657,7 @@ function renderHomeV2View(): string {
         state.musicPlayerOpen,
       )}`,
       threadHtml: renderChatMessagesHtml(),
-      aboveThreadHtml: `${wizard}${tools}${renderHomeLos2StripHtml(buildHomeLos2Signals())}`,
+      aboveThreadHtml: `${wizard}${tools}${renderBriefingStripHtml(buildLifeBriefing())}${renderHomeLos2StripHtml(buildHomeLos2Signals())}`,
       voiceHintHtml: voiceHint,
     })
   } catch (err) {
@@ -5076,7 +5099,11 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                               </div>
                             </section>`
                           : renderNavigationScreen(state.navV2)
-                        : renderSettings()
+                        : state.view === 'ai-camera'
+                          ? renderCameraScreen(state.aiCamera)
+                          : state.view === 'family-helper'
+                            ? renderFamilyHelperScreen(state.familyHelper)
+                            : renderSettings()
   const nav = homeV2On
     ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
     : renderNav()
@@ -5155,6 +5182,46 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
     }
   } else {
     destroyNavigationScreen()
+  }
+  if (state.view === 'ai-camera') {
+    const panel = document.querySelector('[data-aicam="1"]') as HTMLElement | null
+    if (panel) {
+      void bindCameraScreen(
+        panel,
+        state.aiCamera,
+        (next) => {
+          state.aiCamera = { ...state.aiCamera, ...next }
+          render({ guardNav: false })
+        },
+        {
+          onBack: () => goToView('chat'),
+          onSendTranslate: (text) => {
+            state.view = 'chat'
+            state.homeV2MoreOpen = false
+            render()
+            void handleUserText(
+              text
+                ? `이 문장을 자연스럽게 답장해줘: ${text}`
+                : '지금부터 번역 모드로 바꿔줘',
+            )
+          },
+        },
+      )
+    }
+  }
+  if (state.view === 'family-helper') {
+    const panel = document.querySelector('[data-family-helper="1"]') as HTMLElement | null
+    if (panel) {
+      bindFamilyHelperScreen(
+        panel,
+        state.familyHelper,
+        (next) => {
+          state.familyHelper = { ...state.familyHelper, ...next }
+          render({ guardNav: false })
+        },
+        { onBack: () => goToView('chat') },
+      )
+    }
   }
   if (state.view === 'games') {
     // remount after DOM ready
@@ -5923,6 +5990,38 @@ function bind(): void {
     state.homeV2MoreOpen = false
     render()
   })
+  document.querySelector('[data-action="life-brief-open"]')?.addEventListener('click', () => {
+    state.homeV2MoreOpen = false
+    state.view = 'chat'
+    render()
+    void handleUserText('오늘 하루 요약해줘')
+  })
+  document.querySelector('[data-action="life-brief-refresh"]')?.addEventListener('click', () => {
+    render({ guardNav: false })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="life-brief-item"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.briefView as View | undefined
+      const hint = btn.dataset.briefHint || ''
+      if (view === 'ai-camera' || view === 'family-helper' || view === 'life' || view === 'family' || view === 'navigation') {
+        goToView(view)
+        return
+      }
+      if (hint) {
+        void handleUserText(hint)
+        return
+      }
+      void handleUserText('오늘 하루 요약해줘')
+    })
+  })
+  document.querySelectorAll('[data-action="open-ai-camera"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.homeV2MoreOpen = false
+      goToView('ai-camera')
+    })
+  })
+  document.querySelector('[data-action="aicam-back"]')?.addEventListener('click', () => goToView('chat'))
+  document.querySelector('[data-action="fh-back"]')?.addEventListener('click', () => goToView('chat'))
   document.querySelector('[data-home-v2-more="1"]')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       state.homeV2MoreOpen = false
@@ -7423,6 +7522,13 @@ function bootAppCore(): void {
   // Guest local userId/deviceId — does not change legacy jarvis_* keys.
   void import('./account').then((m) => m.ensureGuestIdentity())
   void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
+  try {
+    ensureLifeAssistantSchema()
+    ensureVisionSchema()
+    ensureFamilyHelperSchema()
+  } catch {
+    /* schema markers must never block boot */
+  }
   state.messages = loadChat()
   state.settings = loadSettings()
   void loadBuildMetaLite().then((meta) => {

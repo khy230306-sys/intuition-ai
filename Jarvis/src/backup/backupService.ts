@@ -74,6 +74,14 @@ const LIFE_OS_KEYS = [
   'aizio_los2_proactive_v1',
   'aizio_los2_habit_obs_v1',
   'aizio_los2_privacy_v1',
+  // Life Assistant + AI Camera + Family Helper (additive)
+  'aizio_life_assistant_schema_v1',
+  'aizio_life_assistant_prefs_v1',
+  'aizio_parking_memory_v1',
+  'aizio_vision_schema_v1',
+  'aizio_vision_analysis_history_v1',
+  'aizio_family_helper_schema_v1',
+  'aizio_family_helper_v1',
 ] as const
 
 function readRaw(key: string): unknown {

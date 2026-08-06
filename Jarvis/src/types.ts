@@ -172,6 +172,8 @@ export type View =
   | 'global'
   | 'customers'
   | 'navigation'
+  | 'ai-camera'
+  | 'family-helper'
 
 export interface ActionResult {
   ok: boolean

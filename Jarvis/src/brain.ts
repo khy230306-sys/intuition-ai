@@ -128,6 +128,7 @@ import { userGuideText, wantsUserGuide } from './userGuide'
 import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './weather'
 import { localFunReply } from './localFun'
 import { answerEncyclopedia, isKnowledgeQuestion } from './encyclopedia/encyclopediaEngine'
+import { tryHandleLifeAssistant } from './life-assistant'
 
 function helpText(name: string): string {
   return [
@@ -826,6 +827,15 @@ export async function think(
     } catch {
       return reply
     }
+  }
+
+  // AI Life Assistant — natural-language everyday commands (additive; falls through on miss)
+  try {
+    const strippedLife = stripWakeWord(raw).text || raw
+    const lifeAsst = await tryHandleLifeAssistant(strippedLife)
+    if (lifeAsst) return enrich(lifeAsst)
+  } catch {
+    /* never block Core Brain / legacy */
   }
 
   // AIZIO Core Brain — classify & run registered Skills; otherwise continue legacy pipeline

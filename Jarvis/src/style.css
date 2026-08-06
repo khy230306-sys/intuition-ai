@@ -3784,3 +3784,123 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   overflow: auto;
   padding: 8px 0;
 }
+
+/* —— Life briefing · AI Camera · Family Helper (additive) —— */
+.life-brief-strip {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(13, 148, 136, 0.28);
+  background:
+    linear-gradient(145deg, rgba(13, 148, 136, 0.12), rgba(14, 28, 42, 0.55));
+}
+.life-brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.life-brief-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.life-brief-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  text-align: left;
+  max-width: 100%;
+}
+.life-brief-chip-l { font-weight: 600; font-size: 0.9rem; }
+.life-brief-chip-d { font-size: 0.78rem; opacity: 0.75; }
+.aicam-panel, .fh-panel { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.aicam-modes, .fh-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.aicam-modes .active, .fh-tabs .active {
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.25);
+}
+.aicam-preview {
+  min-height: 180px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+  aspect-ratio: 4 / 3;
+  margin-bottom: 10px;
+}
+.aicam-preview.has { border-style: solid; }
+.aicam-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0b1220;
+}
+.aicam-file-btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.aicam-save { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 0.85rem; }
+.aicam-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 0.86rem;
+}
+.aicam-warn { color: #fbbf24; }
+.aicam-result, .aicam-hist-item, .fh-card {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.16);
+}
+.fh-form {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.fh-form input, .fh-form select, .fh-form textarea {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  padding: 8px 10px;
+}
+.fh-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.fh-card.done { opacity: 0.55; text-decoration: line-through; }
+.aicam-q { display: grid; gap: 6px; margin-bottom: 8px; }
+.aicam-q input { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.25); color: inherit; padding: 8px 10px; }
+
+@media (prefers-color-scheme: light) {
+  .life-brief-strip {
+    background: linear-gradient(145deg, rgba(13, 148, 136, 0.1), rgba(255, 255, 255, 0.85));
+    border-color: rgba(13, 148, 136, 0.25);
+  }
+  .life-brief-chip, .aicam-result, .fh-card, .aicam-hist-item {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #0f172a;
+  }
+  .fh-form input, .fh-form select, .fh-form textarea, .aicam-q input {
+    background: #fff;
+    color: #0f172a;
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+}

@@ -94,21 +94,23 @@ export function renderHomeDashboard(opts: {
 
       ${opts.updateBanner ? `<div class="nav-home-banner" role="status">${esc(opts.updateBanner)}</div>` : ''}
 
-      <form class="nav-home-ask" data-action-form="home-ask" id="home-ask-form">
-        <label class="sr-only" for="home-ask-input">AIZIO에게 말하기</label>
-        <input id="home-ask-input" name="q" type="text" enterkeyhint="send" autocomplete="off"
-          placeholder="AIZIO에게 말하기…" />
-        <button type="submit" class="primary-btn">대화</button>
-        <button type="button" class="icon-btn" data-view="chat" data-action="mic-from-home" aria-label="음성">MIC</button>
-      </form>
-
       ${opts.briefingHtml || ''}
+
+      <section class="nav-home-chat-slot" aria-label="대화">
+        <form class="nav-home-ask" data-action-form="home-ask" id="home-ask-form">
+          <label class="sr-only" for="home-ask-input">AIZIO에게 말하기</label>
+          <input id="home-ask-input" name="q" type="text" enterkeyhint="send" autocomplete="off"
+            placeholder="AIZIO에게 말하기…" />
+          <button type="submit" class="primary-btn">대화</button>
+          <button type="button" class="icon-btn" data-view="chat" data-action="mic-from-home" aria-label="음성">MIC</button>
+        </form>
+      </section>
 
       ${
         emptyStart
           ? `<div class="nav-home-empty">
               <p><strong>시작하기</strong></p>
-              <p class="hint">아래 빠른 실행으로 일정·카메라·번역을 바로 쓰거나, 위 입력창에 말해 보세요.</p>
+              <p class="hint">아래 빠른 실행으로 일정·카메라·번역을 바로 쓰거나, 위 대화창에 말해 보세요.</p>
             </div>`
           : ''
       }

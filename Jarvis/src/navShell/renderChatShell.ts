@@ -1,5 +1,6 @@
 /**
- * Conversation-focused shell — composer capped at 3 primary controls.
+ * Conversation-focused shell — weather briefing on top, thread in the card zone,
+ * composer docked below (matches Home hierarchy: weather → chat).
  */
 
 function esc(s: string): string {
@@ -45,9 +46,13 @@ export function renderChatShell(opts: {
         <p class="hint">생활비서 · 음성 · 번역 · 일정 명령을 여기에 말하세요 · v${esc(opts.appVersion)}</p>
       </header>
       ${opts.activeModeHtml || ''}
-      ${opts.aboveThreadHtml || ''}
-      <div class="messages chat-thread home-v2-thread" id="chat-thread">${opts.threadHtml}</div>
-      ${opts.voiceHintHtml || ''}
+      <div class="nav-chat-top-stack">
+        ${opts.aboveThreadHtml || ''}
+      </div>
+      <section class="nav-chat-thread-card" aria-label="대화창">
+        <div class="messages chat-thread home-v2-thread" id="chat-thread">${opts.threadHtml}</div>
+        ${opts.voiceHintHtml || ''}
+      </section>
       <div class="home-v2-composer-wrap composer-dock nav-chat-composer">
         <button type="button" class="home-v2-translate-badge ${opts.translateActive ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역 잠금">
           ${esc(opts.translateLabel)}

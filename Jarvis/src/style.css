@@ -3837,6 +3837,12 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 }
 .life-brief-chip-l { font-weight: 600; font-size: 0.9rem; }
 .life-brief-chip-d { font-size: 0.78rem; opacity: 0.75; }
+.life-brief-chip-weather {
+  order: -1;
+  min-width: min(100%, 220px);
+  border-color: rgba(13, 148, 136, 0.45);
+  background: rgba(13, 148, 136, 0.16);
+}
 .aicam-panel, .fh-panel { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 .aicam-modes, .fh-tabs {
   display: flex;
@@ -4086,11 +4092,22 @@ body.keyboard-open .aizio-primary-nav {
   }
 }
 
+.nav-home-dash .life-brief-strip {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+.nav-home-dash .nav-home-chat-slot {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.18);
+}
 .nav-home-dash .nav-home-ask {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 8px;
-  margin: 10px 0 14px;
+  margin: 0;
 }
 .nav-home-dash .nav-home-ask input {
   min-width: 0;
@@ -4100,6 +4117,28 @@ body.keyboard-open .aizio-primary-nav {
   color: inherit;
   padding: 12px 14px;
   font: inherit;
+}
+.nav-chat-shell .nav-chat-top-stack {
+  margin: 0 0 8px;
+}
+.nav-chat-shell .nav-chat-top-stack .life-brief-strip {
+  margin-bottom: 0;
+}
+.nav-chat-shell .nav-chat-thread-card {
+  flex: 1 1 auto;
+  min-height: 180px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.nav-chat-shell .nav-chat-thread-card .home-v2-thread {
+  flex: 1 1 auto;
+  min-height: 140px;
 }
 .nav-home-card {
   margin: 14px 0;
@@ -4251,7 +4290,12 @@ body.keyboard-open .aizio-primary-nav {
   font: inherit;
 }
 .nav-more-item:active { background: rgba(0, 210, 190, 0.12); }
-.nav-chat-shell .nav-chat-composer { position: relative; }
+.nav-chat-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.nav-chat-shell .nav-chat-composer { position: relative; flex-shrink: 0; }
 .nav-chat-plus {
   display: grid;
   gap: 4px;

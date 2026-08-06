@@ -34,6 +34,17 @@ export function buildLifeBriefing(now = new Date()): LifeBriefing {
     (s) => s.date < today && !s.done,
   )
 
+  // Weather first — surface at the top of the briefing strip
+  if (weather) {
+    items.push({
+      id: 'wx',
+      kind: 'weather',
+      label: weather.place || '날씨',
+      detail: formatWeatherLine(weather),
+      chatHint: '오늘 날씨 알려줘',
+    })
+  }
+
   if (familyEvents.length || helperSched.length) {
     const top = helperSched[0] || familyEvents[0]
     const label =
@@ -134,16 +145,6 @@ export function buildLifeBriefing(now = new Date()): LifeBriefing {
     })
   }
 
-  if (weather) {
-    items.push({
-      id: 'wx',
-      kind: 'weather',
-      label: weather.place || '날씨',
-      detail: formatWeatherLine(weather),
-      chatHint: '오늘 날씨 알려줘',
-    })
-  }
-
   if (parking) {
     items.push({
       id: 'park',
@@ -191,7 +192,7 @@ export function renderBriefingStripHtml(brief: LifeBriefing): string {
         ${brief.items
           .map(
             (it) => `
-          <button type="button" class="life-brief-chip" data-action="life-brief-item"
+          <button type="button" class="life-brief-chip${it.kind === 'weather' ? ' life-brief-chip-weather' : ''}" data-action="life-brief-item"
             data-brief-id="${esc(it.id)}"
             data-brief-view="${esc(it.targetView || '')}"
             data-brief-hint="${esc(it.chatHint || '')}">

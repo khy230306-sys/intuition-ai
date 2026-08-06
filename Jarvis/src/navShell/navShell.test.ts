@@ -135,6 +135,34 @@ describe('quick + recent', () => {
     ])
   })
 
+  it('places briefing/weather above the home chat slot', () => {
+    const html = renderHomeDashboard({
+      model: {
+        header: { greeting: '안녕하세요', dateLine: '8월 6일', weatherLine: '맑음 26°' },
+        summary: { todoCount: 0, nextAlarmLabel: '다음 알림 없음', unreadMessages: 0 },
+        smartCard: {
+          kind: 'empty',
+          title: '여유',
+          items: [],
+          targetView: 'chat',
+        },
+        translate: { active: false, label: '번역' },
+        voiceState: 'idle',
+        prompt: '무엇을',
+      },
+      briefingHtml: '<section class="life-brief-strip" data-life-brief="1">브리핑</section>',
+      scheduleLines: [],
+      alertLines: [],
+      appVersion: '1.27.0',
+    })
+    const briefAt = html.indexOf('data-life-brief')
+    const chatAt = html.indexOf('nav-home-chat-slot')
+    const askAt = html.indexOf('home-ask-form')
+    expect(briefAt).toBeGreaterThan(-1)
+    expect(chatAt).toBeGreaterThan(briefAt)
+    expect(askAt).toBeGreaterThan(chatAt)
+  })
+
   it('edit panel lists addable catalog with add buttons', () => {
     hideQuickAction('ai-camera')
     const html = renderHomeDashboard({

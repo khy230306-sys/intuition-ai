@@ -288,6 +288,9 @@ import {
   langNameForCode,
   resolveTranslateSheetFrom,
   sttLangForTranslateSheet,
+  saveStoredSpeakLang,
+  defaultSpeakLang,
+  loadStoredSpeakLang,
   resolveHomeVariant,
   writeBootDefaultHome,
   writeStoredHomeVariant,
@@ -331,7 +334,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.14'
+const APP_VERSION = '1.20.15'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -836,19 +839,31 @@ function openTranslateSheet(opts?: { seedText?: string }): void {
   state.homeV2NavSheetOpen = false
   state.installGuideOpen = false
   state.homeV2TranslateSheetOpen = true
+  const storedSpeak = loadStoredSpeakLang()
   if (opts?.seedText?.trim()) {
+    const to = state.translateSheet.to || 'en'
     state.translateSheet = {
       ...state.translateSheet,
       sourceText: opts.seedText.trim().slice(0, 2000),
+      from: state.translateSheet.from || 'auto',
+      speakLang: state.translateSheet.speakLang || defaultSpeakLang(to, storedSpeak),
       result: '',
       status: '번역할 문장을 확인한 뒤 번역하기를 누르세요.',
       busy: false,
+      lastInputSource: 'type',
     }
   } else if (!state.translateSheet.sourceText) {
+    const to = state.translateSheet.to || 'en'
     state.translateSheet = {
       ...defaultTranslateSheetState(),
-      from: state.translateSheet.from || 'auto',
-      to: state.translateSheet.to || 'en',
+      from: 'auto',
+      to,
+      speakLang: defaultSpeakLang(to, storedSpeak),
+    }
+  } else if (!state.translateSheet.speakLang) {
+    state.translateSheet = {
+      ...state.translateSheet,
+      speakLang: defaultSpeakLang(state.translateSheet.to || 'en', storedSpeak),
     }
   }
   render()
@@ -866,7 +881,7 @@ function closeTranslateSheet(): void {
   render()
 }
 
-async function runTranslateSheet(): Promise<void> {
+async function runTranslateSheet(opts?: { inputSource?: 'mic' | 'type' }): Promise<void> {
   const text = state.translateSheet.sourceText.trim()
   if (!text) {
     state.translateSheet = { ...state.translateSheet, status: '번역할 문장을 입력해 주세요.', result: '' }
@@ -874,7 +889,12 @@ async function runTranslateSheet(): Promise<void> {
     return
   }
   const fromPicker = state.translateSheet.from || 'auto'
-  let from = resolveTranslateSheetFrom(text, fromPicker)
+  const inputSource = opts?.inputSource || state.translateSheet.lastInputSource || 'type'
+  const speakLang = state.translateSheet.speakLang || defaultSpeakLang(state.translateSheet.to || 'en')
+  let from = resolveTranslateSheetFrom(text, fromPicker, {
+    speakLang,
+    inputSource,
+  })
   let to = state.translateSheet.to || 'en'
   if (fromPicker !== 'auto' && from === to) {
     state.translateSheet = {
@@ -892,13 +912,17 @@ async function runTranslateSheet(): Promise<void> {
     }
     const result = await translateText(text, from, to)
     const detectedNote =
-      fromPicker === 'auto' ? `자동 감지(${langNameForCode(from)})` : langNameForCode(from)
+      inputSource === 'mic'
+        ? `${langNameForCode(from)}(음성)`
+        : fromPicker === 'auto'
+          ? `자동 감지(${langNameForCode(from)})`
+          : langNameForCode(from)
     state.translateSheet = {
       ...state.translateSheet,
       busy: false,
-      // Keep picker on 「자동 감지」 so the next MIC pass still auto-detects.
       from: fromPicker === 'auto' ? 'auto' : from,
       to,
+      speakLang,
       result: result.ok ? result.text : '',
       status: result.ok
         ? result.offline
@@ -908,7 +932,9 @@ async function runTranslateSheet(): Promise<void> {
       lastFrom: detectedNote,
       lastTo: langNameForCode(to),
       offline: result.offline,
+      lastInputSource: inputSource,
     }
+    if (inputSource === 'mic' && speakLang) saveStoredSpeakLang(speakLang)
   } catch (err) {
     const msg = err instanceof Error ? err.message : '번역 오류'
     state.translateSheet = {
@@ -921,7 +947,7 @@ async function runTranslateSheet(): Promise<void> {
   render()
 }
 
-/** MIC inside 번역하기 sheet — STT then auto-detect → selected target language. */
+/** MIC inside 번역하기 sheet — STT in speakLang → translate to target. */
 function startTranslateSheetDictation(): void {
   if (!state.homeV2TranslateSheetOpen) {
     openTranslateSheet()
@@ -949,9 +975,10 @@ function startTranslateSheetDictation(): void {
         sourceText: partial.trim().slice(0, 2000),
         result: '',
         status: '인식 완료 · 번역 중…',
+        lastInputSource: 'mic',
       }
       render()
-      void runTranslateSheet()
+      void runTranslateSheet({ inputSource: 'mic' })
     } else {
       render()
     }
@@ -963,25 +990,28 @@ function startTranslateSheetDictation(): void {
     state.listening = false
   }
   stopSpeaking()
-  // Sync lang pickers from DOM before listening
   const fromEl = document.getElementById('tr-sheet-from') as HTMLSelectElement | null
   const toEl = document.getElementById('tr-sheet-to') as HTMLSelectElement | null
   if (fromEl?.value) state.translateSheet = { ...state.translateSheet, from: fromEl.value }
   if (toEl?.value) state.translateSheet = { ...state.translateSheet, to: toEl.value }
-  // Default voice path: auto-detect source
   if (!state.translateSheet.from) {
     state.translateSheet = { ...state.translateSheet, from: 'auto' }
+  }
+  if (!state.translateSheet.speakLang) {
+    state.translateSheet = {
+      ...state.translateSheet,
+      speakLang: defaultSpeakLang(state.translateSheet.to || 'en', loadStoredSpeakLang()),
+    }
   }
 
   const session = ++voiceSessionGen
   state.dictationTarget = 'translate-sheet'
-  const listenLang = sttLangForTranslateSheet(state.translateSheet.from, state.translateSheet.to)
+  const speakLang = state.translateSheet.speakLang
+  const listenLang = sttLangForTranslateSheet(speakLang, state.translateSheet.from, state.translateSheet.to)
   state.listenLang = listenLang
-  state.voiceHint =
-    state.translateSheet.from === 'auto'
-      ? `자동 감지 듣는 중 (${listenLang}) · 말하면 → ${langNameForCode(state.translateSheet.to)}`
-      : `듣는 중 (${listenLang}) · 끝나면 바로 번역`
+  state.voiceHint = `${langNameForCode(speakLang)}로 듣는 중 (${listenLang}) → ${langNameForCode(state.translateSheet.to)}`
   state.listening = true
+  state.draft = ''
   render()
   void (async () => {
     const micOk = await ensureMicPermission()
@@ -1003,7 +1033,7 @@ function startTranslateSheetDictation(): void {
           const ta = document.getElementById('tr-sheet-input') as HTMLTextAreaElement | null
           if (ta) ta.value = text
           const status = document.getElementById('tr-sheet-status')
-          if (status) status.textContent = text || '듣고 있습니다…'
+          if (status) status.textContent = text || `${langNameForCode(speakLang)}로 듣는 중…`
           const mic = document.querySelector<HTMLButtonElement>('[data-action="tr-sheet-mic"]')
           if (mic) {
             mic.classList.add('listening')
@@ -1015,15 +1045,19 @@ function startTranslateSheetDictation(): void {
           if (session !== voiceSessionGen || state.dictationTarget !== 'translate-sheet') return
           state.listening = false
           state.voiceHint = ''
+          state.draft = ''
           const cleaned = text.trim().slice(0, 2000)
           state.translateSheet = {
             ...state.translateSheet,
             sourceText: cleaned,
             result: '',
-            status: cleaned ? '인식 완료 · 번역 중…' : '음성을 이해하지 못했습니다. 다시 MIC를 눌러 주세요.',
+            status: cleaned
+              ? `${langNameForCode(speakLang)} 인식 완료 · 번역 중…`
+              : '음성을 이해하지 못했습니다. 말할 언어 칩을 확인한 뒤 다시 MIC를 눌러 주세요.',
+            lastInputSource: 'mic',
           }
           render()
-          if (cleaned) void runTranslateSheet()
+          if (cleaned) void runTranslateSheet({ inputSource: 'mic' })
         },
         onState: (s) => {
           if (session !== voiceSessionGen) return
@@ -5857,8 +5891,19 @@ function bind(): void {
       sourceText: input?.value || '',
       from: fromEl?.value || 'auto',
       to: toEl?.value || 'en',
+      lastInputSource: 'type',
     }
-    void runTranslateSheet()
+    void runTranslateSheet({ inputSource: 'type' })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="tr-sheet-speak-lang"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const code = btn.dataset.speakLang || ''
+      if (!code) return
+      state.translateSheet = { ...state.translateSheet, speakLang: code }
+      saveStoredSpeakLang(code)
+      showFlash(`말할 언어: ${langNameForCode(code)}`)
+      render()
+    })
   })
   document.querySelector('[data-action="tr-sheet-swap"]')?.addEventListener('click', () => {
     const fromEl = document.getElementById('tr-sheet-from') as HTMLSelectElement | null
@@ -5882,7 +5927,7 @@ function bind(): void {
       ...state.translateSheet,
       sourceText: '',
       result: '',
-      status: '번역할 문장을 입력하거나 MIC로 말하세요.',
+      status: '말할 언어를 고른 뒤 MIC를 누르거나, 문장을 입력하세요.',
     }
     render()
   })
@@ -5913,13 +5958,18 @@ function bind(): void {
   })
   document.getElementById('tr-sheet-input')?.addEventListener('input', (e) => {
     const v = (e.target as HTMLTextAreaElement).value
-    state.translateSheet = { ...state.translateSheet, sourceText: v }
+    state.translateSheet = { ...state.translateSheet, sourceText: v, lastInputSource: 'type' }
   })
   document.getElementById('tr-sheet-from')?.addEventListener('change', (e) => {
     state.translateSheet = { ...state.translateSheet, from: (e.target as HTMLSelectElement).value }
   })
   document.getElementById('tr-sheet-to')?.addEventListener('change', (e) => {
-    state.translateSheet = { ...state.translateSheet, to: (e.target as HTMLSelectElement).value }
+    const to = (e.target as HTMLSelectElement).value
+    state.translateSheet = {
+      ...state.translateSheet,
+      to,
+      speakLang: state.translateSheet.speakLang || defaultSpeakLang(to, loadStoredSpeakLang()),
+    }
   })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false

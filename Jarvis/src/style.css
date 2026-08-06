@@ -3256,6 +3256,47 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 .home-v2-tr-actions .icon-btn {
   min-width: 52px;
 }
+.home-v2-tr-speak-block {
+  margin: 0 0 10px;
+}
+.home-v2-tr-speak-label {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--muted, #9db0c7);
+}
+.home-v2-tr-speak-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.home-v2-tr-speak-chip {
+  min-width: 36px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 210, 190, 0.28);
+  background: rgba(8, 16, 26, 0.9);
+  color: #d7e6f7;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-v2-tr-speak-chip.active {
+  border-color: rgba(0, 230, 200, 0.7);
+  background: linear-gradient(145deg, rgba(0, 180, 160, 0.35), rgba(20, 50, 70, 0.95));
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 210, 190, 0.25);
+}
+.home-v2-tr-speak-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.home-v2-tr-result .home-v2-tr-out {
+  font-size: 1.15rem;
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 6px 0 10px;
+}
 .home-v2-tr-sheet .home-v2-tr-panel {
   max-height: min(88vh, 720px);
 }

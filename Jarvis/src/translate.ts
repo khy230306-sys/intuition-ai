@@ -66,9 +66,16 @@ export function detectLangCode(text: string): string {
   if (/[\uac00-\ud7af]/.test(t)) return 'ko'
   // CJK without kana → Chinese
   if (/[\u4e00-\u9fff]/.test(t)) return 'zh-CN'
+  // Vietnamese (Latin + tone marks / ơ ư đ)
+  if (/[ăâêôơưđẠ-ỹ]/i.test(t) || /[àáạảãâầấậẩẫèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ]/i.test(t)) {
+    return 'vi'
+  }
   if (/[äöüß]/i.test(t)) return 'de'
+  // Portuguese before generic French (ã õ)
+  if (/[ãõ]/i.test(t) || /\b(não|você|obrigad[oa]|olá)\b/i.test(t)) return 'pt'
   if (/[àâçéèêëïîôùûü]/i.test(t)) return 'fr'
   if (/[áéíóúñ¿¡]/i.test(t)) return 'es'
+  if (/[àèéìòù]/i.test(t) && /\b(ciao|grazie|perché)\b/i.test(t)) return 'it'
   return 'en'
 }
 

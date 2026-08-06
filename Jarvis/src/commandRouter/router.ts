@@ -7,14 +7,37 @@
  * WEATHER must never win over translation when 번역/통역 cues exist.
  */
 
+import { detectTravelIntent, isTravelUtterance } from '../travelAgent/detect'
+import { hasActiveTravelSession } from '../travelAgent/session'
 import { findTargetLanguage, langName } from './languages'
 import { normalizeCommandInput } from './normalize'
 import { getActiveMode, getTranslationSession } from './session'
-import type { CommandRouterInput, CommandRouterResult } from './types'
+import type { AizioIntent, CommandRouterInput, CommandRouterResult } from './types'
 import { pushRouteDiag } from './diagnostics'
 import { isClearWeatherQuery } from './weatherQuery'
 
 export { isClearWeatherQuery }
+
+function mapTravelIntent(id: NonNullable<ReturnType<typeof detectTravelIntent>>): AizioIntent {
+  const table: Record<string, AizioIntent> = {
+    TRAVEL_PLAN: 'travel.plan',
+    FLIGHT_SEARCH: 'travel.flight.search',
+    FLIGHT_SELECT: 'travel.flight.select',
+    FLIGHT_DETAILS: 'travel.flight.details',
+    HOTEL_SEARCH: 'travel.hotel.search',
+    HOTEL_SELECT: 'travel.hotel.select',
+    HOTEL_DETAILS: 'travel.hotel.details',
+    TRIP_SUMMARY: 'travel.trip.summary',
+    TRIP_SAVE: 'travel.trip.save',
+    TRIP_CALENDAR_ADD: 'travel.trip.calendar_add',
+    BOOKING_PREPARE: 'travel.booking.prepare',
+    BOOKING_CONFIRM: 'travel.booking.confirm',
+    BOOKING_STATUS: 'travel.booking.status',
+    BOOKING_CANCEL: 'travel.booking.cancel',
+    TRAVEL_UNKNOWN: 'travel.unknown',
+  }
+  return table[id] || 'travel.unknown'
+}
 
 function result(
   partial: Omit<CommandRouterResult, 'requiresAI' | 'requiresConfirmation' | 'missingFields' | 'blockedActions'> &
@@ -480,7 +503,26 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
     return r
   }
 
-  // 5) Weather — only clear queries
+  // 5) Travel Agent — before weather / general chat (never steal translation)
+  {
+    const travelHit = detectTravelIntent(normalized, hasActiveTravelSession())
+    if (travelHit || (hasActiveTravelSession() && isTravelUtterance(normalized))) {
+      const intent = mapTravelIntent(travelHit || 'TRAVEL_UNKNOWN')
+      const r = result({
+        intent,
+        confidence: travelHit ? 0.93 : 0.8,
+        entities: {},
+        action: intent,
+        reason: travelHit ? `travel_${travelHit}` : 'travel_session_followup',
+        normalized,
+        forbiddenActions: ['weather', 'general_chat', 'web_search', 'music'],
+      })
+      pushRouteDiag(r, mode, false)
+      return r
+    }
+  }
+
+  // 6) Weather — only clear queries
   if (isClearWeatherQuery(normalized)) {
     const r = result({
       intent: 'weather.query',
@@ -489,7 +531,7 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
       action: 'weather.query',
       reason: 'clear_weather_query',
       normalized,
-      forbiddenActions: ['translation'],
+      forbiddenActions: ['translation', 'travel'],
     })
     pushRouteDiag(r, mode, false)
     return r

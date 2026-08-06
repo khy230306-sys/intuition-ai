@@ -5,6 +5,7 @@
  */
 
 import type { BrainReply } from '../types'
+import { handleTravelAgent } from '../travelAgent'
 import { bcp47, translateText } from '../translate'
 import { routeCommand } from './router'
 import {
@@ -23,10 +24,14 @@ export async function tryHandleRoutedCommand(
 ): Promise<BrainReply | null> {
   void opts
   const routed = routeCommand({ text, activeMode: getActiveMode() })
-  return executeRoutedCommand(routed)
+  return executeRoutedCommand(routed, text)
 }
 
-export async function executeRoutedCommand(routed: CommandRouterResult): Promise<BrainReply | null> {
+export async function executeRoutedCommand(
+  routed: CommandRouterResult,
+  originalText?: string,
+): Promise<BrainReply | null> {
+  const utterance = originalText || routed.normalized || ''
   switch (routed.intent) {
     case 'translation.session.start': {
       const code = routed.targetLanguage || 'en'
@@ -116,6 +121,35 @@ export async function executeRoutedCommand(routed: CommandRouterResult): Promise
         speak: true,
         view: 'ai-camera',
       }
+    case 'travel.plan':
+    case 'travel.flight.search':
+    case 'travel.flight.select':
+    case 'travel.flight.details':
+    case 'travel.hotel.search':
+    case 'travel.hotel.select':
+    case 'travel.hotel.details':
+    case 'travel.trip.summary':
+    case 'travel.trip.save':
+    case 'travel.trip.calendar_add':
+    case 'travel.booking.prepare':
+    case 'travel.booking.confirm':
+    case 'travel.booking.status':
+    case 'travel.booking.cancel':
+    case 'travel.unknown': {
+      const map: Record<string, string> = {
+        'travel.plan': 'TRAVEL_PLAN',
+        'travel.flight.search': 'FLIGHT_SEARCH',
+        'travel.hotel.search': 'HOTEL_SEARCH',
+        'travel.booking.prepare': 'BOOKING_PREPARE',
+        'travel.booking.confirm': 'BOOKING_CONFIRM',
+        'travel.booking.cancel': 'BOOKING_CANCEL',
+        'travel.trip.calendar_add': 'TRIP_CALENDAR_ADD',
+        'travel.trip.summary': 'TRIP_SUMMARY',
+      }
+      const forced = map[routed.intent]
+      const tr = await handleTravelAgent(utterance, forced ? { forceIntent: forced } : undefined)
+      return tr
+    }
     case 'weather.query':
     case 'calendar.create':
     case 'calendar.read':

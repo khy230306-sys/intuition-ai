@@ -3935,6 +3935,79 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   font-weight: 600;
 }
 
+/* —— Travel Agent —— */
+.travel-agent-screen {
+  padding: 12px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.travel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.travel-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.travel-demo-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #1a3a4a;
+  color: #7ee0d0;
+}
+.travel-empty {
+  padding: 28px 8px;
+  text-align: center;
+}
+.travel-empty-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.travel-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.travel-block {
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.travel-block h3,
+.travel-block h4 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+.travel-total {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+.travel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.travel-trip-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.travel-services-card label {
+  display: block;
+  margin: 8px 0;
+}
+.travel-svc-block {
+  margin: 12px 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 /* —— Primary 5-tab nav (v1.23) —— */
 .aizio-primary-nav {
   position: sticky;

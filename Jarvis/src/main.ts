@@ -216,6 +216,13 @@ import {
 } from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
 import { activeModeChipHtml, endTranslationSession, renderRouteDiagPanel } from './commandRouter'
+import {
+  clearTravelSession,
+  renderTravelScreen,
+  renderTravelServicesSettingsHtml,
+  saveTravelConfig,
+  loadTravelConfig,
+} from './travelAgent'
 import { nextChatSendGuard, shouldAcceptChatSend, type ChatSendGuardState } from './chatSendGuard'
 import { bcp47, detectLangCode, translateText } from './translate'
 import {
@@ -412,7 +419,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.24.0'
+const APP_VERSION = '1.25.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -5031,6 +5038,7 @@ function renderSettings(): string {
           visible: designLabVisibleNow(),
         })}
         ${renderHybridAiSettingsHtml()}
+        ${renderTravelServicesSettingsHtml()}
         <h3 class="subsection-title">OpenAI (레거시 호환)</h3>
         <label>OpenAI API Key (심화 분석용)
           <input name="apiKey" type="password" value="" placeholder="${escapeAttr(s.apiKey ? '저장됨 · 변경 시에만 입력' : 'sk-...')}" autocomplete="off" />
@@ -5310,6 +5318,8 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                                     <button type="button" class="ghost-btn" data-view="family-helper">다시 시도</button></section>`
                                       }
                                     })()
+                                  : state.view === 'travel'
+                                    ? renderTravelScreen()
                                   : state.view === 'settings'
                                     ? renderSettings()
                                     : renderNavMoreView())
@@ -6252,6 +6262,41 @@ function bind(): void {
   document.querySelector('[data-action="end-translation-mode"]')?.addEventListener('click', () => {
     endTranslationSession()
     showFlash('번역 모드를 종료했어요.')
+    render({ guardNav: false })
+  })
+  document.querySelector('[data-action="travel-ask-aizio"]')?.addEventListener('click', () => {
+    goToView('chat')
+    void handleUserText('여행 준비 도와줘')
+  })
+  document.querySelector('[data-action="travel-clear-session"]')?.addEventListener('click', () => {
+    clearTravelSession()
+    showFlash('새 여행을 시작할 수 있어요.')
+    render({ guardNav: false })
+  })
+  document.querySelector('[data-action="travel-services-save"]')?.addEventListener('click', () => {
+    const flightEl = document.getElementById('travel-flight-provider') as HTMLSelectElement | null
+    const hotelEl = document.getElementById('travel-hotel-provider') as HTMLSelectElement | null
+    const flightKey = document.getElementById('travel-flight-key') as HTMLInputElement | null
+    const hotelKey = document.getElementById('travel-hotel-key') as HTMLInputElement | null
+    const autoCal = document.getElementById('travel-auto-calendar') as HTMLInputElement | null
+    const cur = loadTravelConfig()
+    const patch: Parameters<typeof saveTravelConfig>[0] = {
+      flightProvider: (flightEl?.value as typeof cur.flightProvider) || 'demo',
+      hotelProvider: (hotelEl?.value as typeof cur.hotelProvider) || 'demo',
+      autoAddCalendar: Boolean(autoCal?.checked),
+    }
+    if (flightKey?.value.trim()) {
+      if (patch.flightProvider === 'duffel') patch.duffelKey = flightKey.value.trim()
+      else if (patch.flightProvider === 'amadeus') patch.amadeusKey = flightKey.value.trim()
+    }
+    if (hotelKey?.value.trim()) {
+      if (patch.hotelProvider === 'expedia_rapid') patch.expediaKey = hotelKey.value.trim()
+      else if (patch.hotelProvider === 'amadeus') patch.amadeusKey = hotelKey.value.trim()
+    }
+    saveTravelConfig(patch)
+    if (flightKey) flightKey.value = ''
+    if (hotelKey) hotelKey.value = ''
+    showFlash('Travel Services 설정을 저장했습니다.')
     render({ guardNav: false })
   })
   // —— Translate pane (replaces main upper window) ——

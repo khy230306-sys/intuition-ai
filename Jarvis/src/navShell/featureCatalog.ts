@@ -122,6 +122,14 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
     keywords: ['친구', '초대'],
   },
   {
+    id: 'travel',
+    title: '여행',
+    description: '항공 · 호텔 · Travel Agent',
+    group: 'leisure',
+    view: 'travel',
+    keywords: ['여행', '항공', '호텔', '비행기', 'travel', 'flight', 'hotel', '오사카', '제주'],
+  },
+  {
     id: 'navigation',
     title: '길안내',
     description: '내부 지도 · 경로',

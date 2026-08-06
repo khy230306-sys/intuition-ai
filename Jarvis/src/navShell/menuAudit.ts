@@ -41,6 +41,7 @@ const KNOWN_VIEWS: View[] = [
   'navigation',
   'ai-camera',
   'family-helper',
+  'travel',
 ]
 
 export function runMenuAudit(): MenuAuditReport {

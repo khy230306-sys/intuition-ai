@@ -759,6 +759,7 @@ export async function think(
       const routed = routeCommand({ text: strippedEarly, activeMode: getActiveMode() })
       if (
         routed.intent.startsWith('translation.') ||
+        routed.intent.startsWith('travel.') ||
         routed.intent === 'vision.translation' ||
         routed.intent === 'clarify'
       ) {

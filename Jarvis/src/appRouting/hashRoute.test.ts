@@ -46,8 +46,8 @@ describe('parseLocationHash', () => {
     expect(r.valid).toBe(false)
     expect(r.screen).toBe('home')
   })
-  it('supports home/chat/life/family/all', () => {
-    for (const s of ['home', 'chat', 'life', 'family', 'all'] as const) {
+  it('supports home/chat/life/schedule/family/more/all', () => {
+    for (const s of ['home', 'chat', 'life', 'schedule', 'family', 'more', 'all'] as const) {
       expect(parseLocationHash(`#${s}`).screen).toBe(s)
     }
   })
@@ -72,11 +72,18 @@ describe('view/hash mapping', () => {
     expect(viewToHashScreen('navigation')).toBe('navigation')
     expect(hashScreenToView('navigation')).toBe('navigation')
   })
-  it('maps home v2 chat to #home', () => {
-    expect(viewToHashScreen('chat', { homeV2: true })).toBe('home')
+  it('maps home and chat distinctly', () => {
+    expect(viewToHashScreen('home')).toBe('home')
+    expect(viewToHashScreen('chat')).toBe('chat')
+    expect(hashScreenToView('home')).toBe('home')
+    expect(hashScreenToView('chat')).toBe('chat')
   })
-  it('maps all to global view', () => {
-    expect(hashScreenToView('all')).toBe('global')
+  it('maps all/more to more hub; life to schedule', () => {
+    expect(hashScreenToView('all')).toBe('more')
+    expect(hashScreenToView('more')).toBe('more')
+    expect(hashScreenToView('life')).toBe('schedule')
+    expect(viewToHashScreen('life')).toBe('schedule')
+    expect(viewToHashScreen('settings')).toBe('more')
   })
 })
 

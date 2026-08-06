@@ -91,7 +91,6 @@ import {
   isSafeExternalUrl,
   LOS2_ALLOWED_VIEWS,
 } from './life-os-2/ui/uiActions'
-import { buildHomeLos2Signals, renderHomeLos2StripHtml } from './life-os-2/ui/homeStrip'
 import {
   buildLifeBriefing,
   ensureLifeAssistantSchema,
@@ -121,6 +120,21 @@ import {
   type AutoDiagReport,
   type FeatureDiagStatus,
 } from './featureDiag'
+import {
+  clearRecentFeatures,
+  exportMenuStructureJson,
+  listVisibleQuickActions,
+  recordRecentFeature,
+  renderChatShell,
+  renderHomeDashboard,
+  renderMoreHub,
+  renderPrimaryBottomNav,
+  renderScheduleHub,
+  runMenuAudit,
+  toggleQuickHidden,
+  type ScheduleHubTab,
+} from './navShell'
+import { listFamilyHelperSchedules, listFamilyHelperTasks, listMedications } from './family-helper/store'
 import {
   attemptPwaInstall,
   bindPwaInstallEvents,
@@ -337,9 +351,7 @@ import {
   readStoredHomeVariant,
   renderDesignLabSection,
   renderHomeV2MoreSheet,
-  renderHomeV2NavWithPane,
   renderTopNavActions,
-  renderHomeV2Shell,
   renderNavigationSheet,
   renderTranslateSheet,
   defaultTranslateSheetState,
@@ -393,7 +405,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.22.1'
+const APP_VERSION = '1.23.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -700,11 +712,17 @@ const TRANSLATE_LANGS: Array<{ code: string; label: string; cmd: string }> = [
 ]
 
 const state = {
-  view: 'chat' as View,
+  view: 'home' as View,
   messages: [] as ChatMessage[],
   draft: '',
   busy: false,
   listening: false,
+  /** Schedule hub filter tab */
+  scheduleHubTab: 'today' as ScheduleHubTab,
+  /** More hub search query */
+  moreQuery: '',
+  /** Chat + overflow menu */
+  chatPlusOpen: false,
   /** Where MIC dictation should land: main chat, space rooms, or translate sheet. */
   dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends' | 'translate-sheet',
   voiceHint: '',
@@ -3202,7 +3220,7 @@ function renderLocationGate(): string {
 
 /** Bottom tabs removed — 홈/메뉴 are in the header; all destinations live in the 메뉴 sheet. */
 function renderNav(): string {
-  return ''
+  return renderPrimaryBottomNav(state.view)
 }
 
 function renderGlobal(): string {
@@ -3638,53 +3656,6 @@ function renderLos2CardsForMessage(m: ChatMessage): string {
   }
 }
 
-/** Unified HOME — dashboard + conversation on one screen. */
-function renderHomeV2View(): string {
-  try {
-    const model = buildHomeV2Model({
-      weather: state.weather,
-      listening: state.listening,
-      busy: state.busy,
-      draft: state.draft,
-    })
-    // Translate chips live behind the single badge (no duplicate 번역 잠금 + version bar)
-    const wizard = shouldShowAiWizard() ? renderAiWizardHtml() : ''
-    const tools =
-      state.messages.length > 0
-        ? `<div class="chat-tools home-v2-chat-tools">
-            <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
-          </div>`
-        : ''
-    // Empty HOME already has #voice-caption on the orb — do not duplicate the id.
-    const voiceHint =
-      state.messages.length === 0
-        ? ''
-        : `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" data-voice-caption="1" ${
-            state.listening || state.voiceHint ? '' : 'hidden'
-          }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
-    return renderHomeV2Shell(model, {
-      draft: state.draft,
-      busy: state.busy,
-      listening: state.listening,
-      appVersion: APP_VERSION,
-      moreOpen: state.homeV2MoreOpen,
-      composerExtraHtml: `${renderMusicMiniPlayer(
-        state.musicSession || sessionSnapshot(),
-        state.musicPlayerOpen,
-      )}`,
-      threadHtml: renderChatMessagesHtml(),
-      aboveThreadHtml: `${wizard}${tools}${renderBriefingStripHtml(buildLifeBriefing())}${renderHomeLos2StripHtml(buildHomeLos2Signals())}`,
-      voiceHintHtml: voiceHint,
-    })
-  } catch (err) {
-    const code = err instanceof Error ? err.name || 'HomeV2Error' : 'HomeV2Error'
-    recordDiagError(`home_v2_fallback:${code}`)
-    writeStoredHomeVariant('legacy')
-    showFlash('새 홈 화면을 불러오지 못해 기존 홈으로 전환했습니다.')
-    return renderChat()
-  }
-}
-
 function renderNavSettingsSection(): string {
   const nav = loadNavigationSettings()
   const homeAddr = nav.home?.addressText || ''
@@ -3772,12 +3743,140 @@ function renderNavSettingsSection(): string {
 }
 
 function renderChatOrHomeV2(): string {
+  // Legacy home variant still uses classic chat shell.
   if (activeHomeVariant() !== 'v2') {
     return renderChat()
   }
-  // Single unified home (dashboard + chat) — no separate 대화 pane.
-  state.homeV2Pane = 'home'
-  return renderHomeV2View()
+  return renderNavChatView()
+}
+
+function buildScheduleHubLines(tab: ScheduleHubTab) {
+  const today = new Date().toISOString().slice(0, 10)
+  const lines: Array<{ id: string; title: string; when: string; kind: string; done?: boolean }> = []
+  const schedules = listFamilyHelperSchedules({ days: tab === 'today' ? 1 : 30, includeDone: true })
+  const tasks = listFamilyHelperTasks(true)
+  const meds = listMedications(false)
+  const reminders = loadReminders()
+
+  if (tab === 'today' || tab === 'schedule' || tab === 'family') {
+    for (const s of schedules) {
+      if (tab === 'today' && s.date !== today) continue
+      lines.push({
+        id: s.id,
+        title: s.title,
+        when: `${s.date}${s.time ? ` ${s.time}` : ''}`,
+        kind: tab === 'family' || s.memberId ? '가족 일정' : '일정',
+        done: s.done,
+      })
+    }
+  }
+  if (tab === 'today' || tab === 'todos') {
+    for (const t of tasks.filter((x) => !x.done).slice(0, 12)) {
+      lines.push({
+        id: t.id,
+        title: t.title,
+        when: t.dueDate || '기한 없음',
+        kind: t.kind === 'homework' ? '숙제' : t.kind === 'supplies' ? '준비물' : '할 일',
+      })
+    }
+    for (const r of reminders.filter((x) => !x.done).slice(0, 8)) {
+      lines.push({
+        id: r.id,
+        title: r.text,
+        when: r.when || (r.whenAt ? new Date(r.whenAt).toLocaleString('ko-KR') : '알림'),
+        kind: '알림',
+      })
+    }
+  }
+  if (tab === 'today' || tab === 'family') {
+    for (const m of meds.slice(0, 6)) {
+      lines.push({
+        id: m.id,
+        title: m.name,
+        when: (m.times || []).join(', ') || '복용',
+        kind: '약 복용',
+      })
+    }
+  }
+  return lines.slice(0, 40)
+}
+
+function renderNavHomeView(): string {
+  try {
+    const model = buildHomeV2Model({
+      weather: state.weather,
+      listening: state.listening,
+      busy: state.busy,
+      draft: state.draft,
+    })
+    const schedules = listFamilyHelperSchedules({ days: 7 })
+    const scheduleLines = schedules
+      .filter((s) => !s.done)
+      .slice(0, 4)
+      .map((s) => ({
+        label: `${s.date}${s.time ? ` ${s.time}` : ''} ${s.title}`,
+        sub: '가족 일정',
+      }))
+    const alertLines = loadReminders()
+      .filter((r) => !r.done)
+      .slice(0, 3)
+      .map((r) => ({ label: r.text }))
+    const updateBanner =
+      state.remoteVersion && state.remoteVersion !== APP_VERSION
+        ? `새 버전 v${state.remoteVersion} 사용 가능 · 더보기 → 설정에서 업데이트`
+        : ''
+    return renderHomeDashboard({
+      model,
+      briefingHtml: renderBriefingStripHtml(buildLifeBriefing()),
+      scheduleLines,
+      alertLines,
+      updateBanner,
+      appVersion: APP_VERSION,
+    })
+  } catch (err) {
+    recordDiagError(`nav_home_fail:${err instanceof Error ? err.message.slice(0, 40) : 'err'}`)
+    return renderChat()
+  }
+}
+
+function renderNavChatView(): string {
+  const model = buildHomeV2Model({
+    weather: state.weather,
+    listening: state.listening,
+    busy: state.busy,
+    draft: state.draft,
+  })
+  const wizard = shouldShowAiWizard() ? renderAiWizardHtml() : ''
+  const voiceHint =
+    state.messages.length === 0
+      ? ''
+      : `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" data-voice-caption="1" ${
+          state.listening || state.voiceHint ? '' : 'hidden'
+        }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
+  return renderChatShell({
+    threadHtml: renderChatMessagesHtml(),
+    draft: state.draft,
+    busy: state.busy,
+    listening: state.listening,
+    translateActive: model.translate.active,
+    translateLabel: model.translate.label,
+    appVersion: APP_VERSION,
+    aboveThreadHtml: `${wizard}${renderBriefingStripHtml(buildLifeBriefing())}`,
+    voiceHintHtml: voiceHint,
+    composerExtraHtml: renderMusicMiniPlayer(state.musicSession || sessionSnapshot(), state.musicPlayerOpen),
+    plusOpen: state.chatPlusOpen,
+  })
+}
+
+function renderNavScheduleView(): string {
+  return renderScheduleHub({
+    tab: state.scheduleHubTab,
+    lines: buildScheduleHubLines(state.scheduleHubTab),
+  })
+}
+
+function renderNavMoreView(): string {
+  return renderMoreHub({ query: state.moreQuery, appVersion: APP_VERSION })
 }
 
 function renderNavChatCardsHtml(): string {
@@ -4994,14 +5093,18 @@ function patchNavBadges(): void {
 }
 
 function goToView(next: View, ev?: MouseEvent): void {
+  // Preserve features: life detail still available, but primary tab uses schedule hub.
+  if (next === 'life' && (ev?.currentTarget as HTMLElement | null)?.getAttribute?.('data-view') === 'life') {
+    /* keep life when explicitly requested from schedule hub */
+  }
   const same = next === state.view
   if (same) {
-    // Re-tapping FAM/FRD jumps to chat tab (faster than hunting sub-tabs)
     if (next === 'family' && state.familyTab !== 'chat') {
       state.familyTab = 'chat'
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
       state.homeV2TranslateSheetOpen = false
+      state.chatPlusOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
@@ -5010,13 +5113,15 @@ function goToView(next: View, ev?: MouseEvent): void {
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
       state.homeV2TranslateSheetOpen = false
+      state.chatPlusOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
       return
     }
-    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen || state.homeV2TranslateSheetOpen) {
+    if (state.homeV2MoreOpen || state.homeV2NavSheetOpen || state.homeV2TranslateSheetOpen || state.chatPlusOpen) {
       state.homeV2MoreOpen = false
       state.homeV2NavSheetOpen = false
       state.homeV2TranslateSheetOpen = false
+      state.chatPlusOpen = false
       render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
     }
     return
@@ -5025,9 +5130,11 @@ function goToView(next: View, ev?: MouseEvent): void {
   stopSpeaking()
   voice.stop()
   state.listening = false
+  state.chatPlusOpen = false
   // Navigation must never use pathname routes — hash + view state only.
   if (next === 'navigation') {
     state.homeV2TranslateSheetOpen = false
+    recordRecentFeature('navigation')
     openNavInternal({ source: 'go_to_view', pushHistory: true })
     return
   }
@@ -5037,7 +5144,18 @@ function goToView(next: View, ev?: MouseEvent): void {
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
+  if (next === 'family-helper') recordRecentFeature('family-helper')
+  else if (next === 'ai-camera') recordRecentFeature('ai-camera')
+  else if (next === 'chat') recordRecentFeature('chat')
+  else if (next === 'schedule') recordRecentFeature('schedule')
+  else if (next === 'life') recordRecentFeature('life')
   syncHashFromApp({ view: next, replace: false })
+  // Reset scroll on menu change
+  try {
+    window.scrollTo(0, 0)
+  } catch {
+    /* ignore */
+  }
   render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
   if (state.view === 'invest') void refreshQuotes()
 }
@@ -5088,27 +5206,33 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   invalidateSpaceInboxCache()
   const homeV2On = activeHomeVariant() === 'v2'
   const main =
-    state.view === 'chat'
-      ? renderChatOrHomeV2()
-      : state.view === 'invest'
-        ? renderInvest()
-        : state.view === 'life'
-          ? renderLife()
-          : state.view === 'family'
-            ? renderFamily()
-            : state.view === 'friends'
-              ? renderFriends()
-              : state.view === 'global'
-                ? renderGlobal()
-                : state.view === 'games'
-                  ? renderGames()
-                  : state.view === 'actions'
-                    ? renderActions()
-                    : state.view === 'customers'
-                      ? renderCustomers()
-                      : state.view === 'navigation'
-                        ? navRouteError
-                          ? `<section class="panel navv2-panel" data-navv2-error="1">
+    state.view === 'home'
+      ? renderNavHomeView()
+      : state.view === 'chat'
+        ? renderChatOrHomeV2()
+        : state.view === 'schedule'
+          ? renderNavScheduleView()
+          : state.view === 'more'
+            ? renderNavMoreView()
+            : state.view === 'invest'
+              ? renderInvest()
+              : state.view === 'life'
+                ? renderLife()
+                : state.view === 'family'
+                  ? renderFamily()
+                  : state.view === 'friends'
+                    ? renderFriends()
+                    : state.view === 'global'
+                      ? renderGlobal()
+                      : state.view === 'games'
+                        ? renderGames()
+                        : state.view === 'actions'
+                          ? renderActions()
+                          : state.view === 'customers'
+                            ? renderCustomers()
+                            : state.view === 'navigation'
+                              ? navRouteError
+                                ? `<section class="panel navv2-panel" data-navv2-error="1">
                               <header class="navv2-head">
                                 <button type="button" class="ghost-btn tiny" data-action="navv2-home">홈으로</button>
                                 <strong>AIZIO 길안내</strong>
@@ -5121,37 +5245,37 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                                 <button type="button" class="ghost-btn" data-action="navv2-copy-diag">진단 복사</button>
                               </div>
                             </section>`
-                          : renderNavigationScreen(state.navV2)
-                        : state.view === 'ai-camera'
-                          ? (() => {
-                              try {
-                                return renderCameraScreen(state.aiCamera)
-                              } catch (err) {
-                                recordDiagError(
-                                  `VISION-PROVIDER-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
-                                )
-                                return `<section class="panel"><p class="hint">카메라 화면을 불러오지 못했어요. (VISION-PROVIDER-001)</p>
-                                  <button type="button" class="primary-btn" data-view="chat">홈으로</button>
+                                : renderNavigationScreen(state.navV2)
+                              : state.view === 'ai-camera'
+                                ? (() => {
+                                    try {
+                                      return renderCameraScreen(state.aiCamera)
+                                    } catch (err) {
+                                      recordDiagError(
+                                        `VISION-PROVIDER-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
+                                      )
+                                      return `<section class="panel"><p class="hint">카메라 화면을 불러오지 못했어요. (VISION-PROVIDER-001)</p>
+                                  <button type="button" class="primary-btn" data-view="home">홈으로</button>
                                   <button type="button" class="ghost-btn" data-view="ai-camera">다시 시도</button></section>`
-                              }
-                            })()
-                          : state.view === 'family-helper'
-                            ? (() => {
-                                try {
-                                  return renderFamilyHelperScreen(state.familyHelper)
-                                } catch (err) {
-                                  recordDiagError(
-                                    `FAMILY-STORAGE-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
-                                  )
-                                  return `<section class="panel"><p class="hint">가족 도우미를 불러오지 못했어요. (FAMILY-STORAGE-001)</p>
-                                    <button type="button" class="primary-btn" data-view="chat">홈으로</button>
+                                    }
+                                  })()
+                                : state.view === 'family-helper'
+                                  ? (() => {
+                                      try {
+                                        return renderFamilyHelperScreen(state.familyHelper)
+                                      } catch (err) {
+                                        recordDiagError(
+                                          `FAMILY-STORAGE-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
+                                        )
+                                        return `<section class="panel"><p class="hint">가족 도우미를 불러오지 못했어요. (FAMILY-STORAGE-001)</p>
+                                    <button type="button" class="primary-btn" data-view="home">홈으로</button>
                                     <button type="button" class="ghost-btn" data-view="family-helper">다시 시도</button></section>`
-                                }
-                              })()
-                            : renderSettings()
-  const nav = homeV2On
-    ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
-    : renderNav()
+                                      }
+                                    })()
+                                  : state.view === 'settings'
+                                    ? renderSettings()
+                                    : renderNavMoreView()
+  const nav = renderNav()
   const more = state.homeV2MoreOpen ? renderHomeV2MoreSheet({ showInstall: state.showInstall }) : ''
   const navSheet =
     state.homeV2NavSheetOpen
@@ -5166,7 +5290,8 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
         voiceHint: state.dictationTarget === 'translate-sheet' ? state.voiceHint : '',
       })
     : ''
-  const hideBrand = homeV2On && state.view === 'chat'
+  const hideBrand =
+    homeV2On && (state.view === 'home' || state.view === 'chat' || state.view === 'schedule' || state.view === 'more')
   // Install CTA stays visible on HOME — users must be able to add to home screen.
   refreshInstallHint()
   const installHtml = renderInstall()
@@ -6017,18 +6142,12 @@ function bind(): void {
   })
   document.querySelectorAll('[data-action="home-v2-nav-home"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      state.view = 'chat'
-      state.homeV2Pane = 'home'
-      state.homeV2MoreOpen = false
-      render()
-      scrollChat()
+      goToView('home')
     })
   })
   document.querySelectorAll('[data-action="home-v2-nav-more"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      state.homeV2TranslateSheetOpen = false
-      state.homeV2MoreOpen = !state.homeV2MoreOpen
-      render()
+      goToView('more')
     })
   })
   document.querySelector('[data-action="home-v2-more-close"]')?.addEventListener('click', () => {
@@ -6037,8 +6156,7 @@ function bind(): void {
   })
   document.querySelector('[data-action="life-brief-open"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
-    state.view = 'chat'
-    render()
+    goToView('chat')
     void handleUserText('오늘 하루 요약해줘')
   })
   document.querySelector('[data-action="life-brief-refresh"]')?.addEventListener('click', () => {
@@ -6065,8 +6183,8 @@ function bind(): void {
       goToView('ai-camera')
     })
   })
-  document.querySelector('[data-action="aicam-back"]')?.addEventListener('click', () => goToView('chat'))
-  document.querySelector('[data-action="fh-back"]')?.addEventListener('click', () => goToView('chat'))
+  document.querySelector('[data-action="aicam-back"]')?.addEventListener('click', () => goToView('home'))
+  document.querySelector('[data-action="fh-back"]')?.addEventListener('click', () => goToView('family-helper'))
   document.querySelector('[data-home-v2-more="1"]')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       state.homeV2MoreOpen = false
@@ -6448,6 +6566,138 @@ function bind(): void {
     goToView('settings')
     showFlash('설정 → 진단 새로고침 / JSON 내보내기')
   })
+
+  // —— Nav shell (v1.23): home / schedule / more / chat plus ——
+  document.getElementById('home-ask-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const input = document.getElementById('home-ask-input') as HTMLInputElement | null
+    const q = (input?.value || '').trim()
+    goToView('chat')
+    if (q) void handleUserText(q)
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-nav-quick]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.quickKind
+      const payload = btn.dataset.quickPayload || ''
+      const id = btn.dataset.navQuick || ''
+      if (id) recordRecentFeature(id === 'ai-camera' ? 'ai-camera' : id === 'family-schedule' ? 'family-helper' : 'schedule')
+      if (kind === 'view' && payload) {
+        goToView(payload as View)
+        return
+      }
+      if (kind === 'action' && payload === 'translate') {
+        openTranslateSheet()
+        recordRecentFeature('translate')
+        return
+      }
+      if (kind === 'cmd' && payload) {
+        goToView('chat')
+        void handleUserText(payload)
+      }
+    })
+  })
+  document.querySelector('[data-action="clear-recent-features"]')?.addEventListener('click', () => {
+    clearRecentFeatures()
+    showFlash('최근 사용 기록을 지웠어요.')
+    render()
+  })
+  document.querySelector('[data-action="edit-quick-actions"]')?.addEventListener('click', () => {
+    const visible = listVisibleQuickActions().map((q) => q.id)
+    const id = window.prompt(
+      '숨길 빠른 실행 ID를 입력하세요 (다시 누르면 표시).\n가능: schedule-add, reminder-add, ai-camera, translate, family-schedule, todo-add',
+      visible[0] || 'translate',
+    )
+    if (!id) return
+    toggleQuickHidden(id as Parameters<typeof toggleQuickHidden>[0])
+    showFlash('빠른 실행을 저장했어요.')
+    render()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-sched-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.scheduleHubTab = (btn.dataset.schedTab || 'today') as ScheduleHubTab
+      render()
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-fh-open-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.fhOpenTab
+      if (tab) state.familyHelper = { ...state.familyHelper, tab: tab as FamilyHelperState['tab'] }
+    })
+  })
+  const moreQ = document.querySelector<HTMLInputElement>('[data-nav-more-q]')
+  moreQ?.addEventListener('input', () => {
+    state.moreQuery = moreQ.value
+    const pos = moreQ.selectionStart
+    window.clearTimeout((moreQ as HTMLInputElement & { _t?: number })._t)
+    ;(moreQ as HTMLInputElement & { _t?: number })._t = window.setTimeout(() => {
+      render({ guardNav: false })
+      const el = document.querySelector<HTMLInputElement>('[data-nav-more-q]')
+      if (el) {
+        el.focus()
+        try {
+          el.setSelectionRange(pos ?? el.value.length, pos ?? el.value.length)
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 180)
+  })
+  document.querySelector('[data-action="chat-plus-toggle"]')?.addEventListener('click', () => {
+    state.chatPlusOpen = !state.chatPlusOpen
+    render({ guardNav: false })
+  })
+  document.querySelector('[data-action="export-menu-json"]')?.addEventListener('click', () => {
+    const blob = new Blob([exportMenuStructureJson()], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `aizio-menu-structure-${APP_VERSION}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    showFlash('메뉴 구조 JSON을 내보냈어요.')
+  })
+  document.querySelector('[data-action="run-menu-audit"]')?.addEventListener('click', () => {
+    const r = runMenuAudit()
+    showFlash(
+      `메뉴 검사 · 정상 ${r.summary.ok} · 정리 ${r.summary.needs_cleanup} · 중복 ${r.summary.duplicate} · 불가 ${r.summary.unreachable}`,
+    )
+    state.featureDiagStatusText = `메뉴 접근성: 탭 ${r.primaryTabs} · 기능 ${r.menuCount} · 깨진링크 ${r.summary.unreachable}`
+    goToView('settings')
+  })
+  document.querySelector('[data-action="lifeos-open"]')?.addEventListener('click', () => {
+    goToView('life')
+    showFlash('Life OS · 생활 화면에서 목표·루틴 등을 이용하세요.')
+  })
+  document.querySelector('[data-action="goto-backup"]')?.addEventListener('click', () => {
+    goToView('settings')
+    showFlash('설정에서 백업·복원을 이용하세요.')
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-feature-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.featureId
+      if (id) recordRecentFeature(id)
+    })
+  })
+  document.querySelector('[data-action="mic-from-home"]')?.addEventListener('click', () => {
+    goToView('chat')
+  })
+
+  // Hide bottom nav while soft keyboard is open (mobile) — bind once
+  if (!(window as Window & { __aizioKbNav?: boolean }).__aizioKbNav) {
+    ;(window as Window & { __aizioKbNav?: boolean }).__aizioKbNav = true
+    try {
+      const vv = window.visualViewport
+      if (vv) {
+        const syncKb = () => {
+          const open = vv.height < window.innerHeight * 0.75
+          document.body.classList.toggle('keyboard-open', open)
+        }
+        vv.addEventListener('resize', syncKb)
+        syncKb()
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   document.querySelectorAll<HTMLButtonElement>('[data-suggest]').forEach((btn) => {
     btn.addEventListener('click', () => {

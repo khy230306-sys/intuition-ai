@@ -85,25 +85,50 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
   let body = ''
   const lastMember = getLastSelectedMemberId()
   if (st.tab === 'overview') {
+    const memberCards = members
+      .filter((m) => m.active)
+      .slice(0, 8)
+      .map(
+        (m) =>
+          `<button type="button" class="ghost-btn tiny" data-fh-filter-member="${esc(m.id)}">${esc(m.name)} · ${esc(REL_LABEL[m.relation])}</button>`,
+      )
+      .join('')
     body = `
-      <p class="hint">구성원 ${members.filter((m) => m.active).length}명 · 다가오는 일정 ${schedules.filter((s) => !s.done).length}건 · 할 일 ${tasks.filter((t) => !t.done).length}건</p>
-      ${
-        !members.length
-          ? `<p class="hint">시작하기: 이름과 관계만 입력해도 구성원을 저장할 수 있어요. 「구성원」탭 → 추가.</p>`
-          : ''
-      }
-      <ul class="fh-list">
-        ${schedules
-          .filter((s) => !s.done)
-          .slice(0, 6)
-          .map((s) => `<li><strong>${esc(s.date)}${s.time ? ' ' + esc(s.time) : ''}</strong> ${esc(s.title)}</li>`)
-          .join('') || '<li class="hint">일정이 없어요. 채팅으로 「한영이 내일 4시 반 하원」처럼 말해 보세요.</li>'}
-      </ul>
-      <div class="row-btns">
-        <button type="button" class="primary-btn" data-fh-tab="schedule">일정 관리</button>
-        <button type="button" class="ghost-btn" data-fh-tab="members">구성원</button>
-        <button type="button" class="ghost-btn" data-action="open-ai-camera">안내문 촬영</button>
-      </div>
+      <section class="fh-overview-block">
+        <h3 class="subsection-title">가족 구성원</h3>
+        ${
+          memberCards
+            ? `<div class="row-btns">${memberCards}</div>`
+            : `<p class="hint">이름과 관계만 있어도 저장할 수 있어요.</p>`
+        }
+        <button type="button" class="primary-btn" data-fh-tab="members">구성원 추가</button>
+      </section>
+      <section class="fh-overview-block">
+        <h3 class="subsection-title">오늘의 가족 일정</h3>
+        <ul class="fh-list">
+          ${schedules
+            .filter((s) => !s.done)
+            .slice(0, 5)
+            .map((s) => `<li><strong>${esc(s.date)}${s.time ? ' ' + esc(s.time) : ''}</strong> ${esc(s.title)}</li>`)
+            .join('') || '<li class="hint">일정이 없어요. 「한영이 내일 4시 반 하원」처럼 대화로 추가해 보세요.</li>'}
+        </ul>
+        <button type="button" class="ghost-btn" data-fh-tab="schedule">일정 추가</button>
+      </section>
+      <section class="fh-overview-block">
+        <h3 class="subsection-title">주요 기능</h3>
+        <details class="fh-more-features">
+          <summary>기능 보기 (준비물 · 약·접종 · 성장 · 긴급정보)</summary>
+          <div class="row-btns">
+            <button type="button" class="ghost-btn" data-fh-tab="tasks">준비물·숙제</button>
+            <button type="button" class="ghost-btn" data-fh-tab="meds">약·접종</button>
+            <button type="button" class="ghost-btn" data-fh-tab="growth">성장 기록</button>
+            <button type="button" class="ghost-btn" data-fh-tab="emergency">긴급 정보</button>
+            <button type="button" class="ghost-btn" data-view="family">가족 공간</button>
+            <button type="button" class="ghost-btn" data-action="open-ai-camera">안내문 촬영</button>
+          </div>
+        </details>
+        <p class="hint">구성원 ${members.filter((m) => m.active).length}명 · 할 일 ${tasks.filter((t) => !t.done).length}건 · 약 ${meds.length} · 접종 ${vax.length}</p>
+      </section>
     `
   } else if (st.tab === 'members') {
     body = `
@@ -302,8 +327,8 @@ export function renderFamilyHelperScreen(st: FamilyHelperState): string {
   return `
     <section class="panel fh-panel" data-family-helper="1">
       <header class="navv2-head">
-        <button type="button" class="ghost-btn tiny" data-action="fh-back">뒤로</button>
-        <strong>가족 도우미</strong>
+        <button type="button" class="ghost-btn tiny" data-action="fh-back">홈</button>
+        <strong>가족</strong>
         <button type="button" class="ghost-btn tiny" data-view="family">가족 공간</button>
       </header>
       <p class="hint">로컬 우선 저장 · 기존 가족 채팅 공간과 별도로 구성원·일정·준비물을 관리합니다.</p>
@@ -330,6 +355,13 @@ export function bindFamilyHelperScreen(
   root.querySelector('[data-action="fh-back"]')?.addEventListener('click', () => opts?.onBack?.())
   root.querySelectorAll<HTMLButtonElement>('[data-fh-tab]').forEach((btn) => {
     btn.addEventListener('click', () => redraw({ tab: btn.dataset.fhTab as FamilyHelperTab, status: '' }))
+  })
+  root.querySelectorAll<HTMLButtonElement>('[data-fh-filter-member]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.fhFilterMember || ''
+      setLastSelectedMemberId(id)
+      redraw({ filterMemberId: id, tab: 'schedule', status: '선택한 구성원 일정만 표시합니다.' })
+    })
   })
 
   root.querySelector('#fh-filter-member')?.addEventListener('change', (e) => {

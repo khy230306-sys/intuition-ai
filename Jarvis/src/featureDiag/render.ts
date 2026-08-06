@@ -144,6 +144,8 @@ export function renderFeatureDiagPanel(opts: {
         <button type="button" class="ghost-btn" data-action="fdiag-cache-refresh">앱 캐시만 새로고침</button>
         <button type="button" class="ghost-btn" data-action="fdiag-copy">진단 정보 복사</button>
         <button type="button" class="ghost-btn" data-action="fdiag-export">진단 JSON 내보내기</button>
+        <button type="button" class="ghost-btn" data-action="run-menu-audit">메뉴 접근성 검사</button>
+        <button type="button" class="ghost-btn" data-action="export-menu-json">메뉴 구조 JSON</button>
       </div>
       <p class="hint">앱 캐시만 새로고침은 가족·일정·주차·Vision 기록 등 <strong>사용자 데이터를 삭제하지 않습니다</strong>.</p>
 

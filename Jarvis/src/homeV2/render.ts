@@ -199,8 +199,8 @@ export function renderHomeV2Shell(
 }
 
 /**
- * Bottom tab bar removed — 홈/생활/가족/메뉴 live in the top actions + 메뉴 sheet.
- * Kept as a no-op export so call sites stay stable.
+ * @deprecated Primary bottom nav lives in navShell.renderPrimaryBottomNav.
+ * Kept for call-site/test compatibility.
  */
 export function renderHomeV2NavWithPane(
   _activeView: string,
@@ -233,64 +233,26 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
         <p class="hint home-v2-more-hint">앱에 있는 화면으로만 이동합니다. 채팅·MIC로도 같은 기능을 쓸 수 있습니다.</p>
 
         <div class="home-v2-more-group">
-          <h4>대화</h4>
+          <h4>주요 메뉴</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('홈 · 채팅', 'data-action="home-v2-nav-home"')}
-            ${moreItem('브리핑', 'data-action="home-v2-quick" data-quick-id="briefing"')}
-            ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
+            ${moreItem('홈', 'data-view="home"')}
+            ${moreItem('대화', 'data-view="chat"')}
+            ${moreItem('일정', 'data-view="schedule"')}
+            ${moreItem(`가족${famBadge}`, 'data-view="family-helper"')}
+            ${moreItem('더보기 · 검색', 'data-view="more"')}
+          </ul>
+        </div>
+
+        <div class="home-v2-more-group">
+          <h4>바로가기</h4>
+          <ul class="home-v2-more-list">
+            ${moreItem('AI 카메라', 'data-view="ai-camera"')}
             ${moreItem('번역하기', 'data-action="home-v2-quick" data-quick-id="translate"')}
-            ${moreItem('음악', 'data-action="home-v2-music"')}
-          </ul>
-        </div>
-
-        <div class="home-v2-more-group">
-          <h4>공간</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem(`가족${famBadge}`, 'data-view="family"')}
-            ${moreItem('가족 도우미', 'data-view="family-helper"')}
+            ${moreItem(`가족 공간${famBadge}`, 'data-view="family"')}
             ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
-          </ul>
-        </div>
-
-        <div class="home-v2-more-group">
-          <h4>일상 · AI 도우미</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('생활비서 브리핑', 'data-action="life-brief-open"')}
-            ${moreItem('AI 만능 카메라', 'data-view="ai-camera"')}
-            ${moreItem('가족 도우미', 'data-view="family-helper"')}
-            ${moreItem('생활 · 할 일 · 알림', 'data-view="life"')}
-            ${moreItem('길안내', 'data-view="navigation"')}
-            ${moreItem('손님관리', 'data-view="customers"')}
-            ${moreItem('빠른 실행', 'data-view="actions"')}
-          </ul>
-        </div>
-
-        <div class="home-v2-more-group">
-          <h4>투자 · 여가</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('투자 · 주식엔진', 'data-view="invest"')}
-            ${moreItem('게임', 'data-view="games"')}
-          </ul>
-        </div>
-
-        <div class="home-v2-more-group">
-          <h4>설정</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('설정 · AI · 업데이트', 'data-view="settings"')}
-            ${moreItem('번역 · 언어 설정', 'data-view="global"')}
-            ${moreItem('번역하기 창', 'data-action="home-v2-quick" data-quick-id="translate"')}
+            ${moreItem('설정', 'data-view="settings"')}
             ${showInstall ? moreItem('홈 화면 설치 방법', 'data-action="install-show-guide"') : ''}
-            ${moreItem('사용설명서', 'data-action="home-v2-guide"')}
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}
-            ${moreItem('푸시 테스트', 'data-action="home-v2-goto-push"')}
-          </ul>
-        </div>
-
-        <div class="home-v2-more-group">
-          <h4>화면 모드</h4>
-          <ul class="home-v2-more-list">
-            ${moreItem('새 홈 (HOME v2)', 'data-action="home-v2-set" data-home-variant="v2"')}
-            ${moreItem('기존 홈', 'data-action="home-v2-set" data-home-variant="legacy"')}
           </ul>
         </div>
       </div>

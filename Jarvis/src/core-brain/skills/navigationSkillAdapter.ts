@@ -2,7 +2,10 @@ import type { View } from '../../types'
 import type { SkillContext, SkillResult } from '../types'
 
 const VIEWS: View[] = [
+  'home',
   'chat',
+  'schedule',
+  'more',
   'invest',
   'life',
   'family',
@@ -38,19 +41,22 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     }
   }
   const labels: Record<View, string> = {
+    home: '홈',
     chat: '대화',
+    schedule: '일정',
+    more: '더보기',
     invest: '투자',
     life: '생활',
-    family: '가족',
+    family: '가족 공간',
     friends: '친구',
     games: '게임',
-    actions: '액션',
+    actions: '빠른 실행',
     settings: '설정',
-    global: '글로벌',
+    global: '언어 설정',
     customers: '손님관리',
     navigation: '길안내',
     'ai-camera': 'AI 카메라',
-    'family-helper': '가족 도우미',
+    'family-helper': '가족',
   }
   return {
     success: true,

@@ -161,7 +161,10 @@ export interface JarvisSettings {
 }
 
 export type View =
+  | 'home'
   | 'chat'
+  | 'schedule'
+  | 'more'
   | 'invest'
   | 'life'
   | 'family'

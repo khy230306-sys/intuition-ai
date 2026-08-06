@@ -4,7 +4,16 @@
  * and rewrite-less snapshots return platform 404.
  */
 
-export const APP_HASH_SCREENS = ['home', 'chat', 'life', 'family', 'all', 'navigation'] as const
+export const APP_HASH_SCREENS = [
+  'home',
+  'chat',
+  'life',
+  'schedule',
+  'family',
+  'more',
+  'all',
+  'navigation',
+] as const
 export type AppHashScreen = (typeof APP_HASH_SCREENS)[number]
 
 export type ParsedHashRoute = {
@@ -110,15 +119,14 @@ export function viewToHashScreen(
   opts?: { homeV2?: boolean; homeV2Pane?: string },
 ): AppHashScreen {
   if (view === 'navigation') return 'navigation'
-  if (view === 'life') return 'life'
-  if (view === 'family') return 'family'
-  if (view === 'global' || view === 'actions') return 'all'
-  if (view === 'chat') {
-    if (opts?.homeV2 && opts.homeV2Pane !== 'thread') return 'home'
-    return 'chat'
-  }
-  // Other views keep chat/home hash rather than inventing pathnames.
-  return opts?.homeV2 ? 'home' : 'chat'
+  if (view === 'schedule' || view === 'life') return 'schedule'
+  if (view === 'family' || view === 'family-helper') return 'family'
+  if (view === 'more' || view === 'settings' || view === 'global' || view === 'actions') return 'more'
+  if (view === 'home') return 'home'
+  if (view === 'chat') return 'chat'
+  // Secondary screens keep more/home hash rather than inventing pathnames.
+  void opts
+  return 'more'
 }
 
 export function hashScreenToView(screen: AppHashScreen): string {
@@ -126,16 +134,18 @@ export function hashScreenToView(screen: AppHashScreen): string {
     case 'navigation':
       return 'navigation'
     case 'life':
-      return 'life'
+    case 'schedule':
+      return 'schedule'
     case 'family':
-      return 'family'
+      return 'family-helper'
+    case 'more':
     case 'all':
-      return 'global'
+      return 'more'
     case 'chat':
       return 'chat'
     case 'home':
     default:
-      return 'chat'
+      return 'home'
   }
 }
 

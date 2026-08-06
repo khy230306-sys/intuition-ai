@@ -1,7 +1,16 @@
 /** Home-screen PWA update helpers — always target the fixed host for the current channel. */
 
 export const FIXED_APP_URL = 'https://jarvis-app.shipstatic.com'
-export const FIXED_PREVIEW_URL = 'https://light-lab.shipstatic.com'
+
+/**
+ * Canonical fixed Preview (claimable platform domain).
+ * ShipStatic rejects the hyphenated snapshot id light-lab-92m8bq7 as a domain.
+ */
+export const FIXED_PREVIEW_URL = 'https://lightlab-92m8bq7.shipstatic.com'
+export const FIXED_PREVIEW_HOST = 'lightlab-92m8bq7.shipstatic.com'
+
+/** Extra Preview aliases that stay same-origin for home-screen updates. */
+export const FIXED_PREVIEW_ALIAS_HOSTS = ['light-lab.shipstatic.com'] as const
 
 /** Snapshot URL the user originally bookmarked — not claimable as a ShipStatic domain. */
 export const LEGACY_PREVIEW_HOST = 'light-lab-92m8bq7.shipstatic.com'
@@ -15,10 +24,28 @@ export type RemoteBuildInfo = {
   commit: string | null
 }
 
+export function isFixedPreviewHost(hostname?: string): boolean {
+  const host = String(hostname || '')
+    .trim()
+    .toLowerCase()
+  if (!host) return false
+  if (host === FIXED_PREVIEW_HOST) return true
+  return (FIXED_PREVIEW_ALIAS_HOSTS as readonly string[]).includes(host)
+}
+
+export function isLegacyPreviewHost(hostname?: string): boolean {
+  return (
+    String(hostname || '')
+      .trim()
+      .toLowerCase() === LEGACY_PREVIEW_HOST
+  )
+}
+
 /**
  * Resolve which fixed origin "앱 업데이트" should hit.
- * - On fixed Preview (or the legacy light-lab-92m8bq7 snapshot): stay on Preview.
- * - Everywhere else (production / random snapshots / local): production.
+ * - Already on a fixed Preview alias → stay on THAT origin (home-screen PWA safe).
+ * - Legacy snapshot light-lab-92m8bq7 → migrate to canonical fixed Preview.
+ * - Everywhere else → production.
  */
 export function resolveUpdateBaseUrl(hostname?: string): string {
   const host = (
@@ -27,10 +54,22 @@ export function resolveUpdateBaseUrl(hostname?: string): string {
   )
     .trim()
     .toLowerCase()
-  if (host === 'light-lab.shipstatic.com' || host === LEGACY_PREVIEW_HOST) {
-    return FIXED_PREVIEW_URL
-  }
+  if (isFixedPreviewHost(host)) return `https://${host}`
+  if (isLegacyPreviewHost(host)) return FIXED_PREVIEW_URL
   return FIXED_APP_URL
+}
+
+/** True when update will leave the current origin (legacy snapshot → fixed Preview). */
+export function updateCrossesOrigin(hostname?: string): boolean {
+  const host = (
+    hostname ??
+    (typeof location !== 'undefined' && location?.hostname ? location.hostname : '')
+  )
+    .trim()
+    .toLowerCase()
+  if (!host) return false
+  const target = resolveUpdateBaseUrl(host).replace(/^https?:\/\//, '').replace(/\/$/, '')
+  return target !== host
 }
 
 /** Parse version from deployed index.html (meta or title). */

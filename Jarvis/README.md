@@ -6,12 +6,12 @@ iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.
 ## 바로 사용 (iPhone)
 
 **앱 URL (프로덕션 고정):** https://jarvis-app.shipstatic.com  
-**Preview URL (검증 고정):** https://light-lab.shipstatic.com
+**Preview URL (검증 고정):** https://lightlab-92m8bq7.shipstatic.com
 
 > 홈 화면에 추가한 앱이 예전 버전이면 **업데이트** 버튼을 누르세요.  
-> 정식 주소는 **https://jarvis-app.shipstatic.com** 입니다. Preview 검증은 **https://light-lab.shipstatic.com** 만 쓰세요.  
+> Preview 홈 화면 추가는 **https://lightlab-92m8bq7.shipstatic.com** 에서 하세요 (같은 출처에서 업데이트가 됩니다).  
+> 예전 `light-lab-92m8bq7`(하이픈) 스냅샷은 고정 도메인이 될 수 없습니다 — 위 고정 Preview로 다시 추가하세요.  
 > 랜덤 `*.shipstatic.com` 스냅샷 주소는 옛 버전일 수 있습니다.  
-> 위치 허용을 권장합니다. 거부해도 **오프라인으로 계속**으로 게임·대화·설정을 쓸 수 있습니다.  
 > **고정 주소는 바뀌지 않습니다.** `deploy:web` / `deploy:preview`가 각각 도메인만 다시 가리킵니다.
 >
 > ShipStatic **무료 플랜**은 배포 스냅샷이 약 **10개**까지입니다. 배포 스크립트가 업로드 전에 연결되지 않은 옛 스냅샷을 자동 삭제합니다(프로덕션·Preview 고정 도메인은 보호).

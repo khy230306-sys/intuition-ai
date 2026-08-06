@@ -114,7 +114,9 @@ describe('pwaInstall', () => {
     const method = installMethodSummary('ios')
     expect(method.title).toBe('홈 화면 설치 방법')
     expect(method.lines.join(' ')).toMatch(/공유/)
-    expect(installMethodSummary('ios', { previewHost: true }).lines.join(' ')).toMatch(/Preview|정식/)
+    expect(installMethodSummary('ios', { previewHost: true }).lines.join(' ')).toMatch(
+      /lightlab-92m8bq7|스냅샷|고정/,
+    )
     expect(isPreviewInstallHost('pulsing-bloom-qk5a536.shipstatic.com')).toBe(true)
     expect(isPreviewInstallHost('jarvis-app.shipstatic.com')).toBe(false)
     expect(
@@ -122,7 +124,16 @@ describe('pwaInstall', () => {
         'pulsing-bloom-qk5a536.shipstatic.com',
         'https://pulsing-bloom-qk5a536.shipstatic.com',
       ),
-    ).toBe(PRODUCTION_INSTALL_URL)
+    ).toBe('https://lightlab-92m8bq7.shipstatic.com')
+    expect(
+      getRecommendedInstallUrl(
+        'lightlab-92m8bq7.shipstatic.com',
+        'https://lightlab-92m8bq7.shipstatic.com',
+      ),
+    ).toBe('https://lightlab-92m8bq7.shipstatic.com')
+    expect(
+      getRecommendedInstallUrl('light-lab-92m8bq7.shipstatic.com', 'https://light-lab-92m8bq7.shipstatic.com'),
+    ).toBe('https://lightlab-92m8bq7.shipstatic.com')
     expect(getRecommendedInstallUrl('jarvis-app.shipstatic.com', 'https://jarvis-app.shipstatic.com')).toBe(
       'https://jarvis-app.shipstatic.com',
     )

@@ -6,8 +6,11 @@ import {
   clearPendingUpdate,
   compareAppVersions,
   fetchRemoteAppVersion,
+  fetchRemoteAppVersionFromHtml,
   fetchRemoteBuildMeta,
   readPendingUpdate,
+  resolveUpdateBaseUrl,
+  updateCrossesOrigin,
   writePendingUpdate,
 } from './appUpdate'
 import {
@@ -74,10 +77,11 @@ import {
   detectInstallPlatform,
   installGuideSteps,
   installMethodSummary,
+  isFixedPreviewInstallHost,
   isPreviewInstallHost,
   markPwaInstalled,
   onPwaInstallChange,
-  PRODUCTION_INSTALL_URL,
+  FIXED_PREVIEW_INSTALL_URL,
   shouldShowInstallButton,
   type InstallPlatform,
 } from './pwaInstall'
@@ -509,13 +513,15 @@ async function hardRefreshApp(opts?: { targetVersion?: string; targetBuildId?: s
 /**
  * Home-screen / Safari update: wipe SW first (so version check is not precache-lied),
  * read live build-meta, then hard-navigate to the fixed host for this channel
- * (production → jarvis-app, fixed/legacy Preview → light-lab).
+ * (production → jarvis-app; fixed Preview → same origin; legacy snapshot → lightlab-92m8bq7).
  */
 async function updateAppToLatest(): Promise<void> {
-  showFlash('최신판을 확인하는 중…')
+  const base = resolveUpdateBaseUrl()
+  const crosses = updateCrossesOrigin()
+  showFlash(crosses ? '고정 Preview로 이동해 최신판을 받습니다…' : '최신판을 확인하는 중…')
   sessionStorage.removeItem('jarvis.refreshing')
   sessionStorage.removeItem('jarvis.buildReloaded')
-  paintBootSplash('캐시를 비우고 최신판을 확인하는 중…')
+  paintBootSplash(crosses ? '고정 Preview 주소로 옮기는 중…' : '캐시를 비우고 최신판을 확인하는 중…')
 
   // 1) Kill SW/precache BEFORE asking the server — old SW served stale index/build-meta.
   try {
@@ -527,11 +533,14 @@ async function updateAppToLatest(): Promise<void> {
 
   let remote = null as Awaited<ReturnType<typeof fetchRemoteBuildMeta>>
   try {
-    remote = await fetchRemoteBuildMeta()
+    remote = await fetchRemoteBuildMeta(8000, base)
   } catch {
     remote = null
   }
-  const remoteVer = remote?.version || (await fetchRemoteAppVersion().catch(() => null))
+  const remoteVer =
+    remote?.version ||
+    (await fetchRemoteAppVersionFromHtml(6000, base).catch(() => null)) ||
+    (await fetchRemoteAppVersion().catch(() => null))
   state.remoteVersion = remoteVer
   const targetVer = remoteVer || APP_VERSION
   const targetBid = remote?.buildId || null
@@ -547,14 +556,15 @@ async function updateAppToLatest(): Promise<void> {
   // Pending target — do NOT mark SEEN as remote until this bundle actually matches
   writePendingUpdate(targetVer, targetBid)
   sessionStorage.setItem('jarvis.refreshing', '1')
-  paintBootSplash('최신판을 불러오는 중…')
-  window.location.replace(buildUpdateUrl({ version: targetVer, buildId: targetBid, step: 1 }))
+  paintBootSplash(crosses ? `고정 Preview로 최신판 불러오는 중…` : '최신판을 불러오는 중…')
+  window.location.replace(buildUpdateUrl({ version: targetVer, buildId: targetBid, step: 1, baseUrl: base }))
 }
 
 /** Settings-only update controls (not shown on chat / games / other tabs). */
 function renderUpdateCard(): string {
   const remote = state.remoteVersion
   const newer = remote && remote !== APP_VERSION
+  const updateHost = resolveUpdateBaseUrl().replace(/^https?:\/\//, '')
   const status = !state.online
     ? '오프라인 · 연결 후 업데이트하세요'
     : newer
@@ -568,7 +578,7 @@ function renderUpdateCard(): string {
         <strong>앱 업데이트</strong>
         <span class="ver">이 기기 v${APP_VERSION}</span>
       </div>
-      <p class="hint">${status}. 홈 화면 앱도 이 버튼으로 캐시를 지우고 공식 URL에서 다시 받습니다. 그래도 버전이 안 바뀌면 아래 «앱 캐시 새로고침»을 한 번 더 누르세요.</p>
+      <p class="hint">${status}. 홈 화면 앱도 이 버튼으로 캐시를 지우고 <strong>${escapeHtml(updateHost)}</strong> 에서 다시 받습니다. 그래도 버전이 안 바뀌면 아래 «앱 캐시 새로고침»을 한 번 더 누르세요.</p>
       <button type="button" class="primary-btn update-btn" data-action="app-update">최신 빌드로 업데이트</button>
       <button type="button" class="ghost-btn tiny" data-action="check-update">최신 버전만 확인</button>
     </div>`
@@ -1203,9 +1213,11 @@ async function handleInstallHomeClick(): Promise<void> {
     // Share sheet opened — user completes with 「홈 화면에 추가」
     state.installGuideOpen = false
     showFlash(
-      isPreviewInstallHost()
-        ? '공유 창에서 「홈 화면에 추가」를 누르세요. (정식 앱은 jarvis-app.shipstatic.com)'
-        : '공유 창에서 「홈 화면에 추가」→「추가」를 누르면 설치됩니다.',
+      isFixedPreviewInstallHost()
+        ? '공유 창에서 「홈 화면에 추가」→「추가」를 누르세요. (고정 Preview 주소 그대로)'
+        : isPreviewInstallHost()
+          ? `공유 창에서 「홈 화면에 추가」를 누르세요. (고정 Preview: ${FIXED_PREVIEW_INSTALL_URL.replace(/^https?:\/\//, '')})`
+          : '공유 창에서 「홈 화면에 추가」→「추가」를 누르면 설치됩니다.',
     )
     refreshInstallHint()
     render()
@@ -2924,7 +2936,11 @@ function renderBrand(): string {
 function renderInstall(): string {
   if (!state.showInstall) return ''
   const platform = detectInstallPlatform()
-  const method = installMethodSummary(platform, { previewHost: isPreviewInstallHost() })
+  const fixedPreview = isFixedPreviewInstallHost()
+  const method = installMethodSummary(platform, {
+    previewHost: isPreviewInstallHost(),
+    fixedPreviewHost: fixedPreview,
+  })
   const lines = method.lines
     .map((line, i) => `<li><span class="install-step-n">${i + 1}</span>${escapeHtml(line)}</li>`)
     .join('')
@@ -2945,13 +2961,19 @@ function renderInstall(): string {
 function renderInstallGuideModal(): string {
   if (!state.installGuideOpen) return ''
   const preview = isPreviewInstallHost()
-  const guide = installGuideSteps(state.installGuideOpen, { previewHost: preview })
+  const fixedPreview = isFixedPreviewInstallHost()
+  const guide = installGuideSteps(state.installGuideOpen, {
+    previewHost: preview,
+    fixedPreviewHost: fixedPreview,
+  })
   const steps = guide.steps.map((s, i) => `<li><span class="step-n">${i + 1}</span>${escapeHtml(s)}</li>`).join('')
   const native = hasNativeInstallPrompt()
   const recUrl = getRecommendedInstallUrl()
-  const previewWarn = preview
-    ? `<p class="hint install-preview-warn">⚠ Preview 주소(${escapeHtml(location.hostname)})는 테스트용입니다. 홈 화면에는 <strong>${escapeHtml(PRODUCTION_INSTALL_URL)}</strong> 를 추가하세요.</p>`
-    : ''
+  const previewWarn = fixedPreview
+    ? `<p class="hint install-preview-warn">고정 Preview <strong>${escapeHtml(recUrl)}</strong> — 이 주소로 홈 화면에 추가하면 이후 「앱 업데이트」가 같은 앱에서 한 번에 됩니다.</p>`
+    : preview
+      ? `<p class="hint install-preview-warn">⚠ 임시 스냅샷(${escapeHtml(location.hostname)})입니다. 홈 화면에는 고정 Preview <strong>${escapeHtml(FIXED_PREVIEW_INSTALL_URL)}</strong> 를 추가하세요.</p>`
+      : ''
   return `
     <div class="share-modal install-guide-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(guide.title)}" data-action="close-install-guide-backdrop">
       <div class="share-sheet" data-install-guide-sheet="1">
@@ -2965,8 +2987,8 @@ function renderInstallGuideModal(): string {
         <p class="hint">홈 화면 아이콘으로 실행하면(주소창 없음) 이 안내는 자동으로 숨겨집니다.</p>
         <div class="row-btns install-guide-actions">
           ${native ? `<button type="button" class="primary-btn" data-action="install-home">설치 창 열기</button>` : ''}
-          <button type="button" class="primary-btn" data-action="install-copy-prod-url">정식 주소 복사</button>
-          ${preview ? `<button type="button" class="ghost-btn" data-action="install-open-prod">정식 주소 열기</button>` : ''}
+          <button type="button" class="primary-btn" data-action="install-copy-prod-url">${fixedPreview || preview ? '고정 주소 복사' : '정식 주소 복사'}</button>
+          ${preview && !fixedPreview ? `<button type="button" class="ghost-btn" data-action="install-open-prod">고정 주소 열기</button>` : ''}
           <button type="button" class="ghost-btn" data-action="install-copy-url">지금 주소 복사</button>
           <button type="button" class="ghost-btn" data-action="install-already-done">이미 설치함</button>
           <button type="button" class="ghost-btn" data-action="close-install-guide">확인</button>
@@ -3026,7 +3048,7 @@ function bindInstallUi(): void {
         showFlash(
           ok
             ? `복사됨: ${url} — Safari에 붙여넣고 공유 → 홈 화면에 추가`
-            : '복사 실패. Safari에서 jarvis-app.shipstatic.com 을 직접 여세요.',
+            : `복사 실패. Safari에서 ${getRecommendedInstallUrl().replace(/^https?:\/\//, '')} 을 직접 여세요.`,
         )
       })
     })
@@ -3035,7 +3057,7 @@ function bindInstallUi(): void {
     btn.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      window.location.href = PRODUCTION_INSTALL_URL
+      window.location.href = getRecommendedInstallUrl()
     })
   })
   document.querySelectorAll('[data-action="install-already-done"]').forEach((btn) => {

@@ -4,6 +4,8 @@ import {
   compareAppVersions,
   parseJarvisVersionFromHtml,
   resolveUpdateBaseUrl,
+  updateCrossesOrigin,
+  isFixedPreviewHost,
   FIXED_APP_URL,
   FIXED_PREVIEW_URL,
   LEGACY_PREVIEW_HOST,
@@ -30,9 +32,18 @@ describe('appUpdate', () => {
     expect(compareAppVersions('2.0.0', '1.99.9')).toBe(1)
   })
 
-  it('resolves update base to Preview on fixed / legacy Preview hosts', () => {
-    expect(resolveUpdateBaseUrl('light-lab.shipstatic.com')).toBe(FIXED_PREVIEW_URL)
+  it('keeps same-origin update on fixed Preview aliases (home-screen safe)', () => {
+    expect(resolveUpdateBaseUrl('lightlab-92m8bq7.shipstatic.com')).toBe(FIXED_PREVIEW_URL)
+    expect(resolveUpdateBaseUrl('light-lab.shipstatic.com')).toBe('https://light-lab.shipstatic.com')
+    expect(isFixedPreviewHost('lightlab-92m8bq7.shipstatic.com')).toBe(true)
+    expect(isFixedPreviewHost('light-lab.shipstatic.com')).toBe(true)
+    expect(updateCrossesOrigin('lightlab-92m8bq7.shipstatic.com')).toBe(false)
+    expect(updateCrossesOrigin('light-lab.shipstatic.com')).toBe(false)
+  })
+
+  it('migrates legacy snapshot host to canonical fixed Preview', () => {
     expect(resolveUpdateBaseUrl(LEGACY_PREVIEW_HOST)).toBe(FIXED_PREVIEW_URL)
+    expect(updateCrossesOrigin(LEGACY_PREVIEW_HOST)).toBe(true)
     expect(resolveUpdateBaseUrl('jarvis-app.shipstatic.com')).toBe(FIXED_APP_URL)
     expect(resolveUpdateBaseUrl('minimal-veil-3gv8v8i.shipstatic.com')).toBe(FIXED_APP_URL)
   })
@@ -53,12 +64,12 @@ describe('appUpdate', () => {
 
   it('builds Preview update URL when base is Preview', () => {
     const url = buildUpdateUrl({
-      version: '1.20.15',
+      version: '1.20.16',
       buildId: 'preview-abc',
       step: 1,
       baseUrl: FIXED_PREVIEW_URL,
     })
-    expect(url.startsWith('https://light-lab.shipstatic.com/?')).toBe(true)
-    expect(url).toContain('_v=1.20.15')
+    expect(url.startsWith('https://lightlab-92m8bq7.shipstatic.com/?')).toBe(true)
+    expect(url).toContain('_v=1.20.16')
   })
 })

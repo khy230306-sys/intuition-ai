@@ -2,12 +2,13 @@
  * Deploy AIZIO Preview to the FIXED ShipStatic preview domain.
  *
  * ALWAYS share this Preview address — never random snapshot URLs:
- *   https://light-lab.shipstatic.com
+ *   https://lightlab-92m8bq7.shipstatic.com
+ * Alias (also repointed): https://light-lab.shipstatic.com
  *
  * Does NOT change production https://jarvis-app.shipstatic.com
  *
  * Each upload creates an immutable snapshot, then this script
- * repoints light-lab → that snapshot. The public Preview URL does not change.
+ * repoints the fixed Preview domain(s) → that snapshot.
  *
  *   npm run deploy:preview
  */
@@ -19,6 +20,7 @@ import { homedir } from 'node:os'
 import {
   PREVIEW_HOST,
   PREVIEW_URL,
+  PREVIEW_REPOINT_HOSTS,
   PRODUCTION_HOST,
   PRODUCTION_URL,
   PROTECTED_DOMAIN_HOSTS,
@@ -241,9 +243,13 @@ async function main() {
     /* labels optional */
   }
 
-  console.log(`Repointing ${PREVIEW_HOST} → ${deployId} …`)
-  const linked = parseJson(runShip(['domains', 'set', PREVIEW_HOST, deployId], apiKey))
-  const fixed = linked?.url || PREVIEW_URL
+  const linkedUrls = []
+  for (const host of PREVIEW_REPOINT_HOSTS) {
+    console.log(`Repointing ${host} → ${deployId} …`)
+    const linked = parseJson(runShip(['domains', 'set', host, deployId], apiKey))
+    linkedUrls.push(linked?.url || `https://${host}`)
+  }
+  const fixed = linkedUrls[0] || PREVIEW_URL
 
   // Sanity: never allow preview deploy to touch production domain
   try {
@@ -259,6 +265,7 @@ async function main() {
   const report = {
     REVIEW_URL: fixed,
     PREVIEW_URL: fixed,
+    PREVIEW_ALIASES: linkedUrls.slice(1),
     PRODUCTION_URL,
     productionChanged: false,
     version: meta.version,
@@ -270,6 +277,7 @@ async function main() {
   writeFileSync(join(root, 'dist', 'preview-deploy.json'), JSON.stringify(report, null, 2))
   console.log('\n=== PREVIEW DEPLOY (production untouched) ===')
   console.log(`REVIEW_URL ${fixed}`)
+  for (const u of linkedUrls.slice(1)) console.log(`PREVIEW_ALIAS ${u}`)
   console.log(`PRODUCTION_URL ${PRODUCTION_URL} (unchanged)`)
   console.log(`VERSION ${meta.version}`)
   console.log(`COMMIT ${meta.commit}`)

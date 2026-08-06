@@ -13,8 +13,23 @@ export type InstallPlatform = 'ios' | 'android' | 'desktop' | 'ios-chrome'
 /** Shared Safari ↔ home-screen PWA storage — once seen as installed, hide CTA everywhere. */
 export const PWA_INSTALLED_STORAGE_KEY = 'aizio.pwa.installed.v1'
 
-/** Stable production host — prefer this for home-screen icons (preview hosts rotate). */
+/** Stable production host — prefer this for home-screen icons on random preview snapshots. */
 export const PRODUCTION_INSTALL_URL = 'https://jarvis-app.shipstatic.com'
+
+/** Fixed Preview host — home-screen install stays on this origin so updates work in place. */
+export const FIXED_PREVIEW_INSTALL_URL = 'https://lightlab-92m8bq7.shipstatic.com'
+export const FIXED_PREVIEW_INSTALL_HOST = 'lightlab-92m8bq7.shipstatic.com'
+export const FIXED_PREVIEW_ALIAS_HOSTS = ['light-lab.shipstatic.com'] as const
+export const LEGACY_PREVIEW_INSTALL_HOST = 'light-lab-92m8bq7.shipstatic.com'
+
+export function isFixedPreviewInstallHost(
+  hostname = typeof location !== 'undefined' ? location.hostname : '',
+): boolean {
+  const host = String(hostname || '').toLowerCase()
+  if (!host) return false
+  if (host === FIXED_PREVIEW_INSTALL_HOST) return true
+  return (FIXED_PREVIEW_ALIAS_HOSTS as readonly string[]).includes(host)
+}
 
 export function isPreviewInstallHost(hostname = typeof location !== 'undefined' ? location.hostname : ''): boolean {
   const host = String(hostname || '').toLowerCase()
@@ -23,12 +38,22 @@ export function isPreviewInstallHost(hostname = typeof location !== 'undefined' 
   return host.endsWith('.shipstatic.com') && host !== 'jarvis-app.shipstatic.com'
 }
 
-/** URL to save on the home screen — production when browsing a preview snapshot. */
+/**
+ * URL to save on the home screen.
+ * - Fixed Preview (or its aliases / legacy snapshot) → fixed Preview origin (updatable).
+ * - Other random preview snapshots → production (avoid stale snapshot icons).
+ * - Production → current origin.
+ */
 export function getRecommendedInstallUrl(
   hostname = typeof location !== 'undefined' ? location.hostname : '',
   origin = typeof location !== 'undefined' ? location.origin : '',
 ): string {
-  if (isPreviewInstallHost(hostname)) return PRODUCTION_INSTALL_URL
+  const host = String(hostname || '').toLowerCase()
+  if (isFixedPreviewInstallHost(host)) {
+    return (origin || `https://${host}`).replace(/\/$/, '')
+  }
+  if (host === LEGACY_PREVIEW_INSTALL_HOST) return FIXED_PREVIEW_INSTALL_URL
+  if (isPreviewInstallHost(host)) return FIXED_PREVIEW_INSTALL_URL
   if (origin) return origin.replace(/\/$/, '')
   return PRODUCTION_INSTALL_URL
 }
@@ -277,9 +302,8 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
   const platform = detectInstallPlatform()
   // iPhone/iPad: no beforeinstallprompt — open system share sheet from this tap
   if (platform === 'ios' || platform === 'ios-chrome') {
-    // iOS 「홈 화면에 추가」 targets the current document — share this origin
-    const shareUrl =
-      typeof location !== 'undefined' ? `${location.origin}/` : `${getRecommendedInstallUrl()}/`
+    // iOS 「홈 화면에 추가」 — share the recommended fixed origin (Preview or production)
+    const shareUrl = `${getRecommendedInstallUrl()}/`
     const shareResult = await openInstallShareSheet(shareUrl)
     if (shareResult === 'shared') return { kind: 'shared' }
     if (shareResult === 'dismissed') return { kind: 'dismissed' }
@@ -293,16 +317,22 @@ export async function attemptPwaInstall(): Promise<InstallAttemptResult> {
 /** Short on-screen install method (no install button — iOS cannot auto-install). */
 export function installMethodSummary(
   platform: InstallPlatform = detectInstallPlatform(),
-  opts?: { previewHost?: boolean },
+  opts?: { previewHost?: boolean; fixedPreviewHost?: boolean },
 ): { title: string; lines: string[] } {
-  const preview = opts?.previewHost
+  const fixedPreview = opts?.fixedPreviewHost
+  const preview = opts?.previewHost && !fixedPreview
+  const previewLine = fixedPreview
+    ? `고정 Preview: ${FIXED_PREVIEW_INSTALL_HOST} (이 주소로 추가하세요)`
+    : preview
+      ? `고정 Preview로 추가: ${FIXED_PREVIEW_INSTALL_HOST}`
+      : '홈 화면 아이콘으로 열면 이 안내가 사라집니다.'
   if (platform === 'ios-chrome') {
     return {
       title: '홈 화면 설치 방법',
       lines: [
         'Safari로 이 주소를 여세요 (Chrome/인앱에서는 추가가 안 됩니다).',
         '공유(□↑) → 「홈 화면에 추가」→「추가」',
-        preview ? '정식 앱: jarvis-app.shipstatic.com' : '홈 화면 아이콘으로 열면 이 안내가 사라집니다.',
+        previewLine,
       ],
     }
   }
@@ -312,9 +342,11 @@ export function installMethodSummary(
       lines: [
         'Safari 공유(□↑) → 아래로 스크롤 → 「홈 화면에 추가」',
         '오른쪽 위 「추가」를 누르면 홈 화면에 AIZIO가 생깁니다.',
-        preview
-          ? '지금 주소는 Preview입니다. 정식: jarvis-app.shipstatic.com'
-          : '홈 화면 아이콘으로 실행하면 이 안내가 자동으로 사라집니다.',
+        fixedPreview
+          ? '지금 주소가 고정 Preview입니다. 이 주소 그대로 홈 화면에 추가하세요.'
+          : preview
+            ? `지금 주소는 임시 스냅샷입니다. 홈 화면에는 ${FIXED_PREVIEW_INSTALL_HOST} 를 추가하세요.`
+            : '홈 화면 아이콘으로 실행하면 이 안내가 자동으로 사라집니다.',
       ],
     }
   }
@@ -336,16 +368,19 @@ export function installMethodSummary(
   }
 }
 
-export function installGuideSteps(platform: InstallPlatform, opts?: { previewHost?: boolean }): { title: string; steps: string[] } {
-  const previewNote = opts?.previewHost
-    ? '지금 보시는 주소는 Preview입니다. 홈 화면에는 정식 주소(jarvis-app.shipstatic.com)를 추가하세요.'
-    : ''
+export function installGuideSteps(platform: InstallPlatform, opts?: { previewHost?: boolean; fixedPreviewHost?: boolean }): { title: string; steps: string[] } {
+  const fixedPreview = opts?.fixedPreviewHost
+  const previewNote = fixedPreview
+    ? `지금 주소(${FIXED_PREVIEW_INSTALL_HOST})가 고정 Preview입니다. 이 주소로 홈 화면에 추가하면 이후 업데이트가 같은 앱에서 됩니다.`
+    : opts?.previewHost
+      ? `임시 스냅샷입니다. 홈 화면에는 고정 Preview(${FIXED_PREVIEW_INSTALL_HOST})를 추가하세요.`
+      : ''
   if (platform === 'ios-chrome') {
     return {
       title: '홈 화면에 추가 (Safari 필요)',
       steps: [
         '아이폰에서는 Chrome/인앱 브라우저로는 설치가 안 됩니다. Safari가 필요합니다.',
-        previewNote || '아래 「정식 주소 복사」를 누릅니다.',
+        previewNote || '아래 「주소 복사」를 누릅니다.',
         'Safari를 연 뒤 주소창에 붙여넣어 AIZIO를 엽니다.',
         'Safari 하단 공유(□↑) → 목록을 아래로 스크롤 → 「홈 화면에 추가」.',
         '없으면 「편집」/「동작 편집」에서 「홈 화면에 추가」를 켠 뒤 다시 시도하세요.',

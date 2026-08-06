@@ -3,8 +3,11 @@ import { buildAiContext } from '../ai/contextManager'
 import { selectAiMode } from '../ai/modeSelect'
 import { buildChatMessages } from '../ai/promptBuilder'
 import { validateAiResponse } from '../ai/responseValidator'
+import { chatViaServerIfPreferred } from '../apiKeys/keyService'
+import { isServerConfigured } from '../apiKeys/serverFlags'
 import {
   hasAnyConfiguredProvider,
+  isProviderConfigured,
   loadHybridAiConfig,
   updateProviderSlot,
 } from './providerConfig'
@@ -27,7 +30,7 @@ function buildCandidateOrder(): HybridProviderId[] {
   const freeFirst = AUTO_PROVIDER_ORDER.filter((id) => {
     const p = getHybridProvider(id)
     if (!p) return false
-    if (!p.isConfigured()) return false
+    if (!isProviderConfigured(id)) return false
     const slot = p.getSlot()
     if (slot.enabled === false) return false
     if (p.category === 'paid' && !cfg.allowPaidFallback) return false
@@ -85,8 +88,43 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
 
   for (const id of order) {
     const provider = getHybridProvider(id)
-    if (!provider?.isConfigured()) continue
+    if (!isProviderConfigured(id) || !provider) continue
     attempted.push(id)
+
+    // Server-held secrets: call via backend proxy (no browser Authorization header)
+    if (isServerConfigured(id)) {
+      try {
+        const proxied = await chatViaServerIfPreferred(
+          id,
+          messages.map((m) => ({ role: m.role, content: m.content })),
+        )
+        if (proxied.used && proxied.text) {
+          const validated = validateAiResponse(proxied.text)
+          if (!validated.ok) {
+            throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
+          }
+          updateProviderSlot(id, { status: 'ok', lastError: '' })
+          recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
+          return {
+            text: validated.text,
+            providerId: id,
+            model: proxied.model || provider.getSlot().model,
+            fallbackUsed,
+            attempted,
+          }
+        }
+        if (proxied.used && proxied.message) {
+          throw new AiError('unavailable', proxied.message, { retryable: true })
+        }
+      } catch (err) {
+        lastErr = err
+        fallbackUsed = true
+        if (!isFallbackableError(err)) break
+        continue
+      }
+    }
+
+    if (!provider.isConfigured()) continue
 
     const currentModel = provider.getSlot().model
     const modelOrder = [

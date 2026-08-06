@@ -1,7 +1,7 @@
 {
   "name": "aizio-iphone",
   "private": true,
-  "version": "1.27.1",
+  "version": "1.28.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,8 @@
     "test:family": "npm run build && node scripts/family-e2e.mjs",
     "test:friends": "npm run build && node scripts/friends-e2e.mjs",
     "test:invite": "npm run build && node scripts/invite-join-e2e.mjs",
-    "test:invite-copy": "npm run build && node scripts/invite-copy-e2e.mjs"
+    "test:invite-copy": "npm run build && node scripts/invite-copy-e2e.mjs",
+    "test:api-keys": "vitest run src/apiKeys src/ai-providers/hybridAi.test.ts && node --test push-server/secretsStore.test.mjs && node scripts/api-key-e2e.mjs"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

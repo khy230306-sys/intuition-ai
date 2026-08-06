@@ -1,5 +1,7 @@
+import { isLikelyStaticPreviewHost, resolveApiBackendBaseUrl } from '../apiKeys/backendUrl'
+import { isServerConfigured } from '../apiKeys/serverFlags'
 import { maskApiKey } from './keyVault'
-import { loadHybridAiConfig } from './providerConfig'
+import { isProviderConfigured, loadHybridAiConfig } from './providerConfig'
 import { listHybridProviders } from './providerRegistry'
 import { usageSummaryLine } from './providerUsage'
 import type { HybridProviderId, ProviderHealthStatus } from './types'
@@ -12,19 +14,19 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Korean status for settings cards (never leave raw "unconfigured" with a stored key). */
+/** Korean status for settings cards — 저장됨 ≠ 연결 성공. */
 export function providerStatusLabelKo(
   status: ProviderHealthStatus | string | undefined,
-  hasKey: boolean,
+  configured: boolean,
 ): string {
-  const s = status || (hasKey ? 'unknown' : 'unconfigured')
-  if (!hasKey) return '미설정'
+  if (!configured) return '미설정'
+  const s = status || 'unknown'
   switch (s) {
     case 'ok':
       return '연결됨'
     case 'unknown':
     case 'unconfigured':
-      return '저장됨 · 연결 전'
+      return '설정됨 · 테스트 필요'
     case 'auth':
       return '키 오류'
     case 'rate_limit':
@@ -41,12 +43,28 @@ export function providerStatusLabelKo(
 export function renderHybridAiSettingsHtml(): string {
   const cfg = loadHybridAiConfig()
   const providers = listHybridProviders()
+  const backend = resolveApiBackendBaseUrl()
+  const previewHint =
+    isLikelyStaticPreviewHost() && !backend
+      ? `<p class="hint danger-text">이 Preview는 정적 호스팅입니다. Live API 키 서버 저장을 쓰려면 로컬에서 푸시·API URL(예: http://127.0.0.1:8787)을 설정하세요. 서버 없이 「저장되었습니다」로 표시하지 않습니다.</p>`
+      : backend
+        ? `<p class="hint">API 백엔드: <strong>${esc(backend)}</strong> · 키는 서버 Secret Store(개발용 JSON 파일)에 저장됩니다. OS Credential Manager 암호화는 아닙니다.</p>`
+        : `<p class="hint">API 백엔드 없음 · 키는 이 기기 개발용 저장만 가능합니다 (서버 비밀 보관 아님).</p>`
+
   const cards = providers
     .map((p) => {
       const slot = p.getSlot()
-      const hasKey = Boolean(slot.apiKey.trim())
-      const status = slot.status || (hasKey ? 'unknown' : 'unconfigured')
-      const statusKo = providerStatusLabelKo(status, hasKey)
+      const configured = isProviderConfigured(p.id)
+      const viaServer = isServerConfigured(p.id)
+      const hasDeviceKey = Boolean(slot.apiKey.trim())
+      const status = slot.status || (configured ? 'unknown' : 'unconfigured')
+      const statusKo = providerStatusLabelKo(status, configured)
+      const source = viaServer ? '서버 Secret Store' : hasDeviceKey ? '이 기기 (개발용)' : '없음'
+      const masked = hasDeviceKey
+        ? maskApiKey(slot.apiKey)
+        : viaServer
+          ? 'sk-••••••••server'
+          : ''
       const cat =
         p.category === 'free' ? '무료 시작 가능' : p.category === 'paid' ? '사용량 기반 유료' : '로컬'
       const modelOptions = p.recommendedModels
@@ -62,9 +80,11 @@ export function renderHybridAiSettingsHtml(): string {
           <span class="hybrid-ai-badge ${p.category}">${cat}</span>
         </div>
         <p class="hint">${esc(p.docsHint)}</p>
-        <p class="hint" data-hybrid-status="${p.id}">상태: <strong>${esc(statusKo)}</strong>${
-          hasKey ? ` · 키 ${esc(maskApiKey(slot.apiKey))}` : ' · 키 없음'
-        }${slot.lastSuccessAt ? ` · 성공 ${esc(slot.lastSuccessAt.slice(0, 16))}` : ''}</p>
+        <p class="hint" data-hybrid-status="${p.id}">상태: <strong>${esc(statusKo)}</strong> · 키: ${
+          masked ? esc(masked) : '없음'
+        } · 출처: ${esc(source)}${
+          slot.lastSuccessAt ? ` · 마지막 성공 ${esc(slot.lastSuccessAt.slice(0, 16))}` : ''
+        }</p>
         ${
           p.id === 'custom' || p.id === 'openai'
             ? `<label>API Base
@@ -74,7 +94,7 @@ export function renderHybridAiSettingsHtml(): string {
         }
         <label>API Key
           <input name="hybridKey_${p.id}" type="password" value="" placeholder="${
-            hasKey ? esc(maskApiKey(slot.apiKey)) + ' · 저장됨' : '키 입력 후 자동 저장'
+            configured ? esc(masked || '저장됨 · 변경 시에만 입력') : '키 입력'
           }" autocomplete="off" data-hybrid-key="${p.id}" />
         </label>
         <label>Model
@@ -94,7 +114,7 @@ export function renderHybridAiSettingsHtml(): string {
           <button type="button" class="primary-btn" data-hybrid-save="${p.id}">키 저장</button>
           <button type="button" class="ghost-btn" data-hybrid-test="${p.id}">연결 테스트</button>
           <button type="button" class="ghost-btn" data-hybrid-default="${p.id}">기본으로 사용</button>
-          <button type="button" class="ghost-btn danger-btn" data-hybrid-clear="${p.id}">키 삭제</button>
+          <button type="button" class="ghost-btn danger-btn" data-hybrid-clear="${p.id}">삭제</button>
         </div>
         ${
           p.signupUrl
@@ -108,7 +128,8 @@ export function renderHybridAiSettingsHtml(): string {
 
   return `
     <h3 class="subsection-title">AI 연결 (Hybrid Provider)</h3>
-    <p class="hint">무료 AI를 먼저 연결하세요. 키를 입력하면 바로 저장됩니다. 「연결 테스트」·「키 저장」도 입력란의 키를 저장합니다.</p>
+    <p class="hint">무료 AI를 먼저 연결하세요. <strong>저장됨 ≠ 연결 성공</strong>. 「키 저장」후 「연결 테스트」로 확인하세요.</p>
+    ${previewHint}
     <p class="hint">${esc(usageSummaryLine())}</p>
     <label>선택 모드
       <select name="hybridMode">
@@ -132,7 +153,7 @@ export function renderHybridAiSettingsHtml(): string {
       <input type="checkbox" name="hybridAllowPaid" ${cfg.allowPaidFallback ? 'checked' : ''} />
     </div>
     <div class="hybrid-ai-list">${cards}</div>
-    <p class="hint">기존 OpenAI 필드도 아래에서 계속 사용할 수 있으며 Hybrid OpenAI 슬롯과 동기화됩니다.</p>
+    <p class="hint">기존 OpenAI 필드도 아래에서 모델/Base를 맞출 수 있습니다. 비밀 키는 서버 Secret Store를 우선합니다.</p>
   `
 }
 

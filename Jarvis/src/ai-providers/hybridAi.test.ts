@@ -206,8 +206,8 @@ describe('hybrid AI router', () => {
 describe('provider status labels', () => {
   it('shows saved vs unconfigured in Korean', () => {
     expect(providerStatusLabelKo('unconfigured', false)).toBe('미설정')
-    expect(providerStatusLabelKo('unconfigured', true)).toBe('저장됨 · 연결 전')
-    expect(providerStatusLabelKo('unknown', true)).toBe('저장됨 · 연결 전')
+    expect(providerStatusLabelKo('unconfigured', true)).toBe('설정됨 · 테스트 필요')
+    expect(providerStatusLabelKo('unknown', true)).toBe('설정됨 · 테스트 필요')
     expect(providerStatusLabelKo('ok', true)).toBe('연결됨')
   })
 })

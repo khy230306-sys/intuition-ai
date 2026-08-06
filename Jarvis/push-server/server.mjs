@@ -8,6 +8,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import webpush from 'web-push'
 import { isHttpsEndpoint, maskId, privacyBody } from './lib.mjs'
+import { createSecretsStore } from './secretsStore.mjs'
+import { proxyChat, testProviderConnection } from './providerTest.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -33,7 +35,7 @@ function loadDotEnv() {
 loadDotEnv()
 
 const STARTED = Date.now()
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 const PORT = Number(process.env.PORT || 8787)
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, 'data')
 const STORE = join(DATA_DIR, 'store.json')
@@ -71,6 +73,9 @@ if (vapidReady) {
 }
 
 mkdirSync(DATA_DIR, { recursive: true })
+
+/** Local-dev secret store (JSON under DATA_DIR — not OS Credential Manager). */
+const secrets = createSecretsStore(DATA_DIR)
 
 /** @typedef {{ subscriptions: any[], reminders: any[], deliveries: any[], meta?: object }} Store */
 
@@ -150,7 +155,7 @@ function json(res, req, status, body) {
   const origin = corsOrigin(req)
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-AIZIO-Install, X-Cron-Secret',
     'Cache-Control': 'no-store',
   }
@@ -334,6 +339,13 @@ function healthBody() {
     },
     vapidConfigured: vapidReady,
     nodeEnv: NODE_ENV,
+    providerSecrets: {
+      ok: true,
+      kind: 'json-file-dev-store',
+      note: 'Local/Preview backend secret store — not OS Credential Manager encryption',
+      configuredCount: secrets.listStatuses().filter((s) => s.configured).length,
+      generation: secrets.getGeneration(),
+    },
   }
 }
 
@@ -346,7 +358,7 @@ const server = createServer(async (req, res) => {
     const origin = corsOrigin(req)
     res.writeHead(origin ? 204 : 403, {
       'Access-Control-Allow-Origin': origin || 'null',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-AIZIO-Install, X-Cron-Secret',
       'Access-Control-Max-Age': '86400',
     })
@@ -378,7 +390,133 @@ const server = createServer(async (req, res) => {
     }
 
     let body = {}
-    if (req.method === 'POST') body = await readBody(req)
+    if (req.method === 'POST' || req.method === 'PUT') body = await readBody(req)
+
+    // —— Provider Secret Store (never returns full keys) ——
+    if (req.method === 'GET' && path === '/v1/provider-keys') {
+      return json(res, req, 200, {
+        ok: true,
+        store: 'json-file-dev-store',
+        generation: secrets.getGeneration(),
+        providers: secrets.listStatuses(),
+      })
+    }
+
+    if (req.method === 'GET' && path === '/v1/provider-keys/diag') {
+      const providers = secrets.listStatuses().map((s) => ({
+        provider: s.provider,
+        configured: s.configured,
+        source: s.source,
+        maskedKey: s.maskedKey,
+        connectionStatus: s.connectionStatus,
+        lastUpdatedAt: s.lastUpdatedAt,
+        lastTestedAt: s.lastTestedAt,
+        lastErrorCode: s.lastErrorCode,
+        // never apiKey
+      }))
+      return json(res, req, 200, {
+        ok: true,
+        storeKind: 'json-file-dev-store',
+        encryptedClaim: false,
+        generation: secrets.getGeneration(),
+        providers,
+      })
+    }
+
+    const keyMatch = path.match(/^\/v1\/provider-keys\/([a-z0-9_]+)$/i)
+    if (keyMatch) {
+      const provider = keyMatch[1]
+      if (req.method === 'GET') {
+        return json(res, req, 200, { ok: true, ...secrets.statusFor(provider) })
+      }
+      if (req.method === 'PUT') {
+        if (!requireInstall(req, body)) {
+          return json(res, req, 401, { ok: false, error: 'unauthorized' })
+        }
+        try {
+          const st = secrets.setKey(provider, {
+            apiKey: body.apiKey,
+            apiBase: body.apiBase,
+            model: body.model,
+          })
+          logInfo('provider_key_saved', { provider, source: st.source })
+          return json(res, req, 200, { ok: true, saved: true, ...st })
+        } catch (err) {
+          const code = err?.code || 'save_failed'
+          return json(res, req, 400, { ok: false, error: code, message: '저장하지 못했습니다.' })
+        }
+      }
+      if (req.method === 'DELETE') {
+        if (!requireInstall(req, body)) {
+          return json(res, req, 401, { ok: false, error: 'unauthorized' })
+        }
+        const st = secrets.deleteKey(provider)
+        logInfo('provider_key_deleted', { provider })
+        return json(res, req, 200, { ok: true, deleted: true, ...st })
+      }
+    }
+
+    const testMatch = path.match(/^\/v1\/provider-keys\/([a-z0-9_]+)\/test$/i)
+    if (req.method === 'POST' && testMatch) {
+      const provider = testMatch[1]
+      if (!requireInstall(req, body)) {
+        return json(res, req, 401, { ok: false, error: 'unauthorized' })
+      }
+      // Optional one-shot key for test-before-save (not persisted unless also PUT)
+      let resolved = secrets.resolveRaw(provider)
+      if (body.apiKey && String(body.apiKey).trim() && !String(body.apiKey).includes('…')) {
+        resolved = {
+          ...resolved,
+          apiKey: String(body.apiKey).trim(),
+          apiBase: body.apiBase != null ? String(body.apiBase).trim() : resolved.apiBase,
+          model: body.model != null ? String(body.model).trim() : resolved.model,
+          source: 'user-secret',
+        }
+      }
+      const result = await testProviderConnection(provider, resolved)
+      if (resolved.source !== 'none' || secrets.resolveRaw(provider).apiKey) {
+        secrets.markTest(provider, {
+          connectionStatus: result.connectionStatus,
+          lastErrorCode: result.ok ? null : result.code,
+          lastErrorMessage: result.ok ? null : result.message,
+        })
+      }
+      return json(res, req, 200, {
+        ok: result.ok,
+        provider,
+        connectionStatus: result.connectionStatus,
+        code: result.code,
+        message: result.message,
+        latencyMs: result.latencyMs,
+        partial: Boolean(result.partial),
+        status: secrets.statusFor(provider),
+      })
+    }
+
+    if (req.method === 'POST' && path === '/v1/ai/chat') {
+      if (!requireInstall(req, body)) {
+        return json(res, req, 401, { ok: false, error: 'unauthorized' })
+      }
+      const provider = String(body.provider || 'openrouter')
+      const resolved = secrets.resolveRaw(provider)
+      if (!resolved.apiKey) {
+        return json(res, req, 400, {
+          ok: false,
+          error: 'NO_KEY',
+          message: 'API 키가 없습니다. 설정에서 저장한 뒤 다시 시도하세요.',
+        })
+      }
+      try {
+        const out = await proxyChat(provider, resolved, body.messages || [])
+        return json(res, req, 200, { ok: true, ...out })
+      } catch (err) {
+        return json(res, req, 502, {
+          ok: false,
+          error: err?.code || 'provider_error',
+          message: err instanceof Error ? err.message : 'Provider 호출 실패',
+        })
+      }
+    }
 
     if (req.method === 'POST' && path === '/v1/push/subscribe') {
       if (!requireInstall(req, body)) {

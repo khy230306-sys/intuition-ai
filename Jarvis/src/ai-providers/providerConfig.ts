@@ -1,3 +1,4 @@
+import { isServerConfigured } from '../apiKeys/serverFlags'
 import { loadSettings, saveSettings } from '../storage'
 import { defaultModelFor, OPENAI_API_BASE } from './models'
 import { deobfuscateSecret, obfuscateSecret } from './keyVault'
@@ -94,13 +95,13 @@ export function saveHybridAiConfig(cfg: HybridAiConfig): void {
   }
   localStorage.setItem(HYBRID_AI_KEY, JSON.stringify(payload))
 
-  // Keep legacy OpenAI settings in sync for older code paths / UI fields.
+  // Sync OpenAI model/base only — never persist plaintext API keys in jarvis_settings_v1.
   const openai = cfg.providers.openai
   if (openai) {
     const settings = loadSettings()
     saveSettings({
       ...settings,
-      apiKey: openai.apiKey || '',
+      apiKey: '',
       apiBase: openai.apiBase || OPENAI_API_BASE,
       model: openai.model || defaultModelFor('openai'),
     })
@@ -162,12 +163,15 @@ export function exportHybridAiSafe(): Omit<HybridAiConfig, 'providers'> & {
   }
 }
 
+export function isProviderConfigured(id: HybridProviderId): boolean {
+  const s = getProviderSlot(id)
+  if (s.enabled === false) return false
+  return Boolean(s.apiKey.trim()) || isServerConfigured(id)
+}
+
 export function hasAnyConfiguredProvider(): boolean {
-  const cfg = loadHybridAiConfig()
-  return (Object.keys(cfg.providers) as HybridProviderId[]).some((id) => {
-    const s = cfg.providers[id]
-    return Boolean(s?.enabled !== false && s?.apiKey?.trim())
-  })
+  const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
+  return ids.some((id) => isProviderConfigured(id))
 }
 
 export function dismissAiWizard(): void {

@@ -49,16 +49,13 @@ import {
   writeAppHash,
 } from './appRouting'
 import {
-  clearProviderKey,
   dismissAiWizard,
   getProviderSlot,
   hasAnyConfiguredProvider,
   loadHybridAiConfig,
-  maskApiKey,
   mergeKeyInput,
   saveHybridAiConfig,
   shouldShowAiWizard,
-  testProviderConnection,
   updateProviderSlot,
   type HybridProviderId,
 } from './ai-providers'
@@ -131,6 +128,17 @@ import {
   setReliabilityOptIn,
   type SuiteReport,
 } from './reliability'
+import {
+  deleteProviderKeyFull,
+  renderApiKeyDiagPanel,
+  runApiKeyDiagnosis,
+  saveProviderKey,
+  testProviderKeyFull,
+  warmPreviewApiBackendHint,
+  type ApiKeyDiagReport,
+} from './apiKeys'
+import { isProviderConfigured } from './ai-providers/providerConfig'
+import { isServerConfigured } from './apiKeys/serverFlags'
 import {
   clearRecentFeatures,
   exportMenuStructureJson,
@@ -434,7 +442,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.27.1'
+const APP_VERSION = '1.28.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -443,11 +451,12 @@ let voiceSessionGen = 0
 /** Bumps when a newer chat request supersedes an in-flight think(). */
 let thinkGen = 0
 
-/**
- * Persist one Hybrid Provider card from the live DOM (key/model/base).
- * Used by 「키 저장」·「연결 테스트」·blur so users need not scroll to 「설정 저장」.
- */
-function flushHybridProviderFromDom(id: HybridProviderId): { hasKey: boolean; apiKey: string } {
+/** Read Hybrid Provider card fields from the live DOM (no side effects). */
+function readHybridProviderFromDom(id: HybridProviderId): {
+  apiKeyInput: string
+  model: string
+  apiBase?: string
+} {
   const form = document.getElementById('settings-form') as HTMLFormElement | null
   const card = document.querySelector(`[data-provider="${id}"]`) as HTMLElement | null
   const read = (name: string): string => {
@@ -457,35 +466,68 @@ function flushHybridProviderFromDom(id: HybridProviderId): { hasKey: boolean; ap
     return String(fromCard?.value || '')
   }
   const existing = getProviderSlot(id)
-  const apiKey = mergeKeyInput(read(`hybridKey_${id}`), existing.apiKey)
   const modelCustom = read(`hybridModelCustom_${id}`).trim()
   const modelSel = read(`hybridModel_${id}`).trim()
   const base = read(`hybridBase_${id}`).trim()
-  updateProviderSlot(id, {
-    apiKey,
+  return {
+    apiKeyInput: read(`hybridKey_${id}`),
     model: modelCustom || modelSel || existing.model || '',
-    ...(base || id === 'openai' || id === 'custom' ? { apiBase: base || existing.apiBase } : {}),
-    enabled: true,
+    apiBase: base || existing.apiBase,
+  }
+}
+
+/**
+ * Persist one Hybrid Provider via server Secret Store (preferred) or device-local.
+ * Never claims success without verifying configured state.
+ */
+async function persistHybridProviderFromDom(
+  id: HybridProviderId,
+  opts?: { allowDeviceFallback?: boolean },
+): Promise<{ ok: boolean; message: string; configured: boolean }> {
+  const fields = readHybridProviderFromDom(id)
+  const existing = getProviderSlot(id).apiKey
+  const merged = mergeKeyInput(fields.apiKeyInput, existing)
+  if (!merged && !isServerConfigured(id) && !isProviderConfigured(id)) {
+    return { ok: false, message: 'API 키를 먼저 입력해 주세요.', configured: false }
+  }
+  if (!merged) {
+    // model/base only update
+    updateProviderSlot(id, {
+      model: fields.model,
+      ...(fields.apiBase ? { apiBase: fields.apiBase } : {}),
+    })
+    return { ok: true, message: '모델/Base를 저장했습니다.', configured: isProviderConfigured(id) }
+  }
+  const saved = await saveProviderKey(id, {
+    apiKeyInput: fields.apiKeyInput,
+    apiBase: fields.apiBase,
+    model: fields.model,
+    allowDeviceFallback: opts?.allowDeviceFallback !== false,
   })
   if (id === 'openai') {
-    state.settings = { ...state.settings, apiKey, apiBase: base || state.settings.apiBase, model: modelCustom || modelSel || state.settings.model }
+    state.settings = {
+      ...state.settings,
+      apiKey: '',
+      apiBase: fields.apiBase || state.settings.apiBase,
+      model: fields.model || state.settings.model,
+    }
     saveSettings(state.settings)
   }
-  const slot = getProviderSlot(id)
-  const hasKey = Boolean(slot.apiKey.trim())
+  const configured = isProviderConfigured(id)
   const statusEl = document.querySelector(`[data-hybrid-status="${id}"]`)
   if (statusEl) {
-    const ko = providerStatusLabelKo(slot.status, hasKey)
-    statusEl.innerHTML = `상태: <strong>${escapeHtml(ko)}</strong>${
-      hasKey ? ` · 키 ${escapeHtml(maskApiKey(slot.apiKey))}` : ' · 키 없음'
-    }`
+    const ko = providerStatusLabelKo(getProviderSlot(id).status, configured)
+    const source = isServerConfigured(id) ? '서버 Secret Store' : '이 기기 (개발용)'
+    statusEl.innerHTML = `상태: <strong>${escapeHtml(ko)}</strong> · 출처: ${escapeHtml(source)}`
   }
   const keyInput = document.querySelector(`[data-hybrid-key="${id}"]`) as HTMLInputElement | null
-  if (keyInput && hasKey) {
+  if (keyInput && saved.ok) {
     keyInput.value = ''
-    keyInput.placeholder = `${maskApiKey(slot.apiKey)} · 저장됨`
+    keyInput.placeholder = saved.status?.maskedKey
+      ? `${saved.status.maskedKey} · 저장됨`
+      : '저장됨 · 변경 시에만 입력'
   }
-  return { hasKey, apiKey: slot.apiKey }
+  return { ok: saved.ok, message: saved.message, configured }
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
@@ -833,6 +875,8 @@ const state = {
   releaseHealthRunning: false,
   reliabilityReport: null as SuiteReport | null,
   reliabilityRunning: false,
+  apiKeyDiagReport: null as ApiKeyDiagReport | null,
+  apiKeyDiagRunning: false,
   /** 손님관리 search filter */
   customerQuery: '',
   /** Deep-link / QR invite waiting for location gate */
@@ -5014,6 +5058,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="reminder-push-status">개인 알림(종료 상태) 준비 상태</button>
         ${renderReleaseHealthPanel(state.releaseHealthReport, { running: state.releaseHealthRunning })}
         ${renderReliabilityCenterPanel(state.reliabilityReport, { running: state.reliabilityRunning })}
+        ${renderApiKeyDiagPanel(state.apiKeyDiagReport, { running: state.apiKeyDiagRunning })}
         ${renderRouteDiagPanel(true)}
         ${renderFeatureDiagPanel({
           status: state.featureDiagStatus,
@@ -7244,98 +7289,114 @@ function bind(): void {
     e.preventDefault()
     const fd = new FormData(settingsForm)
     const appLocale = String(fd.get('appLocale') || getAppLocale()) as AppLocale
-    const hybrid = loadHybridAiConfig()
     const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
-    for (const id of ids) {
-      const existing = hybrid.providers[id]?.apiKey || ''
-      const keyIn = String(fd.get(`hybridKey_${id}`) || '')
-      const modelCustom = String(fd.get(`hybridModelCustom_${id}`) || '').trim()
-      const modelSel = String(fd.get(`hybridModel_${id}`) || '').trim()
-      const base = String(fd.get(`hybridBase_${id}`) || '').trim()
-      updateProviderSlot(id, {
-        apiKey: mergeKeyInput(keyIn, existing),
-        model: modelCustom || modelSel || hybrid.providers[id]?.model || '',
-        ...(base || id === 'openai' || id === 'custom' ? { apiBase: base || hybrid.providers[id]?.apiBase } : {}),
-        enabled: true,
-      })
-    }
-    const mode = String(fd.get('hybridMode') || 'auto') === 'fixed' ? 'fixed' : 'auto'
-    const fixed = String(fd.get('hybridFixed') || '') as HybridProviderId | ''
-    saveHybridAiConfig({
-      ...loadHybridAiConfig(),
-      mode,
-      fixedProvider: fixed || undefined,
-      allowPaidFallback: Boolean(fd.get('hybridAllowPaid')),
-    })
 
-    const next: JarvisSettings = {
-      ...state.settings,
-      displayName: String(fd.get('displayName') || '주인님').trim() || '주인님',
-      speakReplies: Boolean(fd.get('speakReplies')),
-      // Prefer hybrid OpenAI slot so a blank legacy field cannot wipe a just-saved key.
-      apiKey: mergeKeyInput(
-        String(fd.get('apiKey') || ''),
-        getProviderSlot('openai').apiKey || state.settings.apiKey,
-      ),
-      apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
-      model: String(fd.get('model') || 'gpt-4o-mini').trim(),
-      city: String(fd.get('city') || '서울').trim() || '서울',
-      notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
-      notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
-      notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
-      notifyPrivacyMode: (['full', 'simple', 'hidden'] as const).includes(
-        String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden',
-      )
-        ? (String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden')
-        : 'simple',
-      pushServerBaseUrl: String(fd.get('pushServerBaseUrl') || '').trim(),
-      appLocale,
-      translationLocale: String(fd.get('translationLocale') || appLocale),
-      autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
-      showOriginalText: Boolean(fd.get('showOriginalText')),
-    }
-    state.settings = next
-    saveSettings(next)
-    // Sync OpenAI slot ↔ legacy fields (also refreshes settings openai fields)
-    updateProviderSlot('openai', {
-      apiKey: next.apiKey,
-      apiBase: next.apiBase,
-      model: next.model,
-    })
-    state.settings = loadSettings()
-    setAppLocale(appLocale)
-    const musicProvider = String(fd.get('musicProvider') || 'youtube') as
-      | 'youtube'
-      | 'youtube_music'
-      | 'spotify'
-      | 'apple_music'
-    updateMusicPreferences({
-      preferredMusicProvider: musicProvider,
-      preferredMusicLanguage: appLocale,
-      openInExternalApp: Boolean(fd.get('musicOpenExternal')),
-      rememberRecentMusicSearches: Boolean(fd.get('musicRememberSearches')),
-      preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
-    })
-    void import('./push').then((m) => {
-      const url = (next.pushServerBaseUrl || '').trim()
-      if (!url) {
-        m.setPushServerBaseUrl(null)
-        return
+    void (async () => {
+      const keyMessages: string[] = []
+      for (const id of ids) {
+        const keyIn = String(fd.get(`hybridKey_${id}`) || '').trim()
+        const modelCustom = String(fd.get(`hybridModelCustom_${id}`) || '').trim()
+        const modelSel = String(fd.get(`hybridModel_${id}`) || '').trim()
+        const base = String(fd.get(`hybridBase_${id}`) || '').trim()
+        if (keyIn) {
+          const r = await persistHybridProviderFromDom(id, { allowDeviceFallback: true })
+          keyMessages.push(`${id}: ${r.message}`)
+        } else if (modelCustom || modelSel || base) {
+          updateProviderSlot(id, {
+            model: modelCustom || modelSel || getProviderSlot(id).model,
+            ...(base ? { apiBase: base } : {}),
+          })
+        }
       }
-      const r = m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
-      if (!r.ok) {
-        showFlash(r.error === 'https_required' ? '푸시 서버는 HTTPS URL만 저장됩니다.' : '푸시 서버 URL이 올바르지 않습니다.')
+
+      const mode = String(fd.get('hybridMode') || 'auto') === 'fixed' ? 'fixed' : 'auto'
+      const fixed = String(fd.get('hybridFixed') || '') as HybridProviderId | ''
+      saveHybridAiConfig({
+        ...loadHybridAiConfig(),
+        mode,
+        fixedProvider: fixed || undefined,
+        allowPaidFallback: Boolean(fd.get('hybridAllowPaid')),
+      })
+
+      const legacyKeyIn = String(fd.get('apiKey') || '')
+      if (legacyKeyIn.trim()) {
+        await saveProviderKey('openai', {
+          apiKeyInput: legacyKeyIn,
+          apiBase: String(fd.get('apiBase') || '').trim(),
+          model: String(fd.get('model') || '').trim(),
+          allowDeviceFallback: true,
+        })
+      } else {
+        updateProviderSlot('openai', {
+          apiBase: String(fd.get('apiBase') || getProviderSlot('openai').apiBase || '').trim(),
+          model: String(fd.get('model') || getProviderSlot('openai').model || '').trim(),
+        })
       }
-    })
-    if (next.notifyFamilyChat || next.notifyFriendsChat) {
-      void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
-        if (sub) {
-          void bootSpaceSyncAndPush()
+
+      const next: JarvisSettings = {
+        ...state.settings,
+        displayName: String(fd.get('displayName') || '주인님').trim() || '주인님',
+        speakReplies: Boolean(fd.get('speakReplies')),
+        apiKey: '',
+        apiBase: String(fd.get('apiBase') || 'https://api.openai.com/v1').trim(),
+        model: String(fd.get('model') || 'gpt-4o-mini').trim(),
+        city: String(fd.get('city') || '서울').trim() || '서울',
+        notifyFamilyChat: Boolean(fd.get('notifyFamilyChat')),
+        notifyFriendsChat: Boolean(fd.get('notifyFriendsChat')),
+        notifyWhileOpen: Boolean(fd.get('notifyWhileOpen')),
+        notifyPrivacyMode: (['full', 'simple', 'hidden'] as const).includes(
+          String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden',
+        )
+          ? (String(fd.get('notifyPrivacyMode') || 'simple') as 'full' | 'simple' | 'hidden')
+          : 'simple',
+        pushServerBaseUrl: String(fd.get('pushServerBaseUrl') || '').trim(),
+        appLocale,
+        translationLocale: String(fd.get('translationLocale') || appLocale),
+        autoTranslateMessages: Boolean(fd.get('autoTranslateMessages')),
+        showOriginalText: Boolean(fd.get('showOriginalText')),
+      }
+      state.settings = next
+      saveSettings(next)
+      state.settings = loadSettings()
+      setAppLocale(appLocale)
+      const musicProvider = String(fd.get('musicProvider') || 'youtube') as
+        | 'youtube'
+        | 'youtube_music'
+        | 'spotify'
+        | 'apple_music'
+      updateMusicPreferences({
+        preferredMusicProvider: musicProvider,
+        preferredMusicLanguage: appLocale,
+        openInExternalApp: Boolean(fd.get('musicOpenExternal')),
+        rememberRecentMusicSearches: Boolean(fd.get('musicRememberSearches')),
+        preferInstrumental: Boolean(fd.get('musicPreferInstrumental')),
+      })
+      void import('./push').then((m) => {
+        const url = (next.pushServerBaseUrl || '').trim()
+        if (!url) {
+          m.setPushServerBaseUrl(null)
+          return
+        }
+        const r = m.setPushServerBaseUrl(url, { allowHttpLocalhost: true })
+        if (!r.ok) {
+          showFlash(
+            r.error === 'https_required'
+              ? '푸시 서버는 HTTPS URL만 저장됩니다.'
+              : '푸시 서버 URL이 올바르지 않습니다.',
+          )
         }
       })
-    }
-    showFlash('설정을 저장했습니다.')
-    render()
+      if (next.notifyFamilyChat || next.notifyFriendsChat) {
+        void import('./chatNotify').then((m) => m.subscribeChatPush()).then((sub) => {
+          if (sub) {
+            void bootSpaceSyncAndPush()
+          }
+        })
+      }
+      const keyPart = keyMessages.length ? ` · ${keyMessages.slice(0, 2).join(' / ')}` : ''
+      showFlash(`설정을 저장했습니다${keyPart}`)
+      render()
+    })()
   })
 
   document.getElementById('global-translation-form')?.addEventListener('submit', (e) => {
@@ -7392,29 +7453,44 @@ function bind(): void {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-test') as HybridProviderId | null
       if (!id) return
-      const flushed = flushHybridProviderFromDom(id)
-      if (!flushed.hasKey) {
+      const fields = readHybridProviderFromDom(id)
+      const hasTyped = Boolean(fields.apiKeyInput.trim())
+      if (!hasTyped && !isProviderConfigured(id)) {
         showFlash('API 키를 먼저 입력해 주세요.')
         return
       }
       showFlash('연결 테스트 중…')
-      void testProviderConnection(id).then((r) => {
-        showFlash(r.ok ? `${id} 연결 성공${r.latencyMs ? ` (${r.latencyMs}ms)` : ''}` : `${id} 실패: ${r.message}`)
+      void (async () => {
+        if (hasTyped) {
+          const saved = await persistHybridProviderFromDom(id, { allowDeviceFallback: true })
+          if (!saved.ok) {
+            showFlash(saved.message)
+            return
+          }
+        }
+        const r = await testProviderKeyFull(id, {
+          apiKeyInput: fields.apiKeyInput,
+          apiBase: fields.apiBase,
+          model: fields.model,
+        })
+        showFlash(
+          r.ok
+            ? `${id} 연결 성공${r.latencyMs ? ` (${r.latencyMs}ms)` : ''}`
+            : `${id} 실패: ${r.message}`,
+        )
         render()
-      })
+      })()
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-hybrid-save]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-save') as HybridProviderId | null
       if (!id) return
-      const flushed = flushHybridProviderFromDom(id)
-      showFlash(
-        flushed.hasKey
-          ? `${id} 키를 저장했습니다. 연결 테스트로 확인할 수 있어요.`
-          : '저장할 키가 없습니다. 키를 입력해 주세요.',
-      )
-      if (flushed.hasKey) render()
+      showFlash('저장 중…')
+      void persistHybridProviderFromDom(id, { allowDeviceFallback: true }).then((r) => {
+        showFlash(r.message)
+        if (r.ok) render()
+      })
     })
   })
   document.querySelectorAll<HTMLInputElement>('[data-hybrid-key]').forEach((input) => {
@@ -7422,34 +7498,79 @@ function bind(): void {
       const id = (input.getAttribute('data-hybrid-key') || '') as HybridProviderId
       if (!id) return
       if (!input.value.trim()) return
-      flushHybridProviderFromDom(id)
+      void persistHybridProviderFromDom(id, { allowDeviceFallback: true })
     }
     input.addEventListener('change', persist)
-    input.addEventListener('blur', persist)
   })
   document.querySelectorAll<HTMLButtonElement>('[data-hybrid-clear]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-clear') as HybridProviderId | null
       if (!id) return
-      clearProviderKey(id)
-      if (id === 'openai') {
-        state.settings = { ...state.settings, apiKey: '' }
-        saveSettings(state.settings)
-      }
-      showFlash(`${id} 키를 삭제했습니다.`)
-      render()
+      void deleteProviderKeyFull(id).then((r) => {
+        if (id === 'openai') {
+          state.settings = { ...state.settings, apiKey: '' }
+          saveSettings(state.settings)
+        }
+        showFlash(r.message || `${id} 키를 삭제했습니다.`)
+        render()
+      })
     })
   })
   document.querySelectorAll<HTMLButtonElement>('[data-hybrid-default]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-hybrid-default') as HybridProviderId | null
       if (!id) return
-      flushHybridProviderFromDom(id)
-      const cfg = loadHybridAiConfig()
-      saveHybridAiConfig({ ...cfg, mode: 'fixed', fixedProvider: id })
-      showFlash(`${id}를 기본 Provider로 고정했습니다.`)
-      render()
+      void persistHybridProviderFromDom(id, { allowDeviceFallback: true }).then(() => {
+        const cfg = loadHybridAiConfig()
+        saveHybridAiConfig({ ...cfg, mode: 'fixed', fixedProvider: id })
+        showFlash(`${id}를 기본 Provider로 고정했습니다.`)
+        render()
+      })
     })
+  })
+  document.querySelector('[data-action="api-key-diag-run"]')?.addEventListener('click', () => {
+    if (state.apiKeyDiagRunning) return
+    state.apiKeyDiagRunning = true
+    render({ guardNav: false })
+    void runApiKeyDiagnosis()
+      .then((report) => {
+        state.apiKeyDiagReport = report
+        showFlash(
+          `API 진단 · 백엔드 ${report.backend.reachable ? 'OK' : '불가'} · 설정 ${
+            report.providers.filter((p) => p.configured).length
+          }개`,
+        )
+      })
+      .catch((e) => showFlash(e instanceof Error ? e.message : '진단 실패'))
+      .finally(() => {
+        state.apiKeyDiagRunning = false
+        if (state.view === 'settings') render({ guardNav: false })
+      })
+  })
+  document.querySelector('[data-action="api-key-diag-copy"]')?.addEventListener('click', () => {
+    if (!state.apiKeyDiagReport) {
+      showFlash('먼저 API 연결 진단을 실행해 주세요.')
+      return
+    }
+    const payload = sanitizeDiagExport({
+      app: 'AIZIO',
+      kind: 'api-key-diag',
+      version: APP_VERSION,
+      report: {
+        at: state.apiKeyDiagReport.at,
+        backend: state.apiKeyDiagReport.backend,
+        providers: state.apiKeyDiagReport.providers.map((p) => ({
+          provider: p.provider,
+          configured: p.configured,
+          source: p.source,
+          maskedKey: p.maskedKey,
+          connectionStatus: p.connectionStatus,
+          lastErrorCode: p.lastErrorCode,
+        })),
+      },
+    })
+    const copied = copyTextNow(JSON.stringify(payload, null, 2))
+    showFlash(copied.ok ? 'API 진단 결과를 복사했습니다.' : '복사에 실패했습니다.')
   })
 
   document.querySelector('[data-action="ai-wizard-free"]')?.addEventListener('click', () => {
@@ -8164,6 +8285,7 @@ function bootAppCore(): void {
   } catch {
     /* schema markers must never block boot */
   }
+  void warmPreviewApiBackendHint()
   state.messages = loadChat()
   state.settings = loadSettings()
   void loadBuildMetaLite().then((meta) => {

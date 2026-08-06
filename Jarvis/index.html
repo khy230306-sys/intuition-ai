@@ -132,10 +132,13 @@
           var stuckSplash = !!app.querySelector('[data-boot-inline="1"]')
           var empty = html.replace(/\s+/g, '').length < 40
           if (!stuckSplash && !empty && !window.__aizioBootAssetError) return
+          var offline = typeof navigator !== 'undefined' && navigator.onLine === false
           app.innerHTML =
             '<section class="boot-inline" data-boot-fail="1">' +
             '<h1>AIZIO</h1>' +
-            '<p>화면을 불러오지 못했습니다.<br />네트워크 후 다시 시도해 주세요.</p>' +
+            (offline
+              ? '<p>오프라인에서 앱 셸을 찾지 못했습니다.<br />온라인에서 한 번 연 뒤 홈 화면에 추가하면<br />비행기 모드에서도 열립니다.</p>'
+              : '<p>화면을 불러오지 못했습니다.<br />네트워크 후 다시 시도해 주세요.</p>') +
             '<button type="button" id="aizio-boot-retry">다시 시도</button>' +
             '</section>'
           var btn = document.getElementById('aizio-boot-retry')

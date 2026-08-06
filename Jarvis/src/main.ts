@@ -14,6 +14,31 @@ import {
   writePendingUpdate,
 } from './appUpdate'
 import {
+  flushOutbox,
+  listOutbox,
+  clearAllOutbox,
+  pendingOutboxCount,
+} from './offline/outbox'
+import {
+  netStatusLabelKo,
+  onlineOnlyMessage,
+  probeNetwork,
+  startNetworkMonitor,
+  type NetStatus,
+} from './offline/networkStatus'
+import {
+  estimateLocalStorageBytes,
+  verifyAppShell,
+  warmAppShell,
+  type ShellReadyReport,
+} from './offline/shellReady'
+import {
+  renderOfflineBadge,
+  renderOfflineSettingsPanel,
+  renderOfflineStrip,
+  renderOutboxModal,
+} from './offline/offlineUi'
+import {
   buildAppHash,
   hashScreenToView,
   migratePathnameToHashUrl,
@@ -339,7 +364,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.17'
+const APP_VERSION = '1.21.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -421,8 +446,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | void> {
   })
 }
 
-async function clearAppCaches(): Promise<void> {
-  if ('serviceWorker' in navigator) {
+/**
+ * Clear Cache Storage. By default KEEP service worker registration —
+ * unregistering left home-screen PWAs with Safari “페이지를 열 수 없음” offline.
+ * Pass unregisterServiceWorker:true only for stuck update recovery.
+ */
+async function clearAppCaches(opts?: { unregisterServiceWorker?: boolean }): Promise<void> {
+  if (opts?.unregisterServiceWorker && 'serviceWorker' in navigator) {
     try {
       const regs = await navigator.serviceWorker.getRegistrations()
       await Promise.all(
@@ -495,8 +525,9 @@ async function hardRefreshApp(opts?: { targetVersion?: string; targetBuildId?: s
   sessionStorage.setItem('jarvis.refreshing', '1')
   paintBootSplash(stuck ? '앱을 다시 불러오는 중…' : '최신 버전으로 업데이트하는 중…')
   try {
-    await withTimeout(clearAppCaches(), 5000)
-    await waitForServiceWorkerGone(2500)
+    // Stuck update recovery may unregister; normal refresh keeps SW for offline shell.
+    await withTimeout(clearAppCaches({ unregisterServiceWorker: stuck }), 5000)
+    if (stuck) await waitForServiceWorkerGone(2500)
   } catch {
     /* still reload */
   }
@@ -524,10 +555,10 @@ async function updateAppToLatest(): Promise<void> {
   sessionStorage.removeItem('jarvis.buildReloaded')
   paintBootSplash(crosses ? '고정 Preview 주소로 옮기는 중…' : '캐시를 비우고 최신판을 확인하는 중…')
 
-  // 1) Kill SW/precache BEFORE asking the server — old SW served stale index/build-meta.
+  // 1) Clear Cache Storage BEFORE asking the server — but KEEP the service worker
+  // so offline home-screen launches still have an app shell after update.
   try {
-    await withTimeout(clearAppCaches(), 5000)
-    await waitForServiceWorkerGone(2500)
+    await withTimeout(clearAppCaches({ unregisterServiceWorker: false }), 5000)
   } catch {
     /* continue */
   }
@@ -649,6 +680,11 @@ const state = {
   dictationTarget: 'jarvis' as 'jarvis' | 'family' | 'friends' | 'translate-sheet',
   voiceHint: '',
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
+  /** Refined network status (health probe) — not navigator.onLine alone. */
+  netStatus: (typeof navigator === 'undefined' || navigator.onLine ? 'online' : 'offline') as NetStatus,
+  shellReady: null as ShellReadyReport | null,
+  storageBytes: 0,
+  outboxModalOpen: false,
   /** Latest version string from jarvis-app.shipstatic.com, if checked. */
   remoteVersion: null as string | null,
   showInstall: false,
@@ -2927,6 +2963,7 @@ function renderBrand(): string {
         </div>
       </div>
       <div class="brand-bar-right">
+        ${renderOfflineBadge(state.netStatus)}
         <div class="status-pill">${status}</div>
         ${topActions}
       </div>
@@ -4678,6 +4715,12 @@ function renderSettings(): string {
     <section class="panel view-scroll">
       <h2 class="section-title">SETTINGS</h2>
       ${renderUpdateCard()}
+      ${renderOfflineSettingsPanel({
+        appVersion: APP_VERSION,
+        netStatus: state.netStatus,
+        shell: state.shellReady,
+        storageBytes: state.storageBytes,
+      })}
       <form class="settings-form" id="settings-form">
         <div class="profile-picker">
           <button type="button" class="profile-picker-avatar ${s.avatarDataUrl ? 'has-photo' : ''}" data-profile-open="1" data-profile-name="${escapeAttr(s.displayName)}" data-profile-src="${escapeAttr(s.avatarDataUrl || '')}" data-profile-mine="1" aria-label="내 프로필">
@@ -5055,7 +5098,20 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
   // Install CTA stays visible on HOME — users must be able to add to home screen.
   refreshInstallHint()
   const installHtml = renderInstall()
-  app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${translateSheet}${renderShareModal()}${renderInstallGuideModal()}`
+  const offlineStrip = renderOfflineStrip(state.netStatus)
+  const outboxHtml = state.outboxModalOpen
+    ? renderOutboxModal(
+        listOutbox()
+          .slice(-40)
+          .reverse()
+          .map(
+            (it) =>
+              `<p>· ${escapeHtml(it.entityType)}/${escapeHtml(it.action)} · ${escapeHtml(it.syncStatus)} · ${escapeHtml(it.entityId.slice(0, 24))}${it.lastError ? ` · ${escapeHtml(it.lastError)}` : ''}</p>`,
+          )
+          .join('') || '',
+      )
+    : ''
+  app.innerHTML = `${hideBrand ? '' : renderBrand()}${offlineStrip}${installHtml}${main}${nav}${more}${navSheet}${translateSheet}${renderShareModal()}${renderInstallGuideModal()}${outboxHtml}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? 'home' : ''
   document.body.classList.toggle('home-v2-active', homeV2On)
@@ -7147,6 +7203,102 @@ function bind(): void {
       void refreshRemoteVersionBadge({ announce: true })
     })
   })
+
+  document.querySelectorAll('[data-action="offline-continue"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showFlash('오프라인으로 계속합니다 · 로컬 기능을 사용하세요')
+    })
+  })
+  document.querySelectorAll('[data-action="offline-recheck"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void probeNetwork({ force: true }).then((st) => {
+        state.netStatus = st
+        state.online = st === 'online' || st === 'degraded'
+        showFlash(`네트워크: ${netStatusLabelKo(st)}`)
+        render()
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="offline-diag"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      goToView('settings')
+      showFlash('설정 → 오프라인 사용 · 실기기 진단')
+    })
+  })
+  document.querySelectorAll('[data-action="offline-outbox"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.outboxModalOpen = true
+      render()
+    })
+  })
+  document.querySelectorAll('[data-action="offline-outbox-close"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.outboxModalOpen = false
+      render()
+    })
+  })
+  document.querySelectorAll('[data-action="offline-flush-outbox"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void flushOutbox({ isOnline: () => state.netStatus === 'online' || state.netStatus === 'degraded' }).then(
+        (r) => {
+          showFlash(`동기화 · 완료 ${r.synced} · 실패 ${r.failed} · 대기 ${pendingOutboxCount()}`)
+          state.outboxModalOpen = false
+          render()
+        },
+      )
+    })
+  })
+  document.querySelectorAll('[data-action="offline-verify-shell"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void verifyAppShell(APP_VERSION).then(async (report) => {
+        state.shellReady = report
+        state.storageBytes = await estimateLocalStorageBytes()
+        showFlash(report.detail)
+        render()
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="offline-warm-shell"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (state.netStatus === 'offline') {
+        showFlash(onlineOnlyMessage('web-search'))
+        return
+      }
+      showFlash('앱 셸을 다시 받는 중…')
+      void warmAppShell(APP_VERSION)
+        .then(() => verifyAppShell(APP_VERSION))
+        .then((report) => {
+          state.shellReady = report
+          showFlash(report.ready ? '앱 셸 저장 완료' : report.detail)
+          render()
+        })
+    })
+  })
+  document.querySelectorAll('[data-action="offline-test-start"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showFlash(
+        '테스트: 온라인에서 준비 완료 확인 → 홈 화면 추가 → 앱 종료 → 비행기 모드 → 아이콘으로 실행',
+      )
+    })
+  })
+  document.querySelectorAll('[data-action="offline-clear-caches"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!confirm('오프라인 캐시(앱 셸 포함)를 삭제할까요? 서비스 워커는 유지됩니다.')) return
+      void clearAppCaches({ unregisterServiceWorker: false }).then(() => {
+        state.shellReady = null
+        showFlash('캐시를 삭제했습니다. 온라인에서 앱 셸을 다시 받아 주세요.')
+        render()
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="offline-clear-outbox"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!confirm('대기 중인 오프라인 작업을 모두 삭제할까요?')) return
+      clearAllOutbox()
+      showFlash('대기 작업을 삭제했습니다.')
+      render()
+    })
+  })
 }
 
 let swUpdateTimer: number | null = null
@@ -7156,6 +7308,7 @@ function boot(): void {
   bootNavDelegation()
   bootLos2CardDelegation()
   // Soft SW apply on update — hard cache wipe caused intermittent white screens on iPhone.
+  // Keep SW registered so offline home-screen launches still hit the app shell.
   const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
@@ -7164,12 +7317,23 @@ function boot(): void {
         void hardRefreshApp()
       })
     },
+    onOfflineReady() {
+      showFlash('오프라인 실행 준비 완료 · 홈 화면에서도 열 수 있습니다')
+      void warmAppShell(APP_VERSION).then(() => verifyAppShell(APP_VERSION)).then((report) => {
+        state.shellReady = report
+      })
+    },
     onRegisteredSW(_url, reg) {
       if (!reg) return
       void reg.update()
       // Single interval — avoid stacking on re-register / HMR
       if (swUpdateTimer != null) window.clearInterval(swUpdateTimer)
       swUpdateTimer = window.setInterval(() => void reg.update(), 60_000)
+      void warmAppShell(APP_VERSION)
+        .then(() => verifyAppShell(APP_VERSION))
+        .then((report) => {
+          state.shellReady = report
+        })
     },
   })
   const pending = readPendingUpdate()
@@ -7437,23 +7601,43 @@ function bootAppCore(): void {
     render()
   })
   void ensureNotificationPermission()
-  window.addEventListener('online', () => {
-    state.online = true
-    if (state.locationReady) {
-      scheduleResumeSpaceSync('force')
+  startNetworkMonitor(45_000)
+  void import('./offline/networkStatus').then(({ subscribeNetStatus }) => {
+    subscribeNetStatus((status) => {
+      state.netStatus = status
+      state.online = status === 'online' || status === 'degraded'
+      const badge = document.querySelector('[data-net-badge="1"]')
+      if (badge) badge.replaceWith(document.createRange().createContextualFragment(renderOfflineBadge(status)))
       const pill = document.querySelector('.status-pill')
-      if (pill) pill.textContent = '대기'
-    }
+      if (pill && status === 'offline') pill.textContent = '오프라인'
+      if (status === 'online') {
+        void flushOutbox({ isOnline: () => true }).then((r) => {
+          if (r.synced > 0) showFlash(`연결 복구 · 대기 작업 ${r.synced}건 동기화`)
+        })
+        if (state.locationReady) scheduleResumeSpaceSync('force')
+        void warmAppShell(APP_VERSION).then(() => verifyAppShell(APP_VERSION)).then((report) => {
+          state.shellReady = report
+        })
+      }
+      // Soft refresh strip when leaving/entering offline
+      if (status === 'offline' || status === 'degraded') {
+        if (!document.querySelector('[data-offline-strip="1"]')) render()
+      } else if (document.querySelector('[data-offline-strip="1"]')) {
+        render()
+      }
+    })
   })
-  window.addEventListener('offline', () => {
-    state.online = false
-    const pill = document.querySelector('.status-pill')
-    if (pill) pill.textContent = '오프라인'
+  void estimateLocalStorageBytes().then((n) => {
+    state.storageBytes = n
+  })
+  void verifyAppShell(APP_VERSION).then((report) => {
+    state.shellReady = report
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       scheduleResumeSpaceSync('force')
       void refreshRemoteVersionBadge()
+      void probeNetwork({ force: true })
     }
   })
   window.addEventListener('pageshow', (ev) => {

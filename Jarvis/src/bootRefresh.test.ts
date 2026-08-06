@@ -10,7 +10,7 @@ describe('boot / version refresh safety', () => {
     const fs = await import('node:fs')
     const src = fs.readFileSync(new URL('./main.ts', import.meta.url), 'utf8')
     expect(src).toContain('data-boot-splash')
-    expect(src).toContain('withTimeout(clearAppCaches()')
+    expect(src).toMatch(/withTimeout\(clearAppCaches\(/)
     expect(src).toContain('continueBootAfterRefresh')
     expect(src).toContain('paintBootSplash')
     // Auto SW update must soft-apply; hard wipe caused intermittent blank screens.

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b121c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>AIZIO Offline</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        min-height: 100dvh;
+        background: #070b12;
+        color: #e8eef7;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      main {
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 28px 20px;
+        text-align: center;
+      }
+      h1 {
+        margin: 0;
+        letter-spacing: 0.14em;
+        font-size: 1.55rem;
+      }
+      p {
+        margin: 0;
+        opacity: 0.78;
+        line-height: 1.5;
+        max-width: 22rem;
+      }
+      a,
+      button {
+        margin-top: 10px;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 18px;
+        background: #00d2be;
+        color: #041016;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>AIZIO</h1>
+      <p>오프라인 모드입니다. 인터넷 연결 없이 기기에 저장된 기능으로 작동합니다.</p>
+      <p>앱 셸이 준비되어 있으면 홈으로 이동합니다.</p>
+      <a href="./?source=pwa">오프라인으로 계속</a>
+      <button type="button" id="retry">연결 다시 확인</button>
+    </main>
+    <script>
+      document.getElementById('retry').addEventListener('click', function () {
+        location.href = './?source=pwa&_t=' + Date.now()
+      })
+      // If SW can serve index, prefer the real app.
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(function () {
+          location.replace('./?source=pwa')
+        })
+      }
+    </script>
+  </body>
+</html>

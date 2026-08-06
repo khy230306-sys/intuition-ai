@@ -35,17 +35,26 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // Do NOT precache build-meta / quote-snapshot — stale SW made "업데이트" think it was already latest.
-      includeAssets: ['icons/*.png', 'favicon.svg', 'splash.svg'],
+      includeAssets: [
+        'icons/*.png',
+        'favicon.svg',
+        'splash.svg',
+        'offline.html',
+        'offline-shell.js',
+        'push-handler.js',
+      ],
       manifest: {
+        id: '/?source=pwa',
         name: 'AIZIO',
         short_name: 'AIZIO',
-        description: '아이지오 AIZIO — iPhone 만능 AI 비서 · 번역 잠금, 음성, 투자, 기억',
+        description: '아이지오 AIZIO — iPhone 만능 AI 비서 · 오프라인 셸, 번역 잠금, 음성, 생활',
         theme_color: '#0b121c',
         background_color: '#0b121c',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: './',
-        scope: './',
+        // Absolute root paths — more reliable for iOS home-screen offline launch than './'
+        start_url: '/?source=pwa',
+        scope: '/',
         lang: 'ko',
         categories: ['productivity', 'utilities'],
         icons: [
@@ -76,25 +85,23 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Bump when shell routing changes so old SW caches cannot keep a platform 404.
         cacheId: `aizio-shell-${APP_VERSION}`,
-        // js/css/html/icons only — never precache build-meta.json (version checks must hit network)
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
         globIgnores: ['**/build-meta.json', '**/quote-snapshot.json', '**/ship.json'],
         navigateFallback: 'index.html',
-        // Never treat APIs / map tiles / JSON probes as SPA navigations.
         navigateFallbackDenylist: [
           /^\/api\//,
           /\/build-meta\.json$/i,
           /\/quote-snapshot\.json$/i,
           /\/preview-config\.json$/i,
           /\/ship\.json$/i,
+          /\/offline-shell\.js$/i,
+          /\/push-handler\.js$/i,
+          /\.(?:png|jpg|jpeg|gif|webp|svg|js|css|woff2?|json|pbf|mvt)(\?|$)/i,
         ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        // ShipStatic injects ?_ship=<snapshot>; hard-refresh uses _v/_t/_bid.
-        // Do NOT ignore _nocache — version probes rely on a non-ignored param.
         ignoreURLParametersMatching: [
           /^utm_/,
           /^fbclid$/,
@@ -104,11 +111,13 @@ export default defineConfig({
           /^_check$/,
           /^_bid$/,
           /^_update$/,
+          /^source$/,
+          /^_health$/,
         ],
-        importScripts: ['push-handler.js'],
+        // push first, then offline navigation last-resort + verify messages
+        importScripts: ['push-handler.js', 'offline-shell.js'],
         runtimeCaching: [
           {
-            // Always fetch live version / build id from the network
             urlPattern: ({ url }) => /\/build-meta\.json$/i.test(url.pathname),
             handler: 'NetworkOnly',
           },
@@ -122,14 +131,11 @@ export default defineConfig({
             },
           },
           {
-            // Prefer fresh HTML so home-screen PWAs pick up new hashed asset URLs
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'aizio-pages',
-              networkTimeoutSeconds: 4,
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
-            },
+            // Map tiles / vector — network only, never SPA fallback, no bulk cache
+            urlPattern: ({ url }) =>
+              /tile|mapbox|openstreetmap|maplibre|protomaps/i.test(url.hostname) ||
+              /\.(pbf|mvt)(\?|$)/i.test(url.pathname),
+            handler: 'NetworkOnly',
           },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

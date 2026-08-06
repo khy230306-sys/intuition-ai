@@ -1,0 +1,35 @@
+:root {
+  --bg-deep: #05070f;
+  --bg-midnight: #0b1224;
+  --bg-navy: #101b33;
+  --neon-blue: #3aa9ff;
+  --gold: #d4b26a;
+  --violet: #9b6bff;
+  --text-primary: #f4f7ff;
+  --text-muted: #9aa6c3;
+  --border-soft: rgba(244, 247, 255, 0.12);
+  --surface: rgba(16, 27, 51, 0.72);
+  --surface-strong: rgba(11, 18, 36, 0.92);
+  --shadow-glow: 0 0 40px rgba(58, 169, 255, 0.18);
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --header-height: 64px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --font-body: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-display: "Segoe UI", "Avenir Next", "Apple SD Gothic Neo", sans-serif;
+  --max-stage: 560px;
+  --page-max: 1080px;
+  --motion-fast: 160ms;
+  --motion-med: 280ms;
+  --motion-slow: 700ms;
+}
+
+html[data-reduce-motion='true'] {
+  --motion-fast: 1ms;
+  --motion-med: 1ms;
+  --motion-slow: 1ms;
+}

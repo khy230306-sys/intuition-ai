@@ -748,6 +748,22 @@ export async function think(
   const raw = input.trim()
   if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // Continuous translate lock owns the turn before AIE / Core Brain.
+  // Prevents Core translation skill + legacy handleTranslate both answering
+  // (online bubble + cached offline bubble) for the same utterance.
+  {
+    const strippedEarly = stripWakeWord(raw).text || raw
+    const lockedEarly = loadInterpretMode().active
+    if (
+      lockedEarly &&
+      strippedEarly &&
+      !isTranslateEscapeCommand(strippedEarly)
+    ) {
+      const tr = await handleTranslate(strippedEarly)
+      if (tr) return tr
+    }
+  }
+
   // AIZIO Intelligence Engine — orchestrator only (never replaces Core Brain)
   let aiePrep: AiePrepareResult | null = null
   try {
@@ -844,8 +860,7 @@ export async function think(
 
   if (!text) return { text: `${name}, 무엇을 도와드릴까요?` }
 
-  // Continuous translate lock + enable commands beat localFun / greetings / AI.
-  // Clear app commands (길안내 등) escape the lock and continue below.
+  // Enable / one-shot translate commands (lock already handled above).
   {
     const locked = loadInterpretMode().active
     const escape = locked && isTranslateEscapeCommand(text)

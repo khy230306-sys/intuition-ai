@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { think } from './brain'
 import { translateOffline } from './offlineDict'
-import { detectLangCode, findLang } from './translate'
+import { detectLangCode, findLang, translateText } from './translate'
 import {
   clearInterpretMode,
   currentListenLang,
@@ -144,6 +145,42 @@ describe('lock-until-stop translate mode', () => {
     const reply = await handleTranslate('삼성전자 시세')
     expect(reply?.text).toMatch(/영어|원문/)
     expect(loadInterpretMode().active).toBe(true)
+  })
+
+  it('think() under lock returns one translation (no Core+legacy double)', async () => {
+    await handleTranslate('지금부터 베트남어로 번역해줘')
+    expect(loadInterpretMode().active).toBe(true)
+    const reply = await think('안녕하세요')
+    expect(reply.text).toMatch(/Xin chào/)
+    // Single bubble body — not two 【베트남어】 blocks joined
+    const tags = reply.text.match(/【[^】]*】/g) || []
+    expect(tags.length).toBeLessThanOrEqual(1)
+    expect(reply.text).not.toMatch(/오프라인[\s\S]*오프라인|Xin chào[\s\S]*Xin chào/)
+  })
+
+  it('coalesces concurrent translateText calls for the same sentence', async () => {
+    let fetches = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        fetches += 1
+        await new Promise((r) => setTimeout(r, 30))
+        return {
+          ok: true,
+          json: async () => ({
+            responseData: { translatedText: 'Hello unique coalesce' },
+            responseStatus: 200,
+          }),
+        }
+      }),
+    )
+    vi.stubGlobal('navigator', { onLine: true })
+    const q = `유니크문장번역테스트${Date.now()}`
+    const [a, b] = await Promise.all([translateText(q, 'ko', 'en'), translateText(q, 'ko', 'en')])
+    expect(a.ok).toBe(true)
+    expect(b.ok).toBe(true)
+    expect(a.text).toBe(b.text)
+    expect(fetches).toBe(1)
   })
 
   it('escape command helper recognizes navigation', () => {

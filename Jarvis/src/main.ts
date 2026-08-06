@@ -137,6 +137,7 @@ import {
   syncVoiceCaptions,
 } from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
+import { nextChatSendGuard, shouldAcceptChatSend, type ChatSendGuardState } from './chatSendGuard'
 import { bcp47, detectLangCode, translateText } from './translate'
 import {
   canUseGeolocation,
@@ -328,7 +329,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.20.12'
+const APP_VERSION = '1.20.13'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -1865,9 +1866,13 @@ function speakableReplyText(text: string): string {
   return text
 }
 
+/** Blocks double-tap / ghost-click / voice+전송 races that duplicate translate bubbles. */
+let lastChatSend: ChatSendGuardState | null = null
+
 async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' }): Promise<void> {
   const text = raw.trim()
-  if (!text || state.busy) return
+  if (!shouldAcceptChatSend(text, state.busy, lastChatSend)) return
+  lastChatSend = nextChatSendGuard(text)
   const gen = ++thinkGen
   state.busy = true
   state.listening = false
@@ -2394,8 +2399,11 @@ function startJarvisDictation(): void {
           if (session !== voiceSessionGen || state.dictationTarget !== 'jarvis') return
           state.listening = false
           state.voiceHint = '인식 완료'
-          state.draft = text
+          // Clear draft so 전송 cannot resend the same utterance after auto-final.
+          state.draft = ''
           patchVoiceUi()
+          const input = document.getElementById('draft') as HTMLInputElement | null
+          if (input) input.value = ''
           void handleUserText(text, { source: 'voice' })
         },
         onState: (s) => {
@@ -5558,7 +5566,17 @@ function bind(): void {
   })
   composer?.addEventListener('submit', (e) => {
     e.preventDefault()
-    void handleUserText(state.draft)
+    e.stopPropagation()
+    if (state.busy) return
+    const input = document.getElementById('draft') as HTMLInputElement | null
+    const text = (input?.value ?? state.draft).trim()
+    if (!text) return
+    // Clear before async work so a remount/ghost click cannot resubmit the same draft.
+    state.draft = ''
+    if (input) input.value = ''
+    const sendBtn = composer.querySelector<HTMLButtonElement>('.send-btn, [type="submit"]')
+    if (sendBtn) sendBtn.disabled = true
+    void handleUserText(text)
   })
 
   document.querySelectorAll<HTMLButtonElement>('[data-action="home-v2-set"]').forEach((btn) => {

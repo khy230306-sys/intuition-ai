@@ -119,50 +119,67 @@ async function translateOnline(text: string, from: string, to: string): Promise<
  * Offline-first translation.
  * 1) local phrase dictionary / cache (no data needed)
  * 2) optional online MyMemory when connected (result cached for later offline use)
+ *
+ * Concurrent identical requests share one in-flight promise so Core + legacy
+ * (or double-submit) cannot emit online then offline duplicates.
  */
+const inflightTranslate = new Map<string, Promise<TranslateResult>>()
+
 export async function translateText(text: string, from: string, to: string): Promise<TranslateResult> {
   const q = text.trim()
   if (!q) return { ok: false, text: '', from, to, error: '번역할 문장이 없습니다.' }
   if (from === to) return { ok: true, text: q, from, to, offline: true }
 
   const resolvedFrom = from === 'auto' ? detectLangCode(q) : from
-  const offline = translateOffline(q, resolvedFrom, to)
+  const key = `${resolvedFrom}|${to}|${q}`
+  const existing = inflightTranslate.get(key)
+  if (existing) return existing
 
-  // Prefer solid offline hit immediately (works with airplane mode / no data)
-  if (offline.ok && !offline.partial) {
-    // Still refresh from network in background when online for short phrases? Skip — keep instant offline.
+  const work = (async (): Promise<TranslateResult> => {
+    const offline = translateOffline(q, resolvedFrom, to)
+
+    // Prefer solid offline hit immediately (works with airplane mode / no data)
+    if (offline.ok && !offline.partial) {
+      return {
+        ok: true,
+        text: offline.text,
+        from: resolvedFrom,
+        to,
+        offline: true,
+        partial: false,
+      }
+    }
+
+    const online = await translateOnline(q, resolvedFrom, to)
+    if (online?.ok) return online
+
+    if (offline.ok) {
+      return {
+        ok: true,
+        text: offline.text + (offline.partial ? ' …' : ''),
+        from: resolvedFrom,
+        to,
+        offline: true,
+        partial: offline.partial,
+      }
+    }
+
     return {
-      ok: true,
-      text: offline.text,
+      ok: false,
+      text: '',
       from: resolvedFrom,
       to,
+      error:
+        '오프라인 사전에 없는 문장입니다. 기본 여행·일상 표현은 데이터 없이 되고, 한번 온라인으로 번역한 문장은 다음에 오프라인에서도 됩니다.',
       offline: true,
-      partial: false,
     }
-  }
+  })()
 
-  const online = await translateOnline(q, resolvedFrom, to)
-  if (online?.ok) return online
-
-  if (offline.ok) {
-    return {
-      ok: true,
-      text: offline.text + (offline.partial ? ' …' : ''),
-      from: resolvedFrom,
-      to,
-      offline: true,
-      partial: offline.partial,
-    }
-  }
-
-  return {
-    ok: false,
-    text: '',
-    from: resolvedFrom,
-    to,
-    error:
-      '오프라인 사전에 없는 문장입니다. 기본 여행·일상 표현은 데이터 없이 되고, 한번 온라인으로 번역한 문장은 다음에 오프라인에서도 됩니다.',
-    offline: true,
+  inflightTranslate.set(key, work)
+  try {
+    return await work
+  } finally {
+    inflightTranslate.delete(key)
   }
 }
 

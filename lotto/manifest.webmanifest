@@ -1,0 +1,24 @@
+{
+  "name": "AIZIO 로또렌즈",
+  "short_name": "AIZIO",
+  "description": "동행복권 실제 당첨 데이터 기반 통계 분석기",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b2e2a",
+  "theme_color": "#0b2e2a",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

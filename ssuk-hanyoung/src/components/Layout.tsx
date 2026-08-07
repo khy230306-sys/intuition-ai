@@ -42,7 +42,10 @@ export function Layout() {
           <span className="brand-badge photo">
             <CharImg src={CHAR_IMG.bus} size={44} />
           </span>
-          <span className="brand-name">쑥쑥놀이터</span>
+          <span className="brand-text">
+            <span className="brand-aizio">AIZIO</span>
+            <span className="brand-name">쑥쑥놀이터</span>
+          </span>
         </Link>
         <div className="star-chip" aria-label={`별 ${stars}개`}>
           <CharImg src={CHAR_IMG.star} size={22} />

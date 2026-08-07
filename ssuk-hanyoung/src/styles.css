@@ -104,6 +104,23 @@ img {
   object-fit: contain;
 }
 
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.05;
+  gap: 0.08rem;
+}
+
+.brand-aizio {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #7a6a58;
+  text-transform: uppercase;
+}
+
 .brand-name {
   font-family: var(--font-display);
   font-size: 1.35rem;

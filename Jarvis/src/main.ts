@@ -188,7 +188,6 @@ import {
   addWatch,
   appendSeriesValues,
   checkHabit,
-  clearChat,
   deleteExpense,
   deleteHabit,
   deleteMemory,
@@ -233,6 +232,7 @@ import {
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
 import { activeModeChipHtml, endTranslationSession, renderRouteDiagPanel } from './commandRouter'
 import { getActionAgentDiag, renderActionAgentDiagPanel, renderActiveTaskCard } from './actionAgent'
+import { resetConversationState } from './conversationReset'
 import {
   clearTravelSession,
   renderTravelScreen,
@@ -443,7 +443,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.29.3'
+const APP_VERSION = '1.29.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -756,14 +756,16 @@ const SUGGESTIONS = [
   '지금 몇 시야',
 ]
 
-/** Clear main chat history (settings button, chat toolbar, or voice). */
+/** Clear main chat history (settings button, chat toolbar, or voice).
+ * Same action as Global Command RESET_CONVERSATION — also ends Active Tasks.
+ */
 function resetChatHistory(opts?: { confirm?: boolean }): boolean {
-  const needConfirm = opts?.confirm !== false
+  const needConfirm = opts?.confirm === true
   if (needConfirm && state.messages.length > 0) {
     const ok = window.confirm('지난 대화를 모두 삭제하고 초기화할까요?')
     if (!ok) return false
   }
-  clearChat()
+  resetConversationState('reset_conversation')
   state.messages = []
   state.draft = ''
   state.voiceHint = ''
@@ -2286,7 +2288,8 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
     if (gen !== thinkGen || timedOut) return
     window.clearTimeout(timeoutId)
     if (reply.clearChat) {
-      clearChat()
+      // Global CLEAR/RESET already cleared storage/tasks; sync UI state
+      resetConversationState('reset_conversation')
       state.messages = []
       state.draft = ''
       dismissMusicMiniPlayer()
@@ -2294,6 +2297,8 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       if (reply.speak !== false && state.settings.speakReplies) {
         void speakAsync(reply.text, reply.speakLang || 'ko-KR')
       }
+      render()
+      scrollChat()
       return
     }
     if (reply.action) {

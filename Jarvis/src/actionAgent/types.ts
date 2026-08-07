@@ -185,4 +185,6 @@ export type ActionAgentTurnResult = {
   /** When true, caller should fall through to weather/legacy handlers */
   fallthrough?: boolean
   interruptKind?: 'weather' | 'city' | 'other'
+  /** Global CLEAR/RESET — wipe visible chat */
+  clearChat?: boolean
 }

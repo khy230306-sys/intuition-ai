@@ -22,6 +22,8 @@ export {
 } from './session'
 export { loadRouteDiagnostics, renderRouteDiagPanel } from './diagnostics'
 export { normalizeCommandInput } from './normalize'
+export { detectGlobalCommand, isGlobalCommandUtterance } from './globalCommands'
+export type { GlobalCommand, GlobalCommandHit } from './globalCommands'
 export {
   AiIntentSchema,
   parseClassifierOutput,

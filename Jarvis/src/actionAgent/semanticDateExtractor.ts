@@ -196,6 +196,17 @@ export function extractSemanticDates(text: string, now = new Date()): SemanticDa
       continue
     }
 
+    // 「8월10일 부산에서 호치민」 — date + route places ⇒ departure (not unknown)
+    if (
+      matches.length === 1 &&
+      !RETURN_CUE.test(t) &&
+      (/에서|으로|로\s*갈/.test(t) ||
+        /호치민|제주|도쿄|오사카|부산|인천|서울|하노이|다낭|방콕/.test(t))
+    ) {
+      pushDate(out, iso, 'departureDate', hit.text, 0.9, hit.text)
+      continue
+    }
+
     // Relative / absolute without role → unknownDate (resolver assigns)
     pushDate(out, iso, 'unknownDate', hit.text, 0.5, hit.text)
   }

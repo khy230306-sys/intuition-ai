@@ -75,11 +75,14 @@ export async function executeRoutedCommand(
       allowFixtures: actionAgentAllowFixtures,
     })
     if (aa.handled) {
-      return finish(replyFromExec(aa.replyText), {
-        status: aa.task?.status === 'needs_provider' ? 'partial' : 'success',
-        success: true,
-        provider: 'action-agent',
-      })
+      return finish(
+        replyFromExec(aa.replyText, aa.clearChat ? { clearChat: true } : undefined),
+        {
+          status: aa.task?.status === 'needs_provider' ? 'partial' : 'success',
+          success: true,
+          provider: aa.clearChat ? 'global-command' : 'action-agent',
+        },
+      )
     }
   }
 

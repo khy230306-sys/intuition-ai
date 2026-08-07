@@ -100,6 +100,8 @@ import {
   getActiveMode,
   isClearWeatherQuery,
 } from './commandRouter'
+import { detectGlobalCommand } from './commandRouter/globalCommands'
+import { executeGlobalCommandReset } from './conversationReset'
 import { getLocationReport } from './location'
 import {
   addFamilyNotice,
@@ -763,11 +765,33 @@ export async function think(
   const raw = input.trim()
   if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
 
+  // —— Global / System / UI Commands (terminal) ——
+  // MUST run before Action Agent / Active Task. Prevents 「대화초기화」 from being
+  // swallowed by needs_provider travel follow-ups.
+  {
+    const strippedEarly = stripWakeWord(raw).text || raw
+    try {
+      const hit = detectGlobalCommand(strippedEarly)
+      if (hit) {
+        const result = executeGlobalCommandReset(hit.command)
+        const clear =
+          hit.command === 'CLEAR_CHAT' ||
+          hit.command === 'RESET_CONVERSATION' ||
+          hit.command === 'NEW_CONVERSATION'
+        return {
+          text: result.message,
+          speak: true,
+          clearChat: clear,
+        }
+      }
+    } catch {
+      /* global layer must never block */
+    }
+  }
+
   // —— Central Command Router + Action Agent Task Context ——
-  // ALWAYS invoke before AIE / geo / weather so Active Task + Pending Question
-  // + multi-slot follow-ups are not lost when the Intent Router labels the
-  // utterance as general.chat (e.g. 「8월10 호치민으로갈꺼야」).
-  // Translation / travel / restaurant ownership still runs inside tryHandleRoutedCommand.
+  // After Global Commands: Active Task + Pending Question beat standalone intents
+  // when the Intent Router labels the utterance as general.chat.
   {
     const strippedEarly = stripWakeWord(raw).text || raw
     try {

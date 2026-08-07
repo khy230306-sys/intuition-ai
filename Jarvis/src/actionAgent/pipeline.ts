@@ -8,8 +8,10 @@
  */
 
 import type { CommandRouterResult } from '../commandRouter/types'
+import { detectGlobalCommand } from '../commandRouter/globalCommands'
 import { getActiveMode } from '../commandRouter/session'
 import { isClearWeatherQuery } from '../commandRouter/weatherQuery'
+import { executeGlobalCommandReset } from '../conversationReset'
 import { executePlannedAction, formatResultsList } from './executor'
 import {
   isActiveTaskFollowUpAction,
@@ -357,11 +359,27 @@ function startRestaurantTask(text: string): TaskSession {
 
 function activeTaskOwnsTurn(active: TaskSession | null, text: string): boolean {
   if (!active || active.status === 'cancelled') return false
+  // needs_provider must NOT monopolize unrelated inputs (안녕 / 날씨 / …)
+  // Only continue the task when the user is clearly following up on it.
+  if (active.status === 'needs_provider') {
+    return (
+      looksLikeFollowUp(text) ||
+      isActiveTaskFollowUpAction(text) ||
+      isBarePlaceUtterance(text) ||
+      /검색\s*다시|다시\s*(알아|검색|해)|제공자|연결해|항공\s*검색/.test(text)
+    )
+  }
   if (active.pendingQuestion) return true
-  if (active.status === 'collecting' || active.status === 'needs_provider' || active.status === 'ready') {
+  if (active.status === 'collecting' || active.status === 'ready') {
     return true
   }
-  if (active.results.length) return true
+  if (active.results.length) {
+    return (
+      looksLikeFollowUp(text) ||
+      isActiveTaskFollowUpAction(text) ||
+      /그걸로|이걸로|번|호텔도|일정에|알림/.test(text)
+    )
+  }
   if (looksLikeFollowUp(text) || isActiveTaskFollowUpAction(text) || isBarePlaceUtterance(text)) {
     return true
   }
@@ -378,6 +396,21 @@ export async function processActionAgentTurn(
 ): Promise<ActionAgentTurnResult> {
   const t = text.trim()
   const mode = getActiveMode()
+
+  // 0) Global / System commands — terminal (also handled in brain before AA)
+  {
+    const hit = detectGlobalCommand(t)
+    if (hit) {
+      const result = executeGlobalCommandReset(hit.command)
+      return {
+        handled: true,
+        replyText: result.message,
+        speak: true,
+        task: getActiveTask(),
+        clearChat: result.clearedChat,
+      }
+    }
+  }
 
   // 1) Resume suspended travel (before translation fallthrough — 「계속」 must not start translate)
   if (isResumeUtterance(t)) {

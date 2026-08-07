@@ -89,12 +89,18 @@ const CLEAR_SEEDS = [
   '대화삭제해줘',
   '대화삭제',
   '대화초기화',
+  '대화초기화시켜줘',
+  '대화초기화해줘',
   '지난대화삭제',
   '채팅삭제',
   '기록삭제',
   '대화지워줘',
+  '대화창지워줘',
   '채팅지워',
+  '채팅창비워줘',
   '채팅초기화',
+  '새대화시작',
+  '처음부터다시',
 ]
 
 function bestSeedScore(compact: string, seeds: string[]): number {
@@ -199,7 +205,7 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
   }
 
   if (
-    /대화\s*초기화|채팅\s*초기화|지난\s*대화\s*삭제|대화\s*삭제|채팅\s*삭제|기록\s*삭제|대화\s*지워|채팅\s*지워|메시지\s*(?:전부\s*)?삭제|클리어\s*채팅|clear\s*chat|reset\s*chat/i.test(
+    /대화\s*초기화|채팅\s*초기화|지난\s*대화\s*삭제|대화\s*삭제|채팅\s*삭제|기록\s*삭제|대화\s*지워|대화창\s*지워|채팅\s*지워|채팅창\s*비워|메시지\s*(?:전부\s*)?삭제|클리어\s*채팅|clear\s*chat|reset\s*chat|새\s*대화|처음부터\s*다시/i.test(
       text,
     ) ||
     bestSeedScore(c, CLEAR_SEEDS) >= 0.6

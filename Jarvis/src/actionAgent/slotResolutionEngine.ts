@@ -315,22 +315,23 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
     : false
 
   if (expected && isShortAmbiguousAnswer(t) && !alreadyHasExpectedKey && !authoritativeUpdate) {
-    if (expected === 'tripType') {
-      const norm = normalizeTripType(t)
-      diag.normalizedInput = norm.normalizedInput
-      if (norm.tripType) {
-        proposals.push({
-          key: 'tripType',
-          value: norm.tripType,
-          source: 'expected_question',
-          confidence: 1,
-          explicit: true,
-          expectedByQuestion: 'tripType',
-        })
-        expectedFilled = true
-      } else {
-        parseFailed = true
-      }
+    // Trip-type short answers always win over a mismatched expected date slot
+    const earlyTrip = normalizeTripType(t)
+    if (earlyTrip.tripType && (expected === 'tripType' || /^(왕복|편도|완복|왕뽁)/.test(t.replace(/\s+/g, '')))) {
+      proposals.push({
+        key: 'tripType',
+        value: earlyTrip.tripType,
+        source: expected === 'tripType' ? 'expected_question' : 'explicit_semantic',
+        confidence: 1,
+        explicit: true,
+        expectedByQuestion: expected === 'tripType' ? 'tripType' : undefined,
+      })
+      expectedFilled = expected === 'tripType'
+      authoritativeUpdate = expected !== 'tripType'
+      diag.normalizedInput = earlyTrip.normalizedInput
+    } else if (expected === 'tripType') {
+      diag.normalizedInput = earlyTrip.normalizedInput
+      parseFailed = true
     } else if (expected === 'departureDate' || expected === 'returnDate') {
       const unk = dates.find((d) => d.role === 'unknownDate') || dates[0]
       const abs = unk?.resolved

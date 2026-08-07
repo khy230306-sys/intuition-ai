@@ -15,7 +15,7 @@
 
 ## 접속 주소
 
-**https://holdem-edge-68b96b.tiiny.site**
+**https://holdem-edge-68b96b-d50db2.tiiny.site**
 
 (백업 터널) https://realty-collected-wiki-shaped.trycloudflare.com
 

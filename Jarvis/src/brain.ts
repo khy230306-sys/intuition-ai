@@ -119,11 +119,7 @@ import {
 import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
 import { aiEngineErrorText } from './ai'
-import {
-  hasAnyConfiguredProvider,
-  hybridNoProviderMessage,
-  runHybridChat,
-} from './ai-providers'
+import { hasAnyConfiguredProvider, runHybridChat } from './ai-providers'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,

@@ -4,6 +4,8 @@
 
 ## 모바일 접속 주소 (아이폰 · 안드로이드)
 
+**최신 빌드:** 항상 [LATEST_BUILD.md](./LATEST_BUILD.md) 를 보세요.
+
 **https://pnly0n2h.nivii.app**
 
 휴대폰 브라우저(Safari / Chrome)에서 바로 열 수 있습니다.  

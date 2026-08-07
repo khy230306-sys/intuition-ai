@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CORE_GAMES, getGame } from '../data/games'
-import { CATEGORIES, type LearningCategory } from '../data/learning'
+import { CATEGORIES } from '../data/learning'
 import { getDailyMissions, getProfile, useProfileSubscribe } from '../lib/store'
 import { getTodaysRecommendations } from '../lib/learningProgress'
 import { CHAR_IMG, CharImg, GameArt } from '../components/GameArt'
@@ -153,6 +153,3 @@ export function Home() {
     </div>
   )
 }
-
-/** helper kept for typed query links */
-export type HomeCat = LearningCategory

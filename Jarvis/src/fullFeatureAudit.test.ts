@@ -4,11 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { think } from './brain'
 import { clearInterpretMode } from './translateBrain'
-import {
-  endTranslationSession,
-  routeCommand,
-  startTranslationSession,
-} from './commandRouter'
+import { endTranslationSession, routeCommand } from './commandRouter'
 import { planActions } from './aie/actionPlanner'
 import { extractDateFromUtterance } from './actionAgent/dates'
 import { wantsLocalAlarm } from './notify'

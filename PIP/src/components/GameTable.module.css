@@ -55,10 +55,17 @@
 }
 
 .metaLabel {
-  display: block;
+  display: grid;
+  gap: 2px;
   color: rgba(244, 247, 255, 0.55);
   font-size: 0.72rem;
   margin-bottom: 4px;
+}
+
+.metaLabel small {
+  color: rgba(244, 247, 255, 0.35);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
 }
 
 .metaValue {
@@ -166,14 +173,91 @@
   background: rgba(16, 27, 51, 0.8);
 }
 
-.actions {
+.summaryBox {
+  border-radius: 16px;
+  border: 1px solid rgba(126, 224, 255, 0.22);
+  background: rgba(5, 7, 15, 0.45);
+  padding: 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
+.summaryTitle {
+  font-weight: 800;
+  color: #8fe7ff;
+}
+
+.summarySubtitle {
+  color: rgba(244, 247, 255, 0.65);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.summaryEmpty {
+  margin: 0;
+  color: rgba(244, 247, 255, 0.55);
+  font-size: 0.9rem;
+}
+
+.summaryList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: rgba(244, 247, 255, 0.88);
+  font-size: 0.9rem;
+}
+
+.summarySplit {
+  display: grid;
+  gap: 6px;
+}
+
+.summaryMode {
+  color: rgba(244, 247, 255, 0.6);
+  font-size: 0.8rem;
+}
+
+.summaryTotal {
+  font-size: 0.95rem;
+}
+
+.summaryTotal strong {
+  color: #d4b26a;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+  position: sticky;
+  bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: linear-gradient(180deg, transparent, rgba(5, 7, 15, 0.92) 28%);
+}
+
+.lockBtn {
+  min-height: 60px;
+  border-radius: 18px;
+  border: 1px solid rgba(126, 224, 255, 0.4);
+  background: linear-gradient(135deg, #7ee0ff, #3aa9ff 55%, #d4b26a);
+  color: #071018;
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.lockBtn:disabled {
+  opacity: 0.45;
+}
+
+.secondaryActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .actionBtn {
-  min-height: 48px;
+  min-height: 52px;
   border-radius: 999px;
   border: 1px solid rgba(126, 224, 255, 0.35);
   background: linear-gradient(135deg, #7ee0ff, #3aa9ff 55%, #d4b26a);
@@ -186,7 +270,7 @@
 }
 
 .ghostBtn {
-  min-height: 48px;
+  min-height: 52px;
   border-radius: 999px;
   border: 1px solid rgba(244, 247, 255, 0.2);
   background: rgba(16, 27, 51, 0.7);

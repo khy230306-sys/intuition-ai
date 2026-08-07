@@ -3,6 +3,7 @@
  */
 
 import type {
+  CalendarAuthStatus,
   CalendarEvent,
   CalendarEventInput,
   CalendarProvider,
@@ -16,13 +17,34 @@ export class TestCalendarProvider implements CalendarProvider {
   readonly isTestDouble = true
 
   private events = new Map<string, CalendarEvent>()
+  private connected = true
+
+  getAuthStatus(): CalendarAuthStatus {
+    return {
+      status: this.connected ? 'connected' : 'disconnected',
+      clientIdConfigured: true,
+      message: this.connected ? 'test connected' : 'Google Calendar가 아직 연결되지 않았습니다.',
+    }
+  }
+
+  async authorize(): Promise<{ ok: boolean; authUrl?: string; error?: string }> {
+    this.connected = true
+    return { ok: true, authUrl: 'https://example.test/oauth' }
+  }
+
+  async revoke(): Promise<{ ok: boolean; message: string }> {
+    this.connected = false
+    this.events.clear()
+    return { ok: true, message: 'revoked' }
+  }
 
   async healthCheck(): Promise<ProviderHealth> {
     return {
       providerId: this.id,
-      availability: 'READY',
+      availability: this.connected ? 'READY' : 'PENDING_EXTERNAL_SETUP',
       message: 'TEST DOUBLE — production 금지',
       checkedAt: Date.now(),
+      liveVerified: this.connected,
     }
   }
 
@@ -43,6 +65,20 @@ export class TestCalendarProvider implements CalendarProvider {
 
   async getEvent(eventId: string): Promise<CalendarEvent | null> {
     return this.events.get(eventId) || null
+  }
+
+  async updateEvent(eventId: string, patch: Partial<CalendarEventInput>): Promise<CalendarEvent> {
+    const cur = this.events.get(eventId)
+    if (!cur) throw new Error('missing')
+    const next = {
+      ...cur,
+      title: patch.title ?? cur.title,
+      whenAt: patch.whenAt ?? cur.whenAt,
+      whenLabel: patch.whenLabel ?? cur.whenLabel,
+      location: patch.location ?? cur.location,
+    }
+    this.events.set(eventId, next)
+    return next
   }
 
   async listEvents(): Promise<CalendarEvent[]> {

@@ -1,46 +1,38 @@
-# AIZIO Core Engine V1.2
+# AIZIO Core Engine V1.3
 
-Orchestrates **REAL** tools with Provider Registry, structured context, ToolResult, verification, and permissions.
+Commercial Provider Readiness — capability-based selection, Cost Guard, Google Places/Calendar REAL-ready.
 
 ## Loop
 
-`의도 분류 → Session Context → Permission → Provider Registry → ToolResult → Verifier → Reply`
+`의도 분류 → Session Context → Permission → Capability Selection → ToolResult → Verifier → Reply`
 
-## V1 success criteria (unchanged)
+## Provider capabilities
 
-1. Weather (Open-Meteo)  
-2. Family places via PlacesProvider (no curated / DEMO)  
-3. Ordinal / anaphora select  
-4. Calendar write + re-read verify (Local or External)
+`SEARCH_BY_TEXT · NEARBY_SEARCH · PLACE_DETAILS · RATING · REVIEWS · PHOTO · NAVIGATION · ADDRESS_SEARCH`
 
-## Provider Registry
+| Provider | Tier | Role |
+|----------|------|------|
+| Google Places | commercial | 기본 상용 후보 (키+라이브 검증 시 READY/REAL) |
+| Photon | auxiliary | 무료 위치/주소 보조 — 평점·리뷰 생성 금지 |
+| AIZIO Local Calendar | local | 내부 일정 |
+| Google Calendar | external | OAuth 직전 단계까지 완성 |
 
-| Interface | Implementations | Availability |
-|-----------|-----------------|--------------|
-| WeatherProvider | Open-Meteo | READY |
-| PlacesProvider | Google Places (key), Photon (no key) | READY / PENDING_EXTERNAL_SETUP |
-| CalendarProvider | AIZIO Local, Google Calendar (OAuth) | Local READY; External PENDING until OAuth |
+## Cost Guard
 
-Test doubles (`isTestDouble`) are blocked on Production execution paths.
+최소 FieldMask · 세션 placeId 중복 조회 방지 · timeout · retry 상한 · 일별 telemetry · QUOTA_EXCEEDED 매핑  
+(Google 정책 위반 장기 캐시 없음)
 
-## REAL Places rules
+## Fallback
 
-Requires external provider response + `providerPlaceId` + geo/address + `fetchedAt` + `rawSourceAvailable`.  
-`name + mapsQuery + rank` alone is never REAL. Curated/demo/catalog rejected.
+Google 미연결 시 Photon 가능 범위만 사용 → `degraded=true` + `missingCapabilities`  
+가짜 rating/review 생성 금지
 
 ## Calendar copy
 
-- Local: 「AIZIO 내부 일정에 저장했습니다」  
-- External (verified): 「Google Calendar에 등록했습니다」  
-- No connector: 「외부 캘린더가 아직 연결되지 않았습니다」
-
-## Permission
-
-- **0** read/search — weather, places  
-- **1** local write — AIZIO 내부 일정  
-- **2** external write — only when connector READY  
-- **3** sensitive — never without confirm + connector  
+- Local: 「AIZIO 내부 일정에 저장했습니다」
+- External: 「Google Calendar에 등록했습니다」
+- Pending: 「Google Calendar가 아직 연결되지 않았습니다」
 
 ## Non-goals
 
-Own LLM · Gmail · flight/hotel booking · payments · UI redesign  
+Gmail · flights/hotels · payments · Life OS · large UI  

@@ -1,7 +1,11 @@
 /**
- * Provider contracts for AIZIO Core Engine V1.2+.
- * Engine must not hardcode vendor details — only these interfaces.
+ * Provider contracts for AIZIO Core Engine V1.3+.
+ * Engine must not hardcode vendor details — only these interfaces + capabilities.
  */
+
+import type { ProviderCapability, ProviderTier } from './capabilities'
+
+export type { ProviderCapability, ProviderTier }
 
 export type ProviderAvailability =
   | 'READY'
@@ -14,6 +18,8 @@ export type ProviderHealth = {
   availability: ProviderAvailability
   message: string
   checkedAt: number
+  /** True only after a successful live external probe/call. */
+  liveVerified?: boolean
 }
 
 /** Normalized place from any PlacesProvider. */
@@ -25,12 +31,16 @@ export type ProviderPlace = {
   latitude: number | null
   longitude: number | null
   category?: string
+  /** Only when provider returned it — never invent. */
   rating?: number | null
   reviewCount?: number | null
   mapsUrl?: string
   navigationQuery: string
   fetchedAt: number
   rawSourceAvailable: boolean
+  /** Google attribution strings — preserve when present. */
+  attributions?: string[]
+  photoNames?: string[]
 }
 
 export type PlacesSearchInput = {
@@ -38,6 +48,9 @@ export type PlacesSearchInput = {
   city?: string
   limit?: number
   signal?: AbortSignal
+  latitude?: number
+  longitude?: number
+  radiusMeters?: number
 }
 
 export type PlacesSearchOutput = {
@@ -46,14 +59,26 @@ export type PlacesSearchOutput = {
   provider: string
 }
 
+export type NearbySearchInput = {
+  latitude: number
+  longitude: number
+  radiusMeters?: number
+  includedTypes?: string[]
+  limit?: number
+  signal?: AbortSignal
+}
+
 export interface PlacesProvider {
   readonly id: string
   readonly label: string
+  readonly tier: ProviderTier
+  readonly capabilities: readonly ProviderCapability[]
   /** Test doubles must return true — blocked in production. */
   readonly isTestDouble?: boolean
   healthCheck(): Promise<ProviderHealth>
   searchPlaces(input: PlacesSearchInput): Promise<PlacesSearchOutput>
-  getPlaceDetails?(providerPlaceId: string): Promise<ProviderPlace | null>
+  nearbySearch?(input: NearbySearchInput): Promise<PlacesSearchOutput>
+  getPlaceDetails?(providerPlaceId: string, signal?: AbortSignal): Promise<ProviderPlace | null>
 }
 
 export type CalendarEventInput = {
@@ -74,6 +99,12 @@ export type CalendarEvent = {
   calendarKind: 'local' | 'external'
 }
 
+export type CalendarAuthStatus = {
+  status: 'pending_setup' | 'disconnected' | 'connected' | 'expired'
+  clientIdConfigured: boolean
+  message: string
+}
+
 export interface CalendarProvider {
   readonly id: string
   readonly label: string
@@ -85,6 +116,10 @@ export interface CalendarProvider {
   updateEvent?(eventId: string, patch: Partial<CalendarEventInput>): Promise<CalendarEvent>
   deleteEvent?(eventId: string): Promise<{ ok: boolean; message: string }>
   getEvent(eventId: string): Promise<CalendarEvent | null>
+  /** External OAuth connectors */
+  authorize?(): Promise<{ ok: boolean; authUrl?: string; error?: string }>
+  getAuthStatus?(): CalendarAuthStatus
+  revoke?(): Promise<{ ok: boolean; message: string }>
 }
 
 export interface WeatherProviderHealth {

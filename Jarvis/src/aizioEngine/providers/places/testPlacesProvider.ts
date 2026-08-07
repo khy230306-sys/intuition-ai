@@ -1,8 +1,8 @@
 /**
  * TEST-ONLY PlacesProvider. Never used on production execution path.
- * Identified by isTestDouble=true.
  */
 
+import { TEST_PLACES_CAPABILITIES } from '../capabilities'
 import type {
   PlacesProvider,
   PlacesSearchInput,
@@ -14,6 +14,8 @@ import type {
 export class TestPlacesProvider implements PlacesProvider {
   readonly id = 'test_places'
   readonly label = 'Test Places Fixture'
+  readonly tier = 'test' as const
+  readonly capabilities = TEST_PLACES_CAPABILITIES
   readonly isTestDouble = true
 
   private fixtures: ProviderPlace[]
@@ -68,16 +70,17 @@ export class TestPlacesProvider implements PlacesProvider {
       availability: 'READY',
       message: 'TEST DOUBLE — production 금지',
       checkedAt: Date.now(),
+      liveVerified: true,
     }
   }
 
   async searchPlaces(input: PlacesSearchInput): Promise<PlacesSearchOutput> {
     const requestId = `test_places_${Date.now().toString(36)}`
-    const city = (input.city || '').trim()
+    void input
     const places = this.fixtures.map((p) => ({
       ...p,
       fetchedAt: Date.now(),
-      name: city && !p.name.includes(city) ? p.name : p.name,
+      // Never invent rating/review on test fixtures unless explicitly provided
     }))
     return { places, providerRequestId: requestId, provider: this.id }
   }

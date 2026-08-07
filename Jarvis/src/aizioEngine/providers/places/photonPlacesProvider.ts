@@ -1,8 +1,10 @@
 /**
- * Photon (Komoot) PlacesProvider — free external geocoder, no API key.
+ * Photon (Komoot) — auxiliary free geocoder (not commercial place recommendations).
  * REAL when osm_id + coordinates + address/name present.
+ * Never invents rating / reviews / photos.
  */
 
+import { PHOTON_CAPABILITIES } from '../capabilities'
 import type {
   PlacesProvider,
   PlacesSearchInput,
@@ -38,7 +40,9 @@ function addressOf(p: NonNullable<PhotonFeature['properties']>): string {
 
 export class PhotonPlacesProvider implements PlacesProvider {
   readonly id = 'photon'
-  readonly label = 'Photon (Komoot / OSM)'
+  readonly label = 'Photon (Komoot / OSM) · 보조'
+  readonly tier = 'auxiliary' as const
+  readonly capabilities = PHOTON_CAPABILITIES
 
   async healthCheck(): Promise<ProviderHealth> {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -93,6 +97,7 @@ export class PhotonPlacesProvider implements PlacesProvider {
       if (!name) continue
       const address = addressOf(props) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`
       const providerPlaceId = `${props.osm_type || 'N'}/${osmId}`
+      // Explicitly omit rating / reviewCount / photoNames — Photon does not provide them
       places.push({
         provider: this.id,
         providerPlaceId,
@@ -110,13 +115,6 @@ export class PhotonPlacesProvider implements PlacesProvider {
     }
 
     return { places, providerRequestId: requestId, provider: this.id }
-  }
-
-  async getPlaceDetails(providerPlaceId: string): Promise<ProviderPlace | null> {
-    // Photon has no stable details endpoint — re-search by id fragment
-    const idPart = providerPlaceId.split('/').pop() || providerPlaceId
-    const out = await this.searchPlaces({ query: idPart, limit: 5 })
-    return out.places.find((p) => p.providerPlaceId === providerPlaceId) || out.places[0] || null
   }
 }
 

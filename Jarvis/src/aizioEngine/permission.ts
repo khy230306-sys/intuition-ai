@@ -77,7 +77,7 @@ export function checkPermission(
       level,
       reason:
         action === 'calendar.external_write'
-          ? '외부 캘린더가 아직 연결되지 않았습니다. (PENDING_EXTERNAL_SETUP)'
+          ? 'Google Calendar가 아직 연결되지 않았습니다. (PENDING_EXTERNAL_SETUP)'
           : '외부 서비스 쓰기(캘린더 동기화·메일 등)는 아직 연결되어 있지 않습니다. (PENDING_EXTERNAL_SETUP)',
       status: 'pending_external_setup',
     }

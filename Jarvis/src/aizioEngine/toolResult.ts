@@ -1,7 +1,9 @@
 /**
- * Standardized Tool Result for AIZIO Core Engine V1.1+.
+ * Standardized Tool Result for AIZIO Core Engine V1.3+.
  * LLM-generated text must never use this type as if it were tool data.
  */
+
+import type { ProviderCapability } from './providers/capabilities'
 
 export type ToolSourceType = 'live_api' | 'local_store' | 'catalog' | 'curated' | 'none'
 
@@ -38,6 +40,9 @@ export type ToolResult<T = unknown> = {
   providerRequestId?: string | null
   externalId?: string | null
   verificationMethod?: VerificationMethod | null
+  /** True when fallback provider used or preferred capabilities missing. */
+  degraded?: boolean
+  missingCapabilities?: ProviderCapability[]
 }
 
 export function makeToolResult<T>(partial: {
@@ -57,6 +62,8 @@ export function makeToolResult<T>(partial: {
   providerRequestId?: string | null
   externalId?: string | null
   verificationMethod?: VerificationMethod | null
+  degraded?: boolean
+  missingCapabilities?: ProviderCapability[]
 }): ToolResult<T> {
   const success = partial.success
   return {
@@ -76,5 +83,7 @@ export function makeToolResult<T>(partial: {
     providerRequestId: partial.providerRequestId ?? null,
     externalId: partial.externalId ?? null,
     verificationMethod: partial.verificationMethod ?? null,
+    degraded: partial.degraded === true,
+    missingCapabilities: partial.missingCapabilities || [],
   }
 }

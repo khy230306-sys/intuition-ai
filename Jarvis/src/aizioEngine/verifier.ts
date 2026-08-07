@@ -85,9 +85,20 @@ function placeIsRealShape(c: EnginePlaceCandidate): boolean {
   return true
 }
 
+export type PlacesVerifyData = {
+  candidates: EnginePlaceCandidate[]
+  query: string
+  provider?: string
+  providerRequestId?: string
+  degraded?: boolean
+  missingCapabilities?: string[]
+  fallbackFrom?: string | null
+  providerTier?: string
+}
+
 export function verifyPlacesResult(
-  raw: ToolResult<{ candidates: EnginePlaceCandidate[]; query: string; provider?: string; providerRequestId?: string }>,
-): VerifyOutcome<{ candidates: EnginePlaceCandidate[]; query: string; provider?: string; providerRequestId?: string }> {
+  raw: ToolResult<PlacesVerifyData>,
+): VerifyOutcome<PlacesVerifyData> {
   const pendingExternal = raw.status === 'pending_external_setup'
   if (pendingExternal) {
     return {
@@ -224,14 +235,19 @@ export async function verifyCalendarWrite(
           status: 'pending_external_setup',
           isRealData: false,
           errorCode: 'PENDING_EXTERNAL_SETUP',
-          errorMessage: '외부 캘린더가 아직 연결되지 않았습니다.',
+          errorMessage: 'Google Calendar가 아직 연결되지 않았습니다.',
           verifiedAt: Date.now(),
         }),
-        userMessage: '외부 캘린더가 아직 연결되지 않았습니다.',
+        userMessage: 'Google Calendar가 아직 연결되지 않았습니다.',
       }
     }
     const found = await ext.provider.getEvent(d.externalEventId || d.reminderId)
-    if (!found || found.title !== d.title) {
+    const timeOk =
+      found != null &&
+      (found.whenAt === d.whenAt ||
+        Math.abs((found.whenAt || 0) - d.whenAt) < 120_000 ||
+        (found.whenLabel && d.whenLabel && found.whenLabel.includes(d.whenLabel.slice(0, 8))))
+    if (!found || found.title !== d.title || !timeOk) {
       return {
         ok: false,
         result: makeToolResult({
@@ -239,11 +255,11 @@ export async function verifyCalendarWrite(
           success: false,
           isRealData: false,
           errorCode: 'calendar_external_verify_miss',
-          errorMessage: '외부 캘린더 재조회에서 이벤트를 찾지 못했습니다.',
+          errorMessage: '외부 캘린더 재조회에서 제목/시간 일치 이벤트를 찾지 못했습니다.',
           verifiedAt: Date.now(),
           verificationMethod: 'external_reread',
         }),
-        userMessage: '외부 캘린더 등록을 재조회로 확인하지 못했어요. 완료로 처리하지 않습니다.',
+        userMessage: 'Google Calendar 등록을 재조회로 확인하지 못했어요. 완료로 처리하지 않습니다.',
       }
     }
     const verified: EngineCalendarWrite = { ...d, verified: true }

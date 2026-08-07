@@ -1,10 +1,14 @@
 /**
- * Google Places provider scaffold — READY only when API key present.
- * Without key: PENDING_EXTERNAL_SETUP (never fake results).
+ * Google Places commercial provider.
+ * No API key → PENDING_EXTERNAL_SETUP.
+ * READY only after live call verification succeeds (or key + successful probe).
+ * REAL only after verified external response with providerPlaceId.
  */
 
-import { readEnv } from '../env'
+import { GOOGLE_PLACES_CAPABILITIES } from '../capabilities'
+import { googlePlacesApiKey, googleNearbySearch, googlePlaceDetails, googleTextSearch } from './googlePlacesClient'
 import type {
+  NearbySearchInput,
   PlacesProvider,
   PlacesSearchInput,
   PlacesSearchOutput,
@@ -12,16 +16,24 @@ import type {
   ProviderPlace,
 } from '../types'
 
+let liveVerifiedAt = 0
+
+export function resetGooglePlacesLiveVerifyForTests(): void {
+  liveVerifiedAt = 0
+}
+
+export function markGooglePlacesLiveVerified(): void {
+  liveVerifiedAt = Date.now()
+}
+
 export class GooglePlacesProvider implements PlacesProvider {
   readonly id = 'google_places'
   readonly label = 'Google Places API'
+  readonly tier = 'commercial' as const
+  readonly capabilities = GOOGLE_PLACES_CAPABILITIES
 
   private apiKey(): string {
-    return (
-      readEnv('VITE_AIZIO_GOOGLE_PLACES_API_KEY') ||
-      readEnv('AIZIO_GOOGLE_PLACES_API_KEY') ||
-      ''
-    )
+    return googlePlacesApiKey()
   }
 
   async healthCheck(): Promise<ProviderHealth> {
@@ -31,86 +43,71 @@ export class GooglePlacesProvider implements PlacesProvider {
         availability: 'PENDING_EXTERNAL_SETUP',
         message: 'VITE_AIZIO_GOOGLE_PLACES_API_KEY 미설정',
         checkedAt: Date.now(),
+        liveVerified: false,
+      }
+    }
+    if (!liveVerifiedAt) {
+      return {
+        providerId: this.id,
+        availability: 'PENDING_EXTERNAL_SETUP',
+        message: 'API Key 있음 — 실제 외부 호출 검증 전 (PENDING_EXTERNAL_SETUP)',
+        checkedAt: Date.now(),
+        liveVerified: false,
       }
     }
     return {
       providerId: this.id,
       availability: 'READY',
-      message: 'Google Places API 키 감지됨',
+      message: 'Google Places 라이브 검증됨',
       checkedAt: Date.now(),
+      liveVerified: true,
     }
   }
 
+  /**
+   * Attempt live probe when key present (does not invent results).
+   * Called by selection engine to promote PENDING → READY after success.
+   */
+  async tryLiveVerify(signal?: AbortSignal): Promise<boolean> {
+    if (!this.apiKey()) return false
+    if (liveVerifiedAt) return true
+    try {
+      const out = await googleTextSearch({ query: '서울역', city: '서울', limit: 1, signal })
+      if (out.places.some((p) => p.providerPlaceId)) {
+        liveVerifiedAt = Date.now()
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  /** For unit tests — simulate successful live verification without network. */
+  setLiveVerifiedForTests(v: boolean): void {
+    liveVerifiedAt = v ? Date.now() : 0
+  }
+
   async searchPlaces(input: PlacesSearchInput): Promise<PlacesSearchOutput> {
-    const key = this.apiKey()
-    const requestId = `gplaces_${Date.now().toString(36)}`
-    if (!key) {
-      const err = new Error('PENDING_EXTERNAL_SETUP')
-      ;(err as Error & { code?: string }).code = 'PENDING_EXTERNAL_SETUP'
-      throw err
+    const out = await googleTextSearch(input)
+    if (out.places.some((p) => p.providerPlaceId)) {
+      liveVerifiedAt = Date.now()
     }
+    return out
+  }
 
-    // Places API (New) Text Search — structure ready; failures surface honestly
-    const q = `${input.city ? input.city + ' ' : ''}${input.query}`.trim()
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      signal: input.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask':
-          'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.types',
-      },
-      body: JSON.stringify({
-        textQuery: q,
-        languageCode: 'ko',
-        maxResultCount: Math.min(8, input.limit ?? 5),
-        regionCode: 'KR',
-      }),
-    })
-    if (!res.ok) {
-      throw new Error(`google_places_http_${res.status}`)
+  async nearbySearch(input: NearbySearchInput): Promise<PlacesSearchOutput> {
+    const out = await googleNearbySearch(input)
+    if (out.places.some((p) => p.providerPlaceId)) {
+      liveVerifiedAt = Date.now()
     }
-    const data = (await res.json()) as {
-      places?: Array<{
-        id?: string
-        displayName?: { text?: string }
-        formattedAddress?: string
-        location?: { latitude?: number; longitude?: number }
-        rating?: number
-        userRatingCount?: number
-        googleMapsUri?: string
-        types?: string[]
-      }>
-    }
-    const fetchedAt = Date.now()
-    const places: ProviderPlace[] = []
-    for (const p of data.places || []) {
-      const id = String(p.id || '').trim()
-      const name = String(p.displayName?.text || '').trim()
-      if (!id || !name) continue
-      const lat = p.location?.latitude ?? null
-      const lng = p.location?.longitude ?? null
-      const address = String(p.formattedAddress || '').trim()
-      if (lat == null && lng == null && !address) continue
-      places.push({
-        provider: this.id,
-        providerPlaceId: id,
-        name,
-        address: address || `${lat},${lng}`,
-        latitude: lat,
-        longitude: lng,
-        category: p.types?.[0],
-        rating: p.rating ?? null,
-        reviewCount: p.userRatingCount ?? null,
-        mapsUrl: p.googleMapsUri,
-        navigationQuery: address || name,
-        fetchedAt,
-        rawSourceAvailable: true,
-      })
-    }
+    return out
+  }
 
-    return { places, providerRequestId: requestId, provider: this.id }
+  async getPlaceDetails(providerPlaceId: string, signal?: AbortSignal): Promise<ProviderPlace | null> {
+    const place = await googlePlaceDetails(providerPlaceId, signal)
+    if (place?.providerPlaceId) liveVerifiedAt = Date.now()
+    return place
   }
 }
 

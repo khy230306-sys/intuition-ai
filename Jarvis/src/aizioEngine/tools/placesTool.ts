@@ -1,5 +1,5 @@
 /**
- * Places tool — Provider Registry only. No curated Production fallback.
+ * Places tool — capability-based Provider selection. No curated Production fallback.
  */
 
 import {
@@ -14,6 +14,10 @@ export type PlacesToolData = {
   query: string
   provider: string
   providerRequestId: string
+  degraded: boolean
+  missingCapabilities: string[]
+  fallbackFrom: string | null
+  providerTier: string
 }
 
 function toCandidate(p: ProviderPlace, rank: number): EnginePlaceCandidate {
@@ -38,11 +42,13 @@ function toCandidate(p: ProviderPlace, rank: number): EnginePlaceCandidate {
     latitude: p.latitude,
     longitude: p.longitude,
     category: p.category,
-    rating: p.rating,
-    reviewCount: p.reviewCount,
+    // Pass through only if present — never invent
+    rating: p.rating ?? undefined,
+    reviewCount: p.reviewCount ?? undefined,
     mapsUrl: p.mapsUrl,
     fetchedAt: p.fetchedAt,
     rawSourceAvailable: p.rawSourceAvailable,
+    attributions: p.attributions,
   }
 }
 
@@ -66,13 +72,15 @@ export async function runPlacesTool(opts: {
       sourceType: 'none',
       isRealData: false,
       provider: resolved.health?.providerId || null,
-      errorCode: avail,
+      errorCode: avail === 'PENDING_EXTERNAL_SETUP' ? 'PENDING_EXTERNAL_SETUP' : avail,
       errorMessage:
         avail === 'PENDING_EXTERNAL_SETUP'
           ? '실제 장소 검색 서비스를 연결해야 합니다. (PENDING_EXTERNAL_SETUP)'
           : '실제 장소 검색 서비스를 사용할 수 없습니다. 가짜 후보를 만들지 않습니다.',
       confidence: 0,
       verificationMethod: 'none',
+      degraded: false,
+      missingCapabilities: resolved.missingCapabilities,
     })
   }
 
@@ -97,31 +105,40 @@ export async function runPlacesTool(opts: {
         errorMessage: '검색 결과가 비어 있습니다. 장소를 만들어내지 않습니다.',
         confidence: 0,
         verificationMethod: 'none',
+        degraded: resolved.degraded,
+        missingCapabilities: resolved.missingCapabilities,
       })
     }
 
-    const candidates = out.places.map((p, i) => toCandidate(p, i + 1))
+    const candidates = out.places.map((p: ProviderPlace, i: number) => toCandidate(p, i + 1))
     return makeToolResult({
       toolId: 'places.family_seek',
       success: true,
+      status: resolved.degraded ? 'partial' : 'ok',
       data: {
         candidates,
         query,
         provider: provider.id,
         providerRequestId: out.providerRequestId,
+        degraded: resolved.degraded,
+        missingCapabilities: resolved.missingCapabilities,
+        fallbackFrom: resolved.fallbackFrom,
+        providerTier: provider.tier,
       },
       source: provider.id,
       sourceType: 'live_api',
-      // Verifier decides final isRealData
       isRealData: false,
       provider: provider.id,
       providerRequestId: out.providerRequestId,
-      confidence: 0.85,
+      confidence: resolved.degraded ? 0.7 : 0.85,
       verificationMethod: 'provider_id_and_geo',
+      degraded: resolved.degraded,
+      missingCapabilities: resolved.missingCapabilities,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'places_error'
     const pending = msg === 'PENDING_EXTERNAL_SETUP' || /PENDING_EXTERNAL_SETUP/.test(msg)
+    const quota = msg === 'QUOTA_EXCEEDED' || /QUOTA_EXCEEDED/.test(msg)
     return makeToolResult({
       toolId: 'places.family_seek',
       success: false,
@@ -130,12 +147,16 @@ export async function runPlacesTool(opts: {
       sourceType: 'live_api',
       isRealData: false,
       provider: provider.id,
-      errorCode: pending ? 'PENDING_EXTERNAL_SETUP' : 'places_provider_error',
+      errorCode: pending ? 'PENDING_EXTERNAL_SETUP' : quota ? 'QUOTA_EXCEEDED' : 'places_provider_error',
       errorMessage: pending
         ? '실제 장소 검색 서비스를 연결해야 합니다.'
-        : `장소 검색 실패: ${msg}`,
+        : quota
+          ? '장소 검색 할당량(quota)을 초과했습니다. 잠시 후 다시 시도해 주세요.'
+          : `장소 검색 실패: ${msg}`,
       confidence: 0,
       verificationMethod: 'none',
+      degraded: resolved.degraded,
+      missingCapabilities: resolved.missingCapabilities,
     })
   }
 }
@@ -152,7 +173,9 @@ export function formatPlacesReply(
   const lines = candidates.map((c) => {
     const src = c.provider || c.source
     const addr = c.address ? ` — ${c.address}` : c.subtitle ? ` — ${c.subtitle}` : ''
-    return `${c.rank}. ${c.title}${addr} · ${src}`
+    const rating =
+      typeof c.rating === 'number' ? ` · ★${c.rating.toFixed(1)}` : ''
+    return `${c.rank}. ${c.title}${addr}${rating} · ${src}`
   })
   return [
     head,
@@ -172,4 +195,21 @@ export function formatPlacesUnavailable(message: string): string {
     message,
     '가짜 장소 목록은 표시하지 않습니다.',
   ].join('\n')
+}
+
+export function formatPlacesDegradedNote(
+  providerId: string,
+  missing: string[],
+  fallbackFrom: string | null,
+): string {
+  const miss = missing.length ? ` 부족 정보: ${missing.join(', ')}` : ''
+  if (providerId === 'photon') {
+    return `※ 보조 검색(Photon) 결과입니다. Google Places급 추천·평점이 아닙니다.${miss}${
+      fallbackFrom ? ` (선호: ${fallbackFrom})` : ''
+    }`
+  }
+  if (missing.length) {
+    return `※ 일부 상세 정보가 없습니다.${miss}`
+  }
+  return `※ 실제 외부 장소 데이터 (${providerId})`
 }

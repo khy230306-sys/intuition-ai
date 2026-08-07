@@ -32,6 +32,7 @@ export type EnginePlaceCandidate = {
   mapsUrl?: string
   fetchedAt?: number
   rawSourceAvailable?: boolean
+  attributions?: string[]
 }
 
 export type EngineWeatherSnapshot = {

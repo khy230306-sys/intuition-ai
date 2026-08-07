@@ -196,7 +196,7 @@ export async function runCalendarWriteTool(opts: {
     const msg = e instanceof Error ? e.message : 'local_calendar_error'
     const pendingNote =
       extResolved.health.availability === 'PENDING_EXTERNAL_SETUP'
-        ? ' 외부 캘린더가 아직 연결되지 않았습니다.'
+        ? ' Google Calendar가 아직 연결되지 않았습니다.'
         : ''
     return makeToolResult({
       toolId: 'calendar.local_write',
@@ -255,5 +255,5 @@ export function formatCalendarReply(write: EngineCalendarWrite, verified: boolea
 }
 
 export function formatCalendarPendingExternal(): string {
-  return '외부 캘린더가 아직 연결되지 않았습니다. AIZIO 내부 일정으로 저장할 수 있습니다.'
+  return 'Google Calendar가 아직 연결되지 않았습니다. AIZIO 내부 일정으로 저장할 수 있습니다.'
 }

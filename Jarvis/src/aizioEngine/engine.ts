@@ -28,7 +28,12 @@ import {
   loadEngineSession,
 } from './session'
 import { formatCalendarReply, runCalendarWriteTool } from './tools/calendarTool'
-import { formatPlacesReply, formatPlacesUnavailable, runPlacesTool } from './tools/placesTool'
+import {
+  formatPlacesDegradedNote,
+  formatPlacesReply,
+  formatPlacesUnavailable,
+  runPlacesTool,
+} from './tools/placesTool'
 import { formatWeatherReply, runWeatherTool } from './tools/weatherTool'
 import {
   containsForbiddenSuccessClaim,
@@ -174,9 +179,17 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     }
 
     const candidates = verified.result.data.candidates
-    const sourceNote = verified.result.isRealData
-      ? `※ 실제 외부 장소 데이터 (${verified.result.provider || 'provider'})`
-      : '※ 장소 데이터가 REAL 검증을 통과하지 못했습니다.'
+    const toolData = verified.result.data
+    const sourceNote =
+      toolData.degraded || verified.result.degraded
+        ? formatPlacesDegradedNote(
+            toolData.provider || verified.result.provider || 'provider',
+            toolData.missingCapabilities || verified.result.missingCapabilities || [],
+            toolData.fallbackFrom || null,
+          )
+        : verified.result.isRealData
+          ? `※ 실제 외부 장소 데이터 (${verified.result.provider || 'provider'})`
+          : '※ 장소 데이터가 REAL 검증을 통과하지 못했습니다.'
 
     ctx = {
       ...ctx,

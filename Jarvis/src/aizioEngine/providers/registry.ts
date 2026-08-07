@@ -4,16 +4,27 @@
 
 import { localCalendarProvider } from './calendar/localCalendarProvider'
 import { googleCalendarProvider } from './calendar/googleCalendarProvider'
+import { resetCostGuardForTests } from './costGuard'
 import { isProductionRuntime } from './env'
-import { googlePlacesProvider } from './places/googlePlacesProvider'
+import { googlePlacesProvider, resetGooglePlacesLiveVerifyForTests } from './places/googlePlacesProvider'
 import { photonPlacesProvider } from './places/photonPlacesProvider'
-import type { CalendarProvider, PlacesProvider, ProviderAvailability, ProviderHealth } from './types'
+import {
+  familySeekSelectionIntent,
+  selectPlacesProvider,
+  setSelectionPlacesOverride,
+  type PlacesSelection,
+} from './selection'
+import type {
+  CalendarProvider,
+  PlacesProvider,
+  ProviderAvailability,
+  ProviderHealth,
+} from './types'
 import {
   openMeteoWeatherProvider,
   type WeatherProvider,
 } from './weather/openMeteoWeatherProvider'
 
-let placesOverride: PlacesProvider | null = null
 let calendarLocalOverride: CalendarProvider | null = null
 let calendarExternalOverride: CalendarProvider | null = null
 /** When true (tests only), allow test doubles on the active path. */
@@ -31,7 +42,7 @@ export function assertProviderAllowed(p: { id: string; isTestDouble?: boolean })
 
 export function setPlacesProviderForTests(p: PlacesProvider | null): void {
   if (p) assertProviderAllowed(p)
-  placesOverride = p
+  setSelectionPlacesOverride(p)
 }
 
 export function setLocalCalendarProviderForTests(p: CalendarProvider | null): void {
@@ -45,48 +56,26 @@ export function setExternalCalendarProviderForTests(p: CalendarProvider | null):
 }
 
 export function resetProviderRegistryForTests(): void {
-  placesOverride = null
   calendarLocalOverride = null
   calendarExternalOverride = null
   allowTestDoubles = false
+  setSelectionPlacesOverride(null)
+  resetCostGuardForTests()
+  resetGooglePlacesLiveVerifyForTests()
 }
 
-/** Production order: Google (if READY) → Photon. Never curated/demo. */
-export async function resolvePlacesProvider(): Promise<{
-  provider: PlacesProvider | null
-  health: ProviderHealth | null
-  availability: ProviderAvailability
-}> {
-  if (placesOverride) {
-    assertProviderAllowed(placesOverride)
-    const health = await placesOverride.healthCheck()
-    return { provider: placesOverride, health, availability: health.availability }
+/**
+ * Capability-based Places resolution (family seek default intent).
+ * Falls back to Photon with degraded/missingCapabilities when Google not READY.
+ */
+export async function resolvePlacesProvider(): Promise<
+  PlacesSelection & {
+    provider: PlacesProvider | null
+    health: ProviderHealth | null
+    availability: ProviderAvailability
   }
-
-  const candidates: PlacesProvider[] = [googlePlacesProvider, photonPlacesProvider]
-  let pending: ProviderHealth | null = null
-  for (const p of candidates) {
-    if (p.isTestDouble) continue
-    const health = await p.healthCheck()
-    if (health.availability === 'READY') {
-      return { provider: p, health, availability: 'READY' }
-    }
-    if (health.availability === 'PENDING_EXTERNAL_SETUP' && !pending) pending = health
-  }
-  if (pending) {
-    // Photon should normally be READY; if we only have pending Google and Photon failed...
-    return { provider: null, health: pending, availability: 'PENDING_EXTERNAL_SETUP' }
-  }
-  return {
-    provider: null,
-    health: {
-      providerId: 'none',
-      availability: 'UNAVAILABLE',
-      message: '사용 가능한 Places Provider 없음',
-      checkedAt: Date.now(),
-    },
-    availability: 'UNAVAILABLE',
-  }
+> {
+  return selectPlacesProvider(familySeekSelectionIntent())
 }
 
 export function getLocalCalendarProvider(): CalendarProvider {

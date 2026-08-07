@@ -1056,8 +1056,9 @@ export async function think(
     return { text: helpText(name), speak: true }
   }
   if (everyday?.kind === 'clearChat') {
+    const result = executeGlobalCommandReset('RESET_CONVERSATION')
     return {
-      text: '대화를 초기화했습니다. 지난 기록이 삭제되었습니다.',
+      text: result.message || '대화를 초기화했습니다. 지난 기록이 삭제되었습니다.',
       speak: true,
       clearChat: true,
     }

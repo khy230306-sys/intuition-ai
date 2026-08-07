@@ -1,4 +1,5 @@
 import type { BrainReply } from '../types'
+import { executeGlobalCommandReset } from '../conversationReset'
 import { isAllowedExternalUrl } from './safetyPolicy'
 import type { CoreBrainResult, SkillResult, UiAction } from './types'
 import { userFacingBrainError } from './brainErrors'
@@ -62,7 +63,14 @@ export function composeResponse(results: SkillResult[], warnings: string[] = [])
         brainReply.arcadeId = a.payload.arcadeId as BrainReply['arcadeId']
       }
     }
-    if (a.type === 'CLEAR_CHAT') brainReply.clearChat = true
+    if (a.type === 'CLEAR_CHAT') {
+      brainReply.clearChat = true
+      try {
+        executeGlobalCommandReset('CLEAR_CHAT')
+      } catch {
+        /* storage clear best-effort; UI syncs via clearChat flag */
+      }
+    }
     if (a.type === 'SHOW_MUSIC_PLAYER') {
       brainReply.musicShowMiniPlayer = true
       brainReply.musicPlayUrl = a.payload.playUrl

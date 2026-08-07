@@ -444,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.1'
+const APP_VERSION = '1.30.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -768,9 +768,11 @@ function resetChatHistory(opts?: { confirm?: boolean }): boolean {
   }
   resetConversationState('reset_conversation')
   state.messages = []
+  saveChat([])
   state.draft = ''
   state.voiceHint = ''
   state.busy = false
+  state.chatPlusOpen = false
   dismissMusicMiniPlayer()
   showFlash('대화 초기화 완료')
   render()
@@ -2286,22 +2288,28 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
   try {
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
     const reply = await think(text, history.slice(0, -1), { source: opts?.source || 'text' })
-    if (gen !== thinkGen || timedOut) return
     window.clearTimeout(timeoutId)
     if (reply.clearChat) {
-      // Global CLEAR/RESET already cleared storage/tasks; sync UI state
+      // Honor wipe even if a newer turn started — storage must stay empty.
       resetConversationState('reset_conversation')
       state.messages = []
+      saveChat([])
       state.draft = ''
+      state.voiceHint = ''
+      state.busy = false
+      state.chatPlusOpen = false
       dismissMusicMiniPlayer()
-      showFlash(reply.text || '대화 초기화 완료')
-      if (reply.speak !== false && state.settings.speakReplies) {
-        void speakAsync(reply.text, reply.speakLang || 'ko-KR')
+      if (gen === thinkGen) {
+        showFlash(reply.text || '대화 초기화 완료')
+        if (reply.speak !== false && state.settings.speakReplies) {
+          void speakAsync(reply.text, reply.speakLang || 'ko-KR')
+        }
+        render()
+        scrollChat()
       }
-      render()
-      scrollChat()
       return
     }
+    if (gen !== thinkGen || timedOut) return
     if (reply.action) {
       const result = await Promise.race([
         Promise.resolve(reply.action()),

@@ -47,20 +47,20 @@ export function detectGlobalCommand(raw: string): GlobalCommandHit | null {
 
   // CLEAR_CHAT — wipe visible chat (+ end tasks per product policy)
   if (
-    /대화창(을)?지워|채팅창(을)?(지워|비워)|채팅(을)?지워|대화내용지워|대화(를)?삭제|채팅(을)?삭제|지금대화다지워|메시지(를)?(전부)?삭제|클리어채팅|clearchat/.test(
+    /대화창(을)?(지워|초기화)|채팅창(을)?(지워|비워|초기화)|채팅(을)?지워|대화내용지워|대화(를)?삭제|채팅(을)?삭제|지금대화다지워|메시지(를)?(전부)?삭제|클리어채팅|clearchat/.test(
       c,
     ) ||
-    /대화지워줘|채팅지워|화면대화지워/.test(c)
+    /대화지워줘|채팅지워|화면대화지워|대화창초기화|채팅창초기화/.test(c)
   ) {
     return { type: 'GLOBAL_COMMAND', command: 'CLEAR_CHAT', terminal: true, normalized: c }
   }
 
   // RESET / NEW conversation
   if (
-    /대화초기화|채팅초기화|전체대화초기화|대화초기화시켜|초기화하자|처음부터다시|새대화|새로시작|새대화시작|처음부터다시대화|resetchat|resetconversation|newchat/.test(
+    /대화초기화|채팅초기화|전체대화초기화|대화초기화시켜|대화초기화해|초기화하자|처음부터다시|새대화|새로시작|새대화시작|처음부터다시대화|resetchat|resetconversation|newchat/.test(
       c,
     ) ||
-    /대화초기화해|지난대화삭제|기록삭제/.test(c)
+    /지난대화삭제|기록삭제|대화리셋|채팅리셋/.test(c)
   ) {
     if (/새대화|새로시작|newchat/.test(c)) {
       return { type: 'GLOBAL_COMMAND', command: 'NEW_CONVERSATION', terminal: true, normalized: c }

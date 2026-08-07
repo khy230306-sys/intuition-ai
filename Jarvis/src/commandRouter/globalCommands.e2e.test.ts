@@ -59,6 +59,9 @@ describe('Global Command Layer E2E', () => {
     expect(detectGlobalCommand('대화초기화시켜줘')?.command).toBe('RESET_CONVERSATION')
     expect(detectGlobalCommand('대화 초기화 시켜줘')?.command).toBe('RESET_CONVERSATION')
     expect(detectGlobalCommand('대화창을 지워줘')?.command).toBe('CLEAR_CHAT')
+    expect(detectGlobalCommand('대화창 초기화')?.command).toBe('CLEAR_CHAT')
+    expect(detectGlobalCommand('대화창초기화')?.command).toBe('CLEAR_CHAT')
+    expect(detectGlobalCommand('채팅창 초기화해줘')?.command).toBe('CLEAR_CHAT')
     expect(detectGlobalCommand('채팅창 비워줘')?.command).toBe('CLEAR_CHAT')
     expect(detectGlobalCommand('여행 취소')?.command).toBe('CANCEL_ACTIVE_TASK')
     expect(detectGlobalCommand('처음부터 다시')?.command).toBe('RESET_CONVERSATION')
@@ -83,6 +86,18 @@ describe('Global Command Layer E2E', () => {
     expect(r.clearChat).toBe(true)
     expect(r.text).not.toMatch(/항공 검색|제공자|호치민 여행/)
     expect(getActiveTask()).toBeNull()
+  })
+
+  it('CASE B2: 대화창초기화 clears persisted chat storage', async () => {
+    const { saveChat, loadChat } = await import('../storage')
+    saveChat([
+      { id: '1', role: 'user', text: '안녕', createdAt: 1 },
+      { id: '2', role: 'assistant', text: '네', createdAt: 2 },
+    ])
+    expect(loadChat().length).toBe(2)
+    const r = await think('대화창초기화')
+    expect(r.clearChat).toBe(true)
+    expect(loadChat()).toEqual([])
   })
 
   it('CASE C: 여행 취소 keeps chat flag false; later 안녕 is general', async () => {

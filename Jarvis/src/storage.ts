@@ -96,7 +96,13 @@ export function saveChat(messages: ChatMessage[]): void {
 }
 
 export function clearChat(): void {
-  localStorage.removeItem(KEYS.chat)
+  // Persist empty list (not only removeItem) so reload/boot cannot resurrect stale JSON.
+  try {
+    localStorage.removeItem(KEYS.chat)
+  } catch {
+    /* ignore */
+  }
+  writeJson(KEYS.chat, [])
 }
 
 export function loadMemory(): MemoryItem[] {

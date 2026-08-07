@@ -42,7 +42,10 @@ export function renderChatShell(opts: {
   return `
     <section class="panel home-v2-panel nav-chat-shell" data-nav-chat="1">
       <header class="nav-hub-head nav-chat-head">
-        <h1 class="section-title">대화</h1>
+        <div class="nav-chat-head-row">
+          <h1 class="section-title">대화</h1>
+          <button type="button" class="ghost-btn tiny danger-btn nav-chat-clear-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+        </div>
         <p class="hint">생활비서 · 음성 · 번역 · 일정 명령을 여기에 말하세요 · v${esc(opts.appVersion)}</p>
       </header>
       ${opts.activeModeHtml || ''}

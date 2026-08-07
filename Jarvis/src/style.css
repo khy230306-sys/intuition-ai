@@ -4266,6 +4266,22 @@ body.keyboard-open .aizio-primary-nav {
   gap: 8px;
 }
 .nav-hub-head { margin-bottom: 10px; }
+.nav-chat-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nav-chat-head-row .section-title {
+  margin: 0;
+}
+.nav-chat-clear-btn {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  padding: 4px 10px;
+  min-height: 32px;
+  width: auto;
+}
 .nav-hub-tabs {
   display: flex;
   flex-wrap: wrap;

@@ -256,6 +256,22 @@ describe('schedule + chat shells', () => {
     expect(html).toContain('chat-plus-toggle')
     expect(html).toContain('nav-chat-plus')
   })
+
+  it('chat header always exposes clear-chat button', () => {
+    const html = renderChatShell({
+      threadHtml: '<p>hi</p>',
+      draft: '',
+      busy: false,
+      listening: false,
+      translateActive: false,
+      translateLabel: '번역',
+      appVersion: '1.30.2',
+      plusOpen: false,
+    })
+    expect(html).toContain('data-action="clear-chat"')
+    expect(html).toContain('대화 초기화')
+    expect(html).toContain('nav-chat-clear-btn')
+  })
 })
 
 describe('menu audit', () => {

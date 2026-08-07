@@ -5,6 +5,10 @@
  * Preview:     lightlab-92m8bq7.shipstatic.com  (canonical fixed Preview)
  * Alias:       light-lab.shipstatic.com
  *
+ * Standing policy: after a green shippable change, deploy BOTH Preview and
+ * Production (see DEPLOY_POLICY.md). Do not leave Production stale unless
+ * the user explicitly asks to hold it.
+ *
  * Note: snapshot hostnames like light-lab-92m8bq7.shipstatic.com cannot be
  * claimed as platform domains ("Resembles a deployment ID"). The closest
  * claimable fixed Preview host keeps the same id: lightlab-92m8bq7.

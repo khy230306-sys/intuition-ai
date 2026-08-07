@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { routeCommand } from '../commandRouter'
 import { think } from '../brain'
+import { setLegacyDemoProvidersEnabled } from '../featureTruth'
 import { clearInterpretMode } from '../translateBrain'
 import { handleTravelAgent } from './agent'
 import { clearTravelSession, loadTravelSession } from './session'
@@ -64,6 +65,7 @@ describe('Natural language travel commands', () => {
     store.clear()
     clearTravelSession()
     clearInterpretMode()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   const cases: Array<{ input: string; intent: string }> = [
@@ -89,6 +91,7 @@ describe('Multi-turn Osaka family trip', () => {
     store.clear()
     clearTravelSession()
     clearInterpretMode()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('keeps context across plan → flight → hotel → summary → calendar', async () => {
@@ -138,6 +141,7 @@ describe('Booking safety', () => {
   beforeEach(() => {
     store.clear()
     clearTravelSession()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('does not treat weak approval as payment confirm', () => {
@@ -167,6 +171,7 @@ describe('Follow-up filters', () => {
   beforeEach(() => {
     store.clear()
     clearTravelSession()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('supports cheaper / direct / hotel details phrases', async () => {

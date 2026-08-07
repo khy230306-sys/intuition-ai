@@ -85,11 +85,11 @@ describe('vision service + history', () => {
     vi.stubGlobal('navigator', { onLine: true })
   })
 
-  it('picks mock when no keys', () => {
-    expect(pickVisionProvider().id).toBe('mock')
+  it('picks null when no vision keys (no silent mock)', () => {
+    expect(pickVisionProvider()).toBeNull()
   })
 
-  it('analyzeImage works offline with demo', async () => {
+  it('analyzeImage offline returns error without demo OCR content', async () => {
     vi.stubGlobal('navigator', { onLine: false })
     const r = await analyzeImage({
       imageDataUrl: 'data:image/jpeg;base64,xx',
@@ -97,7 +97,9 @@ describe('vision service + history', () => {
       mode: 'ocr',
     })
     expect(r.errorCode).toBe('offline')
-    expect(r.ocrText || r.summary).toBeTruthy()
+    expect(r.ok).toBe(false)
+    expect(r.ocrText).toBeFalsy()
+    expect(r.summary).toMatch(/오프라인/)
   })
 
   it('saves and deletes history without raw dumps', () => {

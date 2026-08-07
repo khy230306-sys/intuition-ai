@@ -50,8 +50,8 @@ function demoFlightResults(req: ProviderSearchRequest): ProviderSearchResponse {
 }
 
 /**
- * Production: DEMO when unset/demo provider (honest sample results).
- * NEEDS_PROVIDER only when user chose a live provider without API keys.
+ * Production: never return DEMO offer lists to users.
+ * Fixtures only when allowFixtures (tests). Live adapters are not wired — SEARCH_UNAVAILABLE.
  */
 export const defaultFlightProvider: FlightProvider = {
   id: 'aizio-flight-gate',
@@ -59,14 +59,22 @@ export const defaultFlightProvider: FlightProvider = {
     if (req.allowFixtures) return demoFlightResults(req)
 
     const mode = flightProviderMode()
-    if (mode === 'demo') return demoFlightResults(req)
+    if (mode === 'demo') {
+      return {
+        availability: 'NEEDS_PROVIDER',
+        results: [],
+        message:
+          '항공 실검색 API가 연결되어 있지 않습니다. DEMO 항공편 목록은 표시하지 않습니다. 설정 → Travel Services에서 Provider와 API 키를 연결해 주세요.',
+        errorCode: 'NEEDS_PROVIDER',
+      }
+    }
 
     if (mode === 'live_missing_key') {
       return {
         availability: 'NEEDS_PROVIDER',
         results: [],
         message:
-          '항공 검색에 필요한 정보는 모았어요. 설정하신 항공 Provider API 키가 비어 있습니다. 설정 → 여행 서비스에서 키를 연결해 주세요. (또는 Provider를 DEMO로 두면 샘플 결과를 보여 드려요.)',
+          '항공 검색에 필요한 정보는 모았어요. 설정하신 항공 Provider API 키가 비어 있습니다. 설정 → Travel Services에서 키를 연결해 주세요.',
         errorCode: 'NEEDS_PROVIDER',
       }
     }
@@ -74,7 +82,8 @@ export const defaultFlightProvider: FlightProvider = {
     return {
       availability: 'SEARCH_UNAVAILABLE',
       results: [],
-      message: '항공 Provider는 설정되어 있지만 이 빌드에서는 Live 검색 어댑터가 아직 연결되지 않았습니다. Provider를 DEMO로 두면 샘플 결과를 바로 볼 수 있어요.',
+      message:
+        '항공 Provider는 설정되어 있지만 Live 검색 어댑터가 아직 연결되지 않아 실제 항공편을 조회할 수 없습니다.',
       errorCode: 'SEARCH_UNAVAILABLE',
     }
   },

@@ -131,7 +131,7 @@ export async function collectFeatureDiagStatus(meta: {
   const cfg = loadHybridAiConfig()
   const openai = cfg.providers.openai
   const openrouter = cfg.providers.openrouter
-  const visionId = pickVisionProvider().id
+  const visionId = pickVisionProvider()?.id || 'none'
 
   const [camera, geolocation, microphone] = await Promise.all([
     queryPerm('camera'),

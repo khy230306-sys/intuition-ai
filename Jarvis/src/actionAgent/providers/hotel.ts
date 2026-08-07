@@ -34,14 +34,22 @@ export const defaultHotelProvider: HotelProvider = {
     if (req.allowFixtures) return demoHotelResults(req)
 
     const mode = hotelProviderMode()
-    if (mode === 'demo') return demoHotelResults(req)
+    if (mode === 'demo') {
+      return {
+        availability: 'NEEDS_PROVIDER',
+        results: [],
+        message:
+          '호텔 실검색 API가 연결되어 있지 않습니다. DEMO 호텔 목록은 표시하지 않습니다. 설정 → Travel Services에서 Provider와 API 키를 연결해 주세요.',
+        errorCode: 'NEEDS_PROVIDER',
+      }
+    }
 
     if (mode === 'live_missing_key') {
       return {
         availability: 'NEEDS_PROVIDER',
         results: [],
         message:
-          '호텔 검색 정보는 준비됐어요. 설정하신 호텔 Provider API 키가 비어 있습니다. 설정 → 여행 서비스에서 키를 연결해 주세요. (또는 Provider를 DEMO로 두면 샘플 결과를 보여 드려요.)',
+          '호텔 검색 정보는 준비됐어요. 설정하신 호텔 Provider API 키가 비어 있습니다. 설정 → Travel Services에서 키를 연결해 주세요.',
         errorCode: 'NEEDS_PROVIDER',
       }
     }
@@ -49,7 +57,8 @@ export const defaultHotelProvider: HotelProvider = {
     return {
       availability: 'SEARCH_UNAVAILABLE',
       results: [],
-      message: '호텔 Provider는 설정되어 있지만 Live 검색 어댑터가 아직 연결되지 않았습니다. Provider를 DEMO로 두면 샘플 결과를 바로 볼 수 있어요.',
+      message:
+        '호텔 Provider는 설정되어 있지만 Live 검색 어댑터가 아직 연결되지 않아 실제 호텔을 조회할 수 없습니다.',
       errorCode: 'SEARCH_UNAVAILABLE',
     }
   },

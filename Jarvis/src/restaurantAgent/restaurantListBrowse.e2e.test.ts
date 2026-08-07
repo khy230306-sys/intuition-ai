@@ -1,15 +1,22 @@
 /**
- * Device bug: 「나트랑 맛집좀 찾아줘」 → party-size loop;
- * 「그냥 맛집 리스트만줘」 must escape and show a list.
+ * Device bug: 「나트랑 맛집좀 찾아줘」 → party-size loop.
+ * Production: DEMO lists are disabled — honest unavailable, still no party ask.
+ * Legacy DEMO path kept for dialogue regression with fixtures on.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { think } from '../brain'
 import { resetActionAgentForTests } from '../actionAgent'
 import { endTranslationSession } from '../commandRouter/session'
+import { setLegacyDemoProvidersEnabled } from '../featureTruth'
 import { clearTravelSession } from '../travelAgent/session'
 import { handleRestaurantAgent } from './agent'
-import { clearRestaurantSession, loadRestaurantSession, saveRestaurantSession, createRestaurantSession } from './session'
+import {
+  clearRestaurantSession,
+  loadRestaurantSession,
+  saveRestaurantSession,
+  createRestaurantSession,
+} from './session'
 import { clearInterpretMode } from '../translateBrain'
 
 const store = new Map<string, string>()
@@ -37,19 +44,29 @@ describe('Restaurant list browse (no party-size trap)', () => {
     clearRestaurantSession()
     clearInterpretMode()
     endTranslationSession()
+    setLegacyDemoProvidersEnabled(false)
   })
 
-  it('나트랑 맛집좀 찾아줘 → list, not party ask', async () => {
+  it('production: 나트랑 맛집 → unavailable, not party ask, not DEMO list', async () => {
     const r = await think('나트랑 맛집좀 찾아줘')
-    expect(r.text).toMatch(/DEMO|맛집|식당|한식|추천/)
+    expect(r.text).toMatch(/실검색|미연결|지도|근처 맛집|제공자|연결/)
+    expect(r.text).not.toMatch(/【DEMO 맛집 검색】/)
     expect(r.text).not.toMatch(/몇 명이서 가시나요|인원을 숫자로/)
+  })
+
+  it('legacy DEMO: list browse without party ask', async () => {
+    setLegacyDemoProvidersEnabled(true)
+    const r = await handleRestaurantAgent('나트랑 맛집좀 찾아줘')
+    expect(r?.text).toMatch(/DEMO|맛집|식당/)
+    expect(r?.text).not.toMatch(/몇 명이서 가시나요|인원을 숫자로/)
     const sess = loadRestaurantSession()
     expect(sess?.searchInput?.location).toMatch(/나트랑/)
     expect(sess?.results.length).toBeGreaterThan(0)
     expect(sess?.pendingQuestion).toBeFalsy()
   })
 
-  it('pending partySize + 그냥 맛집 리스트만줘 → list, not number loop', async () => {
+  it('legacy: partySize pending honors list-only bypass', async () => {
+    setLegacyDemoProvidersEnabled(true)
     const sess = createRestaurantSession({
       bookingFlow: true,
       pendingQuestion: 'partySize',
@@ -57,22 +74,9 @@ describe('Restaurant list browse (no party-size trap)', () => {
       status: 'searching',
     })
     saveRestaurantSession(sess)
-
-    const r = await think('그냥 맛집 리스트만줘')
-    expect(r.text).toMatch(/DEMO|맛집|식당/)
-    expect(r.text).not.toMatch(/인원을 숫자로 알려/)
+    const r = await handleRestaurantAgent('그냥 맛집 리스트만줘')
+    expect(r?.text).toMatch(/DEMO|맛집|식당/)
+    expect(r?.text).not.toMatch(/인원을 숫자/)
     expect(loadRestaurantSession()?.results.length).toBeGreaterThan(0)
-  })
-
-  it('가족 외식 booking flow still asks party after location (legacy agent)', async () => {
-    const s1 = await handleRestaurantAgent('오늘 저녁 가족들이랑 외식하려고')
-    expect(s1?.text).toMatch(/지역/)
-
-    const s2 = await handleRestaurantAgent('울산 삼산')
-    expect(s2?.text).toMatch(/명/)
-    expect(s2?.text).not.toMatch(/DEMO 맛집 검색/)
-
-    const s3 = await handleRestaurantAgent('4명')
-    expect(s3?.text).toMatch(/음식|한식/)
   })
 })

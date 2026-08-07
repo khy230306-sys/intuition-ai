@@ -11,6 +11,7 @@ import {
   prepareBooking,
 } from './booking'
 import { addTripToCalendar } from './calendarBridge'
+import { MSG_TRAVEL_UNAVAILABLE } from '../featureTruth'
 import { isDemoTravelMode } from './config'
 import { parseTravelDates } from './dates'
 import { formatTravelerCandidates } from './familyBridge'
@@ -221,6 +222,14 @@ async function runFlightSearch(session: TravelSession): Promise<TravelAgentResul
       excludeAirline: session.flightPreferences?.excludeAirline,
       sortBy: session.flightPreferences?.sortBy || 'recommended',
     })
+    if (!res.offers.length) {
+      return reply(
+        prov.id === 'unavailable' || isDemoTravelMode()
+          ? MSG_TRAVEL_UNAVAILABLE
+          : formatFlightList([], false),
+        'FLIGHT_SEARCH',
+      )
+    }
     const next = saveTravelSession({
       ...session,
       flightSearchResults: res.offers,
@@ -272,6 +281,14 @@ async function runHotelSearch(session: TravelSession): Promise<TravelAgentResult
       parking: session.hotelPreferences?.parking,
       starRatingMin: session.hotelPreferences?.starRatingMin,
     })
+    if (!res.offers.length) {
+      return reply(
+        prov.id === 'unavailable' || isDemoTravelMode()
+          ? MSG_TRAVEL_UNAVAILABLE
+          : formatHotelList([], false),
+        'HOTEL_SEARCH',
+      )
+    }
     const next = saveTravelSession({
       ...session,
       departureDate: checkIn,

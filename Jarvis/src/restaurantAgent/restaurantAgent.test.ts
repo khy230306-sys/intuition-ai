@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { routeCommand } from '../commandRouter'
 import { think } from '../brain'
+import { setLegacyDemoProvidersEnabled } from '../featureTruth'
 import { clearInterpretMode } from '../translateBrain'
 import { handleRestaurantAgent } from './agent'
 import { clearRestaurantSession, loadRestaurantSession } from './session'
@@ -29,6 +30,7 @@ describe('Restaurant intent routing', () => {
     clearRestaurantSession()
     clearInterpretMode()
     endTranslationSession()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('distinguishes restaurant vs recipe vs weather vs flight', () => {
@@ -76,6 +78,7 @@ describe('Natural language restaurant commands', () => {
     store.clear()
     clearRestaurantSession()
     clearInterpretMode()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   const cases = [
@@ -127,6 +130,7 @@ describe('Multi-turn family dinner in Samsan', () => {
     store.clear()
     clearRestaurantSession()
     clearInterpretMode()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('keeps context through search → filter → select → availability → prepare → confirm', async () => {
@@ -172,6 +176,7 @@ describe('Booking safety + calendar', () => {
   beforeEach(() => {
     store.clear()
     clearRestaurantSession()
+    setLegacyDemoProvidersEnabled(true)
   })
 
   it('prepare uses reservationAttemptId and confirm stays DEMO-honest', async () => {

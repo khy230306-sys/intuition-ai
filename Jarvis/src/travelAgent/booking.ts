@@ -3,6 +3,10 @@
  * Never auto-charges; live providers require explicit confirm + configured keys.
  */
 
+import {
+  isLegacyDemoProvidersEnabled,
+  MSG_TRAVEL_BOOKING_UNAVAILABLE,
+} from '../featureTruth'
 import { isDemoTravelMode, loadTravelConfig } from './config'
 import { getFlightProvider, getHotelProvider } from './providers/registry'
 import {
@@ -168,6 +172,27 @@ export async function confirmBooking(session: TravelSession, explicitConfirm: bo
   saveAttempt({ bookingAttemptId: attemptId, status: 'SUBMITTING', createdAt: Date.now(), updatedAt: Date.now() })
 
   if (isDemoTravelMode()) {
+    // Production: never invent confirmation codes. Tests may enable legacy DEMO.
+    if (!isLegacyDemoProvidersEnabled()) {
+      const result: BookingResult = {
+        bookingAttemptId: attemptId,
+        status: 'FAILED',
+        message: MSG_TRAVEL_BOOKING_UNAVAILABLE,
+      }
+      saveAttempt({
+        bookingAttemptId: attemptId,
+        status: 'FAILED',
+        result,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      saveTravelSession({
+        ...session,
+        lastBookingAttemptId: attemptId,
+        bookingStatus: 'FAILED',
+      })
+      return result
+    }
     const result: BookingResult = {
       bookingAttemptId: attemptId,
       status: 'CONFIRMED',
@@ -180,7 +205,13 @@ export async function confirmBooking(session: TravelSession, explicitConfirm: bo
         '예약 준비가 완료되었습니다. 현재 연결된 예약 Provider가 없어 실제 결제는 진행되지 않았습니다. (DEMO)',
       bookedAt: new Date().toISOString(),
     }
-    saveAttempt({ bookingAttemptId: attemptId, status: 'CONFIRMED', result, createdAt: Date.now(), updatedAt: Date.now() })
+    saveAttempt({
+      bookingAttemptId: attemptId,
+      status: 'CONFIRMED',
+      result,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
     const next = {
       ...session,
       lastBookingAttemptId: attemptId,

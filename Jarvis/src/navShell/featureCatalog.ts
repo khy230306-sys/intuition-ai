@@ -1,8 +1,10 @@
 /**
  * Canonical feature catalog for More-search, redirects, and menu audits.
  * Does not delete features — only organizes entry points.
+ * FAKE surfaces (travel/restaurant DEMO) are hidden from user menus via featureTruth.
  */
 
+import { isHiddenFromUserMenu } from '../featureTruth'
 import type { View } from '../types'
 
 export type FeatureGroup =
@@ -124,7 +126,7 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   {
     id: 'travel',
     title: '여행',
-    description: '항공 · 호텔 · Travel Agent',
+    description: '실검색 미연결 (메뉴 숨김)',
     group: 'leisure',
     view: 'travel',
     keywords: ['여행', '항공', '호텔', '비행기', 'travel', 'flight', 'hotel', '오사카', '제주'],
@@ -132,7 +134,7 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   {
     id: 'restaurant',
     title: '맛집 · 예약',
-    description: '식당 검색 · 예약 (Demo)',
+    description: '실검색 미연결 (메뉴 숨김)',
     group: 'lifeos',
     view: 'restaurant',
     keywords: ['맛집', '식당', '예약', '외식', '레스토랑', 'restaurant', '삼산'],
@@ -238,10 +240,16 @@ export const GROUP_LABELS: Record<FeatureGroup, string> = {
   tools: '도구',
 }
 
+/** User-visible catalog entries (excludes FAKE/unwired menu surfaces). */
+export function userVisibleFeatures(): FeatureEntry[] {
+  return FEATURE_CATALOG.filter((f) => !isHiddenFromUserMenu(f.id))
+}
+
 export function searchFeatures(query: string): FeatureEntry[] {
   const q = query.trim().toLowerCase()
-  if (!q) return FEATURE_CATALOG.filter((f) => f.group !== 'primary')
-  return FEATURE_CATALOG.filter((f) => {
+  const pool = userVisibleFeatures()
+  if (!q) return pool.filter((f) => f.group !== 'primary')
+  return pool.filter((f) => {
     const blob = `${f.title} ${f.description} ${f.keywords.join(' ')}`.toLowerCase()
     return blob.includes(q)
   })

@@ -3,9 +3,9 @@
  */
 
 import {
-  FEATURE_CATALOG,
   GROUP_LABELS,
   searchFeatures,
+  userVisibleFeatures,
   type FeatureEntry,
   type FeatureGroup,
 } from './featureCatalog'
@@ -61,7 +61,7 @@ export function renderMoreHub(opts: {
         : `<p class="hint">「${esc(q)}」에 맞는 앱 기능이 없어요. 다른 단어로 검색해 보세요.</p>`
   } else {
     body = GROUP_ORDER.map((g) => {
-      const items = FEATURE_CATALOG.filter((f) => f.group === g)
+      const items = userVisibleFeatures().filter((f) => f.group === g)
       if (!items.length) return ''
       return `<div class="nav-more-group">
         <h3 class="subsection-title">${esc(GROUP_LABELS[g])}</h3>

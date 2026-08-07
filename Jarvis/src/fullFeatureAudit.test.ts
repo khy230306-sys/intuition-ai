@@ -98,11 +98,10 @@ describe('full feature audit', () => {
     expect(r.text).toMatch(/음악|재생|유튜브|노래|플레이/i)
   })
 
-  it('restaurant DEMO list then ordinal select', async () => {
+  it('restaurant without live API does not invent DEMO venue list', async () => {
     const list = await think('나트랑 맛집좀 찾아줘')
-    expect(list.text).toMatch(/DEMO|맛집|★/)
-    const pick = await think('두 번째')
-    expect(pick.text).not.toMatch(/어느 지역에서/)
-    expect(pick.text).toMatch(/선택|상세|2번/)
+    expect(list.text).toMatch(/실검색|미연결|지도|근처 맛집|제공자|연결/)
+    expect(list.text).not.toMatch(/【DEMO 맛집 검색】/)
+    expect(list.text).not.toMatch(/★\d/)
   })
 })

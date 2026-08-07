@@ -1,4 +1,11 @@
-export { FEATURE_CATALOG, searchFeatures, getFeatureById, GROUP_LABELS, catalogTargetViews } from './featureCatalog'
+export {
+  FEATURE_CATALOG,
+  searchFeatures,
+  userVisibleFeatures,
+  getFeatureById,
+  GROUP_LABELS,
+  catalogTargetViews,
+} from './featureCatalog'
 export type { FeatureEntry, FeatureGroup } from './featureCatalog'
 export { PRIMARY_TABS, primaryTabForView, normalizeNavView } from './primaryTabs'
 export type { PrimaryTabId } from './primaryTabs'

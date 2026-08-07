@@ -7,6 +7,7 @@ import { routeCommand } from '../commandRouter'
 import { endTranslationSession } from '../commandRouter/session'
 import { think } from '../brain'
 import { clearBrainStateForTests } from '../core-brain'
+import { setLegacyDemoProvidersEnabled } from '../featureTruth'
 import { handleRestaurantAgent } from '../restaurantAgent'
 import { clearRestaurantSession } from '../restaurantAgent/session'
 import { handleTravelAgent } from '../travelAgent'
@@ -157,6 +158,9 @@ async function runMultiTurnScenario(
   sc: MultiTurnScenario,
 ): Promise<{ ok: boolean; failedStep?: number; detail?: string }> {
   clearAllSessions()
+  // Multi-turn harness exercises legacy DEMO dialogue paths (not user-facing).
+  setLegacyDemoProvidersEnabled(sc.category === 'travel' || sc.category === 'restaurant')
+  try {
   for (let i = 0; i < sc.steps.length; i++) {
     const step = sc.steps[i]
     const routed = routeCommand({ text: step.input })
@@ -183,6 +187,9 @@ async function runMultiTurnScenario(
     }
   }
   return { ok: true }
+  } finally {
+    setLegacyDemoProvidersEnabled(false)
+  }
 }
 
 export async function runMultiTurnSuite(): Promise<{

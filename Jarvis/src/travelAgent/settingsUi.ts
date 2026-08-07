@@ -26,7 +26,7 @@ export function renderTravelServicesSettingsHtml(): string {
   return `
     <section class="settings-card travel-services-card" data-travel-services="1">
       <h3>Travel Services</h3>
-      <p class="hint">API Key는 저장만 하며 화면에 다시 보여주지 않습니다. 키가 없으면 Demo로 동작합니다.</p>
+      <p class="hint">API Key는 저장만 하며 화면에 다시 보여주지 않습니다. Demo 샘플 항공·호텔은 사용자에게 표시하지 않습니다. Live 어댑터가 연결되기 전에는 실검색이 불가합니다.</p>
       <div class="travel-svc-block">
         <h4>Flights</h4>
         <p class="hint">Status: <strong>${fStatus}</strong></p>

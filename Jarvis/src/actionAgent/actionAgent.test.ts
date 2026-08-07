@@ -176,7 +176,7 @@ describe('Action Agent V1', () => {
     expect(e?.resolvedDate).toBeTruthy()
   })
 
-  it('demo provider returns DEMO flights without fixtures flag', async () => {
+  it('demo provider without fixtures reports NEEDS_PROVIDER (no fake flight list)', async () => {
     setActionAgentAllowFixtures(false)
     localStorage.removeItem('aizio_travel_services_v1')
     await turn('다음 주 금요일 제주도 가는 비행기 알아봐')
@@ -184,9 +184,9 @@ describe('Action Agent V1', () => {
     await processActionAgentTurn('김포', routed, { allowFixtures: false })
     await processActionAgentTurn('편도', routeCommand({ text: '편도' }), { allowFixtures: false })
     const r = await processActionAgentTurn('2명', routeCommand({ text: '2명' }), { allowFixtures: false })
-    expect(r.replyText).toMatch(/DEMO|항공/)
-    expect(getActiveTask()?.results?.length).toBeGreaterThan(0)
-    expect(getActiveTask()?.status).not.toBe('needs_provider')
+    expect(r.replyText).toMatch(/실검색|연결|DEMO 항공편|NEEDS_PROVIDER|제공자/)
+    expect(getActiveTask()?.results?.length || 0).toBe(0)
+    expect(getActiveTask()?.status).toBe('needs_provider')
   })
 
   it('live provider without keys reports NEEDS_PROVIDER', async () => {

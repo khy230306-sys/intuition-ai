@@ -20,7 +20,7 @@ export const defaultRestaurantProvider: RestaurantProvider = {
       availability: 'NEEDS_PROVIDER',
       results: [],
       message:
-        '음식점 검색에 필요한 정보는 모았어요. 현재 음식점 검색 제공자가 연결되지 않아 실제 목록을 보여드릴 수 없습니다.',
+        '음식점 실검색 API가 연결되어 있지 않습니다. DEMO 식당 목록은 표시하지 않습니다. 지도에서 찾으려면 「근처 맛집」처럼 말해 주세요.',
       errorCode: 'NEEDS_PROVIDER',
     }
   },

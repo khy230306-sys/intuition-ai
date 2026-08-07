@@ -2,6 +2,7 @@
  * Restaurant Agent dialogue — multi-turn session + provider calls.
  */
 
+import { MSG_RESTAURANT_UNAVAILABLE } from '../featureTruth'
 import type { BrainReply } from '../types'
 import { loadTrips } from '../travelAgent/trip'
 import {
@@ -100,6 +101,14 @@ async function runSearch(
       ...input,
       partySize: partyForSearch,
     })
+    if (!res.offers.length) {
+      return reply(
+        prov.id === 'unavailable' || isDemoRestaurantMode()
+          ? MSG_RESTAURANT_UNAVAILABLE
+          : formatRestaurantList([], false, input),
+        'RESTAURANT_SEARCH',
+      )
+    }
     const next = saveRestaurantSession({
       ...session,
       searchInput: { ...input, partySize: input.partySize || partyForSearch },

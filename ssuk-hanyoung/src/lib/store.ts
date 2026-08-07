@@ -1,3 +1,12 @@
+import {
+  DEFAULT_PARENT_SETTINGS,
+  emptyLearningProgress,
+  type ActivityEntry,
+  type LearningProgress,
+  type ParentSettings,
+} from './learningTypes'
+import { migrateLearningFields } from './migrateLearning'
+
 export type Profile = {
   name: string
   stars: number
@@ -8,6 +17,11 @@ export type Profile = {
   muteSpeech: boolean
   muteSfx: boolean
   lastSticker?: string | null
+  learningProgress?: LearningProgress
+  activityLog?: ActivityEntry[]
+  parentSettings?: ParentSettings
+  playStreak?: number
+  lastPlayDate?: string
 }
 
 const KEY = 'ssuk-hanyoung-v3'
@@ -22,22 +36,28 @@ const DEFAULT: Profile = {
   muteSpeech: false,
   muteSfx: false,
   lastSticker: null,
+  learningProgress: emptyLearningProgress(),
+  activityLog: [],
+  parentSettings: { ...DEFAULT_PARENT_SETTINGS },
+  playStreak: 0,
+  lastPlayDate: '',
 }
 
-const C = '/assets/chars'
+/** Stickers use optimized WebP (same art family as GameArt) */
+const C = '/assets/chars/sm'
 export const STICKERS = [
-  { id: 'bus', src: `${C}/bus.png`, ko: '버스' },
-  { id: 'police', src: `${C}/police.png`, ko: '경찰차' },
-  { id: 'fire', src: `${C}/fire.png`, ko: '소방차' },
-  { id: 'ambulance', src: `${C}/ambulance.png`, ko: '구급차' },
-  { id: 'sports', src: `${C}/car.png`, ko: '자동차' },
-  { id: 'truck', src: `${C}/dump.png`, ko: '트럭' },
-  { id: 'tractor', src: `${C}/tractor.png`, ko: '트랙터' },
-  { id: 'star', src: `${C}/char-star.png`, ko: '별' },
-  { id: 'paint', src: `${C}/char-paint.png`, ko: '팔레트' },
-  { id: 'drum', src: `${C}/char-drum.png`, ko: '북' },
-  { id: 'sand', src: `${C}/char-sand.png`, ko: '모래성' },
-  { id: 'busFront', src: `${C}/bus-front.png`, ko: '스쿨버스' },
+  { id: 'bus', src: `${C}/bus.webp`, ko: '버스' },
+  { id: 'police', src: `${C}/police.webp`, ko: '경찰차' },
+  { id: 'fire', src: `${C}/fire.webp`, ko: '소방차' },
+  { id: 'ambulance', src: `${C}/ambulance.webp`, ko: '구급차' },
+  { id: 'sports', src: `${C}/char-car.webp`, ko: '자동차' },
+  { id: 'truck', src: `${C}/dump.webp`, ko: '트럭' },
+  { id: 'tractor', src: `${C}/tractor.webp`, ko: '트랙터' },
+  { id: 'star', src: `${C}/char-star.webp`, ko: '별' },
+  { id: 'paint', src: `${C}/char-paint.webp`, ko: '팔레트' },
+  { id: 'drum', src: `${C}/char-drum.webp`, ko: '북' },
+  { id: 'sand', src: `${C}/char-sand.webp`, ko: '모래성' },
+  { id: 'busFront', src: `${C}/bus-front.webp`, ko: '스쿨버스' },
 ]
 
 function todayKey() {
@@ -48,9 +68,18 @@ function todayKey() {
 function read(): Profile {
   try {
     const raw = localStorage.getItem(KEY) || localStorage.getItem('ssuk-hanyoung-v2')
-    if (!raw) return { ...DEFAULT, played: {}, stickers: [], missionsDone: [] }
+    if (!raw) {
+      return migrateLearningFields({
+        ...DEFAULT,
+        played: {},
+        stickers: [],
+        missionsDone: [],
+        learningProgress: emptyLearningProgress(),
+        activityLog: [],
+      })
+    }
     const parsed = JSON.parse(raw)
-    return {
+    const base: Profile = {
       ...DEFAULT,
       ...parsed,
       played: { ...(parsed.played || {}) },
@@ -59,14 +88,26 @@ function read(): Profile {
       muteSpeech: !!parsed.muteSpeech,
       muteSfx: !!parsed.muteSfx,
     }
+    return migrateLearningFields(base)
   } catch {
-    return { ...DEFAULT, played: {}, stickers: [], missionsDone: [] }
+    return migrateLearningFields({
+      ...DEFAULT,
+      played: {},
+      stickers: [],
+      missionsDone: [],
+      learningProgress: emptyLearningProgress(),
+      activityLog: [],
+    })
   }
 }
 
 function write(p: Profile) {
   localStorage.setItem(KEY, JSON.stringify(p))
   window.dispatchEvent(new CustomEvent('ssuk-profile'))
+}
+
+export function writeProfilePatch(p: Profile) {
+  write(migrateLearningFields(p))
 }
 
 export function getProfile(): Profile {
@@ -88,7 +129,6 @@ export function setMuteSfx(v: boolean) {
   const p = read()
   p.muteSfx = v
   write(p)
-  // lazy import avoided — Layout syncs sfx mute
   window.dispatchEvent(new CustomEvent('ssuk-sfx-mute', { detail: v }))
 }
 
@@ -134,6 +174,12 @@ export function addStars(n: number, gameId?: string) {
   write(p)
   if (unlocked) {
     window.dispatchEvent(new CustomEvent('ssuk-sticker', { detail: unlocked }))
+  }
+  // Learning Core: every star award counts as a successful micro-activity
+  if (gameId && typeof window !== 'undefined') {
+    void import('./learningProgress').then(({ recordLearningActivity }) => {
+      recordLearningActivity({ gameId, success: true, duration: 15, score: n })
+    })
   }
   return p.stars
 }

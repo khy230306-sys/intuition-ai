@@ -1,17 +1,35 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CORE_GAMES, GAMES, MORE_GAMES } from '../data/games'
+import { Link, useSearchParams } from 'react-router-dom'
+import { GAMES } from '../data/games'
+import { CATEGORIES, getLearningMeta, type LearningCategory } from '../data/learning'
+import { getProfile } from '../lib/store'
 import { GameArt } from '../components/GameArt'
+import { VisualIcon } from '../components/visual/VisualIcon'
+import { ProgressBar } from '../components/visual/ProgressBar'
 
-type Filter = 'core' | 'car' | 'color' | 'focus' | 'more'
+type Filter = 'all' | LearningCategory
+
+const FILTERS: Array<{ id: Filter; label: string }> = [
+  { id: 'all', label: '전체' },
+  ...CATEGORIES.map((c) => ({ id: c.id as Filter, label: c.short })),
+]
 
 export function Games() {
-  const [filter, setFilter] = useState<Filter>('core')
+  const [params, setParams] = useSearchParams()
+  const initial = (params.get('cat') as Filter) || 'all'
+  const [filter, setFilter] = useState<Filter>(FILTERS.some((f) => f.id === initial) ? initial : 'all')
+  const profile = getProfile()
+
   const list = useMemo(() => {
-    if (filter === 'core') return CORE_GAMES
-    if (filter === 'more') return MORE_GAMES
-    return GAMES.filter((g) => g.tags.includes(filter))
+    if (filter === 'all') return GAMES
+    return GAMES.filter((g) => getLearningMeta(g.id)?.category === filter)
   }, [filter])
+
+  function select(id: Filter) {
+    setFilter(id)
+    if (id === 'all') setParams({})
+    else setParams({ cat: id })
+  }
 
   return (
     <div>
@@ -21,25 +39,17 @@ export function Games() {
       <p className="section-sub" style={{ marginTop: '-0.4rem' }}>
         마음에 드는 걸 골라요
       </p>
-      <div className="filter-row" role="tablist" aria-label="놀이 필터">
-        {(
-          [
-            ['core', '추천'],
-            ['car', '자동차'],
-            ['color', '색깔'],
-            ['focus', '집중'],
-            ['more', '더보기'],
-          ] as const
-        ).map(([id, label]) => (
+      <div className="filter-row filter-row-scroll" role="tablist" aria-label="학습 영역 필터">
+        {FILTERS.map((f) => (
           <button
-            key={id}
+            key={f.id}
             type="button"
             role="tab"
-            aria-selected={filter === id}
-            className={`chip${filter === id ? ' on' : ''}`}
-            onClick={() => setFilter(id)}
+            aria-selected={filter === f.id}
+            className={`chip${filter === f.id ? ' on' : ''}`}
+            onClick={() => select(f.id)}
           >
-            {label}
+            {f.label}
           </button>
         ))}
       </div>
@@ -50,15 +60,33 @@ export function Games() {
         <p className="section-sub">이 칸에는 아직 없어요</p>
       ) : (
         <div className="grid-2">
-          {list.map((g) => (
-            <Link key={g.id} to={`/games/${g.id}`} className="card art-card photo-card">
-              <div className="art-wrap photo">
-                <GameArt id={g.id} size={100} />
-              </div>
-              <div className="card-title">{g.title}</div>
-              <div className="card-sub">{g.subtitle}</div>
-            </Link>
-          ))}
+          {list.map((g) => {
+            const meta = getLearningMeta(g.id)
+            const skill = meta ? profile.learningProgress?.[meta.category]?.[meta.skill] : undefined
+            const mastery = skill?.mastery ?? 0
+            return (
+              <Link key={g.id} to={`/games/${g.id}`} className="card art-card photo-card game-meta-card anim-tap">
+                <div className="art-wrap photo">
+                  <GameArt id={g.id} size={100} />
+                </div>
+                <div className="card-title">{g.title}</div>
+                <div className="card-sub">{g.subtitle}</div>
+                {meta && (
+                  <div className="game-meta-row">
+                    <span className="meta-pill">난이도 {meta.difficulty === 1 ? '쉬움' : meta.difficulty === 2 ? '보통' : '도전'}</span>
+                    <span className="meta-pill">
+                      {meta.recommendedAge[0]}~{meta.recommendedAge[1]}세
+                    </span>
+                    <span className="meta-pill">약 {meta.estimatedMinutes}분</span>
+                    <span className="meta-pill meta-star">
+                      <VisualIcon name="reward.star" size={14} />+{meta.rewardStars || 1}
+                    </span>
+                  </div>
+                )}
+                <ProgressBar value={mastery} label="진도" color={CATEGORIES.find((c) => c.id === meta?.category)?.accent} />
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>

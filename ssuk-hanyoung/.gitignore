@@ -6,3 +6,7 @@ dist/
 .env.*
 # Heavy source art — deploy uses public/assets WebP only
 asset-src/
+# Local backup zips
+*.zip
+쑥쑥놀이터*.zip
+

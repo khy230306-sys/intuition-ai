@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "smoke": "bash scripts/smoke.sh",
+    "test:learning": "node scripts/test-learning.mjs",
     "deploy:web": "bash scripts/deploy-ship.sh"
   },
   "dependencies": {

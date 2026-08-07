@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { CHAR_IMG, CharImg } from './GameArt'
+import { VisualIcon } from './visual/VisualIcon'
 
 export function GameShell({
   title,
@@ -19,7 +20,7 @@ export function GameShell({
     <div>
       <div className="page-head">
         <Link to="/games" className="icon-btn" aria-label="게임 목록">
-          ←
+          <VisualIcon name="ui.back" size={36} />
         </Link>
         <h1>{title}</h1>
         <Link to="/" className="icon-btn photo" aria-label="홈">

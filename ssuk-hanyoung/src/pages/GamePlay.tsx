@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getGame } from '../data/games'
+import { VisualIcon } from '../components/visual/VisualIcon'
 import { ColorGarage } from '../games/ColorGarage'
 import { VroomRace } from '../games/VroomRace'
 import { ParkingLot } from '../games/ParkingLot'
@@ -75,7 +76,7 @@ export function GamePlay() {
       <div>
         <div className="page-head">
           <Link to="/games" className="icon-btn" aria-label="뒤로">
-            ←
+            <VisualIcon name="ui.back" size={36} />
           </Link>
           <h1>게임을 찾지 못했어요</h1>
         </div>

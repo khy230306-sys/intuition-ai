@@ -5,6 +5,7 @@ import { speak } from '../lib/speech'
 import { sfx } from '../lib/sfx'
 import { CHAR_IMG, CharImg } from '../components/GameArt'
 import { PaintSubject } from '../components/PaintSubject'
+import { VisualIcon } from '../components/visual/VisualIcon'
 
 const VEHICLE_KIND: Record<string, string> = {
   car: 'car',
@@ -80,7 +81,7 @@ function ColorExplore() {
     <div>
       <div className="page-head">
         <Link to="/explore" className="icon-btn" aria-label="뒤로">
-          ←
+          <VisualIcon name="ui.back" size={36} />
         </Link>
         <h1>색깔</h1>
       </div>
@@ -113,7 +114,7 @@ function VehicleExplore() {
     <div>
       <div className="page-head">
         <Link to="/explore" className="icon-btn" aria-label="뒤로">
-          ←
+          <VisualIcon name="ui.back" size={36} />
         </Link>
         <h1>자동차</h1>
       </div>

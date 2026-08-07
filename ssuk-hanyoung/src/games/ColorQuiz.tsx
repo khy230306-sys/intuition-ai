@@ -3,6 +3,7 @@ import { PLAY_COLORS, pick, shuffle } from '../data/colors'
 import { speak } from '../lib/speech'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
+import { VisualIcon } from '../components/visual/VisualIcon'
 import { useRound } from './useRound'
 
 export function ColorQuiz() {
@@ -28,6 +29,7 @@ export function ColorQuiz() {
       setTimeout(next, 550)
     } else {
       speak('다른 색깔이에요')
+      round.fail()
     }
   }
 
@@ -37,8 +39,9 @@ export function ColorQuiz() {
       {round.toast && <div className="toast">{round.toast}</div>}
       <div className="prompt">
         <div className="prompt-big">{target.ko}</div>
-        <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => speak(target.ko)}>
-          다시 듣기 🔊
+        <button type="button" className="btn btn-ghost btn-listen" style={{ marginTop: 8 }} onClick={() => speak(target.ko)}>
+          <VisualIcon name="ui.speaker" size={28} />
+          <span>다시 듣기</span>
         </button>
       </div>
       <div className="play-area">

@@ -1,17 +1,22 @@
 /**
- * Map short follow-up utterances onto the active Task Session slots.
- * Delegates multi-slot parsing to shared extractor (travel/hotel/restaurant/…).
+ * Map follow-up utterances onto active Task Session slots.
+ * Priority: explicit correction → expectedSlot → multi-slot → generic.
  */
 
-import { extractDateFromUtterance, resolveKoreanDate } from './dates'
+import {
+  extractExplicitCorrections,
+  multiSlotToProposals,
+  resolveExpectedSlot,
+} from './expectedSlotResolver'
 import {
   DESTINATION_PLACES,
-  extractMultiSlots,
   isActiveTaskFollowUpAction,
-  mergeExtractedSlots,
   ORIGIN_PLACES,
 } from './multiSlotExtractor'
-import type { SearchResultItem, TaskSession, TaskSlots } from './types'
+import { extractMultiSlots } from './multiSlotExtractor'
+import { safeMergeSlots, type SlotUpdateProposal } from './slotMerge'
+import { normalizeTripType } from './tripTypeNormalize'
+import type { SearchResultItem, SlotTurnDiag, TaskSession, TaskSlots } from './types'
 
 const ORIGIN_MAP = ORIGIN_PLACES
 
@@ -19,12 +24,12 @@ export function looksLikeFollowUp(text: string): boolean {
   const t = text.trim()
   if (!t || t.length > 80) return false
   if (isActiveTaskFollowUpAction(t)) return true
-  // Absolute dates / place answers
   if (/\d{1,2}\s*월\s*\d{1,2}/.test(t)) return true
+  if (normalizeTripType(t).tripType) return true
   if (Object.keys(DESTINATION_PLACES).some((k) => t.replace(/\s+/g, '').includes(k))) return true
   return (
     /^(오전|오후|저녁|아침)\s*걸로?$/.test(t) ||
-    /^(왕복|편도)$/.test(t) ||
+    /^(왕복|편도|완복)$/.test(t) ||
     /^\d+\s*명/.test(t) ||
     /^(두\s*번째|세\s*번째|첫\s*번째|가운데|\d+\s*번)/.test(t) ||
     /^(그걸로|이걸로|그\s*호텔|그거)/.test(t) ||
@@ -52,134 +57,218 @@ export function parseSelectionIndex(text: string): number | null {
   return null
 }
 
-export function applyFollowUpSlots(
-  task: TaskSession,
-  text: string,
-): { slots: TaskSlots; stale: boolean; selected?: SearchResultItem | null; note?: string } {
+export type ApplySlotsResult = {
+  slots: TaskSlots
+  stale: boolean
+  selected?: SearchResultItem | null
+  note?: string
+  /** true when expected slot was answered successfully */
+  expectedFilled?: boolean
+  /** expected slot parse failed — keep pending */
+  parseFailed?: boolean
+  validationError?: string
+  normalizedInput?: string
+  diag: SlotTurnDiag
+  slotMeta: NonNullable<TaskSession['slotMeta']>
+}
+
+export function applyFollowUpSlots(task: TaskSession, text: string): ApplySlotsResult {
   const t = text.trim()
-  let slots: TaskSlots = { ...task.slots }
+  const expected = task.expectedSlot || task.pendingQuestion || null
   let stale = false
   let selected: SearchResultItem | null = null
   let note: string | undefined
+  const proposals: SlotUpdateProposal[] = []
 
-  // Corrections / cancel
-  if (/취소|그만|그만둘|비행기\s*찾던\s*건\s*취소/.test(t) && !/알림/.test(t)) {
-    return { slots, stale, note: '__cancel__' }
+  const diag: SlotTurnDiag = {
+    expectedSlot: expected,
+    pendingQuestion: task.pendingQuestion || null,
+    rawInput: t,
+    normalizedInput: t,
+    extractedSlots: {},
+    appliedSlots: [],
+    rejectedSlotUpdates: [],
+    missingSlots: [],
+    nextQuestion: null,
   }
-  if (/김포\s*말고\s*부산|부산에서/.test(t) && /부산/.test(t)) {
-    slots.origin = '부산'
-    stale = true
+
+  // Cancel
+  if (/취소|그만|그만둘|비행기\s*찾던\s*건\s*취소/.test(t) && !/알림/.test(t)) {
+    return {
+      slots: { ...task.slots },
+      stale: false,
+      note: '__cancel__',
+      diag,
+      slotMeta: task.slotMeta || {},
+    }
+  }
+
+  // 1) Explicit corrections (highest priority)
+  const corrections = extractExplicitCorrections(t, task.slots)
+  proposals.push(...corrections)
+  if (/김포\s*말고\s*부산/.test(t) && /부산/.test(t)) {
+    proposals.push({
+      key: 'origin',
+      value: '부산',
+      source: 'explicit_correction',
+      confidence: 1,
+      explicit: true,
+    })
     note = 'origin_changed'
   }
-  if (/날짜를\s*토요일로|토요일로\s*바꿔/.test(t)) {
-    const d = resolveKoreanDate('토요일')
-    if (d) {
-      slots.departureDate = d
-      stale = true
-    }
-  }
-  if (/(\d+)\s*명이\s*아니라\s*(\d+)\s*명/.test(t)) {
-    const m = t.match(/(\d+)\s*명이\s*아니라\s*(\d+)\s*명/)
-    if (m) {
-      slots.passengers = Number(m[2])
-      stale = true
-    }
-  }
-  if (/호텔은\s*빼|호텔\s*빼/.test(t)) {
-    note = 'drop_hotel'
-  }
+  if (/호텔은\s*빼|호텔\s*빼/.test(t)) note = 'drop_hotel'
 
-  // Core: extract ALL slots from this utterance (pending-aware)
-  const extracted = extractMultiSlots(t, {
-    pendingQuestion: task.pendingQuestion,
-    existing: slots,
-    taskType: task.type,
-  })
-  const before = JSON.stringify({
-    o: slots.origin,
-    d: slots.destination,
-    dep: slots.departureDate?.resolvedDate,
-    ret: slots.returnDate?.resolvedDate,
-    p: slots.passengers,
-  })
-  slots = mergeExtractedSlots(slots, extracted)
-  const after = JSON.stringify({
-    o: slots.origin,
-    d: slots.destination,
-    dep: slots.departureDate?.resolvedDate,
-    ret: slots.returnDate?.resolvedDate,
-    p: slots.passengers,
-  })
-  if (before !== after) stale = Boolean(task.results.length) || stale
+  // 2) Expected slot resolver (beats generic multi-slot date routing)
+  let expectedFilled = false
+  let parseFailed = false
+  let validationError: string | undefined
 
-  // Legacy relative 「까지」 / weekday when extractor missed return date
-  if (/까지$/.test(t) || /^[월화수목금토일]요일$/.test(t)) {
-    const d = extractDateFromUtterance(t) || resolveKoreanDate(t)
-    if (d) {
-      if (task.pendingQuestion === 'returnDate' || slots.tripType === 'round_trip') {
-        if (!slots.returnDate || task.pendingQuestion === 'returnDate') slots.returnDate = d
-        else if (!slots.departureDate) slots.departureDate = d
-      } else if (!slots.departureDate) {
-        slots.departureDate = d
-      }
-      stale = Boolean(task.results.length) || stale
+  if (expected) {
+    const resolved = resolveExpectedSlot(task, t)
+    diag.normalizedInput = resolved.normalizedInput || t
+    if (resolved.extractedPreview) {
+      diag.extractedSlots = { ...diag.extractedSlots, ...resolved.extractedPreview }
+    }
+    if (resolved.validationError) {
+      validationError = resolved.validationError
+      // Keep pending — do not apply invalid return date; may still apply other corrections
+    } else if (resolved.ok && resolved.proposals.length) {
+      proposals.push(...resolved.proposals)
+      expectedFilled = true
+    } else if (resolved.parseFailed) {
+      parseFailed = true
     }
   }
 
-  // Budget
+  // 3–4) Multi-slot / semantic extras (lower priority — safeMerge protects committed slots)
+  // Skip multi-slot date proposals when we already filled expected date successfully,
+  // or when parse/validation failed for expected date (avoid overwrite).
+  const skipMultiDates =
+    (expected === 'returnDate' || expected === 'departureDate') &&
+    (expectedFilled || parseFailed || Boolean(validationError))
+
+  if (!parseFailed || !expected) {
+    const multi = multiSlotToProposals(t, task)
+    for (const p of multi) {
+      if (skipMultiDates && (p.key === 'departureDate' || p.key === 'returnDate')) continue
+      // When expected filled tripType, don't let weaker multi overwrite — safeMerge handles it
+      proposals.push(p)
+    }
+  }
+
+  // Selection / prefs / budget (non-protected extras)
   const budget = t.match(/(\d+)\s*만\s*원/)
-  if (budget) slots.budgetMax = Number(budget[1]) * 10000
-  if (/1박\s*(\d+)\s*만/.test(t)) {
-    const m = t.match(/1박\s*(\d+)\s*만/)
-    if (m) slots.budgetMax = Number(m[1]) * 10000
+  if (budget) {
+    proposals.push({
+      key: 'budgetMax',
+      value: Number(budget[1]) * 10000,
+      source: 'multi_slot',
+      confidence: 0.6,
+    })
+  }
+  if (/근처로/.test(t)) {
+    proposals.push({ key: 'preference', value: 'nearby', source: 'multi_slot', confidence: 0.6 })
+  }
+  if (/조용한\s*곳/.test(t)) {
+    proposals.push({ key: 'preference', value: 'quiet', source: 'multi_slot', confidence: 0.6 })
+  }
+  if (/조금\s*싼\s*곳|싼\s*곳/.test(t)) {
+    proposals.push({ key: 'preference', value: 'cheap', source: 'multi_slot', confidence: 0.6 })
   }
 
-  // Preferences
-  if (/근처로/.test(t)) slots.preference = 'nearby'
-  if (/조용한\s*곳/.test(t)) slots.preference = 'quiet'
-  if (/조금\s*싼\s*곳|싼\s*곳/.test(t)) slots.preference = 'cheap'
-
-  // Selection
   const idx = parseSelectionIndex(t)
   if (idx != null && task.results.length) {
     const hit = task.results.find((r) => r.rank === idx) || task.results[idx - 1]
     if (hit && !hit.stale) {
       selected = hit
-      slots.selectedResultId = hit.id
+      proposals.push({
+        key: 'selectedResultId',
+        value: hit.id,
+        source: 'explicit_semantic',
+        confidence: 1,
+        explicit: true,
+      })
     }
   }
   if (/그걸로|이걸로|그\s*호텔|아까\s*두\s*번째/.test(t) && task.results.length) {
-    if (/두\s*번째/.test(t)) {
-      selected = task.results.find((r) => r.rank === 2) || null
-    } else if (slots.selectedResultId) {
-      selected = task.results.find((r) => r.id === slots.selectedResultId) || null
-    } else {
-      selected = task.results[0]
+    if (/두\s*번째/.test(t)) selected = task.results.find((r) => r.rank === 2) || null
+    else if (task.slots.selectedResultId) {
+      selected = task.results.find((r) => r.id === task.slots.selectedResultId) || null
+    } else selected = task.results[0]
+    if (selected) {
+      proposals.push({
+        key: 'selectedResultId',
+        value: selected.id,
+        source: 'explicit_semantic',
+        confidence: 0.9,
+      })
     }
-    if (selected) slots.selectedResultId = selected.id
   }
 
-  // Reminder offset
   const rem = t.match(/(\d+)\s*시간\s*전/) || t.match(/출발\s*두\s*시간\s*전|두\s*시간\s*전/)
   if (rem) {
-    if (/두\s*시간|2\s*시간/.test(t)) slots.reminderOffsetMinutes = 120
-    else if (rem[1]) slots.reminderOffsetMinutes = Number(rem[1]) * 60
-  }
-  if (/알림도|알려줘/.test(t) && /전/.test(t)) {
-    slots.reminderOffsetMinutes = slots.reminderOffsetMinutes || 120
+    const mins = /두\s*시간|2\s*시간/.test(t) ? 120 : rem[1] ? Number(rem[1]) * 60 : 120
+    proposals.push({
+      key: 'reminderOffsetMinutes',
+      value: mins,
+      source: 'multi_slot',
+      confidence: 0.7,
+    })
   }
 
-  return { slots, stale, selected, note }
+  const merged = safeMergeSlots(task.slots, task.slotMeta, proposals)
+  diag.appliedSlots = merged.diag.applied
+  diag.rejectedSlotUpdates = merged.diag.rejected
+  if (merged.diag.applied.length) stale = Boolean(task.results.length)
+
+  // Build extracted preview for diagnostics
+  for (const p of proposals) {
+    if (p.key === 'departureDate' || p.key === 'returnDate') {
+      const d = p.value as { resolvedDate?: string }
+      diag.extractedSlots[p.key] = d?.resolvedDate || p.value
+    } else if (!(p.key in diag.extractedSlots)) {
+      diag.extractedSlots[p.key] = p.value
+    }
+  }
+
+  return {
+    slots: merged.slots,
+    stale,
+    selected,
+    note,
+    expectedFilled,
+    parseFailed,
+    validationError,
+    normalizedInput: diag.normalizedInput,
+    diag,
+    slotMeta: merged.meta,
+  }
+}
+
+/** @deprecated use extractMultiSlots — kept for callers */
+export function mergeExtractedSlots(existing: TaskSlots, extracted: TaskSlots): TaskSlots {
+  const proposals: SlotUpdateProposal[] = Object.entries(extracted)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([key, value]) => ({
+      key,
+      value,
+      source: 'multi_slot' as const,
+      confidence: 0.7,
+    }))
+  return safeMergeSlots(existing, undefined, proposals).slots
 }
 
 export function extractInitialTravelSlots(text: string): TaskSlots {
-  return extractMultiSlots(text, { taskType: 'travel.flight' })
+  // Initial utterance: allow full multi-slot (no expected yet)
+  const extracted = extractMultiSlots(text, { taskType: 'travel.flight' })
+  const norm = normalizeTripType(text)
+  if (norm.tripType) extracted.tripType = norm.tripType
+  return extracted
 }
 
 export function extractRestaurantSlots(text: string): TaskSlots {
   const t = text.trim()
   const slots = extractMultiSlots(t, { taskType: 'restaurant.search', pendingQuestion: 'location' })
-  // Extra local places / categories not in travel destination map
   const places = ['울산', '수원', '지리산', '삼산', '해운대', '강남', '홍대']
   for (const p of places) {
     if (t.includes(p) && !slots.location) {

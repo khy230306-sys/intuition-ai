@@ -37,7 +37,9 @@ export function computeMissingSlots(task: TaskSession): string[] {
   return []
 }
 
-export function nextQuestion(task: TaskSession): { ask: string; pending: string } | null {
+export function nextQuestion(
+  task: TaskSession,
+): { ask: string; pending: string; expectedSlot: string } | null {
   const miss = computeMissingSlots(task)
   if (!miss.length) return null
   const first = miss[0]
@@ -47,13 +49,27 @@ export function nextQuestion(task: TaskSession): { ask: string; pending: string 
     departureDate: '좋아요. 여행 날짜가 언제인가요?',
     tripType: '편도인가요, 왕복인가요?',
     returnDate: '돌아오는 날짜는 언제인가요?',
-    passengers: '몇 분이세요?',
+    passengers: '몇 분이 가시나요?',
     checkIn: '체크인 날짜가 언제인가요?',
     checkOut: '체크아웃 날짜가 언제인가요?',
     location: '어느 지역에서 찾으실까요?',
     partySize: '몇 분이세요?',
   }
-  return { ask: map[first] || `${first} 정보를 알려주세요.`, pending: first }
+  const ask = map[first] || `${first} 정보를 알려주세요.`
+  return { ask, pending: first, expectedSlot: first }
+}
+
+/** Clarify copy when the same expected slot fails to parse. */
+export function clarifyQuestion(expectedSlot: string): string {
+  const map: Record<string, string> = {
+    tripType: '편도인지 왕복인지 알려주세요. 예: "편도", "왕복"',
+    departureDate: '여행 출발 날짜를 알려주세요. 예: "8월10일"',
+    returnDate: '돌아오는 날짜를 알려주세요. 예: "8월14일"',
+    destination: '목적지를 알려주세요. 예: "호치민"',
+    origin: '출발지를 알려주세요. 예: "부산", "인천"',
+    passengers: '인원 수를 알려주세요. 예: "2명"',
+  }
+  return map[expectedSlot] || '다시 한 번 알려주세요.'
 }
 
 export function planSearchAction(task: TaskSession): PlannedAction {

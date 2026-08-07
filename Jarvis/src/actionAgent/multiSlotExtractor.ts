@@ -235,32 +235,39 @@ export function extractMultiSlots(text: string, ctx: SlotExtractContext = {}, no
   const slots: TaskSlots = {}
   if (!t) return slots
 
-  // Absolute month/day (+ range) first
+  // Absolute month/day (+ range). Single dates respect expected/pending slot.
   const abs = extractAbsoluteMonthDaySlots(t, now)
-  if (abs.departureDate) slots.departureDate = abs.departureDate
-  if (abs.returnDate) {
+  const expected = ctx.pendingQuestion
+  if (abs.departureDate && abs.returnDate) {
+    slots.departureDate = abs.departureDate
     slots.returnDate = abs.returnDate
     slots.tripType = 'round_trip'
+  } else if (abs.departureDate) {
+    if (expected === 'returnDate') {
+      // Never map a lone date onto departureDate while asking for return
+      slots.returnDate = abs.departureDate
+    } else if (expected === 'departureDate' || !ctx.existing?.departureDate) {
+      slots.departureDate = abs.departureDate
+    }
+    // else: departure already set & not asking for date → leave dates alone
   }
 
-  // Relative Korean dates when no absolute departure yet
-  if (!slots.departureDate) {
+  // Relative Korean dates when no absolute date assigned yet
+  if (!slots.departureDate && !slots.returnDate) {
     const rel = extractDateFromUtterance(t, now) || resolveKoreanDate(t, now)
     if (rel) {
-      if (ctx.pendingQuestion === 'returnDate') slots.returnDate = rel
-      else if (ctx.pendingQuestion === 'departureDate' || !ctx.existing?.departureDate) {
+      if (expected === 'returnDate') slots.returnDate = rel
+      else if (expected === 'departureDate' || !ctx.existing?.departureDate) {
         slots.departureDate = rel
-      } else if (/까지$/.test(t) || ctx.pendingQuestion === 'returnDate') {
+      } else if (/까지$/.test(t)) {
         slots.returnDate = rel
-      } else {
-        slots.departureDate = rel
       }
     }
   }
 
-  // Trip type
-  if (/왕복/.test(t)) slots.tripType = 'round_trip'
-  if (/편도/.test(t)) slots.tripType = 'one_way'
+  // Trip type (exact substring; aliases handled in tripTypeNormalize)
+  if (/왕복|완복|왕뽁/.test(t)) slots.tripType = 'round_trip'
+  if (/편도/.test(t) && !/왕복|완복/.test(t)) slots.tripType = 'one_way'
 
   // Origin before destination so 「인천에서 호치민」 works
   const origin = extractOrigin(t)
@@ -318,11 +325,32 @@ export function extractMultiSlots(text: string, ctx: SlotExtractContext = {}, no
   return slots
 }
 
-/** Merge extracted slots onto existing (extracted wins for defined keys). */
+/**
+ * Merge extracted slots onto existing.
+ * Protected travel slots already present are NOT overwritten by generic extract.
+ */
 export function mergeExtractedSlots(existing: TaskSlots, extracted: TaskSlots): TaskSlots {
+  const protectedKeys = new Set([
+    'departureDate',
+    'returnDate',
+    'origin',
+    'destination',
+    'tripType',
+    'passengers',
+  ])
   const next: TaskSlots = { ...existing }
   for (const [k, v] of Object.entries(extracted)) {
     if (v === undefined || v === null || v === '') continue
+    const prev = next[k]
+    const hasPrev =
+      prev !== undefined && prev !== null && prev !== '' && prev !== 'unknown'
+    if (hasPrev && protectedKeys.has(k)) {
+      // Allow fill-only for returnDate when empty; never clobber departureDate
+      if (k === 'returnDate' && !existing.returnDate) {
+        next.returnDate = v as typeof next.returnDate
+      }
+      continue
+    }
     ;(next as Record<string, unknown>)[k] = v
   }
   return next

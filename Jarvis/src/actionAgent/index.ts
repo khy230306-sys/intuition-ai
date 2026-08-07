@@ -20,6 +20,9 @@ export {
   isBarePlaceUtterance,
   isActiveTaskFollowUpAction,
 } from './multiSlotExtractor'
+export { normalizeTripType, editDistance } from './tripTypeNormalize'
+export { resolveExpectedSlot } from './expectedSlotResolver'
+export { safeMergeSlots } from './slotMerge'
 export {
   clearAllTasks,
   createTaskSession,
@@ -29,6 +32,7 @@ export {
   resumeTravelTask,
 } from './sessionStore'
 export { processActionAgentTurn, getActionAgentDiag, resetActionAgentForTests } from './pipeline'
+export { clarifyQuestion, computeMissingSlots, nextQuestion } from './planner'
 export { renderActiveTaskCard, renderActionAgentDiagPanel } from './ui/taskCard'
 export { setFlightProviderForTests } from './providers/flight'
 export { setHotelProviderForTests } from './providers/hotel'

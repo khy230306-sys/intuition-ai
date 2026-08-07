@@ -16,7 +16,14 @@ import {
   isBarePlaceUtterance,
   isExplicitCityInfoQuery,
 } from './multiSlotExtractor'
-import { computeMissingSlots, nextQuestion, planCrossAction, planSearchAction, taskLabel } from './planner'
+import {
+  clarifyQuestion,
+  computeMissingSlots,
+  nextQuestion,
+  planCrossAction,
+  planSearchAction,
+  taskLabel,
+} from './planner'
 import {
   applyFollowUpSlots,
   extractInitialTravelSlots,
@@ -28,6 +35,7 @@ import {
   clearAllTasks,
   createTaskSession,
   getActiveTask,
+  getSuspendedTasks,
   markResultsStale,
   resumeTravelTask,
   saveTask,
@@ -83,16 +91,30 @@ function summarizeTask(task: TaskSession): string {
   const s = task.slots
   const lines = [task.label]
   if (s.origin || s.destination) lines.push(`${s.origin || '?'} → ${s.destination || '?'}`)
-  if (s.departureDate) {
-    const ret = s.returnDate ? ` ~ ${s.returnDate.resolvedDate}` : ''
-    lines.push(`${s.departureDate.resolvedDate}${ret}`)
-  }
+  // Always render departure / return as independent fields (never a single overwritten date)
+  if (s.departureDate) lines.push(`출발: ${s.departureDate.resolvedDate}`)
+  if (s.returnDate) lines.push(`귀국: ${s.returnDate.resolvedDate}`)
   if (s.passengers) lines.push(`${s.passengers}명`)
   if (s.tripType && s.tripType !== 'unknown') lines.push(s.tripType === 'round_trip' ? '왕복' : '편도')
   if (task.status === 'needs_provider') lines.push('제공자 연결 필요')
   else if (task.status === 'collecting') lines.push('정보 수집 중')
   else if (task.results.length && !task.resultsStale) lines.push(`후보 ${task.results.length}개`)
   return lines.join('\n')
+}
+
+function setExpectedQuestion(task: TaskSession, expectedSlot: string | null): TaskSession {
+  const questionId = expectedSlot ? `q_${task.id}_${expectedSlot}` : null
+  return saveTask({
+    ...task,
+    pendingQuestion: expectedSlot,
+    expectedSlot,
+    questionId,
+    // Clear parse failure when moving to a new question
+    lastParseFailure:
+      expectedSlot && task.lastParseFailure?.expectedSlot === expectedSlot
+        ? task.lastParseFailure
+        : null,
+  })
 }
 
 async function runSearch(task: TaskSession, opts: PipelineOpts): Promise<ActionAgentTurnResult> {
@@ -126,11 +148,24 @@ async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<A
   let next = saveTask({ ...task, missingSlots: missing })
   if (missing.length) {
     const q = nextQuestion(next)
-    next = saveTask({
-      ...next,
-      status: 'collecting',
-      pendingQuestion: q?.pending || null,
-    })
+    const expected = q?.expectedSlot || null
+    next = setExpectedQuestion(
+      {
+        ...next,
+        status: 'collecting',
+      },
+      expected,
+    )
+    if (next.lastDiag) {
+      next = saveTask({
+        ...next,
+        lastDiag: {
+          ...next.lastDiag,
+          missingSlots: missing,
+          nextQuestion: q?.ask || null,
+        },
+      })
+    }
     return {
       handled: true,
       replyText: `${q?.ask || '정보가 더 필요해요.'}\n\n${summarizeTask(next)}`,
@@ -138,7 +173,14 @@ async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<A
       task: next,
     }
   }
-  next = saveTask({ ...next, status: 'ready', pendingQuestion: null })
+  next = saveTask({
+    ...next,
+    status: 'ready',
+    pendingQuestion: null,
+    expectedSlot: null,
+    questionId: null,
+    lastParseFailure: null,
+  })
   return runSearch(next, opts)
 }
 
@@ -147,16 +189,100 @@ async function applySlotsAndContinue(
   text: string,
   opts: PipelineOpts,
 ): Promise<ActionAgentTurnResult> {
+  const expected = active.expectedSlot || active.pendingQuestion || null
   const applied = applyFollowUpSlots(active, text)
   if (applied.note === '__cancel__') {
     cancelActiveTask()
     return { handled: true, replyText: '작업을 취소했어요.', speak: true, task: null }
   }
+
+  // Validation error (e.g. return before departure) — keep expectedSlot, do not advance
+  if (applied.validationError) {
+    const next = saveTask({
+      ...active,
+      slots: applied.slots,
+      slotMeta: applied.slotMeta,
+      lastDiag: {
+        ...applied.diag,
+        validationError: applied.validationError,
+        missingSlots: computeMissingSlots({ ...active, slots: applied.slots }),
+        nextQuestion: active.pendingQuestion || expected,
+      },
+      // pending/expected unchanged
+      pendingQuestion: expected,
+      expectedSlot: expected,
+    })
+    return {
+      handled: true,
+      replyText: `${applied.validationError}\n\n${summarizeTask(next)}`,
+      speak: true,
+      task: next,
+    }
+  }
+
+  // Parse failure for expected slot — clarify, never infinite identical loop without feedback
+  if (applied.parseFailed && expected) {
+    const prevFail = active.lastParseFailure
+    const same =
+      prevFail &&
+      prevFail.expectedSlot === expected &&
+      prevFail.rawInput === text.trim()
+    const count = same ? prevFail.count + 1 : prevFail?.expectedSlot === expected ? prevFail.count + 1 : 1
+    const failure = {
+      slotParseFailure: true as const,
+      expectedSlot: expected,
+      rawInput: text.trim(),
+      normalizedInput: applied.normalizedInput || text.trim(),
+      count,
+    }
+    const clarify = clarifyQuestion(expected)
+    const next = saveTask({
+      ...active,
+      slots: applied.slots,
+      slotMeta: applied.slotMeta,
+      pendingQuestion: expected,
+      expectedSlot: expected,
+      lastParseFailure: failure,
+      lastDiag: {
+        ...applied.diag,
+        parseFailed: true,
+        missingSlots: computeMissingSlots({ ...active, slots: applied.slots }),
+        nextQuestion: clarify,
+      },
+    })
+    const prefix =
+      count >= 2
+        ? `${clarify}\n(입력 「${text.trim()}」을 이해하지 못했어요.)`
+        : clarify
+    return {
+      handled: true,
+      replyText: `${prefix}\n\n${summarizeTask(next)}`,
+      speak: true,
+      task: next,
+    }
+  }
+
+  // Success path — only clear pending when expected was filled OR there was no expected
+  const clearPending = !expected || applied.expectedFilled || applied.diag.appliedSlots.some((a) => a.key === expected)
+
   let next: TaskSession = {
     ...active,
     slots: applied.slots,
+    slotMeta: applied.slotMeta,
     label: taskLabel(active.type, applied.slots),
+    lastDiag: applied.diag,
+    lastParseFailure: clearPending ? null : active.lastParseFailure,
   }
+  if (clearPending) {
+    next.pendingQuestion = null
+    next.expectedSlot = null
+    // questionId cleared after missing recompute assigns the next one
+  } else {
+    // Keep asking the same expected slot
+    next.pendingQuestion = expected
+    next.expectedSlot = expected
+  }
+
   if (applied.stale && next.results.length) next = markResultsStale(next)
   else next = saveTask(next)
 
@@ -172,6 +298,8 @@ async function applySlotsAndContinue(
       task: next,
     }
   }
+
+  // Recompute missing from full task; never re-ask a filled slot
   return collectOrSearch(next, opts)
 }
 
@@ -381,7 +509,7 @@ export function getActionAgentDiag(currentIntent = ''): ActionAgentDiag {
     currentIntent,
     activeMode: mode,
     activeTask: active,
-    suspendedCount: 0,
+    suspendedCount: getSuspendedTasks().length,
     collectedSlots: active
       ? Object.keys(active.slots).filter(
           (k) => active.slots[k] != null && active.slots[k] !== '' && active.slots[k] !== 'unknown',
@@ -390,6 +518,9 @@ export function getActionAgentDiag(currentIntent = ''): ActionAgentDiag {
     missingSlots: active ? computeMissingSlots(active) : [],
     plannedAction: active?.plannedAction?.kind || null,
     lastActionResult: active?.lastActionResult?.state || null,
+    expectedSlot: active?.expectedSlot || active?.pendingQuestion || null,
+    pendingQuestion: active?.pendingQuestion || null,
+    lastTurn: active?.lastDiag || null,
   }
 }
 

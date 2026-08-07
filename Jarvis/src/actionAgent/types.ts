@@ -38,6 +38,43 @@ export type ResolvedDate = {
   resolvedDate: string // ISO YYYY-MM-DD
 }
 
+export type SlotSource =
+  | 'explicit_correction'
+  | 'expected_question'
+  | 'explicit_semantic'
+  | 'multi_slot'
+  | 'generic_fallback'
+
+export type SlotMeta = {
+  source: SlotSource
+  confidence: number
+  updatedAt: string
+  explicit?: boolean
+  expectedByQuestion?: string
+}
+
+export type SlotParseFailure = {
+  slotParseFailure: true
+  expectedSlot: string
+  rawInput: string
+  normalizedInput: string
+  count: number
+}
+
+export type SlotTurnDiag = {
+  expectedSlot: string | null
+  pendingQuestion: string | null
+  rawInput: string
+  normalizedInput: string
+  extractedSlots: Record<string, unknown>
+  appliedSlots: Array<{ key: string; value: unknown; source: string }>
+  rejectedSlotUpdates: Array<{ key: string; value: unknown; reason: string }>
+  missingSlots: string[]
+  nextQuestion: string | null
+  parseFailed?: boolean
+  validationError?: string | null
+}
+
 export type SearchResultItem = {
   id: string // result_1 …
   rank: number
@@ -105,7 +142,18 @@ export type TaskSession = {
   createdAt: string
   updatedAt: string
   label: string
+  /** Legacy alias — same as expectedSlot for travel questions */
   pendingQuestion?: string | null
+  /** Slot the next user answer must fill */
+  expectedSlot?: string | null
+  /** Stable id for the current question (retry tracking) */
+  questionId?: string | null
+  /** Per-slot provenance / confidence */
+  slotMeta?: Record<string, SlotMeta>
+  /** Consecutive parse failure for the same expected slot */
+  lastParseFailure?: SlotParseFailure | null
+  /** Last turn diagnostics (dev panel) */
+  lastDiag?: SlotTurnDiag | null
 }
 
 export type ActionAgentDiag = {
@@ -117,6 +165,9 @@ export type ActionAgentDiag = {
   missingSlots: string[]
   plannedAction: string | null
   lastActionResult: string | null
+  expectedSlot?: string | null
+  pendingQuestion?: string | null
+  lastTurn?: SlotTurnDiag | null
 }
 
 export type ActionAgentTurnResult = {

@@ -48,8 +48,14 @@ describe('Action Agent V1', () => {
     r = await turn('왕복')
     expect(r.replyText).toMatch(/돌아오|날짜/)
 
-    r = await turn('일요일')
+    // Return must be after departure (bare 「일요일」 can resolve to a date before next Friday)
+    r = await turn('다음 주 일요일')
     expect(r.replyText).toMatch(/명|분/)
+    expect(getActiveTask()?.slots.returnDate?.resolvedDate).toBeTruthy()
+    expect(getActiveTask()?.slots.departureDate?.resolvedDate).toBeTruthy()
+    expect(getActiveTask()!.slots.returnDate!.resolvedDate >= getActiveTask()!.slots.departureDate!.resolvedDate).toBe(
+      true,
+    )
 
     r = await turn('2명')
     expect(r.replyText).toMatch(/result|후보|테스트용|1\./i)

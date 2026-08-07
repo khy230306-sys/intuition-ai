@@ -74,6 +74,11 @@ export function createTaskSession(type: TaskType, label: string, slots: TaskSess
     updatedAt: now,
     label,
     pendingQuestion: null,
+    expectedSlot: null,
+    questionId: null,
+    slotMeta: {},
+    lastParseFailure: null,
+    lastDiag: null,
   }
   const state = loadRaw()
   // Push previous active onto suspended (keep last 3)

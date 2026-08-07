@@ -1,8 +1,11 @@
 import clsx from 'clsx'
 import { PlayingCard } from '@/components/PlayingCard'
 import { CardPicker } from '@/components/CardPicker'
+import { FlowDashboard } from '@/components/FlowDashboard'
+import { StreetTimeline } from '@/components/StreetTimeline'
 import { useHandSession } from '@/hooks/useHandSession'
 import type { Position } from '@/engine/strategy'
+import type { HandOutcome } from '@/engine/session'
 
 const STREET_KO = {
   preflop: '프리플랍',
@@ -18,6 +21,13 @@ const POSITIONS: { id: Position; label: string }[] = [
   { id: 'blinds', label: '블라인드' },
 ]
 
+const OUTCOMES: { id: HandOutcome; label: string; className: string }[] = [
+  { id: 'won', label: '승으로 저장 → 다음', className: 'bg-accent text-[#062019]' },
+  { id: 'lost', label: '패로 저장 → 다음', className: 'bg-danger text-white' },
+  { id: 'folded', label: '폴드 저장 → 다음', className: 'bg-panel-2 border border-line text-ink' },
+  { id: 'unknown', label: '결과 없이 저장 → 다음', className: 'border border-line text-mute' },
+]
+
 export default function App() {
   const s = useHandSession()
 
@@ -27,15 +37,17 @@ export default function App() {
         <p className="text-xs font-semibold tracking-[0.28em] text-accent">HOLDEM EDGE</p>
         <h1 className="he-title mt-2 text-4xl leading-none text-ink sm:text-6xl">홀덤 엣지</h1>
         <p className="mt-3 max-w-xl text-sm text-mute sm:text-base">
-          내 카드와 바닥 카드를 입력하면 승률을 계산하고, 지금 스트리트에 맞는 배팅 전략을 알려줍니다.
+          카드를 입력하며 실시간 승률·전략을 보고, 핸드를 저장해 그날의 흐름까지 분석합니다.
         </p>
       </header>
+
+      <FlowDashboard session={s.daySession} flow={s.flow} onClear={s.clearToday} />
 
       <section className="he-enter-delay mb-4 rounded-3xl border border-line bg-panel/80 p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">1. 내 홀카드</h2>
           <button type="button" className="text-sm text-mute underline" onClick={s.reset}>
-            전체 초기화
+            현재 핸드 초기화
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -143,7 +155,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-accent/30 bg-gradient-to-b from-panel to-panel-2 p-5">
+      <section className="mb-4 rounded-3xl border border-accent/30 bg-gradient-to-b from-panel to-panel-2 p-5">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">3. 확률 · 전략</h2>
           {s.pending ? <span className="text-sm text-accent">계산 중…</span> : null}
@@ -187,6 +199,30 @@ export default function App() {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            <StreetTimeline snapshots={s.snapshots} />
+
+            <div className="rounded-2xl border border-line bg-panel px-3 py-3">
+              <div className="mb-2 text-sm font-semibold">핸드 결과 저장 & 계속 진행</div>
+              <p className="mb-3 text-xs text-mute">
+                결과를 저장하면 오늘 흐름·모멘텀에 반영됩니다. 저장 후 바로 다음 핸드를 입력하세요.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {OUTCOMES.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    className={clsx('min-h-12 rounded-xl px-3 text-sm font-semibold', o.className)}
+                    onClick={() => s.saveAndNext(o.id)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {s.lastSavedId ? (
+                <p className="mt-2 text-xs text-accent">저장됨 · 다음 핸드를 입력하세요</p>
+              ) : null}
             </div>
 
             <p className="text-xs text-mute">

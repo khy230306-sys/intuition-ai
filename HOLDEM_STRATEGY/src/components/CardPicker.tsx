@@ -7,7 +7,6 @@ import {
   SUITS,
   RANK_LABEL,
   SUIT_LABEL,
-  SUIT_NAME,
   cardEquals,
 } from '@/engine/cards'
 
@@ -21,34 +20,31 @@ export function CardPicker({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-3 sm:place-items-center">
-      <div className="he-enter w-full max-w-lg rounded-3xl border border-line bg-panel p-4 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <div className="he-title text-xl text-accent">카드 선택</div>
-            <p className="text-sm text-mute">숫자 → 무늬 순으로 고르세요</p>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-end bg-black/60 p-2 sm:items-center sm:justify-center sm:p-4">
+      <div className="he-enter flex max-h-[92dvh] w-full max-w-lg flex-col rounded-2xl border border-line bg-panel p-3 shadow-2xl">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="he-title text-lg text-accent">카드 선택</div>
           <button
             type="button"
-            className="min-h-11 rounded-xl border border-line px-4 text-sm"
+            className="min-h-10 rounded-lg border border-line px-3 text-sm"
             onClick={onClose}
           >
             닫기
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-auto pb-1">
           {SUITS.map((suit) => (
             <div key={suit}>
               <div
                 className={clsx(
-                  'mb-2 text-sm font-semibold',
-                  suit === 'h' || suit === 'd' ? 'text-[#ff8b8b]' : 'text-ink',
+                  'mb-1 text-xs font-semibold',
+                  suit === 'h' || suit === 'd' ? 'text-[#ff8b8b]' : 'text-mute',
                 )}
               >
-                {SUIT_LABEL[suit]} {SUIT_NAME[suit]}
+                {SUIT_LABEL[suit]}
               </div>
-              <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-[repeat(13,minmax(0,1fr))]">
+              <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1">
                 {RANKS.map((rank) => {
                   const card: Card = { rank: rank as Rank, suit: suit as Suit }
                   const disabled = used.some((u) => cardEquals(u, card))
@@ -59,7 +55,7 @@ export function CardPicker({
                       disabled={disabled}
                       onClick={() => onPick(card)}
                       className={clsx(
-                        'min-h-11 rounded-lg border text-sm font-semibold',
+                        'min-h-9 rounded-md border text-xs font-semibold sm:min-h-10 sm:text-sm',
                         disabled
                           ? 'border-line/40 bg-panel-2/40 text-mute/40'
                           : suit === 'h' || suit === 'd'

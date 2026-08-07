@@ -15,9 +15,9 @@
 
 ## 접속 주소
 
-**https://holdem-edge.tiiny.site**
+**https://holdem-edge-68b96b.tiiny.site**
 
-(백업 터널) https://device-castle-conf-dealt.trycloudflare.com
+(백업 터널) https://realty-collected-wiki-shaped.trycloudflare.com
 
 ## 실행
 

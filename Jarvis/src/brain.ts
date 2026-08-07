@@ -711,9 +711,10 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     return { text: helpText(name) }
   }
 
-  if (/안녕|하이|헬로|hello|hi\b/.test(text)) {
+  // Plain greetings: just greet back — no feature pitches (브리핑/시세 등).
+  if (/^(안녕(하세요|하십니까)?|하이+|헬로|hello|hi)[\s!?.~ㅋㅎ]*$/i.test(text.trim())) {
     return {
-      text: `안녕하세요, ${name}. AIZIO입니다. "브리핑" 또는 "삼성전자 시세"로 시작해 보세요.`,
+      text: `안녕하세요, ${name}.`,
       speak: true,
     }
   }

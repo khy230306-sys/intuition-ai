@@ -115,4 +115,13 @@ describe('casual chat vs STT garbage', () => {
     expect(r.text).not.toMatch(/빨간/)
     expect(r.text).not.toMatch(/삼성전자 시세/)
   })
+
+  it('plain greeting is greeted without briefing/stock pitches', async () => {
+    const { think } = await import('./brain')
+    for (const q of ['안녕', '안녕하세요', '하이']) {
+      const r = await think(q)
+      expect(r.text, q).toMatch(/안녕/)
+      expect(r.text, q).not.toMatch(/브리핑|삼성전자|시세|시작해 보세요/)
+    }
+  })
 })

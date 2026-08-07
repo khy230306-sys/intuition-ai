@@ -112,9 +112,8 @@ export const MULTI_TURN_SCENARIOS: MultiTurnScenario[] = [
     category: 'restaurant',
     setup: 'clear_all',
     steps: [
-      { input: '울산 삼산 맛집', expectText: /명|지역|DEMO|식당/ },
-      { input: '4명', expectText: /음식|한식|DEMO|식당/ },
-      { input: '한식으로', expectText: /DEMO|한식/ },
+      // List browse returns results immediately (no party-size gate)
+      { input: '울산 삼산 맛집', expectText: /DEMO|식당/ },
       { input: '첫 번째', expectText: /선택|상세/ },
       { input: '7시 반으로 해줘', expectText: /19:30|7:30|예약|가능|없|DEMO/ },
     ],
@@ -180,9 +179,7 @@ export const MULTI_TURN_SCENARIOS: MultiTurnScenario[] = [
     category: 'restaurant',
     setup: 'clear_all',
     steps: [
-      { input: '울산 삼산 맛집', expectText: /명|DEMO/ },
-      { input: '4명', expectText: /음식|DEMO/ },
-      { input: '한식으로', expectText: /DEMO/ },
+      { input: '울산 삼산 맛집', expectText: /DEMO/ },
       { input: '첫 번째', expectText: /선택/ },
       { input: '예약해줘', expectText: /예약 준비|DEMO/ },
       { input: '좋네', expectText: /명확|응 예약해|자동으로 진행하지/ },

@@ -3,6 +3,7 @@
  */
 
 import type { BrainReply } from '../types'
+import { isHowToOrAdviceUtterance } from '../commandRouter/howto'
 import {
   confirmBooking,
   isExplicitBookingConfirm,
@@ -362,11 +363,8 @@ export async function handleTravelAgent(
   const t = text.trim()
   if (!t) return null
 
-  // How-to / explanation must never open booking Q&A (e.g. "비행기 예약하는 방법")
-  if (
-    !opts?.forceIntent &&
-    /(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|가격이\s*왜|만드는\s*법)/.test(t)
-  ) {
+  // How-to / tip / advice must never open booking Q&A
+  if (!opts?.forceIntent && (isHowToOrAdviceUtterance(t) || /가격이\s*왜/.test(t))) {
     return null
   }
 

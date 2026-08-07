@@ -11,6 +11,8 @@ import type { CommandRouterResult } from '../commandRouter/types'
 import { detectGlobalCommand } from '../commandRouter/globalCommands'
 import { getActiveMode } from '../commandRouter/session'
 import { isClearWeatherQuery } from '../commandRouter/weatherQuery'
+import { isHowToOrAdviceUtterance } from '../commandRouter/howto'
+import { hasActiveRestaurantSession } from '../restaurantAgent/session'
 import { executeGlobalCommandReset } from '../conversationReset'
 import { executePlannedAction, formatResultsList } from './executor'
 import {
@@ -566,7 +568,7 @@ export async function processActionAgentTurn(
 
   // 8) Standalone Intent — new travel / restaurant (only when no owning active task)
   if (routed.intent.startsWith('travel.flight') || routed.intent === 'travel.plan' || routed.intent === 'travel.unknown') {
-    if (/예약하는\s*방법|어떻게\s*예약|예약\s*방법/.test(t)) {
+    if (isHowToOrAdviceUtterance(t)) {
       return { handled: false, replyText: '', fallthrough: true }
     }
     // If a travel task is already active, merge into it instead of creating a blank session
@@ -585,6 +587,11 @@ export async function processActionAgentTurn(
     return collectOrSearch(task, opts)
   }
   if (routed.intent.startsWith('restaurant.')) {
+    // Legacy DEMO/list session owns selection — don't start a blank AA restaurant task
+    const aaOwnsRestaurant = getActiveTask()?.type === 'restaurant.search'
+    if (!aaOwnsRestaurant && hasActiveRestaurantSession()) {
+      return { handled: false, replyText: '', fallthrough: true }
+    }
     // Simple 「지역 맛집」 → legacy lifestyle/map path (no multi-turn booking slots)
     if (
       /맛집/.test(t) &&

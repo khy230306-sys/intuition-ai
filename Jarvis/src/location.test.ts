@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { formatFix, loadCachedFix, saveCachedFix, wasLocationGranted } from './location'
+import {
+  canUseGeolocation,
+  formatFix,
+  getLocationReport,
+  loadCachedFix,
+  saveCachedFix,
+  wasLocationGranted,
+} from './location'
 
 const store = new Map<string, string>()
 
@@ -22,5 +29,11 @@ describe('location cache', () => {
     expect(wasLocationGranted()).toBe(true)
     expect(loadCachedFix()?.lat).toBe(37.5)
     expect(formatFix(loadCachedFix()!, '서울')).toMatch(/서울/)
+  })
+
+  it('treats missing geolocation API as unavailable (no crash)', async () => {
+    vi.stubGlobal('navigator', { onLine: true, language: 'ko-KR', geolocation: undefined })
+    expect(canUseGeolocation()).toBe(false)
+    await expect(getLocationReport()).rejects.toThrow(/위치 서비스를 지원하지/)
   })
 })

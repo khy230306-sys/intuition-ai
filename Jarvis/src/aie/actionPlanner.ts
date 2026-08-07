@@ -5,8 +5,9 @@
 
 import type { AieActionPlan, AiePlannedTask, AieTaskKind } from './types'
 
+// Note: bare 「후」 must NOT match inside 「오후」 — use word-ish boundaries.
 const CONNECTOR =
-  /\s*(?:그리고|그\s*다음|다음에|끝난\s*뒤|끝나면|한\s*뒤|하고\s*나서|하고|,|\n|후(?:에)?)\s*/i
+  /\s*(?:그리고|그\s*다음|다음에|끝난\s*뒤|끝나면|한\s*뒤|하고\s*나서|하고|,|\n|(?:(?<=\s)|^)후(?:에)?(?=\s|$))\s*/i
 
 function classifyKind(text: string): AieTaskKind {
   const t = text.toLowerCase()

@@ -89,10 +89,15 @@ function isShortAmbiguousAnswer(text: string): boolean {
   if (/^\d{1,2}월\d{1,2}일?(이야|야|이요|요)?$/.test(t)) return true
   if (/^(왕복|편도|완복|왕뽁)(이야|야|이요|으로|할게)?$/.test(t)) return true
   if (/^\d+명$/.test(t)) return true
-  if (/^[가-힣A-Za-z]{2,8}(으로|로|에서)?$/.test(t) && !/여행|비행|알아/.test(t)) return true
+  if (/^(다)?다음주[월화수목금토일](요일)?$/.test(t) || /^이번주[월화수목금토일](요일)?$/.test(t)) return true
+  if (
+    /^[가-힣A-Za-z]{2,8}(으로|로|에서)?$/.test(t) &&
+    !/여행|비행|알아|(다)?다음주|이번주/.test(t)
+  ) {
+    return true
+  }
   if (/^[월화수목금토일]요일$/.test(t)) return true
   if (/^(내일|모레|오늘)$/.test(t)) return true
-  if (/^다음주[월화수목금토일]요일$/.test(t)) return true
   return false
 }
 

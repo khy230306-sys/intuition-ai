@@ -21,6 +21,7 @@ import { getActiveMode, getTranslationSession } from './session'
 import type { AizioIntent, CommandRouterInput, CommandRouterResult } from './types'
 import { pushRouteDiag } from './diagnostics'
 import { isClearWeatherQuery } from './weatherQuery'
+import { isHowToOrAdviceUtterance } from './howto'
 import { isTodoCreateUtterance } from '../life/todoShopping'
 
 export { isClearWeatherQuery }
@@ -112,10 +113,12 @@ export function isTranslationStart(text: string): boolean {
   ) {
     return true
   }
-  // 「영어로 번역해줘」 with no payload content → session start
+  // 「영어로 번역해줘」 with no payload content → session start (must end; trailing text = oneshot)
   if (
     /^(?:[가-힣A-Za-z\-]+(?:어|말)\s*)?(?:로|으로)\s*(?:번역|통역)(?:\s*해(?:\s*줘|주세요)?|\s*하기)?\s*$/i.test(t) ||
-    /^(?:영어|일본어|중국어|베트남어|스페인어|프랑스어|독일어|태국어)\s*(?:로|으로)\s*(?:번역|통역|말해|바꿔)/i.test(t)
+    /^(?:영어|일본어|중국어|베트남어|스페인어|프랑스어|독일어|태국어)\s*(?:로|으로)\s*(?:번역|통역|말해|바꿔)(?:\s*해(?:\s*줘|주세요)?)?\s*$/i.test(
+      t,
+    )
   ) {
     return true
   }
@@ -159,6 +162,11 @@ export function extractTranslateContent(text: string): string {
   const t = text.trim()
   const quoted = t.match(/^['"「『](.+?)['"」』]\s*(?:을|를)?\s*.+?(?:로|으로)\s*(?:번역|통역)/i)
   if (quoted) return quoted[1].trim()
+  // 「일본어로 번역해 안녕하세요」— language command then payload
+  const trailing = t.match(
+    /^(?:영어|일본어|중국어|베트남어|스페인어|프랑스어|독일어|태국어|한국어|[가-힣]+어)\s*(?:로|으로)\s*(?:번역|통역)(?:\s*해(?:\s*줘|주세요)?)?\s+(.+)$/i,
+  )
+  if (trailing?.[1]?.trim()) return trailing[1].trim()
   const m =
     t.match(
       /^(.+?)(?:을|를|라고|다고)\s*(?:영어로|일본어로|중국어로|베트남어로|스페인어로|프랑스어로|독일어로|태국어로|한국어로|.+?(?:어|말)\s*(?:로|으로))\s*(?:번역|통역)/i,
@@ -539,22 +547,20 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
     return r
   }
 
-  // How-to / explanation questions stay GENERAL_CHAT (never book/search)
-  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|만드는\s*법|왜\s*비싸)/i.test(normalized)) {
-    if (!/(비행기\s*찾아|항공권\s*검색|맛집\s*찾아)/i.test(normalized)) {
-      const r = result({
-        intent: 'general.chat',
-        confidence: 0.88,
-        entities: {},
-        action: 'general.chat',
-        reason: 'howto_or_explanation',
-        normalized,
-        requiresAI: true,
-        forbiddenActions: ['travel.booking', 'restaurant.booking', 'weather'],
-      })
-      pushRouteDiag(r, mode, false)
-      return r
-    }
+  // How-to / tip / advice stay GENERAL_CHAT (never book/search)
+  if (isHowToOrAdviceUtterance(normalized)) {
+    const r = result({
+      intent: 'general.chat',
+      confidence: 0.88,
+      entities: {},
+      action: 'general.chat',
+      reason: 'howto_or_explanation',
+      normalized,
+      requiresAI: true,
+      forbiddenActions: ['travel.booking', 'restaurant.booking', 'weather'],
+    })
+    pushRouteDiag(r, mode, false)
+    return r
   }
 
   // 5a) Restaurant Agent — before travel/weather; never steal recipes / translation

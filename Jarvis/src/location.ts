@@ -36,7 +36,7 @@ export function clearLocationGrant(): void {
 }
 
 export function canUseGeolocation(): boolean {
-  return typeof navigator !== 'undefined' && 'geolocation' in navigator
+  return typeof navigator !== 'undefined' && Boolean(navigator.geolocation)
 }
 
 export async function queryPermissionState(): Promise<GeoPermission> {

@@ -105,6 +105,27 @@ export async function aizioLocalChat(input: {
     return { text: joke, speak: true }
   }
 
+  // Travel/booking howto — answer with steps, never start slot-filling
+  if (
+    /(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|어떻게\s*사|사는\s*(법|방법)|어떻게\s*예매|예매\s*(법|방법)|여행\s*팁|팁\s*알려)/.test(
+      text,
+    ) &&
+    /(비행|항공|호텔|여행|표)/.test(text)
+  ) {
+    return {
+      text: [
+        '【여행·예약 팁 (참고)】',
+        '1. 출발지·도착지·날짜·인원을 먼저 정해요.',
+        '2. 네이버·구글 항공권, 카약, 스카이스캐너 등으로 가격을 비교해요.',
+        '3. 항공사·호텔 공식 사이트에서 조건(수하물·취소)을 확인하고 결제해요.',
+        '4. 예약 확인 메일·전자탑승권을 저장해 두세요.',
+        '',
+        '실제 검색이 필요하면 「인천에서 도쿄 비행기 찾아줘」처럼 말해 주세요.',
+      ].join('\n'),
+      speak: true,
+    }
+  }
+
   if (isOpinionOrEmotion(text)) {
     if (/고마|감사/i.test(text)) {
       return { text: `천만에요, ${name}. 언제든 불러 주세요.`, speak: true }

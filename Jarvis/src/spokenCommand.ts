@@ -322,7 +322,7 @@ export function looksLikeSttGarbage(text: string): boolean {
   // Hangul but no common content tokens and fails all seeds
   if (!/[가-힣]{2,}/.test(stripped)) return true
   const useful =
-    /날씨|시간|시세|브리핑|위치|번역|통역|가족|친구|게임|지출|알림|환율|뉴스|속보|통계|도움|시세|주가|검색|지도|맛집|길안내|로또|주사위/.test(
+    /날씨|시간|시세|브리핑|위치|번역|통역|가족|친구|게임|지출|알림|환율|뉴스|속보|통계|도움|시세|주가|검색|지도|맛집|길안내|로또|주사위|농담|개그|조크|joke|웃긴/.test(
       c,
     )
   if (useful) return false

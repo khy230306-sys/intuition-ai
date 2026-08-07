@@ -16,12 +16,17 @@ const WEEKDAY: Record<string, number> = {
   토: 6,
 }
 
-function resolveWeekday(t: string, now: Date, nextWeek: boolean): Date | null {
-  const key = Object.keys(WEEKDAY).find((k) => t.includes(`${k}요일`) || new RegExp(`${k}요(?:일)?`).test(t))
-  if (!key) return null
+function resolveWeekday(t: string, now: Date, nextWeek: boolean, weekOffset = 0): Date | null {
+  // 「금요일」·「금요」· bare 「금」(after 주) · 「금요」
+  const key =
+    Object.keys(WEEKDAY).find((k) => t.includes(`${k}요일`) || new RegExp(`${k}요(?:일)?`).test(t)) ||
+    (t.match(/(?:주)\s*([월화수목금토일])(?:요일)?/) || [])[1] ||
+    (t.match(/^([월화수목금토일])$/) || [])[1]
+  if (!key || WEEKDAY[key] == null) return null
   let d = nextWeekday(now, WEEKDAY[key])
   if (nextWeek && d.getTime() - now.getTime() < 6 * 86400000) d = addDays(d, 7)
   if (!nextWeek && d.getTime() <= now.getTime()) d = addDays(d, 7)
+  if (weekOffset > 0) d = addDays(d, weekOffset)
   return d
 }
 
@@ -57,6 +62,11 @@ export function resolveKoreanDate(text: string, now = new Date()): ResolvedDate 
     const day = Number(t.match(/다음\s*달\s*(\d{1,2})\s*일/)![1])
     const d = new Date(now.getFullYear(), now.getMonth() + 1, day, 12)
     return { originalText, resolvedDate: toIsoDate(d) }
+  }
+  // 「다다음주 금」 = week after next (+14 from next-week baseline via weekOffset)
+  if (/다다음\s*주/.test(t)) {
+    const d = resolveWeekday(t, now, true, 7)
+    if (d) return { originalText, resolvedDate: toIsoDate(d) }
   }
   if (/다음\s*주/.test(t)) {
     const d = resolveWeekday(t, now, true)
@@ -99,8 +109,9 @@ export function extractDateFromUtterance(text: string, now = new Date()): Resolv
   const abs = resolveAbsoluteMonthDay(t, now)
   if (abs) return abs
   const phrases = [
-    t.match(/(다음\s*주\s*[월화수목금토일]요일)/)?.[1],
-    t.match(/(이번\s*주\s*[월화수목금토일]요일)/)?.[1],
+    t.match(/(다다음\s*주\s*[월화수목금토일](?:요일)?)/)?.[1],
+    t.match(/(다음\s*주\s*[월화수목금토일](?:요일)?)/)?.[1],
+    t.match(/(이번\s*주\s*[월화수목금토일](?:요일)?)/)?.[1],
     t.match(/(다음\s*달\s*\d{1,2}\s*일)/)?.[1],
     t.match(/(이번\s*달\s*말)/)?.[1],
     t.match(/(다음\s*주말|이번\s*주말)/)?.[1],

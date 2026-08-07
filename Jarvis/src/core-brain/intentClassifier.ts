@@ -36,7 +36,7 @@ const RULES: Rule[] = [
   },
   {
     intent: 'play_music',
-    re: /(음악|노래|뮤직|플레이리스트|playlist|곡).*(틀어|재생|추천|들려|찾아|play)|틀어\s*줘|재생해|play\s+.*music/i,
+    re: /(음악|노래|뮤직|플레이리스트|playlist|곡).*(틀어|재생|추천|들려|찾아|play)|틀어\s*줘|재생해|play\s+.*music|(?:유튜브|youtube).*(?:음악|노래|뮤직)|(?:잔잔한|조용한|신나는)\s*음악(?!\s*좋아)/i,
     confidence: 0.9,
   },
   {

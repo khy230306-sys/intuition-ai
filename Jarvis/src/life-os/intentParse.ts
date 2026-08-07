@@ -50,7 +50,9 @@ export function parseLifeOsIntent(raw: string): LifeOsParsedIntent | null {
     return { intent: 'forget_preference', query: text }
   }
   if (
-    /나는\s*.+좋아|짧은\s*답변|긴\s*답변|취미는|잔잔한\s*음악|명령어는\s*한\s*번에/i.test(text)
+    /나는\s*.+좋아|짧은\s*답변|긴\s*답변|취미는|명령어는\s*한\s*번에/i.test(text) ||
+    // 「잔잔한 음악」 alone is often a play request — require preference framing
+    (/(잔잔한|조용한)\s*음악/.test(text) && /나는|좋아|선호|기억해/.test(text))
   ) {
     return { intent: 'remember_preference', text }
   }

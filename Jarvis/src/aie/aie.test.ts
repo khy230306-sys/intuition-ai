@@ -78,6 +78,16 @@ describe('AIZIO Intelligence Engine', () => {
     expect(plan.tasks[0].kind).toBe('music')
   })
 
+  it('does not split 오후 calendar creates (후 ≠ connector)', () => {
+    for (const q of ['내일 오후 3시 회의 일정 추가해줘', '내일 오후 3시에 병원 일정 추가해줘']) {
+      const plan = planActions(q)
+      expect(plan.multiTask, q).toBe(false)
+      expect(plan.tasks).toHaveLength(1)
+      expect(plan.tasks[0].kind).toBe('calendar')
+      expect(plan.tasks[0].text).toBe(q)
+    }
+  })
+
   it('builds context with time/date/network/skills', () => {
     const ctx = buildAieContext({ force: true })
     expect(ctx.time).toMatch(/\d+:\d+/)

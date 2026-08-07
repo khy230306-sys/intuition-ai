@@ -3,6 +3,12 @@
  * status: REAL | TEMP | FALLBACK
  * Production UI prefers REAL; TEMP is a swap slot, never emoji.
  * Existing approved car WebP assets remain REAL and untouched.
+ *
+ * GRAPHIC FREEZE (see docs/GRAPHIC_FREEZE.md):
+ * Do NOT invent/mass-generate characters, animals, food, places, or category art.
+ * Do NOT promote TEMP → REAL without separately approved production files.
+ * Do NOT restyle approved REAL assets or mix inconsistent illustration styles.
+ * Missing art stays TEMP/FALLBACK until an approved drop is registered.
  */
 
 import { CHAR_IMG, CHAR_IMG_MD } from '../components/GameArt'

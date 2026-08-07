@@ -1,5 +1,8 @@
 # Premium Illustration Pack V3
 
+> **GRAPHIC FREEZE ACTIVE** — 자세한 금지/허용 목록은 [`GRAPHIC_FREEZE.md`](./GRAPHIC_FREEZE.md).  
+> 승인 파일 전달 전까지 신규 일러스트 생성·스타일 변경·TEMP→REAL 승격 금지.
+
 ## 정책
 
 - **REAL**: 승인된 WebP/PNG 일러스트 (프로덕션 우선)

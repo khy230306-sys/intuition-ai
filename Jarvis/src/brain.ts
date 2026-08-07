@@ -119,11 +119,11 @@ import {
 import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
 import { aiEngineErrorText } from './ai'
+import { aizioLocalChat, shouldUseAizioLocalChat } from './aizioAi'
 import { hasAnyConfiguredProvider, runHybridChat } from './ai-providers'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,
-  isCasualChatText,
   localCasualReply,
   looksLikeSttGarbage,
   wantsWeatherCommand,
@@ -173,7 +173,7 @@ function helpText(name: string): string {
     '• 적립식 매달 50만 10년 연7%',
     '• 삼성전자 투자체크',
     '',
-    '날씨·시세·환율·브리핑·통역·통계·메모·일정·알림은 API 키 없이 동작합니다. 자유 대화는 설정에서 무료 AI(OpenRouter/Gemini/Groq) 또는 OpenAI를 연결하세요.',
+    'AIZIO는 API 키 없이도 기본 대화가 됩니다. 날씨·환율·통역·메모·일정·알림도 바로 쓸 수 있어요. (클라우드 두뇌 연결은 선택 사항)',
     '로컬 알림은 앱/탭이 열려 있을 때 가장 확실합니다(iOS 백그라운드 제한).',
     '면책: 투자 조언이 아니며 손실 책임은 본인에게 있습니다.',
   ].join('\n')
@@ -707,14 +707,10 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     return { text: helpText(name) }
   }
 
-  // Plain greetings: if cloud AI is connected, let Hybrid chat handle it (ChatGPT-like).
-  // Without AI: warm local hello only — no 브리핑/시세 pitches.
+  // Plain greetings are handled by cloud Hybrid (optional) or built-in AIZIO chat below —
+  // never short-circuit with 브리핑/시세 pitches here.
   if (/^(안녕(하세요|하십니까)?|하이+|헬로|hello|hi)[\s!?.~ㅋㅎ]*$/i.test(text.trim())) {
-    if (hasAnyConfiguredProvider()) return null
-    return {
-      text: `안녕하세요, ${name}.`,
-      speak: true,
-    }
+    return null
   }
 
   return null
@@ -1506,31 +1502,23 @@ export async function think(
     return { text: 'YouTube를 엽니다.', speak: true, action: () => openApp('유튜브') }
   }
 
+  // Optional cloud upgrade (server/device keys). Built-in AIZIO chat always remains.
   if (hasAnyConfiguredProvider()) {
     try {
       const cloud = await callCloudLLM(text, settings, history)
       if (cloud) return enrich({ text: cloud, speak: true })
     } catch (err) {
-      // Never hard-stop the app on a dead model — local fun/casual/wiki still work
       const fun = localFunReply(text)
       if (fun) return enrich({ text: fun, speak: true })
-      if (isKnowledgeQuestion(text)) {
-        try {
-          const wiki = await answerEncyclopedia(text)
-          if (wiki) return enrich({ text: wiki, speak: true })
-        } catch {
-          /* ignore */
-        }
+      if (shouldUseAizioLocalChat(text)) {
+        const local = await aizioLocalChat({ text, history, displayName: name })
+        return enrich(local)
       }
-      const casual = localCasualReply(text)
-      if (casual) return enrich({ text: casual, speak: true })
       return enrich({
         text: [
           aiEngineErrorText(err),
           '',
-          '그동안 로컬로 바로 쓸 수 있는 예:',
-          '· 로또번호 추천해줘 · 주사위 · 브리핑 · 오늘 날씨 · 할 일 · 집중 시작',
-          '설정 → AI 에서 다른 모델/무료 AI(OpenRouter·Gemini·Groq)로 바꿔 보세요.',
+          '지금은 내장 AIZIO로 이어서 대화할 수 있어요. 편하게 다시 말해 주세요.',
         ].join('\n'),
         speak: true,
       })
@@ -1548,6 +1536,12 @@ export async function think(
     }
   }
 
+  // Built-in AIZIO conversation — no user API key required
+  if (shouldUseAizioLocalChat(text) && !looksLikeSttGarbage(text)) {
+    const local = await aizioLocalChat({ text, history, displayName: name })
+    return enrich(local)
+  }
+
   // Readable casual chat (compliment / thanks / emotion) — never STT-error path
   const casual = localCasualReply(text)
   if (casual) return enrich({ text: casual, speak: true })
@@ -1561,25 +1555,7 @@ export async function think(
     return { text: lines.join('\n'), speak: true }
   }
 
-  if (isCasualChatText(text)) {
-    return {
-      text: '말씀 감사해요. 필요한 일이 있으면 편하게 말해 주세요.',
-      speak: true,
-    }
-  }
-
-  return {
-    text: [
-      '잘 이해하지 못했어요. 조금 다르게 말해 주시겠어요?',
-      hasAnyConfiguredProvider()
-        ? '예: 오늘 날씨 알려줘 · 지금 몇 시야 · 도움말 · 또는 자유롭게 질문해 주세요.'
-        : [
-            '자유 대화(ChatGPT처럼)를 쓰려면 설정 → AI에서 무료 AI(Groq·Gemini·OpenRouter)를 연결해 주세요.',
-            '키 없이도: 오늘 날씨 · 지금 몇 시야 · 할 일 · 도움말',
-          ].join('\n'),
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    speak: true,
-  }
+  // Last resort: still stay in AIZIO voice
+  const local = await aizioLocalChat({ text, history, displayName: name })
+  return enrich(local)
 }

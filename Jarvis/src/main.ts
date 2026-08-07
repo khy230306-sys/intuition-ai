@@ -443,7 +443,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.29.7'
+const APP_VERSION = '1.29.8'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -7599,7 +7599,7 @@ function bind(): void {
   })
   document.querySelector('[data-action="ai-wizard-local"]')?.addEventListener('click', () => {
     dismissAiWizard()
-    showFlash('AI 없이 일정·메모·알림 등 기본 기능을 사용합니다.')
+    showFlash('AIZIO와 바로 대화할 수 있어요. 편하게 말해 보세요.')
     render()
   })
 

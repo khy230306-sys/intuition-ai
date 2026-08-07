@@ -91,12 +91,24 @@ export async function listProviderKeyStatuses(force = false): Promise<ProviderKe
 
   if (server.ok) {
     for (const s of server.providers) {
-      if (!s.configured) continue
+      if (!s.configured) {
+        // Drop stale flags when server no longer has the key
+        if (HYBRID_IDS.includes(s.provider as HybridProviderId)) {
+          clearServerConfigured(s.provider)
+        }
+        continue
+      }
       // Server user-secret / environment wins over device-local
       byId.set(s.provider, {
         ...s,
         source: s.source === 'environment' ? 'environment' : 'user-secret',
       })
+      // App-owned keys (env) or saved secrets → unlock cloud without user paste
+      markServerConfigured(
+        s.provider,
+        true,
+        s.source === 'environment' ? 'environment' : 'user-secret',
+      )
     }
     preferServerChat = true
   }

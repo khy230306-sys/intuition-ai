@@ -127,8 +127,10 @@ export function renderHybridAiSettingsHtml(): string {
     .join('')
 
   return `
-    <h3 class="subsection-title">AI 연결 (Hybrid Provider)</h3>
-    <p class="hint">무료 AI를 먼저 연결하세요. <strong>저장됨 ≠ 연결 성공</strong>. 「키 저장」후 「연결 테스트」로 확인하세요.</p>
+    <h3 class="subsection-title">AIZIO 대화</h3>
+    <p class="hint"><strong>기본:</strong> AIZIO는 API 키 없이 바로 대화합니다. 아래 클라우드 연결은 더 긴 답·전문 지식을 위한 <strong>선택</strong>입니다.</p>
+    <h3 class="subsection-title">클라우드 두뇌 (선택 · Hybrid)</h3>
+    <p class="hint">연결하면 더 강한 모델로 이어집니다. <strong>저장됨 ≠ 연결 성공</strong> — 「키 저장」후 「연결 테스트」.</p>
     ${previewHint}
     <p class="hint">${esc(usageSummaryLine())}</p>
     <label>선택 모드
@@ -160,15 +162,14 @@ export function renderHybridAiSettingsHtml(): string {
 export function renderAiWizardHtml(): string {
   return `
     <div class="ai-wizard-card" id="ai-wizard">
-      <strong>AI 연결 마법사</strong>
-      <p class="hint">무료 AI를 연결하면 자유 대화가 가능합니다. 일정·메모·알림은 키 없이 사용할 수 있습니다.</p>
+      <strong>AIZIO와 대화하기</strong>
+      <p class="hint">키 없이도 바로 대화할 수 있어요. 클라우드 두뇌는 더 똑똑한 답이 필요할 때만 연결하면 됩니다.</p>
       <div class="row-btns">
-        <button type="button" class="primary-btn" data-action="ai-wizard-free">무료 AI 연결하기</button>
-        <button type="button" class="ghost-btn" data-action="ai-wizard-openai">OpenAI 연결</button>
+        <button type="button" class="primary-btn" data-action="ai-wizard-local">AIZIO로 시작</button>
+        <button type="button" class="ghost-btn" data-action="ai-wizard-free">클라우드 두뇌 연결</button>
         <button type="button" class="ghost-btn" data-action="ai-wizard-later">나중에</button>
-        <button type="button" class="ghost-btn" data-action="ai-wizard-local">AI 없이 기본 기능</button>
       </div>
-      <p class="hint">추천: OpenRouter · Gemini · Groq 중 하나를 설정에서 연결하세요. 가짜 자동 계정 생성은 하지 않습니다.</p>
+      <p class="hint">선택: OpenRouter · Gemini · Groq · OpenAI. 필수는 아닙니다.</p>
     </div>
   `
 }

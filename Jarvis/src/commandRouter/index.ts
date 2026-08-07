@@ -6,7 +6,12 @@ export type {
   RouteDiagEntry,
 } from './types'
 export { routeCommand, isClearWeatherQuery, isTranslationStart, isTranslationOneShot, isVisionTranslation } from './router'
-export { tryHandleRoutedCommand, executeRoutedCommand, activeModeChipHtml } from './execute'
+export {
+  tryHandleRoutedCommand,
+  executeRoutedCommand,
+  activeModeChipHtml,
+  setActionAgentAllowFixtures,
+} from './execute'
 export {
   getActiveMode,
   getTranslationSession,

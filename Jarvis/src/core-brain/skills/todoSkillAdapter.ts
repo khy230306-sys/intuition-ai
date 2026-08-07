@@ -38,9 +38,10 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
   const text = ctx.request.normalizedText || ctx.request.text
   const item =
     (typeof ctx.entities.item === 'string' && ctx.entities.item) ||
+    (isTodoCreateUtterance(text) ? extractTodoTitle(text) : '') ||
     text
       .replace(/^(?:리마인더|할\s*일|기억시켜)\s*/i, '')
-      .replace(/\s*(?:기억시켜|할\s*일에\s*넣어)$/i, '')
+      .replace(/\s*(?:기억시켜|할\s*일에\s*넣어|추가|등록)$/i, '')
       .trim()
   if (!item || /목록|보여|리스트/.test(item)) {
     return {

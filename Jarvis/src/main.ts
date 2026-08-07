@@ -232,6 +232,7 @@ import {
 } from './voiceUi'
 import { currentListenLang, loadInterpretMode, clearInterpretMode } from './translateBrain'
 import { activeModeChipHtml, endTranslationSession, renderRouteDiagPanel } from './commandRouter'
+import { getActionAgentDiag, renderActionAgentDiagPanel, renderActiveTaskCard } from './actionAgent'
 import {
   clearTravelSession,
   renderTravelScreen,
@@ -442,7 +443,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.28.1'
+const APP_VERSION = '1.29.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -3956,7 +3957,7 @@ function renderNavChatView(): string {
     translateActive: model.translate.active,
     translateLabel: model.translate.label,
     appVersion: APP_VERSION,
-    activeModeHtml: activeModeChipHtml(),
+    activeModeHtml: `${activeModeChipHtml()}${renderActiveTaskCard()}`,
     aboveThreadHtml: `${wizard}${renderBriefingStripHtml(buildLifeBriefing())}`,
     voiceHintHtml: voiceHint,
     composerExtraHtml: renderMusicMiniPlayer(state.musicSession || sessionSnapshot(), state.musicPlayerOpen),
@@ -5060,6 +5061,7 @@ function renderSettings(): string {
         ${renderReliabilityCenterPanel(state.reliabilityReport, { running: state.reliabilityRunning })}
         ${renderApiKeyDiagPanel(state.apiKeyDiagReport, { running: state.apiKeyDiagRunning })}
         ${renderRouteDiagPanel(true)}
+        ${renderActionAgentDiagPanel(getActionAgentDiag())}
         ${renderFeatureDiagPanel({
           status: state.featureDiagStatus,
           report: state.featureDiagReport,

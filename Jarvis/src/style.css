@@ -3941,6 +3941,36 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   font-weight: 600;
 }
 
+/* Action Agent — compact task card */
+.aizio-task-card {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 238, 247, 0.12);
+  background: linear-gradient(135deg, rgba(12, 28, 42, 0.92), rgba(8, 18, 30, 0.88));
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.aizio-task-card-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.aizio-task-card-line {
+  opacity: 0.82;
+}
+.aizio-task-card-status {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7ee0d4;
+}
+.aizio-aa-diag {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(232, 238, 247, 0.18);
+}
+
 /* —— Travel Agent —— */
 .travel-agent-screen {
   padding: 12px 14px 28px;

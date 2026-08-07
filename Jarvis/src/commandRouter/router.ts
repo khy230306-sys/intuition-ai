@@ -88,6 +88,10 @@ export function isTranslationStop(text: string): boolean {
 
 export function isTranslationStart(text: string): boolean {
   const t = text.trim()
+  // Task resume / travel continue must never open translation mode
+  if (/아까\s*(여행|비행기|호텔|작업)|여행\s*계속|비행기\s*계속|이어서\s*(알아|해)/.test(t)) {
+    return false
+  }
   if (!/번역|통역|translate|interpre/i.test(t) && !/지금부터|이제부터|앞으로|계속/.test(t)) {
     // bare "영어 번역" / "번역 시작" / "영어로 바꿔줘"
     if (/^(영어|일본어|중국어|베트남어|스페인어|프랑스어|독일어|태국어|한국어|베트남말|일본말)\s*(번역|통역)$/i.test(t))
@@ -99,11 +103,12 @@ export function isTranslationStart(text: string): boolean {
   }
   if (isTranslationStop(t)) return false
   if (isVisionTranslation(t)) return false
-  // Continuous cues / English phrasing
+  // Continuous cues — bare 「계속」 alone is not enough (avoids 「아까 여행 계속」)
   if (
-    /지금부터|이제부터|앞으로|계속|번역\s*모드|통역\s*모드|번역\s*시작|통역\s*시작|번역하기|통역하기|translate\s+to|start\s+translati/i.test(
+    /지금부터|이제부터|앞으로|번역\s*모드|통역\s*모드|번역\s*시작|통역\s*시작|번역하기|통역하기|translate\s+to|start\s+translati/i.test(
       t,
-    )
+    ) ||
+    (/계속/.test(t) && /번역|통역|영어|일본어|중국어|베트남어|translate|interpre/i.test(t))
   ) {
     return true
   }

@@ -5,6 +5,7 @@
  */
 
 import type { BrainReply } from '../types'
+import { processActionAgentTurn } from '../actionAgent/pipeline'
 import { handleRestaurantAgent } from '../restaurantAgent'
 import { handleTravelAgent } from '../travelAgent'
 import { isolateFeature } from '../reliability/crashIsolation'
@@ -21,6 +22,12 @@ import {
 } from './session'
 import { describeTarget } from './router'
 import type { CommandRouterResult } from './types'
+
+/** Vitest / local harness may set this for fixture search results. */
+export let actionAgentAllowFixtures = false
+export function setActionAgentAllowFixtures(v: boolean): void {
+  actionAgentAllowFixtures = v
+}
 
 function replyFromExec(text: string, extra?: Partial<BrainReply>): BrainReply {
   return { text, speak: true, ...extra }
@@ -60,6 +67,20 @@ export async function executeRoutedCommand(
       })
     }
     return reply
+  }
+
+  // Action Agent V1 — multi-turn task sessions (before legacy travel/restaurant)
+  if (!routed.intent.startsWith('translation.')) {
+    const aa = await processActionAgentTurn(utterance, routed, {
+      allowFixtures: actionAgentAllowFixtures,
+    })
+    if (aa.handled) {
+      return finish(replyFromExec(aa.replyText), {
+        status: aa.task?.status === 'needs_provider' ? 'partial' : 'success',
+        success: true,
+        provider: 'action-agent',
+      })
+    }
   }
 
   switch (routed.intent) {

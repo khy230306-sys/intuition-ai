@@ -100,6 +100,7 @@ import {
   getActiveMode,
   isClearWeatherQuery,
 } from './commandRouter'
+import { tryHandleAizioEngine } from './aizioEngine'
 import { detectGlobalCommand } from './commandRouter/globalCommands'
 import { executeGlobalCommandReset } from './conversationReset'
 import { getLocationReport } from './location'
@@ -792,6 +793,20 @@ export async function think(
       }
     } catch {
       /* global layer must never block */
+    }
+  }
+
+  // —— AIZIO Core Engine V1 (REAL tools + session memory) ——
+  // Owns weather → family places → ordinal select → calendar when classified.
+  // Runs before Action Agent / restaurant DEMO fallthrough so FAKE catalogs
+  // cannot steal the V1 success conversation.
+  {
+    const strippedEarly = stripWakeWord(raw).text || raw
+    try {
+      const engine = await tryHandleAizioEngine(strippedEarly)
+      if (engine) return engine
+    } catch {
+      /* engine must never block legacy */
     }
   }
 

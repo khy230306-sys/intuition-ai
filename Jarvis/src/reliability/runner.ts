@@ -7,6 +7,7 @@ import { routeCommand } from '../commandRouter'
 import { endTranslationSession } from '../commandRouter/session'
 import { think } from '../brain'
 import { clearBrainStateForTests } from '../core-brain'
+import { clearEngineSession } from '../aizioEngine'
 import { setLegacyDemoProvidersEnabled } from '../featureTruth'
 import { handleRestaurantAgent } from '../restaurantAgent'
 import { clearRestaurantSession } from '../restaurantAgent/session'
@@ -70,6 +71,7 @@ function clearAllSessions(): void {
   endTranslationSession()
   clearTravelSession()
   clearRestaurantSession()
+  clearEngineSession()
   clearBrainStateForTests()
 }
 

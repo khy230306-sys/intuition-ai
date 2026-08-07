@@ -3,7 +3,8 @@
 import type { HybridProviderId, ModelInfo } from './types'
 
 export const OPENROUTER_DEFAULT_MODEL = 'openrouter/free'
-export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
+/** Alias that tracks Google's current Flash for new API keys. */
+export const GEMINI_DEFAULT_MODEL = 'gemini-flash-latest'
 export const GROQ_DEFAULT_MODEL = 'llama-3.1-8b-instant'
 export const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini'
 
@@ -29,9 +30,9 @@ export const RECOMMENDED_MODELS: Record<HybridProviderId, ModelInfo[]> = {
     },
   ],
   gemini: [
+    { id: 'gemini-flash-latest', label: 'Gemini Flash (latest)', category: 'fast', freeHint: true },
+    { id: 'gemini-flash-lite-latest', label: 'Gemini Flash-Lite (latest)', category: 'fast', freeHint: true },
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', category: 'fast', freeHint: true },
-    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', category: 'fast', freeHint: true },
-    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', category: 'chat', freeHint: true },
   ],
   groq: [
     { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant', category: 'fast', freeHint: true },

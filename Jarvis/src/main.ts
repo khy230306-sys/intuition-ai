@@ -137,6 +137,7 @@ import {
   warmPreviewApiBackendHint,
   type ApiKeyDiagReport,
 } from './apiKeys'
+import { seedAppOwnedGeminiFromBuild } from './ai-providers/appOwnedSeed'
 import { isProviderConfigured } from './ai-providers/providerConfig'
 import { isServerConfigured } from './apiKeys/serverFlags'
 import {
@@ -443,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.29.8'
+const APP_VERSION = '1.29.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -8293,6 +8294,11 @@ function bootAppCore(): void {
     /* schema markers must never block boot */
   }
   void warmPreviewApiBackendHint()
+  try {
+    seedAppOwnedGeminiFromBuild()
+  } catch {
+    /* optional cloud seed */
+  }
   state.messages = loadChat()
   state.settings = loadSettings()
   void loadBuildMetaLite().then((meta) => {

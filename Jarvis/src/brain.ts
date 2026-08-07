@@ -763,23 +763,16 @@ export async function think(
   const raw = input.trim()
   if (!raw) return { text: `${name}, 무엇을 도와드릴까요?` }
 
-  // —— Central Command Router (owns translation session + intent priority) ——
-  // Runs before AIE / Life Assistant / Core Brain / weather so WEATHER cannot
-  // steal translation commands that merely mention 「날씨」.
+  // —— Central Command Router + Action Agent Task Context ——
+  // ALWAYS invoke before AIE / geo / weather so Active Task + Pending Question
+  // + multi-slot follow-ups are not lost when the Intent Router labels the
+  // utterance as general.chat (e.g. 「8월10 호치민으로갈꺼야」).
+  // Translation / travel / restaurant ownership still runs inside tryHandleRoutedCommand.
   {
     const strippedEarly = stripWakeWord(raw).text || raw
     try {
-      const routed = routeCommand({ text: strippedEarly, activeMode: getActiveMode() })
-      if (
-        routed.intent.startsWith('translation.') ||
-        routed.intent.startsWith('travel.') ||
-        routed.intent.startsWith('restaurant.') ||
-        routed.intent === 'vision.translation' ||
-        routed.intent === 'clarify'
-      ) {
-        const owned = await tryHandleRoutedCommand(strippedEarly, { source: opts?.source })
-        if (owned) return owned
-      }
+      const owned = await tryHandleRoutedCommand(strippedEarly, { source: opts?.source })
+      if (owned) return owned
     } catch {
       /* router must never block legacy */
     }

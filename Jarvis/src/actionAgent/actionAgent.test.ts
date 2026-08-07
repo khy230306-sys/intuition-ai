@@ -49,7 +49,7 @@ describe('Action Agent V1', () => {
     expect(r.replyText).toMatch(/돌아오|날짜/)
 
     r = await turn('일요일')
-    expect(r.replyText).toMatch(/명/)
+    expect(r.replyText).toMatch(/명|분/)
 
     r = await turn('2명')
     expect(r.replyText).toMatch(/result|후보|테스트용|1\./i)

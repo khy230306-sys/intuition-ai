@@ -74,9 +74,30 @@ export function resolveKoreanDate(text: string, now = new Date()): ResolvedDate 
   return null
 }
 
+/** Absolute 「8월10」 / 「8월 10일」 → ISO (year inferred from now). */
+export function resolveAbsoluteMonthDay(text: string, now = new Date()): ResolvedDate | null {
+  const compact = String(text || '').replace(/\s+/g, '')
+  const m = compact.match(/(\d{1,2})월(\d{1,2})일?/)
+  if (!m) return null
+  const month = Number(m[1])
+  const day = Number(m[2])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  let year = now.getFullYear()
+  const candidate = new Date(year, month - 1, day, 12)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (candidate < startOfToday) year += 1
+  const mm = String(month).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  const originalText = m[0].endsWith('일') ? m[0] : `${m[0]}일`
+  return { originalText, resolvedDate: `${year}-${mm}-${dd}` }
+}
+
 /** Extract departure-like date from a longer utterance. */
 export function extractDateFromUtterance(text: string, now = new Date()): ResolvedDate | null {
   const t = String(text || '').trim()
+  // Absolute month/day before relative phrases (「8월10 호치민」)
+  const abs = resolveAbsoluteMonthDay(t, now)
+  if (abs) return abs
   const phrases = [
     t.match(/(다음\s*주\s*[월화수목금토일]요일)/)?.[1],
     t.match(/(이번\s*주\s*[월화수목금토일]요일)/)?.[1],

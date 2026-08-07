@@ -126,5 +126,5 @@ export type ActionAgentTurnResult = {
   task?: TaskSession | null
   /** When true, caller should fall through to weather/legacy handlers */
   fallthrough?: boolean
-  interruptKind?: 'weather' | 'other'
+  interruptKind?: 'weather' | 'city' | 'other'
 }

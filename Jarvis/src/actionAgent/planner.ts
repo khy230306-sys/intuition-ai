@@ -3,9 +3,10 @@ import type { PlannedAction, RiskLevel, TaskSession, TaskType } from './types'
 function missingForFlight(task: TaskSession): string[] {
   const s = task.slots
   const miss: string[] = []
+  // Date first — matches device UX 「여행 날짜가 언제인가요?」 and protects pending date answers
+  if (!s.departureDate) miss.push('departureDate')
   if (!s.destination) miss.push('destination')
   if (!s.origin) miss.push('origin')
-  if (!s.departureDate) miss.push('departureDate')
   if (!s.tripType || s.tripType === 'unknown') miss.push('tripType')
   if (s.tripType === 'round_trip' && !s.returnDate) miss.push('returnDate')
   if (!s.passengers) miss.push('passengers')
@@ -41,12 +42,12 @@ export function nextQuestion(task: TaskSession): { ask: string; pending: string 
   if (!miss.length) return null
   const first = miss[0]
   const map: Record<string, string> = {
-    origin: '어디서 출발하시나요? (예: 김포, 인천)',
+    origin: '출발지는 어디인가요?',
     destination: '어디로 가시나요?',
-    departureDate: '출발 날짜가 언제인가요?',
+    departureDate: '좋아요. 여행 날짜가 언제인가요?',
     tripType: '편도인가요, 왕복인가요?',
     returnDate: '돌아오는 날짜는 언제인가요?',
-    passengers: '몇 명이 가시나요?',
+    passengers: '몇 분이세요?',
     checkIn: '체크인 날짜가 언제인가요?',
     checkOut: '체크아웃 날짜가 언제인가요?',
     location: '어느 지역에서 찾으실까요?',

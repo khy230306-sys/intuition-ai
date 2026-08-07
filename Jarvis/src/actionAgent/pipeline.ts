@@ -1,13 +1,21 @@
 /**
- * Action Agent pipeline:
- * NORMALIZE → ACTIVE MODE → INTENT ROUTER → TASK SESSION →
- * SLOT RESOLVER → ACTION PLANNER → EXECUTOR → VALIDATOR → UI RESPONSE
+ * Action Agent pipeline (priority order):
+ * normalize → translation mode → task cancel/switch →
+ * pending-question / multi-slot (active task) → follow-up action →
+ * explicit standalone intent → planner → executor → response
+ *
+ * Active Task + Pending Question + Existing Slots beat standalone Intent Router.
  */
 
 import type { CommandRouterResult } from '../commandRouter/types'
 import { getActiveMode } from '../commandRouter/session'
 import { isClearWeatherQuery } from '../commandRouter/weatherQuery'
 import { executePlannedAction, formatResultsList } from './executor'
+import {
+  isActiveTaskFollowUpAction,
+  isBarePlaceUtterance,
+  isExplicitCityInfoQuery,
+} from './multiSlotExtractor'
 import { computeMissingSlots, nextQuestion, planCrossAction, planSearchAction, taskLabel } from './planner'
 import {
   applyFollowUpSlots,
@@ -65,6 +73,10 @@ function wantsNavigation(t: string): boolean {
 
 function switchToReminder(t: string): boolean {
   return /취소하고.*알림|알림\s*잡아|전화할\s*거\s*알림/.test(t)
+}
+
+function isTravelDomainIntent(intent: string): boolean {
+  return intent.startsWith('travel.')
 }
 
 function summarizeTask(task: TaskSession): string {
@@ -130,10 +142,45 @@ async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<A
   return runSearch(next, opts)
 }
 
+async function applySlotsAndContinue(
+  active: TaskSession,
+  text: string,
+  opts: PipelineOpts,
+): Promise<ActionAgentTurnResult> {
+  const applied = applyFollowUpSlots(active, text)
+  if (applied.note === '__cancel__') {
+    cancelActiveTask()
+    return { handled: true, replyText: '작업을 취소했어요.', speak: true, task: null }
+  }
+  let next: TaskSession = {
+    ...active,
+    slots: applied.slots,
+    label: taskLabel(active.type, applied.slots),
+  }
+  if (applied.stale && next.results.length) next = markResultsStale(next)
+  else next = saveTask(next)
+
+  if (applied.selected) {
+    next = saveTask({
+      ...next,
+      slots: { ...next.slots, selectedResultId: applied.selected.id },
+    })
+    return {
+      handled: true,
+      replyText: `${applied.selected.rank}번을 선택했어요: ${applied.selected.title}`,
+      speak: true,
+      task: next,
+    }
+  }
+  return collectOrSearch(next, opts)
+}
+
 function startFlightTask(text: string): TaskSession {
   const slots = extractInitialTravelSlots(text)
-  const label = taskLabel('travel.flight', slots)
-  return createTaskSession('travel.flight', label, slots)
+  const label = taskLabel('travel.plan', slots)
+  // travel.plan for open-ended 「여행 준비」; flight search phrases still use travel.flight
+  const type = /비행기|항공/.test(text) ? 'travel.flight' : 'travel.plan'
+  return createTaskSession(type, label, slots)
 }
 
 function startHotelFromTravel(base: TaskSession): TaskSession {
@@ -151,6 +198,19 @@ function startRestaurantTask(text: string): TaskSession {
   return createTaskSession('restaurant.search', taskLabel('restaurant.search', slots), slots)
 }
 
+function activeTaskOwnsTurn(active: TaskSession | null, text: string): boolean {
+  if (!active || active.status === 'cancelled') return false
+  if (active.pendingQuestion) return true
+  if (active.status === 'collecting' || active.status === 'needs_provider' || active.status === 'ready') {
+    return true
+  }
+  if (active.results.length) return true
+  if (looksLikeFollowUp(text) || isActiveTaskFollowUpAction(text) || isBarePlaceUtterance(text)) {
+    return true
+  }
+  return false
+}
+
 /**
  * Main entry — returns handled turn or fallthrough for weather/legacy.
  */
@@ -162,7 +222,7 @@ export async function processActionAgentTurn(
   const t = text.trim()
   const mode = getActiveMode()
 
-  // Resume suspended travel (before translation fallthrough — 「계속」 must not start translate)
+  // 1) Resume suspended travel (before translation fallthrough — 「계속」 must not start translate)
   if (isResumeUtterance(t)) {
     const resumed = resumeTravelTask()
     if (!resumed) {
@@ -171,12 +231,12 @@ export async function processActionAgentTurn(
     return collectOrSearch(resumed, opts)
   }
 
-  // ACTIVE MODE: translation owns utterances
+  // 2) ACTIVE MODE: translation owns utterances
   if (mode === 'translation' || routed.intent.startsWith('translation.')) {
     return { handled: false, replyText: '', fallthrough: true }
   }
 
-  // Explicit cancel
+  // 3) Explicit cancel
   if (isCancelUtterance(t)) {
     const c = cancelActiveTask()
     return {
@@ -187,56 +247,28 @@ export async function processActionAgentTurn(
     }
   }
 
-  // Switch: cancel travel + reminder request → fallthrough after cancel
+  // 4) Switch: cancel travel + reminder request → fallthrough after cancel
   if (switchToReminder(t)) {
     cancelActiveTask()
     return { handled: false, replyText: '', fallthrough: true }
   }
 
-  // Weather interrupt — suspend & fallthrough
+  // 5) Explicit weather interrupt — suspend & fallthrough (task preserved in suspended stack)
   if (routed.intent === 'weather.query' || isClearWeatherQuery(t)) {
     if (getActiveTask()) suspendActiveForInterrupt()
     return { handled: false, replyText: '', fallthrough: true, interruptKind: 'weather' }
   }
 
+  // 6) Explicit city.info — answer via geo, keep active travel task (do NOT suspend/delete)
+  if (isExplicitCityInfoQuery(t)) {
+    return { handled: false, replyText: '', fallthrough: true, interruptKind: 'city' }
+  }
+
   let active = getActiveTask()
 
-  // Hotel add-on from travel context
-  if (active && active.type.startsWith('travel') && wantsHotelAdd(t)) {
-    active = startHotelFromTravel(active)
-    return collectOrSearch(active, opts)
-  }
-
-  // Cross-actions on selection
-  if (active && wantsCalendar(t)) {
-    const action = planCrossAction(active, 'calendar.create', 'low_write')
-    const result = await executePlannedAction(active, action, { allowWrite: true })
-    active = saveTask({ ...active, plannedAction: action, lastActionResult: result, status: result.state })
-    return { handled: true, replyText: result.message, speak: true, task: active }
-  }
-  if (active && wantsReminderFromTrip(t)) {
-    const applied = applyFollowUpSlots(active, t)
-    active = saveTask({ ...active, slots: applied.slots })
-    const action = planCrossAction(active, 'reminder.create', 'low_write')
-    const result = await executePlannedAction(active, action, { allowWrite: true })
-    active = saveTask({ ...active, plannedAction: action, lastActionResult: result, status: result.state })
-    return { handled: true, replyText: result.message, speak: true, task: active }
-  }
-  if (active && wantsNavigation(t)) {
-    const sel = active.results.find((r) => r.id === active!.slots.selectedResultId)
-    return {
-      handled: true,
-      replyText: sel
-        ? `「${sel.title}」로 길찾기를 열 준비예요. 지도/내비 화면에서 이어서 안내할게요.`
-        : '길찾기를 하려면 먼저 결과에서 장소를 골라 주세요.',
-      speak: true,
-      task: active,
-    }
-  }
-
-  // Follow-ups on active session
-  if (active && active.status !== 'cancelled' && (looksLikeFollowUp(t) || active.pendingQuestion || active.status === 'collecting' || active.status === 'needs_provider' || active.results.length)) {
-    // Don't steal clear new domain intents
+  // 7) Pending question + multi-slot + follow-up on ACTIVE TASK (before standalone router intents)
+  if (active && activeTaskOwnsTurn(active, t)) {
+    // Don't steal clear new domain intents (non-travel)
     if (
       routed.intent === 'todo.create' ||
       routed.intent.startsWith('reminder.') ||
@@ -244,44 +276,71 @@ export async function processActionAgentTurn(
     ) {
       return { handled: false, replyText: '', fallthrough: true }
     }
+    // Domain switch: restaurant ↔ travel
     if (routed.intent.startsWith('travel.') && active.type === 'restaurant.search') {
       /* new travel below */
     } else if (routed.intent.startsWith('restaurant.') && active.type.startsWith('travel')) {
-      /* allow new restaurant */
+      /* allow new restaurant below — unless this is bare place / slot fill */
+      if (!isBarePlaceUtterance(t) && !active.pendingQuestion && !/\d{1,2}\s*월/.test(t)) {
+        /* fall through to restaurant create */
+      } else {
+        return applySlotsAndContinue(active, t, opts)
+      }
     } else {
-      const applied = applyFollowUpSlots(active, t)
-      if (applied.note === '__cancel__') {
-        cancelActiveTask()
-        return { handled: true, replyText: '작업을 취소했어요.', speak: true, task: null }
+      // Hotel add-on
+      if (active.type.startsWith('travel') && wantsHotelAdd(t)) {
+        active = startHotelFromTravel(active)
+        return collectOrSearch(active, opts)
       }
-      let next: TaskSession = {
-        ...active,
-        slots: applied.slots,
-        label: taskLabel(active.type, applied.slots),
+      // Cross-actions
+      if (wantsCalendar(t)) {
+        const action = planCrossAction(active, 'calendar.create', 'low_write')
+        const result = await executePlannedAction(active, action, { allowWrite: true })
+        active = saveTask({ ...active, plannedAction: action, lastActionResult: result, status: result.state })
+        return { handled: true, replyText: result.message, speak: true, task: active }
       }
-      if (applied.stale && next.results.length) next = markResultsStale(next)
-      else next = saveTask(next)
-
-      if (applied.selected) {
-        next = saveTask({
-          ...next,
-          slots: { ...next.slots, selectedResultId: applied.selected.id },
-        })
+      if (wantsReminderFromTrip(t)) {
+        const applied = applyFollowUpSlots(active, t)
+        active = saveTask({ ...active, slots: applied.slots })
+        const action = planCrossAction(active, 'reminder.create', 'low_write')
+        const result = await executePlannedAction(active, action, { allowWrite: true })
+        active = saveTask({ ...active, plannedAction: action, lastActionResult: result, status: result.state })
+        return { handled: true, replyText: result.message, speak: true, task: active }
+      }
+      if (wantsNavigation(t)) {
+        const sel = active.results.find((r) => r.id === active!.slots.selectedResultId)
         return {
           handled: true,
-          replyText: `${applied.selected.rank}번을 선택했어요: ${applied.selected.title}`,
+          replyText: sel
+            ? `「${sel.title}」로 길찾기를 열 준비예요. 지도/내비 화면에서 이어서 안내할게요.`
+            : '길찾기를 하려면 먼저 결과에서 장소를 골라 주세요.',
           speak: true,
-          task: next,
+          task: active,
         }
       }
-      return collectOrSearch(next, opts)
+
+      // Travel follow-up search (「비행기표좀알아봐줘」) — reuse existing slots, never reset dates
+      if (
+        active.type.startsWith('travel') &&
+        (isActiveTaskFollowUpAction(t) || isTravelDomainIntent(routed.intent))
+      ) {
+        return applySlotsAndContinue(active, t, opts)
+      }
+
+      // Pending question / multi-slot fill (short answers, combined slots)
+      return applySlotsAndContinue(active, t, opts)
     }
   }
 
-  // New travel / restaurant from router
+  // 8) Standalone Intent — new travel / restaurant (only when no owning active task)
   if (routed.intent.startsWith('travel.flight') || routed.intent === 'travel.plan' || routed.intent === 'travel.unknown') {
     if (/예약하는\s*방법|어떻게\s*예약|예약\s*방법/.test(t)) {
       return { handled: false, replyText: '', fallthrough: true }
+    }
+    // If a travel task is already active, merge into it instead of creating a blank session
+    const existing = getActiveTask()
+    if (existing && existing.type.startsWith('travel') && existing.status !== 'cancelled') {
+      return applySlotsAndContinue(existing, t, opts)
     }
     const task = startFlightTask(t)
     return collectOrSearch(task, opts)
@@ -306,6 +365,12 @@ export async function processActionAgentTurn(
     return collectOrSearch(task, opts)
   }
 
+  // 9) Bare place with active travel that somehow wasn't owned — still fill destination
+  active = getActiveTask()
+  if (active?.type.startsWith('travel') && isBarePlaceUtterance(t)) {
+    return applySlotsAndContinue(active, t, opts)
+  }
+
   return { handled: false, replyText: '', fallthrough: true }
 }
 
@@ -317,7 +382,11 @@ export function getActionAgentDiag(currentIntent = ''): ActionAgentDiag {
     activeMode: mode,
     activeTask: active,
     suspendedCount: 0,
-    collectedSlots: active ? Object.keys(active.slots).filter((k) => active.slots[k] != null && active.slots[k] !== '' && active.slots[k] !== 'unknown') : [],
+    collectedSlots: active
+      ? Object.keys(active.slots).filter(
+          (k) => active.slots[k] != null && active.slots[k] !== '' && active.slots[k] !== 'unknown',
+        )
+      : [],
     missingSlots: active ? computeMissingSlots(active) : [],
     plannedAction: active?.plannedAction?.kind || null,
     lastActionResult: active?.lastActionResult?.state || null,

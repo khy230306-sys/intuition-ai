@@ -1,28 +1,27 @@
 /**
  * Map short follow-up utterances onto the active Task Session slots.
+ * Delegates multi-slot parsing to shared extractor (travel/hotel/restaurant/…).
  */
 
 import { extractDateFromUtterance, resolveKoreanDate } from './dates'
+import {
+  DESTINATION_PLACES,
+  extractMultiSlots,
+  isActiveTaskFollowUpAction,
+  mergeExtractedSlots,
+  ORIGIN_PLACES,
+} from './multiSlotExtractor'
 import type { SearchResultItem, TaskSession, TaskSlots } from './types'
 
-const ORIGIN_MAP: Record<string, string> = {
-  김포: '김포',
-  인천: '인천',
-  부산: '부산',
-  김해: '김해',
-  제주: '제주',
-  서울: '서울',
-  대구: '대구',
-  광주: '광주',
-  GMP: '김포',
-  ICN: '인천',
-  CJU: '제주',
-  PUS: '김해',
-}
+const ORIGIN_MAP = ORIGIN_PLACES
 
 export function looksLikeFollowUp(text: string): boolean {
   const t = text.trim()
-  if (!t || t.length > 48) return false
+  if (!t || t.length > 80) return false
+  if (isActiveTaskFollowUpAction(t)) return true
+  // Absolute dates / place answers
+  if (/\d{1,2}\s*월\s*\d{1,2}/.test(t)) return true
+  if (Object.keys(DESTINATION_PLACES).some((k) => t.replace(/\s+/g, '').includes(k))) return true
   return (
     /^(오전|오후|저녁|아침)\s*걸로?$/.test(t) ||
     /^(왕복|편도)$/.test(t) ||
@@ -58,12 +57,12 @@ export function applyFollowUpSlots(
   text: string,
 ): { slots: TaskSlots; stale: boolean; selected?: SearchResultItem | null; note?: string } {
   const t = text.trim()
-  const slots: TaskSlots = { ...task.slots }
+  let slots: TaskSlots = { ...task.slots }
   let stale = false
   let selected: SearchResultItem | null = null
   let note: string | undefined
 
-  // Corrections
+  // Corrections / cancel
   if (/취소|그만|그만둘|비행기\s*찾던\s*건\s*취소/.test(t) && !/알림/.test(t)) {
     return { slots, stale, note: '__cancel__' }
   }
@@ -90,49 +89,40 @@ export function applyFollowUpSlots(
     note = 'drop_hotel'
   }
 
-  // Trip type
-  if (/^왕복$|왕복으로/.test(t)) slots.tripType = 'round_trip'
-  if (/^편도$|편도로/.test(t)) slots.tripType = 'one_way'
+  // Core: extract ALL slots from this utterance (pending-aware)
+  const extracted = extractMultiSlots(t, {
+    pendingQuestion: task.pendingQuestion,
+    existing: slots,
+    taskType: task.type,
+  })
+  const before = JSON.stringify({
+    o: slots.origin,
+    d: slots.destination,
+    dep: slots.departureDate?.resolvedDate,
+    ret: slots.returnDate?.resolvedDate,
+    p: slots.passengers,
+  })
+  slots = mergeExtractedSlots(slots, extracted)
+  const after = JSON.stringify({
+    o: slots.origin,
+    d: slots.destination,
+    dep: slots.departureDate?.resolvedDate,
+    ret: slots.returnDate?.resolvedDate,
+    p: slots.passengers,
+  })
+  if (before !== after) stale = Boolean(task.results.length) || stale
 
-  // Passengers
-  const pax = t.match(/(\d+)\s*명/)
-  if (pax) slots.passengers = Number(pax[1])
-  if (/둘이|두\s*명|2인/.test(t) && !slots.passengers) slots.passengers = 2
-  if (/혼자|1명/.test(t) && !/아니라/.test(t)) slots.passengers = 1
-  if (/가족이랑|가족\s*4|네\s*명|4명/.test(t)) slots.passengers = slots.passengers || 4
-
-  // Preferred time
-  if (/오전\s*걸로|아침/.test(t)) slots.preferredTime = 'morning'
-  if (/오후\s*걸로/.test(t)) slots.preferredTime = 'afternoon'
-  if (/저녁\s*걸로|저녁\s*7시/.test(t)) {
-    slots.preferredTime = 'evening'
-    if (/7시/.test(t)) slots.time = '19:00'
-  }
-
-  // Origin / destination short answers
-  for (const [k, v] of Object.entries(ORIGIN_MAP)) {
-    if (t === k || t === `${k}에서` || t === `${k}로`) {
-      if (task.pendingQuestion === 'origin' || !slots.origin) slots.origin = v
-      else if (task.pendingQuestion === 'destination') slots.destination = v
-      else if (!slots.origin) slots.origin = v
-      stale = true
-      break
-    }
-  }
-
-  // Dates
-  if (/까지$/.test(t) || /^[월화수목금토일]요일$/.test(t) || /일요일|토요일|금요일/.test(t)) {
+  // Legacy relative 「까지」 / weekday when extractor missed return date
+  if (/까지$/.test(t) || /^[월화수목금토일]요일$/.test(t)) {
     const d = extractDateFromUtterance(t) || resolveKoreanDate(t)
     if (d) {
       if (task.pendingQuestion === 'returnDate' || slots.tripType === 'round_trip') {
         if (!slots.returnDate || task.pendingQuestion === 'returnDate') slots.returnDate = d
-        else slots.departureDate = d
-      } else if (task.pendingQuestion === 'departureDate' || !slots.departureDate) {
+        else if (!slots.departureDate) slots.departureDate = d
+      } else if (!slots.departureDate) {
         slots.departureDate = d
-      } else {
-        slots.returnDate = d
       }
-      stale = Boolean(task.results.length)
+      stale = Boolean(task.results.length) || stale
     }
   }
 
@@ -183,48 +173,16 @@ export function applyFollowUpSlots(
 }
 
 export function extractInitialTravelSlots(text: string): TaskSlots {
-  const t = text.trim()
-  const slots: TaskSlots = { tripType: 'unknown', preferredTime: 'unknown' }
-  if (/제주/.test(t)) slots.destination = '제주'
-  if (/오사카/.test(t)) slots.destination = '오사카'
-  if (/도쿄|동경/.test(t)) slots.destination = '도쿄'
-  if (/부산/.test(t) && !/출발/.test(t)) {
-    /* destination if not origin-like */
-    if (!slots.destination) slots.destination = '부산'
-  }
-  for (const [k, v] of Object.entries(ORIGIN_MAP)) {
-    if (new RegExp(`${k}\\s*에서`).test(t)) slots.origin = v
-  }
-  const dep = extractDateFromUtterance(t)
-  if (dep) slots.departureDate = dep
-  if (/왕복/.test(t)) slots.tripType = 'round_trip'
-  if (/편도/.test(t)) slots.tripType = 'one_way'
-  const pax = t.match(/(\d+)\s*명/)
-  if (pax) slots.passengers = Number(pax[1])
-  return slots
+  return extractMultiSlots(text, { taskType: 'travel.flight' })
 }
 
 export function extractRestaurantSlots(text: string): TaskSlots {
   const t = text.trim()
-  const slots: TaskSlots = {}
-  const places = [
-    '울산',
-    '서울',
-    '부산',
-    '대구',
-    '인천',
-    '광주',
-    '대전',
-    '제주',
-    '수원',
-    '지리산',
-    '삼산',
-    '해운대',
-    '강남',
-    '홍대',
-  ]
+  const slots = extractMultiSlots(t, { taskType: 'restaurant.search', pendingQuestion: 'location' })
+  // Extra local places / categories not in travel destination map
+  const places = ['울산', '수원', '지리산', '삼산', '해운대', '강남', '홍대']
   for (const p of places) {
-    if (t.includes(p)) {
+    if (t.includes(p) && !slots.location) {
       slots.location = p
       break
     }
@@ -237,9 +195,7 @@ export function extractRestaurantSlots(text: string): TaskSlots {
   if (/가족/.test(t)) slots.preference = 'family'
   if (/저녁/.test(t)) slots.time = 'evening'
   if (/점심/.test(t)) slots.time = 'lunch'
-  const d = extractDateFromUtterance(t)
-  if (d) slots.date = d
-  const pax = t.match(/(\d+)\s*명/)
-  if (pax) slots.partySize = Number(pax[1])
+  if (slots.destination && !slots.location) slots.location = slots.destination
+  if (slots.passengers && !slots.partySize) slots.partySize = slots.passengers
   return slots
 }

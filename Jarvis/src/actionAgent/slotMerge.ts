@@ -13,11 +13,12 @@ export const PROTECTED_SLOTS = [
   'passengers',
 ] as const
 
+/** User meaning > pending question > generic inference */
 const SOURCE_RANK: Record<SlotSource, number> = {
   explicit_correction: 100,
-  expected_question: 90,
-  explicit_semantic: 70,
-  multi_slot: 50,
+  explicit_semantic: 95,
+  multi_slot: 70,
+  expected_question: 55,
   generic_fallback: 20,
 }
 
@@ -80,42 +81,36 @@ export function safeMergeSlots(
       const prevRank = prevMeta
         ? sourceRank(prevMeta.source) + (prevMeta.confidence || 0)
         : sourceRank('multi_slot') + 0.5
-      // Protected: never let generic/multi overwrite a stronger committed value
+      // Protected slots: explicit correction/semantic always win; expected/generic cannot clobber them
       if (PROTECTED_SLOTS.includes(p.key as (typeof PROTECTED_SLOTS)[number])) {
-        if (incomingRank < prevRank || (p.source === 'generic_fallback' && prevMeta?.source === 'expected_question')) {
+        if (p.source === 'explicit_correction' || p.source === 'explicit_semantic') {
+          // authoritative user meaning — allow overwrite of stale values
+        } else if (p.source === 'expected_question') {
+          // expected may fill empty only; never overwrite existing protected value
+          if (!isEmpty(prev)) {
+            diag.rejected.push({
+              key: p.key,
+              value: p.value,
+              reason: `${p.key} overwrite blocked (expected_question cannot replace existing)`,
+            })
+            continue
+          }
+        } else if (p.source === 'multi_slot' || p.source === 'generic_fallback') {
+          if (!isEmpty(prev)) {
+            diag.rejected.push({
+              key: p.key,
+              value: p.value,
+              reason: `${p.key} overwrite blocked (${p.source} < committed)`,
+            })
+            continue
+          }
+        } else if (incomingRank < prevRank) {
           diag.rejected.push({
             key: p.key,
             value: p.value,
             reason: `${p.key} overwrite blocked (${p.source} < ${prevMeta?.source || 'existing'})`,
           })
           continue
-        }
-        // Same-rank generic must not clobber expected/explicit
-        if (
-          p.source === 'multi_slot' ||
-          p.source === 'generic_fallback'
-        ) {
-          if (
-            prevMeta?.source === 'expected_question' ||
-            prevMeta?.source === 'explicit_correction' ||
-            prevMeta?.source === 'explicit_semantic'
-          ) {
-            diag.rejected.push({
-              key: p.key,
-              value: p.value,
-              reason: `${p.key} overwrite blocked by committed ${prevMeta.source}`,
-            })
-            continue
-          }
-          // Bare multi_slot must not overwrite any existing protected date/place
-          if (PROTECTED_SLOTS.includes(p.key as (typeof PROTECTED_SLOTS)[number]) && p.source === 'generic_fallback') {
-            diag.rejected.push({
-              key: p.key,
-              value: p.value,
-              reason: `${p.key} overwrite blocked (generic_fallback)`,
-            })
-            continue
-          }
         }
       } else if (incomingRank < prevRank) {
         diag.rejected.push({

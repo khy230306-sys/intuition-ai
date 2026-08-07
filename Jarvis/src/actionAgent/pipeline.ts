@@ -31,6 +31,7 @@ import {
   looksLikeFollowUp,
 } from './slotResolver'
 import {
+  applyTaskUpdate,
   cancelActiveTask,
   clearAllTasks,
   createTaskSession,
@@ -189,29 +190,58 @@ async function applySlotsAndContinue(
   text: string,
   opts: PipelineOpts,
 ): Promise<ActionAgentTurnResult> {
-  const expected = active.expectedSlot || active.pendingQuestion || null
-  const applied = applyFollowUpSlots(active, text)
+  // Always resolve against LATEST stored task (stale closure guard)
+  const latest = getActiveTask()
+  const base = latest && latest.id === active.id ? latest : active
+  const expected = base.expectedSlot || base.pendingQuestion || null
+  const applied = applyFollowUpSlots(base, text)
+
   if (applied.note === '__cancel__') {
     cancelActiveTask()
     return { handled: true, replyText: '작업을 취소했어요.', speak: true, task: null }
   }
 
-  // Validation error (e.g. return before departure) — keep expectedSlot, do not advance
-  if (applied.validationError) {
-    const next = saveTask({
-      ...active,
-      slots: applied.slots,
-      slotMeta: applied.slotMeta,
-      lastDiag: {
-        ...applied.diag,
-        validationError: applied.validationError,
-        missingSlots: computeMissingSlots({ ...active, slots: applied.slots }),
-        nextQuestion: active.pendingQuestion || expected,
-      },
-      // pending/expected unchanged
-      pendingQuestion: expected,
-      expectedSlot: expected,
-    })
+  // Explicit new travel task reset
+  if (applied.note === '__reset__' || applied.resetTask) {
+    cancelActiveTask()
+    const fresh = startFlightTask(text)
+    return collectOrSearch(fresh, opts)
+  }
+
+  const enrichDiag = (diag: typeof applied.diag) => ({
+    ...diag,
+    beforeSlots: {
+      departureDate: applied.beforeSlots?.departureDate?.resolvedDate,
+      returnDate: applied.beforeSlots?.returnDate?.resolvedDate,
+      origin: applied.beforeSlots?.origin,
+      destination: applied.beforeSlots?.destination,
+    },
+    afterSlots: {
+      departureDate: applied.slots.departureDate?.resolvedDate,
+      returnDate: applied.slots.returnDate?.resolvedDate,
+      origin: applied.slots.origin,
+      destination: applied.slots.destination,
+    },
+    taskRevision: base.revision,
+    semanticTrace: diag.extractedSlots?._semantic as Record<string, unknown> | undefined,
+  })
+
+  // Validation error ONLY when return phrase was wrong — not when user gave a new departure
+  if (applied.validationError && !applied.authoritativeUpdate) {
+    const next =
+      applyTaskUpdate(base.id, (prev) => ({
+        ...prev,
+        slots: applied.slots,
+        slotMeta: applied.slotMeta,
+        lastDiag: {
+          ...enrichDiag(applied.diag),
+          validationError: applied.validationError,
+          missingSlots: computeMissingSlots({ ...prev, slots: applied.slots }),
+          nextQuestion: prev.pendingQuestion || expected,
+        },
+        pendingQuestion: expected,
+        expectedSlot: expected,
+      })) || base
     return {
       handled: true,
       replyText: `${applied.validationError}\n\n${summarizeTask(next)}`,
@@ -220,14 +250,11 @@ async function applySlotsAndContinue(
     }
   }
 
-  // Parse failure for expected slot — clarify, never infinite identical loop without feedback
-  if (applied.parseFailed && expected) {
-    const prevFail = active.lastParseFailure
-    const same =
-      prevFail &&
-      prevFail.expectedSlot === expected &&
-      prevFail.rawInput === text.trim()
-    const count = same ? prevFail.count + 1 : prevFail?.expectedSlot === expected ? prevFail.count + 1 : 1
+  // Parse failure for expected slot — only when NOT an authoritative semantic update
+  if (applied.parseFailed && expected && !applied.authoritativeUpdate) {
+    const prevFail = base.lastParseFailure
+    const count =
+      prevFail?.expectedSlot === expected ? prevFail.count + 1 : 1
     const failure = {
       slotParseFailure: true as const,
       expectedSlot: expected,
@@ -236,20 +263,21 @@ async function applySlotsAndContinue(
       count,
     }
     const clarify = clarifyQuestion(expected)
-    const next = saveTask({
-      ...active,
-      slots: applied.slots,
-      slotMeta: applied.slotMeta,
-      pendingQuestion: expected,
-      expectedSlot: expected,
-      lastParseFailure: failure,
-      lastDiag: {
-        ...applied.diag,
-        parseFailed: true,
-        missingSlots: computeMissingSlots({ ...active, slots: applied.slots }),
-        nextQuestion: clarify,
-      },
-    })
+    const next =
+      applyTaskUpdate(base.id, (prev) => ({
+        ...prev,
+        slots: applied.slots,
+        slotMeta: applied.slotMeta,
+        pendingQuestion: expected,
+        expectedSlot: expected,
+        lastParseFailure: failure,
+        lastDiag: {
+          ...enrichDiag(applied.diag),
+          parseFailed: true,
+          missingSlots: computeMissingSlots({ ...prev, slots: applied.slots }),
+          nextQuestion: clarify,
+        },
+      })) || base
     const prefix =
       count >= 2
         ? `${clarify}\n(입력 「${text.trim()}」을 이해하지 못했어요.)`
@@ -262,35 +290,36 @@ async function applySlotsAndContinue(
     }
   }
 
-  // Success path — only clear pending when expected was filled OR there was no expected
-  const clearPending = !expected || applied.expectedFilled || applied.diag.appliedSlots.some((a) => a.key === expected)
+  // Success / authoritative: clear pending when expected filled, authoritative, or no expected
+  const clearPending =
+    !expected ||
+    Boolean(applied.expectedFilled) ||
+    Boolean(applied.authoritativeUpdate) ||
+    applied.diag.appliedSlots.some((a) => a.key === expected)
 
-  let next: TaskSession = {
-    ...active,
-    slots: applied.slots,
-    slotMeta: applied.slotMeta,
-    label: taskLabel(active.type, applied.slots),
-    lastDiag: applied.diag,
-    lastParseFailure: clearPending ? null : active.lastParseFailure,
-  }
-  if (clearPending) {
-    next.pendingQuestion = null
-    next.expectedSlot = null
-    // questionId cleared after missing recompute assigns the next one
-  } else {
-    // Keep asking the same expected slot
-    next.pendingQuestion = expected
-    next.expectedSlot = expected
-  }
+  let next =
+    applyTaskUpdate(base.id, (prev) => {
+      const draft: TaskSession = {
+        ...prev,
+        slots: applied.slots,
+        slotMeta: applied.slotMeta,
+        label: taskLabel(prev.type, applied.slots),
+        lastDiag: enrichDiag(applied.diag),
+        lastParseFailure: clearPending ? null : prev.lastParseFailure,
+        pendingQuestion: clearPending ? null : expected,
+        expectedSlot: clearPending ? null : expected,
+      }
+      return draft
+    }) || base
 
   if (applied.stale && next.results.length) next = markResultsStale(next)
-  else next = saveTask(next)
 
   if (applied.selected) {
-    next = saveTask({
-      ...next,
-      slots: { ...next.slots, selectedResultId: applied.selected.id },
-    })
+    next =
+      applyTaskUpdate(next.id, (prev) => ({
+        ...prev,
+        slots: { ...prev.slots, selectedResultId: applied.selected!.id },
+      })) || next
     return {
       handled: true,
       replyText: `${applied.selected.rank}번을 선택했어요: ${applied.selected.title}`,
@@ -299,8 +328,8 @@ async function applySlotsAndContinue(
     }
   }
 
-  // Recompute missing from full task; never re-ask a filled slot
-  return collectOrSearch(next, opts)
+  // Recompute missing from full latest task
+  return collectOrSearch(getActiveTask() || next, opts)
 }
 
 function startFlightTask(text: string): TaskSession {

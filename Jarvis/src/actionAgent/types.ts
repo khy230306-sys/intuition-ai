@@ -73,6 +73,11 @@ export type SlotTurnDiag = {
   nextQuestion: string | null
   parseFailed?: boolean
   validationError?: string | null
+  /** Semantic extraction trace for developer diagnostics */
+  semanticTrace?: Record<string, unknown>
+  beforeSlots?: Record<string, unknown>
+  afterSlots?: Record<string, unknown>
+  taskRevision?: number
 }
 
 export type SearchResultItem = {
@@ -154,6 +159,8 @@ export type TaskSession = {
   lastParseFailure?: SlotParseFailure | null
   /** Last turn diagnostics (dev panel) */
   lastDiag?: SlotTurnDiag | null
+  /** Monotonic revision — stale async updates must discard lower revisions */
+  revision?: number
 }
 
 export type ActionAgentDiag = {

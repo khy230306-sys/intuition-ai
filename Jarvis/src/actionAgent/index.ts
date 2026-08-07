@@ -23,6 +23,8 @@ export {
 export { normalizeTripType, editDistance } from './tripTypeNormalize'
 export { resolveExpectedSlot } from './expectedSlotResolver'
 export { safeMergeSlots } from './slotMerge'
+export { extractSemanticDates, isRichTravelUtterance, isNewTravelReset } from './semanticDateExtractor'
+export { resolveSlotTurn } from './slotResolutionEngine'
 export {
   clearAllTasks,
   createTaskSession,

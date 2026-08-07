@@ -1,20 +1,16 @@
 /**
- * Map follow-up utterances onto active Task Session slots.
- * Priority: explicit correction → expectedSlot → multi-slot → generic.
+ * Follow-up slot application — delegates to Slot Resolution Engine.
+ * Priority: user meaning > pending question > generic inference.
  */
 
 import {
-  extractExplicitCorrections,
-  multiSlotToProposals,
-  resolveExpectedSlot,
-} from './expectedSlotResolver'
-import {
   DESTINATION_PLACES,
+  extractMultiSlots,
   isActiveTaskFollowUpAction,
   ORIGIN_PLACES,
 } from './multiSlotExtractor'
-import { extractMultiSlots } from './multiSlotExtractor'
 import { safeMergeSlots, type SlotUpdateProposal } from './slotMerge'
+import { resolveSlotTurn } from './slotResolutionEngine'
 import { normalizeTripType } from './tripTypeNormalize'
 import type { SearchResultItem, SlotTurnDiag, TaskSession, TaskSlots } from './types'
 
@@ -62,121 +58,25 @@ export type ApplySlotsResult = {
   stale: boolean
   selected?: SearchResultItem | null
   note?: string
-  /** true when expected slot was answered successfully */
   expectedFilled?: boolean
-  /** expected slot parse failed — keep pending */
   parseFailed?: boolean
   validationError?: string
   normalizedInput?: string
   diag: SlotTurnDiag
   slotMeta: NonNullable<TaskSession['slotMeta']>
+  resetTask?: boolean
+  authoritativeUpdate?: boolean
+  beforeSlots?: TaskSlots
 }
 
 export function applyFollowUpSlots(task: TaskSession, text: string): ApplySlotsResult {
+  const engine = resolveSlotTurn(task, text)
+
+  // Selection extras (results list)
+  let selected: SearchResultItem | null = engine.selected || null
   const t = text.trim()
-  const expected = task.expectedSlot || task.pendingQuestion || null
-  let stale = false
-  let selected: SearchResultItem | null = null
-  let note: string | undefined
-  const proposals: SlotUpdateProposal[] = []
-
-  const diag: SlotTurnDiag = {
-    expectedSlot: expected,
-    pendingQuestion: task.pendingQuestion || null,
-    rawInput: t,
-    normalizedInput: t,
-    extractedSlots: {},
-    appliedSlots: [],
-    rejectedSlotUpdates: [],
-    missingSlots: [],
-    nextQuestion: null,
-  }
-
-  // Cancel
-  if (/취소|그만|그만둘|비행기\s*찾던\s*건\s*취소/.test(t) && !/알림/.test(t)) {
-    return {
-      slots: { ...task.slots },
-      stale: false,
-      note: '__cancel__',
-      diag,
-      slotMeta: task.slotMeta || {},
-    }
-  }
-
-  // 1) Explicit corrections (highest priority)
-  const corrections = extractExplicitCorrections(t, task.slots)
-  proposals.push(...corrections)
-  if (/김포\s*말고\s*부산/.test(t) && /부산/.test(t)) {
-    proposals.push({
-      key: 'origin',
-      value: '부산',
-      source: 'explicit_correction',
-      confidence: 1,
-      explicit: true,
-    })
-    note = 'origin_changed'
-  }
-  if (/호텔은\s*빼|호텔\s*빼/.test(t)) note = 'drop_hotel'
-
-  // 2) Expected slot resolver (beats generic multi-slot date routing)
-  let expectedFilled = false
-  let parseFailed = false
-  let validationError: string | undefined
-
-  if (expected) {
-    const resolved = resolveExpectedSlot(task, t)
-    diag.normalizedInput = resolved.normalizedInput || t
-    if (resolved.extractedPreview) {
-      diag.extractedSlots = { ...diag.extractedSlots, ...resolved.extractedPreview }
-    }
-    if (resolved.validationError) {
-      validationError = resolved.validationError
-      // Keep pending — do not apply invalid return date; may still apply other corrections
-    } else if (resolved.ok && resolved.proposals.length) {
-      proposals.push(...resolved.proposals)
-      expectedFilled = true
-    } else if (resolved.parseFailed) {
-      parseFailed = true
-    }
-  }
-
-  // 3–4) Multi-slot / semantic extras (lower priority — safeMerge protects committed slots)
-  // Skip multi-slot date proposals when we already filled expected date successfully,
-  // or when parse/validation failed for expected date (avoid overwrite).
-  const skipMultiDates =
-    (expected === 'returnDate' || expected === 'departureDate') &&
-    (expectedFilled || parseFailed || Boolean(validationError))
-
-  if (!parseFailed || !expected) {
-    const multi = multiSlotToProposals(t, task)
-    for (const p of multi) {
-      if (skipMultiDates && (p.key === 'departureDate' || p.key === 'returnDate')) continue
-      // When expected filled tripType, don't let weaker multi overwrite — safeMerge handles it
-      proposals.push(p)
-    }
-  }
-
-  // Selection / prefs / budget (non-protected extras)
-  const budget = t.match(/(\d+)\s*만\s*원/)
-  if (budget) {
-    proposals.push({
-      key: 'budgetMax',
-      value: Number(budget[1]) * 10000,
-      source: 'multi_slot',
-      confidence: 0.6,
-    })
-  }
-  if (/근처로/.test(t)) {
-    proposals.push({ key: 'preference', value: 'nearby', source: 'multi_slot', confidence: 0.6 })
-  }
-  if (/조용한\s*곳/.test(t)) {
-    proposals.push({ key: 'preference', value: 'quiet', source: 'multi_slot', confidence: 0.6 })
-  }
-  if (/조금\s*싼\s*곳|싼\s*곳/.test(t)) {
-    proposals.push({ key: 'preference', value: 'cheap', source: 'multi_slot', confidence: 0.6 })
-  }
-
   const idx = parseSelectionIndex(t)
+  const proposals: SlotUpdateProposal[] = []
   if (idx != null && task.results.length) {
     const hit = task.results.find((r) => r.rank === idx) || task.results[idx - 1]
     if (hit && !hit.stale) {
@@ -190,11 +90,8 @@ export function applyFollowUpSlots(task: TaskSession, text: string): ApplySlotsR
       })
     }
   }
-  if (/그걸로|이걸로|그\s*호텔|아까\s*두\s*번째/.test(t) && task.results.length) {
-    if (/두\s*번째/.test(t)) selected = task.results.find((r) => r.rank === 2) || null
-    else if (task.slots.selectedResultId) {
-      selected = task.results.find((r) => r.id === task.slots.selectedResultId) || null
-    } else selected = task.results[0]
+  if (/그걸로|이걸로|그\s*호텔/.test(t) && task.results.length && !selected) {
+    selected = task.results[0]
     if (selected) {
       proposals.push({
         key: 'selectedResultId',
@@ -205,47 +102,46 @@ export function applyFollowUpSlots(task: TaskSession, text: string): ApplySlotsR
     }
   }
 
-  const rem = t.match(/(\d+)\s*시간\s*전/) || t.match(/출발\s*두\s*시간\s*전|두\s*시간\s*전/)
-  if (rem) {
-    const mins = /두\s*시간|2\s*시간/.test(t) ? 120 : rem[1] ? Number(rem[1]) * 60 : 120
-    proposals.push({
-      key: 'reminderOffsetMinutes',
-      value: mins,
-      source: 'multi_slot',
-      confidence: 0.7,
-    })
-  }
-
-  const merged = safeMergeSlots(task.slots, task.slotMeta, proposals)
-  diag.appliedSlots = merged.diag.applied
-  diag.rejectedSlotUpdates = merged.diag.rejected
-  if (merged.diag.applied.length) stale = Boolean(task.results.length)
-
-  // Build extracted preview for diagnostics
-  for (const p of proposals) {
-    if (p.key === 'departureDate' || p.key === 'returnDate') {
-      const d = p.value as { resolvedDate?: string }
-      diag.extractedSlots[p.key] = d?.resolvedDate || p.value
-    } else if (!(p.key in diag.extractedSlots)) {
-      diag.extractedSlots[p.key] = p.value
+  let slots = engine.slots
+  let slotMeta = engine.slotMeta
+  let diag = engine.diag
+  if (proposals.length) {
+    const merged = safeMergeSlots(slots, slotMeta, proposals)
+    slots = merged.slots
+    slotMeta = merged.meta
+    diag = {
+      ...diag,
+      appliedSlots: [...diag.appliedSlots, ...merged.diag.applied],
+      rejectedSlotUpdates: [...diag.rejectedSlotUpdates, ...merged.diag.rejected],
     }
   }
 
+  // Enrich diag for developer panel
+  diag.extractedSlots = {
+    ...diag.extractedSlots,
+    _after: {
+      departureDate: slots.departureDate?.resolvedDate,
+      returnDate: slots.returnDate?.resolvedDate,
+    },
+  }
+
   return {
-    slots: merged.slots,
-    stale,
+    slots,
+    stale: engine.stale,
     selected,
-    note,
-    expectedFilled,
-    parseFailed,
-    validationError,
-    normalizedInput: diag.normalizedInput,
+    note: engine.note,
+    expectedFilled: engine.expectedFilled,
+    parseFailed: engine.parseFailed,
+    validationError: engine.validationError,
+    normalizedInput: engine.normalizedInput,
     diag,
-    slotMeta: merged.meta,
+    slotMeta,
+    resetTask: engine.resetTask,
+    authoritativeUpdate: engine.authoritativeUpdate,
+    beforeSlots: engine.beforeSlots,
   }
 }
 
-/** @deprecated use extractMultiSlots — kept for callers */
 export function mergeExtractedSlots(existing: TaskSlots, extracted: TaskSlots): TaskSlots {
   const proposals: SlotUpdateProposal[] = Object.entries(extracted)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -259,11 +155,22 @@ export function mergeExtractedSlots(existing: TaskSlots, extracted: TaskSlots): 
 }
 
 export function extractInitialTravelSlots(text: string): TaskSlots {
-  // Initial utterance: allow full multi-slot (no expected yet)
-  const extracted = extractMultiSlots(text, { taskType: 'travel.flight' })
-  const norm = normalizeTripType(text)
-  if (norm.tripType) extracted.tripType = norm.tripType
-  return extracted
+  // Use engine against empty task for consistent semantics
+  const empty = {
+    id: 'tmp',
+    type: 'travel.flight' as const,
+    status: 'collecting' as const,
+    slots: {} as TaskSlots,
+    missingSlots: [],
+    results: [],
+    resultsStale: false,
+    createdAt: '',
+    updatedAt: '',
+    label: '',
+    pendingQuestion: null,
+    expectedSlot: null,
+  }
+  return resolveSlotTurn(empty as TaskSession, text).slots
 }
 
 export function extractRestaurantSlots(text: string): TaskSlots {
@@ -286,5 +193,22 @@ export function extractRestaurantSlots(text: string): TaskSlots {
   if (/점심/.test(t)) slots.time = 'lunch'
   if (slots.destination && !slots.location) slots.location = slots.destination
   if (slots.passengers && !slots.partySize) slots.partySize = slots.passengers
+  // Also pull semantic dates into restaurant date slot
+  const eng = resolveSlotTurn(
+    {
+      id: 'tmp',
+      type: 'restaurant.search',
+      status: 'collecting',
+      slots,
+      missingSlots: [],
+      results: [],
+      resultsStale: false,
+      createdAt: '',
+      updatedAt: '',
+      label: '',
+    } as TaskSession,
+    t,
+  )
+  if (eng.slots.departureDate && !slots.date) slots.date = eng.slots.departureDate
   return slots
 }

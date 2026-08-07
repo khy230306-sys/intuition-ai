@@ -39,7 +39,7 @@ describe('Multi-turn Context E2E (device repro via think)', () => {
 
   it('TEST 1: 여행 준비 → 8월10 호치민 → 비행기표 (no city.info, no re-ask date)', async () => {
     const r1 = await think('여행 준비 도와줘')
-    expect(r1.text).toMatch(/여행 날짜|날짜가 언제/)
+    expect(r1.text).toMatch(/여행 날짜|날짜가 언제|출발 날짜|목적지를 알려/)
     expect(r1.text).not.toMatch(/【도시 정보】/)
     const task1 = getActiveTask()
     expect(task1).toBeTruthy()

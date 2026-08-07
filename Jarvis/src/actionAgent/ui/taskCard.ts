@@ -72,10 +72,14 @@ export function renderActionAgentDiagPanel(diag: ActionAgentDiag): string {
       <ul class="hint">
         <li>Raw Input: <code>${esc(turn.rawInput || '—')}</code></li>
         <li>Normalized: <code>${esc(turn.normalizedInput || '—')}</code></li>
+        <li>Before: <code>${esc(JSON.stringify(turn.beforeSlots || turn.extractedSlots?._before || {}))}</code></li>
+        <li>Semantic: <code>${esc(JSON.stringify(turn.semanticTrace || turn.extractedSlots?._semantic || {}))}</code></li>
         <li>Extracted: <code>${esc(JSON.stringify(turn.extractedSlots || {}))}</code></li>
         <li>Applied: <code>${esc(JSON.stringify(turn.appliedSlots || []))}</code></li>
-        <li>Rejected: <code>${esc(JSON.stringify(turn.rejectedSlotUpdates || []))}</code></li>
+        <li>Rejected / Blocked: <code>${esc(JSON.stringify(turn.rejectedSlotUpdates || []))}</code></li>
+        <li>After: <code>${esc(JSON.stringify(turn.afterSlots || turn.extractedSlots?._after || {}))}</code></li>
         <li>Next Question: <code>${esc(turn.nextQuestion || '—')}</code></li>
+        <li>Task Revision: <code>${esc(String(turn.taskRevision ?? t?.revision ?? '—'))}</code></li>
         ${turn.parseFailed ? `<li>Parse Failed: <code>true</code></li>` : ''}
         ${turn.validationError ? `<li>Validation: <code>${esc(turn.validationError)}</code></li>` : ''}
       </ul>`

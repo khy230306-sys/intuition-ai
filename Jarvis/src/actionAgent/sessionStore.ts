@@ -79,6 +79,7 @@ export function createTaskSession(type: TaskType, label: string, slots: TaskSess
     slotMeta: {},
     lastParseFailure: null,
     lastDiag: null,
+    revision: 1,
   }
   const state = loadRaw()
   // Push previous active onto suspended (keep last 3)
@@ -92,8 +93,22 @@ export function createTaskSession(type: TaskType, label: string, slots: TaskSess
 }
 
 export function saveTask(task: TaskSession): TaskSession {
-  const next = { ...task, updatedAt: new Date().toISOString() }
   const state = loadRaw()
+  const current =
+    state.active?.id === task.id
+      ? state.active
+      : state.suspended.find((t) => t.id === task.id) || null
+  // Stale async guard: ignore updates based on an older revision
+  if (
+    current &&
+    typeof task.revision === 'number' &&
+    typeof current.revision === 'number' &&
+    task.revision < current.revision
+  ) {
+    return current
+  }
+  const nextRev = (current?.revision || task.revision || 0) + 1
+  const next = { ...task, updatedAt: new Date().toISOString(), revision: nextRev }
   if (state.active?.id === next.id) state.active = next
   else {
     state.suspended = state.suspended.map((t) => (t.id === next.id ? next : t))
@@ -101,6 +116,23 @@ export function saveTask(task: TaskSession): TaskSession {
   }
   saveRaw(state)
   return next
+}
+
+/**
+ * Functional / atomic update from latest stored task (prevents stale closure overwrite).
+ */
+export function applyTaskUpdate(
+  taskId: string,
+  updater: (prev: TaskSession) => TaskSession,
+): TaskSession | null {
+  const state = loadRaw()
+  const prev =
+    state.active?.id === taskId
+      ? state.active
+      : state.suspended.find((t) => t.id === taskId) || null
+  if (!prev) return null
+  const draft = updater({ ...prev, slots: { ...prev.slots }, slotMeta: { ...(prev.slotMeta || {}) } })
+  return saveTask({ ...draft, id: taskId, revision: prev.revision })
 }
 
 export function cancelActiveTask(): TaskSession | null {

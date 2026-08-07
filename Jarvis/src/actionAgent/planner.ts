@@ -43,6 +43,23 @@ export function nextQuestion(
   const miss = computeMissingSlots(task)
   if (!miss.length) return null
   const first = miss[0]
+  const s = task.slots
+  const emptyCore = !s.departureDate && !s.destination && !s.origin
+
+  // Soft bundled opener when almost nothing is known yet
+  if (
+    emptyCore &&
+    (task.type === 'travel.flight' || task.type === 'travel.plan') &&
+    miss.includes('departureDate') &&
+    miss.includes('destination')
+  ) {
+    return {
+      ask: '좋아요. 출발 날짜와 출발지, 목적지를 알려주세요.',
+      pending: 'departureDate',
+      expectedSlot: 'departureDate',
+    }
+  }
+
   const map: Record<string, string> = {
     origin: '출발지는 어디인가요?',
     destination: '어디로 가시나요?',

@@ -11,27 +11,33 @@ import { getProviderSlot, loadHybridAiConfig, saveHybridAiConfig, updateProvider
 const SEEDED_OPENAI = 'aizio_app_owned_openai_seeded_v1'
 const SEEDED_GEMINI = 'aizio_app_owned_gemini_seeded_v1'
 
-function envKey(name: string): string {
-  // Prefer process.env so tests (vi.stubEnv) and deploy shells win over baked import.meta.env
+/**
+ * Vite only inlines *static* `import.meta.env.VITE_*` access.
+ * Keep literal property reads so deploy-time keys are baked into the bundle.
+ * process.env is a test/dev override (vitest vi.stubEnv).
+ */
+function openAiKeyFromBuild(): string {
   try {
-    const fromProc = String(
-      (globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[name] || '',
-    ).trim()
+    const fromProc = String(process.env.VITE_AIZIO_OPENAI_API_KEY || '').trim()
     if (fromProc) return fromProc
   } catch {
-    /* ignore */
+    /* browser: no process */
   }
+  return String(import.meta.env.VITE_AIZIO_OPENAI_API_KEY || '').trim()
+}
+
+function geminiKeyFromBuild(): string {
   try {
-    return String(
-      (import.meta as ImportMeta & { env?: Record<string, string> }).env?.[name] || '',
-    ).trim()
+    const fromProc = String(process.env.VITE_AIZIO_GEMINI_API_KEY || '').trim()
+    if (fromProc) return fromProc
   } catch {
-    return ''
+    /* browser: no process */
   }
+  return String(import.meta.env.VITE_AIZIO_GEMINI_API_KEY || '').trim()
 }
 
 function seedOpenAI(): boolean {
-  const key = envKey('VITE_AIZIO_OPENAI_API_KEY')
+  const key = openAiKeyFromBuild()
   if (!key) return false
   updateProviderSlot('openai', {
     apiKey: key,
@@ -45,7 +51,7 @@ function seedOpenAI(): boolean {
 }
 
 function seedGemini(): boolean {
-  const key = envKey('VITE_AIZIO_GEMINI_API_KEY')
+  const key = geminiKeyFromBuild()
   if (!key) return false
   updateProviderSlot('gemini', {
     apiKey: key,

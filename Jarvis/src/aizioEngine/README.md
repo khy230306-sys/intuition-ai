@@ -1,20 +1,34 @@
-# AIZIO Core Engine V1
+# AIZIO Core Engine V1.1
 
-Orchestrates **REAL** tools only. External LLMs are optional parts later — V1 is deterministic tool command.
+Orchestrates **REAL** tools with structured context, standardized results, verification, and permissions.
 
-## V1 success criteria (one conversation)
+## Loop
 
-1. `내일 울산 비 와?` → Open-Meteo daily forecast  
-2. `비 안 오면 아이들이랑 갈 만한 곳 찾아줘.` → place search / curated public spots (never DEMO restaurant)  
-3. `두 번째가 괜찮네.` → session memory select  
-4. `토요일 오후 2시에 일정 잡아줘.` → `addReminder` + verify in storage  
+`의도 분류 → Session Context → Permission → ToolResult → Verifier → Reply`
 
-## Non-goals (V1)
+## V1 success criteria (unchanged)
 
-- Own LLM / model training  
-- Travel booking, Gmail, payments  
-- Fake DEMO catalogs  
+1. Weather (Open-Meteo)  
+2. Family places (no DEMO restaurant)  
+3. Ordinal / anaphora select  
+4. Local calendar write + re-read verify  
 
-## Entry
+## V1.1 modules
 
-`tryHandleAizioEngine(text)` from `brain.ts` after Command Router, before Life Assistant.
+| Module | Role |
+|--------|------|
+| `context.ts` | Goal, places, selected, dateTime, lastTools, anaphora |
+| `toolResult.ts` | Common ToolResult (`isRealData`, never for LLM text) |
+| `verifier.ts` | Re-check weather/places/calendar before success copy |
+| `permission.ts` | LEVEL 0–3; L2–3 → PENDING_EXTERNAL_SETUP |
+
+## Permission
+
+- **0** read/search — weather, places  
+- **1** local write — in-app reminders  
+- **2** external write — not connected  
+- **3** sensitive — never without confirm + connector  
+
+## Non-goals
+
+Own LLM · Gmail · flight/hotel booking · payments · UI redesign  

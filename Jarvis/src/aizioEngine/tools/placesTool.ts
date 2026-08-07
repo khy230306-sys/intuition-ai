@@ -1,34 +1,17 @@
 /**
- * Family-friendly place seek — REAL search (catalog/Photon) + honest curated fallbacks.
- * Never uses restaurant DEMO / fake bookings.
+ * Family place seek — ToolResult. Curated ≠ live (isRealData false).
  */
 
 import { searchPlaces } from '../../navigationV2/placeSearchService'
+import { makeToolResult, type ToolResult } from '../toolResult'
 import type { EnginePlaceCandidate } from '../types'
 
-/** Known public family spots — labeled curated, not live rankings. */
 const CURATED_FAMILY: Record<string, Array<{ title: string; mapsQuery: string; subtitle: string }>> = {
   울산: [
-    {
-      title: '울산대공원',
-      mapsQuery: '울산대공원',
-      subtitle: '넓은 공원 · 가족 산책',
-    },
-    {
-      title: '울산박물관',
-      mapsQuery: '울산박물관',
-      subtitle: '실내 관람 · 아이 체험',
-    },
-    {
-      title: '태화강 국가정원',
-      mapsQuery: '태화강 국가정원',
-      subtitle: '산책·자전거 · 야외',
-    },
-    {
-      title: '울산 고래생태체험관',
-      mapsQuery: '울산 고래생태체험관',
-      subtitle: '아이 체험 · 실내외',
-    },
+    { title: '울산대공원', mapsQuery: '울산대공원', subtitle: '넓은 공원 · 가족 산책' },
+    { title: '울산박물관', mapsQuery: '울산박물관', subtitle: '실내 관람 · 아이 체험' },
+    { title: '태화강 국가정원', mapsQuery: '태화강 국가정원', subtitle: '산책·자전거 · 야외' },
+    { title: '울산 고래생태체험관', mapsQuery: '울산 고래생태체험관', subtitle: '아이 체험 · 실내외' },
   ],
   서울: [
     { title: '서울숲', mapsQuery: '서울숲', subtitle: '공원 · 가족' },
@@ -43,7 +26,13 @@ const CURATED_FAMILY: Record<string, Array<{ title: string; mapsQuery: string; s
 }
 
 function toCandidates(
-  items: Array<{ title: string; mapsQuery: string; subtitle?: string; source: EnginePlaceCandidate['source']; id?: string }>,
+  items: Array<{
+    title: string
+    mapsQuery: string
+    subtitle?: string
+    source: EnginePlaceCandidate['source']
+    id?: string
+  }>,
 ): EnginePlaceCandidate[] {
   return items.slice(0, 5).map((it, i) => ({
     rank: i + 1,
@@ -55,10 +44,12 @@ function toCandidates(
   }))
 }
 
-export async function seekFamilyPlaces(opts: {
+export type PlacesToolData = { candidates: EnginePlaceCandidate[]; query: string }
+
+export async function runPlacesTool(opts: {
   city: string
   utterance: string
-}): Promise<{ candidates: EnginePlaceCandidate[]; query: string; provider: string }> {
+}): Promise<ToolResult<PlacesToolData>> {
   const city = opts.city || '울산'
   const query = /아이|어린이|키즈/.test(opts.utterance)
     ? `${city} 어린이 체험 공원`
@@ -75,19 +66,41 @@ export async function seekFamilyPlaces(opts: {
         id: c.id || `remote_${i}`,
       })),
     )
-    return { candidates, query, provider: remote.provider }
+    return makeToolResult({
+      toolId: 'places.family_seek',
+      success: true,
+      data: { candidates, query },
+      source: remote.provider,
+      sourceType: remote.catalogOnly ? 'catalog' : 'live_api',
+      isRealData: !remote.catalogOnly,
+      confidence: remote.catalogOnly ? 0.7 : 0.85,
+    })
   }
 
   const curated = CURATED_FAMILY[city] || CURATED_FAMILY['울산']!
+  const candidates = toCandidates(curated.map((c) => ({ ...c, source: 'curated' as const })))
+  return makeToolResult({
+    toolId: 'places.family_seek',
+    success: true,
+    data: { candidates, query },
+    source: 'curated-family',
+    sourceType: 'curated',
+    // Honest public-place shortlist — NOT live rankings / NOT demo restaurants
+    isRealData: false,
+    confidence: 0.55,
+  })
+}
+
+/** @deprecated */
+export async function seekFamilyPlaces(opts: {
+  city: string
+  utterance: string
+}): Promise<{ candidates: EnginePlaceCandidate[]; query: string; provider: string }> {
+  const r = await runPlacesTool(opts)
   return {
-    candidates: toCandidates(
-      curated.map((c) => ({
-        ...c,
-        source: 'curated' as const,
-      })),
-    ),
-    query,
-    provider: 'curated-family',
+    candidates: r.data?.candidates || [],
+    query: r.data?.query || '',
+    provider: r.source,
   }
 }
 
@@ -95,6 +108,7 @@ export function formatPlacesReply(
   city: string,
   candidates: EnginePlaceCandidate[],
   weatherNote?: string,
+  sourceNote?: string,
 ): string {
   const head = weatherNote
     ? `${weatherNote}\n\n【${city} · 아이와 갈 만한 곳】`
@@ -106,9 +120,12 @@ export function formatPlacesReply(
   })
   return [
     head,
+    sourceNote || '',
     ...lines,
     '',
     '번호로 골라 주세요. 예: 「두 번째가 괜찮네」',
     '실제 예약·영업 여부는 지도에서 확인해 주세요.',
-  ].join('\n')
+  ]
+    .filter((x) => x !== '')
+    .join('\n')
 }

@@ -1,7 +1,10 @@
 /**
- * AIZIO Core Engine V1 types.
+ * AIZIO Core Engine V1.1 types.
  * Orchestrates REAL tools only — never DEMO travel/restaurant catalogs.
  */
+
+import type { SessionContext } from './context'
+import type { ToolResult } from './toolResult'
 
 export type EngineTurnKind =
   | 'weather'
@@ -39,22 +42,26 @@ export type EngineCalendarWrite = {
   verified: boolean
 }
 
+/** Persisted engine session — embeds structured SessionContext. */
 export type EngineSession = {
   id: string
   updatedAt: number
+  /** V1.1 structured context (source of truth for anaphora). */
+  context: SessionContext
+  /** @deprecated V1 flat fields kept in sync for compatibility */
   city?: string
   weather?: EngineWeatherSnapshot
   places: EnginePlaceCandidate[]
   placesQuery?: string
   selected?: EnginePlaceCandidate
   lastCalendar?: EngineCalendarWrite
-  /** Last verified tool outcomes for the session */
   lastVerified?: {
     weather?: boolean
     places?: boolean
     select?: boolean
     calendar?: boolean
   }
+  lastToolResults?: Record<string, ToolResult>
 }
 
 export type EngineResult = {

@@ -9,6 +9,12 @@
 3. 플랍 → 턴 → 리버 순으로 바닥 카드 입력
 4. 각 단계마다 승률·추천 액션(폴드/콜/레이즈/올인) 확인
 
+## 접속 주소
+
+**https://holdem-edge.tiiny.site**
+
+(백업 터널) https://device-castle-conf-dealt.trycloudflare.com
+
 ## 실행
 
 ```bash

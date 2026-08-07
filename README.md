@@ -1,24 +1,9 @@
-# workspace
+# intuition-ai
 
-<<<<<<< HEAD
-- **FlowMate** — iOS 네이티브 자동화 앱 (Xcode 필요)
-- **JARVIS** — iPhone 만능 AI 비서 PWA (Safari 홈 화면 추가)
+## Projects
 
-See [Jarvis/README.md](Jarvis/README.md) for the assistant app.
-=======
-## DoriJitGoTtaeng PICK AI
-
-독립 PWA: [DoriJitGoTtaeng-PICK-AI/README.md](DoriJitGoTtaeng-PICK-AI/README.md)
-
-- **영구 URL:** https://khy230306-sys.github.io/intuition-ai/
-- **영구 설정:** [DoriJitGoTtaeng-PICK-AI/PERMANENT_HOSTING.md](DoriJitGoTtaeng-PICK-AI/PERMANENT_HOSTING.md)
-
-```bash
-cd DoriJitGoTtaeng-PICK-AI && npm install && npm run dev
-```
-
-## Other projects
-
+- **HOLDEM EDGE** (`HOLDEM_STRATEGY`) — 홀덤 승률·배팅 전략 분석. See [HOLDEM_STRATEGY/README.md](HOLDEM_STRATEGY/README.md).
+- **DoriJitGoTtaeng PICK AI** — 도리짓고땡 바닥 카드 AI. See [DoriJitGoTtaeng-PICK-AI/README.md](DoriJitGoTtaeng-PICK-AI/README.md).
 - **FlowMate** — iOS automation app. See [FlowMate/README.md](FlowMate/README.md).
+- **JARVIS** — iPhone AI assistant PWA. See [Jarvis/README.md](Jarvis/README.md).
 - **짠!** (`jjan-party`) — 술자리 벌칙 게임 웹앱. See [jjan-party/README.md](jjan-party/README.md).
->>>>>>> origin/main

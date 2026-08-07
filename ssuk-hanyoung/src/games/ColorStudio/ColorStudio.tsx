@@ -220,21 +220,6 @@ export function ColorStudio() {
     return mode === 'easy' ? easyRedo.current.length > 0 : !!freeRef.current?.canRedo()
   }
 
-  function makeThumbnail(): string {
-    if (mode === 'free') {
-      return freeRef.current?.exportPng() || ''
-    }
-    // Serialize SVG regions to canvas
-    const svg = document.querySelector('.studio-easy-svg') as SVGSVGElement | null
-    if (!svg) return ''
-    const xml = new XMLSerializer().serializeToString(svg)
-    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    // sync fallback — return empty and async update not needed for save path below
-    URL.revokeObjectURL(url)
-    return svgToDataUrl(svg)
-  }
-
   function svgToDataUrl(svg: SVGSVGElement): string {
     try {
       const clone = svg.cloneNode(true) as SVGSVGElement
@@ -243,6 +228,46 @@ export function ColorStudio() {
       return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`
     } catch {
       return ''
+    }
+  }
+
+  function loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('img'))
+      img.src = src
+    })
+  }
+
+  async function makeThumbnail(): Promise<string> {
+    if (mode === 'easy') {
+      const svg = document.querySelector('.studio-easy-svg') as SVGSVGElement | null
+      return svg ? svgToDataUrl(svg) : ''
+    }
+    const paint = freeRef.current?.exportPng() || ''
+    const line = document.querySelector('.studio-lineart svg') as SVGSVGElement | null
+    if (!line) return paint
+    try {
+      const vb = template.viewBox.split(/\s+/).map(Number)
+      const w = Math.max(160, vb[2] || 320)
+      const h = Math.max(120, vb[3] || 220)
+      const c = document.createElement('canvas')
+      c.width = Math.round(w * 2)
+      c.height = Math.round(h * 2)
+      const ctx = c.getContext('2d')
+      if (!ctx) return paint
+      ctx.fillStyle = '#FFFDF8'
+      ctx.fillRect(0, 0, c.width, c.height)
+      const lineImg = await loadImage(svgToDataUrl(line))
+      ctx.drawImage(lineImg, 0, 0, c.width, c.height)
+      if (paint) {
+        const paintImg = await loadImage(paint)
+        ctx.drawImage(paintImg, 0, 0, c.width, c.height)
+      }
+      return c.toDataURL('image/png')
+    } catch {
+      return paint
     }
   }
 
@@ -256,9 +281,9 @@ export function ColorStudio() {
     }
   }
 
-  function doSave(silent = false) {
+  async function doSave(silent = false) {
     const id = artworkId || newArtworkId()
-    const thumb = makeThumbnail() || (mode === 'free' ? freeRef.current?.exportPng() || '' : '')
+    const thumb = (await makeThumbnail()) || (mode === 'free' ? freeRef.current?.exportPng() || '' : '')
     const rec = saveArtwork({
       artworkId: id,
       templateId,
@@ -275,8 +300,8 @@ export function ColorStudio() {
     return rec
   }
 
-  function finish() {
-    doSave(true)
+  async function finish() {
+    await doSave(true)
     const duration = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000))
     addStars(2, GAME_ID, {
       duration,
@@ -387,12 +412,10 @@ export function ColorStudio() {
           <div className="studio-finish-art">
             {mode === 'easy' ? (
               <LineArtSvg template={template} fills={easyFills} showDefaultFills className="studio-easy-svg" />
+            ) : artworkId && getArtwork(artworkId)?.thumbnail ? (
+              <img src={getArtwork(artworkId)!.thumbnail} alt="완성 작품" />
             ) : (
-              artworkId && getArtwork(artworkId)?.thumbnail ? (
-                <img src={getArtwork(artworkId)!.thumbnail} alt="완성 작품" />
-              ) : (
-                <LineArtSvg template={template} showDefaultFills />
-              )
+              <LineArtSvg template={template} showDefaultFills />
             )}
           </div>
           <p className="prompt-big">별도 받았어요!</p>
@@ -522,12 +545,12 @@ export function ColorStudio() {
             type="button"
             className="studio-act"
             onClick={() => {
-              doSave()
+              void doSave()
             }}
           >
             저장
           </button>
-          <button type="button" className="studio-act primary" onClick={finish}>
+          <button type="button" className="studio-act primary" onClick={() => void finish()}>
             완성
           </button>
         </div>

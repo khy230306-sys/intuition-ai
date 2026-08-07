@@ -711,8 +711,10 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     return { text: helpText(name) }
   }
 
-  // Plain greetings: just greet back — no feature pitches (브리핑/시세 등).
+  // Plain greetings: if cloud AI is connected, let Hybrid chat handle it (ChatGPT-like).
+  // Without AI: warm local hello only — no 브리핑/시세 pitches.
   if (/^(안녕(하세요|하십니까)?|하이+|헬로|hello|hi)[\s!?.~ㅋㅎ]*$/i.test(text.trim())) {
+    if (hasAnyConfiguredProvider()) return null
     return {
       text: `안녕하세요, ${name}.`,
       speak: true,
@@ -1573,8 +1575,12 @@ export async function think(
   return {
     text: [
       '잘 이해하지 못했어요. 조금 다르게 말해 주시겠어요?',
-      '예: 오늘 날씨 알려줘 · 브리핑 · 지금 몇 시야 · 삼성전자 시세 · 통계 · 도움말',
-      hasAnyConfiguredProvider() ? '' : hybridNoProviderMessage(),
+      hasAnyConfiguredProvider()
+        ? '예: 오늘 날씨 알려줘 · 지금 몇 시야 · 도움말 · 또는 자유롭게 질문해 주세요.'
+        : [
+            '자유 대화(ChatGPT처럼)를 쓰려면 설정 → AI에서 무료 AI(Groq·Gemini·OpenRouter)를 연결해 주세요.',
+            '키 없이도: 오늘 날씨 · 지금 몇 시야 · 할 일 · 도움말',
+          ].join('\n'),
     ]
       .filter(Boolean)
       .join('\n'),

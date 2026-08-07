@@ -273,8 +273,9 @@ export function localCasualReply(text: string): string | null {
   const c = compactKo(stripDecorative(text) || text)
   if (/고마|감사|thanks|thank/i.test(c)) return '천만에요. 더 필요한 일 있으면 편하게 말해 주세요.'
   if (/사랑|love/i.test(c)) return '저도 함께여서 기뻐요. 언제든지 불러 주세요.'
-  if (/안녕|하이|헬로|hello|^hi$/i.test(c)) return '안녕하세요. 무엇을 도와드릴까요?'
-  if (/피곤|심심|기분/.test(c)) return '말씀 감사합니다. 잠깐 쉬어도 좋고, 원하시면 음악이나 브리핑도 도와드릴게요.'
+  if (/안녕|하이|헬로|hello|^hi$/i.test(c)) return '안녕하세요.'
+  if (/피곤|심심|기분/.test(c))
+    return '말씀 감사합니다. 잠깐 쉬어도 좋아요. 원하시면 편하게 이어서 이야기해요.'
   if (/최고|대단|똑똑|잘했|멋지|짱|훌륭|굿|대박|비서/.test(c)) {
     return '고마워요. 그렇게 말해 주시니 힘이 나요. 앞으로도 더 잘 도와드릴게요.'
   }

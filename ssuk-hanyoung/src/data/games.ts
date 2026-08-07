@@ -11,7 +11,7 @@ export const GAMES: GameMeta[] = [
   { id: 'sound-board', title: '사운드보드', subtitle: '빵빵 삐뽀!', tags: ['car', 'touch', 'core'], accent: 'sunny' },
   { id: 'car-puzzle', title: '자동차 퍼즐', subtitle: '조각을 맞춰요', tags: ['car', 'focus', 'touch', 'core'], accent: 'grape' },
   { id: 'color-follow', title: '부릉 따라하기', subtitle: '색깔 순서 기억', tags: ['color', 'car', 'focus', 'touch', 'core'], accent: 'grape' },
-  { id: 'car-paint', title: '색칠놀이', subtitle: '원하는 색으로 칠해요', tags: ['car', 'color', 'touch', 'core'], accent: 'grape' },
+  { id: 'car-paint', title: '쑥쑥 색칠 스튜디오', subtitle: '도안을 골라 진짜로 색칠해요', tags: ['car', 'color', 'touch', 'core'], accent: 'grape' },
   { id: 'story-tap', title: '자동차 동화', subtitle: '이야기를 골라요', tags: ['car', 'touch', 'core'], accent: 'berry' },
   { id: 'maze-drive', title: '미로 운전', subtitle: '길을 따라가요', tags: ['car', 'focus', 'touch', 'core'], accent: 'sky' },
   { id: 'wait-go', title: '참았다가 출발', subtitle: '초록불에 출발!', tags: ['car', 'color', 'focus', 'touch', 'core'], accent: 'leaf' },

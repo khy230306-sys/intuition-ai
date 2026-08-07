@@ -79,6 +79,8 @@ export type RecordInput = {
   kind?: ActivityKind
   /** when false, updates retries/abandons without counting as attempt */
   countAttempt?: boolean
+  colorsUsed?: string[]
+  toolsUsed?: string[]
 }
 
 export function recordLearningActivity(input: RecordInput) {
@@ -129,6 +131,8 @@ export function recordLearningActivity(input: RecordInput) {
       durationSec,
       score: input.score || 0,
       kind,
+      ...(input.colorsUsed?.length ? { colorsUsed: input.colorsUsed } : {}),
+      ...(input.toolsUsed?.length ? { toolsUsed: input.toolsUsed } : {}),
     },
     ...p.activityLog,
   ].slice(0, 240)

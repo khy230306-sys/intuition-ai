@@ -1,1 +1,1 @@
-export { ColorBook as CarPaint } from './ColorBook'
+export { ColorStudio as CarPaint } from './ColorStudio/ColorStudio'

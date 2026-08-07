@@ -2,7 +2,7 @@ import { getLearningMeta } from '../data/learning'
 import type { ActivityKind } from './learningTypes'
 import { recordLearningActivity } from './learningProgress'
 
-type Opts = { duration?: number; score?: number }
+type Opts = { duration?: number; score?: number; colorsUsed?: string[]; toolsUsed?: string[] }
 
 /** Games graded by right/wrong */
 export const QUIZ_GAMES = new Set([
@@ -48,7 +48,15 @@ export function isCreativeGame(gameId: string) {
 
 export function recordSuccess(gameId: string, opts: Opts = {}) {
   if (isCreativeGame(gameId)) return recordCreativeCompleted(gameId, opts)
-  return recordLearningActivity({ gameId, success: true, duration: opts.duration, score: opts.score, kind: 'success' })
+  return recordLearningActivity({
+    gameId,
+    success: true,
+    duration: opts.duration,
+    score: opts.score,
+    kind: 'success',
+    colorsUsed: opts.colorsUsed,
+    toolsUsed: opts.toolsUsed,
+  })
 }
 
 export function recordFailure(gameId: string, opts: Opts = {}) {
@@ -81,6 +89,8 @@ export function recordCreativeEngaged(gameId: string, opts: Opts = {}) {
     score: opts.score ?? 0,
     kind: 'complete',
     countAttempt: true,
+    colorsUsed: opts.colorsUsed,
+    toolsUsed: opts.toolsUsed,
   })
 }
 
@@ -92,6 +102,8 @@ export function recordCreativeCompleted(gameId: string, opts: Opts = {}) {
     score: opts.score ?? 1,
     kind: 'complete',
     countAttempt: true,
+    colorsUsed: opts.colorsUsed,
+    toolsUsed: opts.toolsUsed,
   })
 }
 

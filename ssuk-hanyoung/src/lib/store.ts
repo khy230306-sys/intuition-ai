@@ -158,7 +158,7 @@ export function consumeLastSticker() {
   return STICKERS.find((s) => s.id === id) || null
 }
 
-export function addStars(n: number, gameId?: string) {
+export function addStars(n: number, gameId?: string, opts?: { skipLearning?: boolean; duration?: number; colorsUsed?: string[]; toolsUsed?: string[] }) {
   const p = read()
   p.stars += n
   if (gameId) p.played[gameId] = (p.played[gameId] || 0) + 1
@@ -176,9 +176,14 @@ export function addStars(n: number, gameId?: string) {
     window.dispatchEvent(new CustomEvent('ssuk-sticker', { detail: unlocked }))
   }
   // Learning Core: stars → success or creative engagement (no forced fail on creative)
-  if (gameId && typeof window !== 'undefined') {
+  if (gameId && typeof window !== 'undefined' && !opts?.skipLearning) {
     void import('./learningEvents').then(({ recordSuccess }) => {
-      recordSuccess(gameId, { duration: 15, score: n })
+      recordSuccess(gameId, {
+        duration: opts?.duration ?? 15,
+        score: n,
+        colorsUsed: opts?.colorsUsed,
+        toolsUsed: opts?.toolsUsed,
+      })
     })
   }
   return p.stars

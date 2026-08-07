@@ -29,6 +29,9 @@ export type ActivityEntry = {
   durationSec: number
   score: number
   kind?: ActivityKind
+  /** creative studio extras — optional, ignored by quiz games */
+  colorsUsed?: string[]
+  toolsUsed?: string[]
 }
 
 export type DifficultyBias = 'easy' | 'auto' | 'challenge'

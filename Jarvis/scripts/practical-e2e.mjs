@@ -21,17 +21,46 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
 }
 
+async function dismissOverlays(page) {
+  await page.evaluate(() => {
+    const labels = [/나중에/, /AI 없이 기본 기능/, /숨기기/]
+    for (const re of labels) {
+      const btn = [...document.querySelectorAll('button')].find((b) => re.test(b.textContent || ''))
+      btn?.click()
+    }
+  })
+  await new Promise((r) => setTimeout(r, 250))
+}
+
+async function ensureChatComposer(page) {
+  await page.evaluate(() => {
+    if (!document.querySelector('#draft')) location.hash = '#chat'
+  })
+  await page.waitForSelector('#draft', { timeout: 15000 })
+  await dismissOverlays(page)
+  await page.waitForSelector('#draft:not([disabled])', { timeout: 15000 })
+}
+
 async function sendChat(page, text) {
-  await page.waitForSelector('#draft:not([disabled])', { timeout: 10000 })
-  await page.click('#draft', { clickCount: 3 })
-  await page.type('#draft', text)
-  await page.click('button.primary-btn[type="submit"]')
+  await ensureChatComposer(page)
+  const sent = await page.evaluate((msg) => {
+    const input = document.getElementById('draft')
+    const form = document.getElementById('composer')
+    if (!input || !form) return { ok: false, reason: 'missing-composer' }
+    input.disabled = false
+    input.focus()
+    input.value = msg
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    form.requestSubmit()
+    return { ok: true }
+  }, text)
+  if (!sent.ok) throw new Error(`sendChat failed: ${sent.reason}`)
   await page.waitForFunction(
-    (msg) => {
-      const users = [...document.querySelectorAll('.msg.user')]
-      return users.some((m) => (m.textContent || '').includes(msg))
-    },
-    { timeout: 8000 },
+    (msg) =>
+      [...document.querySelectorAll('.msg-bubble.user, .msg.user')].some((m) =>
+        (m.textContent || '').includes(msg),
+      ),
+    { timeout: 12000 },
     text,
   )
   await page.waitForFunction(
@@ -39,13 +68,14 @@ async function sendChat(page, text) {
       const busy = document.querySelector('#draft')?.disabled
       return !busy
     },
-    { timeout: 20000 },
+    { timeout: 25000 },
   )
+  await new Promise((r) => setTimeout(r, 350))
 }
 
 async function lastAssistant(page) {
   return page.evaluate(() => {
-    const msgs = [...document.querySelectorAll('.msg.assistant')]
+    const msgs = [...document.querySelectorAll('.msg-bubble.assistant, .msg.assistant')]
     const last = msgs[msgs.length - 1]
     return last ? last.textContent || '' : ''
   })
@@ -83,11 +113,15 @@ async function main() {
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
 
+  const context = browser.defaultBrowserContext()
+  await context.overridePermissions(base, ['geolocation', 'notifications'])
+  await page.setGeolocation({ latitude: 37.5665, longitude: 126.978, accuracy: 12 })
+
   await page.evaluateOnNewDocument(() => {
     const fix = { lat: 37.5665, lon: 126.978, accuracy: 12, at: Date.now() }
     localStorage.setItem('jarvis.geo.granted.v1', '1')
     localStorage.setItem('jarvis.geo.last.v1', JSON.stringify(fix))
-    navigator.geolocation.getCurrentPosition = (success) => {
+    const ok = (success) => {
       success({
         coords: {
           latitude: fix.lat,
@@ -101,9 +135,19 @@ async function main() {
         timestamp: Date.now(),
       })
     }
+    navigator.geolocation.getCurrentPosition = (success) => ok(success)
     navigator.geolocation.watchPosition = (success) => {
-      navigator.geolocation.getCurrentPosition(success)
+      ok(success)
       return 1
+    }
+    const originalQuery = navigator.permissions?.query?.bind(navigator.permissions)
+    if (navigator.permissions) {
+      navigator.permissions.query = (desc) => {
+        if (desc && desc.name === 'geolocation') {
+          return Promise.resolve({ state: 'granted', onchange: null })
+        }
+        return originalQuery ? originalQuery(desc) : Promise.resolve({ state: 'granted', onchange: null })
+      }
     }
     class FakeNotification {
       static permission = 'granted'
@@ -119,7 +163,32 @@ async function main() {
   })
 
   await page.goto(base, { waitUntil: 'networkidle0' })
+  for (let i = 0; i < 25; i++) {
+    const state = await page.evaluate(() => ({
+      draft: Boolean(document.querySelector('#draft')),
+      homeAsk: Boolean(document.querySelector('#home-ask-input')),
+      skip: Boolean(document.querySelector('[data-action="skip-location"]')),
+    }))
+    if (state.draft || state.homeAsk) break
+    if (state.skip) {
+      await page.click('[data-action="skip-location"]')
+      await new Promise((r) => setTimeout(r, 400))
+      continue
+    }
+    await new Promise((r) => setTimeout(r, 300))
+  }
+  await page.evaluate(() => {
+    location.hash = '#chat'
+  })
   await page.waitForSelector('#draft', { timeout: 15000 })
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) =>
+      /나중에|AI 없이 기본 기능/.test(b.textContent || ''),
+    )
+    btn?.click()
+  })
+  await page.waitForSelector('#draft:not([disabled])', { timeout: 15000 })
+  await new Promise((r) => setTimeout(r, 400))
 
   const checks = []
 

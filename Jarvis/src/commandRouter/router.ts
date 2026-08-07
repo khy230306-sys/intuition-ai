@@ -536,7 +536,7 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
   }
 
   // How-to / explanation questions stay GENERAL_CHAT (never book/search)
-  if (/(예약하는\s*법|어떻게\s*예약|예약\s*방법|만드는\s*법|왜\s*비싸)/i.test(normalized)) {
+  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|만드는\s*법|왜\s*비싸)/i.test(normalized)) {
     if (!/(비행기\s*찾아|항공권\s*검색|맛집\s*찾아)/i.test(normalized)) {
       const r = result({
         intent: 'general.chat',

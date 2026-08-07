@@ -234,6 +234,9 @@ export function parseWhenFromText(text: string, now = Date.now()): ParsedWhen | 
 
 export function wantsLocalAlarm(text: string): boolean {
   const t = text.trim()
+  // How-to / encyclopedia 「…방법 알려줘」 is not a timed alarm
+  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|만드는\s*법|무슨\s*뜻)/.test(t)) return false
+  if (/(방법|하는\s*법|어떻게)\s*알려줘/.test(t)) return false
   if (/알림|알람|알려줘/.test(t)) return true
   if (/(\d+)\s*(분|시간)\s*(뒤|후)/.test(t) && /(알려|알람|리마인더|기억)/.test(t)) return true
   if (/(오전|오후|내일).*\d+\s*시/.test(t) && /(알려|알람|알림|리마인더)/.test(t)) return true

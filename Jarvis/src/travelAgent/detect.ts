@@ -25,7 +25,7 @@ export function isTravelUtterance(text: string): boolean {
   const t = text.trim()
   if (!t) return false
   if (/번역|통역|translate/i.test(t)) return false
-  if (/(예약하는\s*법|어떻게\s*예약|예약\s*방법)/.test(t)) return false
+  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법)/.test(t)) return false
   if (/날씨\s*(알려|어때)|오늘\s*날씨/.test(t) && !/(비행|항공|호텔|여행)/.test(t)) return false
   return (
     /(비행기|항공권|항공편|비행\s*편|항공\s*찾|비행\s*찾|직항)/.test(t) ||
@@ -43,7 +43,7 @@ export function detectTravelIntent(text: string, hasSession = false): TravelInte
   if (!t) return null
   if (/번역|통역/i.test(t)) return null
   // How-to explanations are not booking/search intents
-  if (/(예약하는\s*법|어떻게\s*예약|예약\s*방법|가격이\s*왜)/.test(t)) return null
+  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|가격이\s*왜)/.test(t)) return null
   // Weather wins when clear weather-only
   if (/날씨\s*(알려|어때)|오늘\s*날씨\s*알려/.test(t) && !/(비행|항공|호텔|여행)/.test(t)) return null
 

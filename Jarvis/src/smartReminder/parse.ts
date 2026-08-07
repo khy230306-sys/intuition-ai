@@ -21,6 +21,11 @@ export function parseReminderUtterance(raw: string): ReminderUtterance | null {
   const text = String(raw || '').trim()
   if (!text || text.length > 160) return null
 
+  // How-to / explanation — never treat as reminder ("비행기 예약하는 방법 알려줘")
+  if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|예약\s*방법|만드는\s*법|무슨\s*뜻)/.test(text)) {
+    return null
+  }
+
   // Definition / encyclopedia — never treat as reminder (even if pasted chat has 「13:28」)
   // Do NOT match bare 「뭐야」 — that also ends schedule asks like 「엄마 오늘 일정 뭐야?」
   if (

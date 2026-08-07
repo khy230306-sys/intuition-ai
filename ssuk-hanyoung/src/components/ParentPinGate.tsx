@@ -1,10 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { getParentSettings, resetParentSettingsOnly, setParentSettings } from '../lib/learningProgress'
 import { hashPin, isParentUnlocked, lockParentSession, makeRecoveryToken, randomSalt, unlockParentSession, verifyPin } from '../lib/pin'
 import { VisualIcon } from './visual/VisualIcon'
 import { Character } from './visual/Character'
 
-type Mode = 'entry' | 'setup' | 'confirm' | 'change' | 'recover'
+type Mode = 'entry' | 'setup' | 'confirm' | 'recover'
+
+const LOCK_AFTER = 5
+const LOCK_MS = 20_000
 
 export function ParentPinGate({ children }: { children: ReactNode }) {
   const settings = getParentSettings()
@@ -13,15 +16,36 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
   const [pin, setPin] = useState('')
   const [pending, setPending] = useState('')
   const [error, setError] = useState('')
+  const [okMsg, setOkMsg] = useState('')
+  const [fails, setFails] = useState(0)
+  const [lockedUntil, setLockedUntil] = useState(0)
+  const [now, setNow] = useState(Date.now())
   const [recoveryInput, setRecoveryInput] = useState('')
-  const [showRecovery, setShowRecovery] = useState(false)
+  const [showRecoveryCode, setShowRecoveryCode] = useState(false)
+
+  useEffect(() => {
+    if (lockedUntil <= Date.now()) return
+    const t = window.setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [lockedUntil])
+
+  const waitSec = Math.max(0, Math.ceil((lockedUntil - now) / 1000))
 
   if (unlocked) {
     return (
       <div>
-        {settings.parentPinEnabled && (
+        {getParentSettings().parentPinEnabled && (
           <div className="pin-toolbar">
-            <button type="button" className="btn btn-ghost" onClick={() => { lockParentSession(); setUnlocked(false); setMode('entry'); setPin('') }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                lockParentSession()
+                setUnlocked(false)
+                setMode('entry')
+                setPin('')
+              }}
+            >
               잠금
             </button>
           </div>
@@ -33,13 +57,24 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
   }
 
   async function submitEntry() {
+    if (waitSec > 0) return
     setError('')
+    setOkMsg('')
     const s = getParentSettings()
     if (!(await verifyPin(pin, s.parentPinSalt, s.parentPinHash))) {
-      setError('PIN이 맞지 않아요')
+      const next = fails + 1
+      setFails(next)
+      setError('번호가 달라요. 다시 눌러 주세요')
       setPin('')
+      if (next >= LOCK_AFTER) {
+        setLockedUntil(Date.now() + LOCK_MS)
+        setFails(0)
+        setError('조금 쉬었다가 다시 해 보세요')
+      }
       return
     }
+    setFails(0)
+    setOkMsg('열렸어요!')
     unlockParentSession()
     setUnlocked(true)
     setPin('')
@@ -48,7 +83,7 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
   async function submitSetup() {
     setError('')
     if (!/^\d{4}$/.test(pin)) {
-      setError('숫자 4자리를 입력해요')
+      setError('숫자 네 자리를 눌러 주세요')
       return
     }
     setPending(pin)
@@ -59,26 +94,27 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
   async function submitConfirm() {
     setError('')
     if (pin !== pending) {
-      setError('PIN이 서로 달라요. 다시 설정해요')
+      setError('두 번호가 달라요. 처음부터 다시요')
       setPin('')
       setPending('')
       setMode('setup')
       return
     }
     const salt = randomSalt()
-    const hash = await hashPin(pin, salt)
+    const digest = await hashPin(pin, salt)
     const token = makeRecoveryToken()
     setParentSettings({
       parentPinEnabled: true,
       parentPinSalt: salt,
-      parentPinHash: hash,
+      parentPinHash: digest,
       parentRecoveryToken: token,
     })
     unlockParentSession()
     setUnlocked(true)
     setPin('')
     setPending('')
-    setShowRecovery(true)
+    setShowRecoveryCode(true)
+    setOkMsg('부모님 비밀번호를 저장했어요')
   }
 
   async function submitRecover() {
@@ -93,31 +129,35 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
     setMode('setup')
     setPin('')
     setRecoveryInput('')
-    setShowRecovery(false)
   }
 
   return (
     <div className="pin-gate">
-      <Character name="youngi" state="thinking" size="md" animate />
+      <Character name="youngi" state={error ? 'sad' : okMsg ? 'happy' : 'thinking'} size="md" animate />
       <h1>부모님 공간</h1>
-      <p className="section-sub">아이 화면과 분리된 설정이에요</p>
+      <p className="section-sub">아이 놀이 화면과 따로 되어 있어요</p>
       <VisualIcon name="ui.lock" size={48} />
 
       {mode === 'entry' && (
         <>
-          <p className="card-title">PIN 4자리</p>
-          <PinPad value={pin} onChange={setPin} onSubmit={submitEntry} />
+          <p className="card-title">비밀번호 네 자리</p>
+          {waitSec > 0 ? (
+            <p className="pin-error">{waitSec}초 뒤에 다시 눌러 주세요</p>
+          ) : (
+            <PinPad value={pin} onChange={setPin} onSubmit={submitEntry} disabled={waitSec > 0} />
+          )}
           {error && <p className="pin-error">{error}</p>}
+          {okMsg && <p className="pin-ok">{okMsg}</p>}
           <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: '0.7rem' }} onClick={() => setMode('recover')}>
-            PIN을 잊었어요 (부모 설정만 초기화)
+            비밀번호를 잊었어요
           </button>
         </>
       )}
 
       {mode === 'setup' && (
         <>
-          <p className="card-title">새 PIN 설정</p>
-          <p className="card-sub">숫자 4자리를 정해요</p>
+          <p className="card-title">부모님 비밀번호 만들기</p>
+          <p className="card-sub">숫자 네 자리를 정해요. 아이 화면에는 안 보여요.</p>
           <PinPad value={pin} onChange={setPin} onSubmit={submitSetup} />
           {error && <p className="pin-error">{error}</p>}
           <button
@@ -130,14 +170,14 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
               setUnlocked(true)
             }}
           >
-            지금은 PIN 없이 쓸게요
+            지금은 비밀번호 없이 쓸게요
           </button>
         </>
       )}
 
       {mode === 'confirm' && (
         <>
-          <p className="card-title">한 번 더 입력</p>
+          <p className="card-title">한 번 더 눌러 주세요</p>
           <PinPad value={pin} onChange={setPin} onSubmit={submitConfirm} />
           {error && <p className="pin-error">{error}</p>}
         </>
@@ -146,10 +186,10 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
       {mode === 'recover' && (
         <>
           <p className="card-title">복구 코드</p>
-          <p className="card-sub">별·스티커·놀이 기록은 그대로 두고, 부모 설정(PIN 포함)만 지워요.</p>
+          <p className="card-sub">별·스티커·놀이 기록은 그대로 두고, 부모님 설정만 지워요.</p>
           <input className="parent-input" value={recoveryInput} onChange={(e) => setRecoveryInput(e.target.value)} placeholder="복구 코드" />
           <button type="button" className="btn btn-sunny btn-block" style={{ marginTop: '0.7rem' }} onClick={submitRecover}>
-            부모 설정 초기화
+            부모님 설정만 초기화
           </button>
           {error && <p className="pin-error">{error}</p>}
           <button type="button" className="btn btn-ghost btn-block" onClick={() => setMode('entry')}>
@@ -158,12 +198,12 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
         </>
       )}
 
-      {showRecovery && (
+      {showRecoveryCode && (
         <div className="card soft-card" style={{ marginTop: '1rem' }}>
-          <div className="card-title">복구 코드를 저장하세요</div>
-          <p className="card-sub">PIN을 잊었을 때 부모 설정만 초기화할 수 있어요.</p>
+          <div className="card-title">복구 코드를 적어 두세요</div>
+          <p className="card-sub">비밀번호를 잊었을 때 부모님 설정만 지울 수 있어요.</p>
           <code className="recovery-code">{getParentSettings().parentRecoveryToken}</code>
-          <button type="button" className="btn btn-sky btn-block" style={{ marginTop: '0.6rem' }} onClick={() => setShowRecovery(false)}>
+          <button type="button" className="btn btn-sky btn-block" style={{ marginTop: '0.6rem' }} onClick={() => setShowRecoveryCode(false)}>
             확인했어요
           </button>
         </div>
@@ -172,18 +212,28 @@ export function ParentPinGate({ children }: { children: ReactNode }) {
   )
 }
 
-function PinPad({ value, onChange, onSubmit }: { value: string; onChange: (v: string) => void; onSubmit: () => void }) {
+function PinPad({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSubmit: () => void
+  disabled?: boolean
+}) {
   function press(d: string) {
-    if (value.length >= 4) return
+    if (disabled || value.length >= 4) return
     const next = value + d
     onChange(next)
     if (next.length === 4) setTimeout(onSubmit, 80)
   }
   return (
     <div>
-      <div className="pin-slots" aria-label="PIN 입력">
+      <div className="pin-slots" aria-label="비밀번호 입력">
         {[0, 1, 2, 3].map((i) => (
-          <span key={i} className={`pin-slot${value.length > i ? ' filled' : ''}`} />
+          <span key={i} className={`pin-slot${value.length > i ? ' filled' : ''}${disabled ? ' locked' : ''}`} />
         ))}
       </div>
       <div className="pin-pad">
@@ -195,6 +245,7 @@ function PinPad({ value, onChange, onSubmit }: { value: string; onChange: (v: st
               key={k}
               type="button"
               className="pin-key anim-tap"
+              disabled={disabled}
               onClick={() => {
                 if (k === '⌫') onChange(value.slice(0, -1))
                 else press(k)
@@ -215,38 +266,42 @@ function PinSettingsPanel() {
   const [pin, setPin] = useState('')
   const [pending, setPending] = useState('')
   const [msg, setMsg] = useState('')
+  const [revealCode, setRevealCode] = useState(false)
 
   if (mode === 'idle') {
     return (
       <div className="card" style={{ marginTop: '1rem', marginBottom: '0.9rem' }}>
-        <div className="card-title">부모 PIN</div>
-        <p className="card-sub">{s.parentPinEnabled ? 'PIN 잠금이 켜져 있어요' : 'PIN 잠금이 꺼져 있어요'}</p>
+        <div className="card-title">부모님 비밀번호</div>
+        <p className="card-sub">{s.parentPinEnabled ? '잠금이 켜져 있어요' : '잠금이 꺼져 있어요'}</p>
         <div className="chip-row">
           {!s.parentPinEnabled && (
             <button type="button" className="chip on" onClick={() => setMode('change1')}>
-              PIN 설정
+              비밀번호 만들기
             </button>
           )}
           {s.parentPinEnabled && (
             <>
               <button type="button" className="chip" onClick={() => setMode('change1')}>
-                PIN 변경
+                바꾸기
               </button>
               <button
                 type="button"
                 className="chip"
                 onClick={() => {
                   setParentSettings({ parentPinEnabled: false, parentPinHash: null, parentPinSalt: null })
-                  setMsg('PIN을 껐어요')
+                  setMsg('잠금을 껐어요')
                 }}
               >
-                PIN 끄기
+                끄기
+              </button>
+              <button type="button" className="chip" onClick={() => setRevealCode((v) => !v)}>
+                복구 코드
               </button>
             </>
           )}
         </div>
         {msg && <p className="card-sub">{msg}</p>}
-        {s.parentRecoveryToken && (
+        {revealCode && s.parentRecoveryToken && (
           <p className="card-sub" style={{ marginTop: '0.5rem' }}>
             복구 코드: <code>{s.parentRecoveryToken}</code>
           </p>
@@ -257,7 +312,7 @@ function PinSettingsPanel() {
 
   return (
     <div className="card" style={{ marginTop: '1rem' }}>
-      <div className="card-title">{mode === 'change1' ? '새 PIN' : '확인'}</div>
+      <div className="card-title">{mode === 'change1' ? '새 비밀번호' : '확인'}</div>
       <PinPad
         value={pin}
         onChange={setPin}
@@ -276,15 +331,22 @@ function PinSettingsPanel() {
             return
           }
           const salt = randomSalt()
-          const hash = await hashPin(pin, salt)
+          const digest = await hashPin(pin, salt)
           const token = s.parentRecoveryToken || makeRecoveryToken()
-          setParentSettings({ parentPinEnabled: true, parentPinSalt: salt, parentPinHash: hash, parentRecoveryToken: token })
-          setMsg('PIN을 저장했어요')
+          setParentSettings({ parentPinEnabled: true, parentPinSalt: salt, parentPinHash: digest, parentRecoveryToken: token })
+          setMsg('저장했어요')
           setMode('idle')
           setPin('')
         }}
       />
-      <button type="button" className="btn btn-ghost btn-block" onClick={() => { setMode('idle'); setPin('') }}>
+      <button
+        type="button"
+        className="btn btn-ghost btn-block"
+        onClick={() => {
+          setMode('idle')
+          setPin('')
+        }}
+      >
         취소
       </button>
     </div>

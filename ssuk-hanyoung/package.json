@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "smoke": "bash scripts/smoke.sh",
     "test:learning": "node scripts/test-learning.mjs",
-    "deploy:web": "bash scripts/deploy-ship.sh"
+    "deploy:web": "bash scripts/deploy-ship.sh",
+    "deploy:fixed": "node scripts/deploy-fixed.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

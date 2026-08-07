@@ -41,5 +41,10 @@ for (const f of uiFiles) {
 }
 assert.equal(emojiHits, 0, 'UI files still contain emoji glyphs')
 
+// Registry status counts (string scan)
+const assets = readFileSync(join(root, 'src/design/visualAssets.ts'), 'utf8')
+const real = (assets.match(/status: 'REAL'/g) || []).length
+const temp = (assets.match(/status: 'TEMP'/g) || []).length
 console.log('OK learning-core checks')
 console.log(`games=${gameIds.length} learningMeta=${learningIds.length} uiEmojiHits=${emojiHits}`)
+console.log(`registry REAL≈${real} TEMP helpers present=${temp > 0}`)

@@ -175,10 +175,10 @@ export function addStars(n: number, gameId?: string) {
   if (unlocked) {
     window.dispatchEvent(new CustomEvent('ssuk-sticker', { detail: unlocked }))
   }
-  // Learning Core: every star award counts as a successful micro-activity
+  // Learning Core: stars → success or creative engagement (no forced fail on creative)
   if (gameId && typeof window !== 'undefined') {
-    void import('./learningProgress').then(({ recordLearningActivity }) => {
-      recordLearningActivity({ gameId, success: true, duration: 15, score: n })
+    void import('./learningEvents').then(({ recordSuccess }) => {
+      recordSuccess(gameId, { duration: 15, score: n })
     })
   }
   return p.stars

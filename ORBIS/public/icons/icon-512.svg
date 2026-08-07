@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ORBIS">
+  <rect width="512" height="512" rx="112" fill="#05070f"/>
+  <defs>
+    <radialGradient id="core512" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#3aa9ff"/>
+      <stop offset="75%" stop-color="#9b6bff"/>
+      <stop offset="100%" stop-color="#05070f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="orbit512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3aa9ff"/>
+      <stop offset="50%" stop-color="#d4b26a"/>
+      <stop offset="100%" stop-color="#9b6bff"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#orbit512)" stroke-width="8" opacity="0.7"/>
+  <ellipse cx="256" cy="256" rx="140" ry="58" fill="none" stroke="url(#orbit512)" stroke-width="7" transform="rotate(-28 256 256)"/>
+  <ellipse cx="256" cy="256" rx="108" ry="42" fill="none" stroke="#9b6bff" stroke-width="5" opacity="0.65" transform="rotate(40 256 256)"/>
+  <circle cx="256" cy="256" r="58" fill="url(#core512)"/>
+  <circle cx="256" cy="256" r="20" fill="#ffffff"/>
+  <circle cx="378" cy="190" r="12" fill="#3aa9ff"/>
+  <circle cx="154" cy="318" r="11" fill="#d4b26a"/>
+  <circle cx="336" cy="352" r="10" fill="#9b6bff"/>
+</svg>

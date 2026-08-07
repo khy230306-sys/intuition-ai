@@ -1,0 +1,94 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(14px);
+  background: rgba(5, 7, 15, 0.72);
+  border-bottom: 1px solid rgba(244, 247, 255, 0.06);
+}
+
+.inner {
+  width: min(100%, var(--page-max));
+  min-height: var(--header-height);
+  margin: 0 auto;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brandLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.desktopNav {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.navLink {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+
+.navLink:hover,
+.navLinkActive {
+  color: var(--text-primary);
+  background: rgba(58, 169, 255, 0.1);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iconButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-soft);
+  background: rgba(16, 27, 51, 0.55);
+  display: inline-grid;
+  place-items: center;
+  transition:
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.iconButton:hover {
+  border-color: rgba(58, 169, 255, 0.45);
+}
+
+.iconButton:active {
+  transform: scale(0.96);
+}
+
+.iconButtonActive {
+  border-color: rgba(212, 178, 106, 0.55);
+  box-shadow: 0 0 16px rgba(212, 178, 106, 0.2);
+}
+
+.burger {
+  display: inline-grid;
+}
+
+@media (min-width: 860px) {
+  .desktopNav {
+    display: flex;
+  }
+
+  .burger {
+    display: none;
+  }
+}

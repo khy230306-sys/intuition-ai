@@ -13,7 +13,13 @@ export type {
   TaskStatus,
   TaskType,
 } from './types'
-export { resolveKoreanDate, extractDateFromUtterance } from './dates'
+export { resolveKoreanDate, extractDateFromUtterance, resolveAbsoluteMonthDay } from './dates'
+export {
+  extractMultiSlots,
+  isExplicitCityInfoQuery,
+  isBarePlaceUtterance,
+  isActiveTaskFollowUpAction,
+} from './multiSlotExtractor'
 export {
   clearAllTasks,
   createTaskSession,

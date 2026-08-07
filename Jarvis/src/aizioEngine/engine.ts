@@ -25,7 +25,6 @@ import {
   ensureEngineSession,
   getSessionContext,
   loadEngineSession,
-  saveEngineSession,
 } from './session'
 import { formatCalendarReply, runCalendarWriteTool } from './tools/calendarTool'
 import { formatPlacesReply, runPlacesTool } from './tools/placesTool'

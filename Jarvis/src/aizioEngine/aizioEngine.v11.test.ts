@@ -157,7 +157,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
       makeToolResult({
         toolId: 'weather.forecast',
         success: true,
-        data: null,
+        data: null as never,
         source: 'x',
         sourceType: 'live_api',
         isRealData: true,

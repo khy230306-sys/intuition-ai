@@ -201,11 +201,11 @@ export function verifyMemoryField(
   if (!actual || actual !== expected) {
     return {
       ok: false,
-      result: makeToolResult({
+      result: makeToolResult<{ key: string; value: string }>({
         toolId: 'memory.read',
         success: false,
         status: 'failed',
-        data: null,
+        data: { key, value: actual || '' },
         source: 'session',
         sourceType: 'local_store',
         isRealData: false,

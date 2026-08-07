@@ -41,6 +41,8 @@ export function primaryTabForView(view: View | string): PrimaryTabId {
     case 'customers':
     case 'ai-camera':
     case 'navigation':
+    case 'travel':
+    case 'restaurant':
       return 'more'
     default:
       return 'home'

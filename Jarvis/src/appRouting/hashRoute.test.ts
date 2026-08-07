@@ -83,7 +83,22 @@ describe('view/hash mapping', () => {
     expect(hashScreenToView('more')).toBe('more')
     expect(hashScreenToView('life')).toBe('schedule')
     expect(viewToHashScreen('life')).toBe('schedule')
-    expect(viewToHashScreen('settings')).toBe('more')
+  })
+
+  it('deep-links secondary screens (settings/games/travel/…)', () => {
+    expect(parseLocationHash('#settings').valid).toBe(true)
+    expect(hashScreenToView('settings')).toBe('settings')
+    expect(viewToHashScreen('settings')).toBe('settings')
+    expect(parseLocationHash('#games').screen).toBe('games')
+    expect(hashScreenToView('games')).toBe('games')
+    expect(parseLocationHash('#travel').screen).toBe('travel')
+    expect(parseLocationHash('#restaurant').screen).toBe('restaurant')
+    expect(parseLocationHash('#family-helper').valid).toBe(true)
+    expect(hashScreenToView('family-helper')).toBe('family-helper')
+    expect(hashScreenToView('family')).toBe('family-helper')
+    expect(viewToHashScreen('family-helper')).toBe('family')
+    expect(viewToHashScreen('family')).toBe('family-room')
+    expect(hashScreenToView('family-room')).toBe('family')
   })
 })
 

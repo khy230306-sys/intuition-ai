@@ -96,10 +96,15 @@ async function main() {
     window.SpeechRecognition = FakeRec
   })
 
-  await page.goto('http://127.0.0.1:4183/', { waitUntil: 'networkidle0' })
-  await page.waitForSelector('[data-view="friends"]')
-  await page.click('[data-view="friends"]')
-  await page.waitForSelector('#friends-create')
+  await page.goto('http://127.0.0.1:4183/#friends', { waitUntil: 'networkidle0' })
+  await page.evaluate(() => {
+    document.querySelector('[data-action="skip-location"]')?.click()
+    for (const re of [/숨기기/, /나중에/, /오프라인/, /AI 없이/]) {
+      ;[...document.querySelectorAll('button')].find((b) => re.test(b.textContent || ''))?.click()
+    }
+  })
+  await new Promise((r) => setTimeout(r, 500))
+  await page.waitForSelector('#friends-create', { timeout: 20000 })
 
   await page.type('#friends-create input[name="name"]', '')
   await page.click('#friends-create input[name="name"]', { clickCount: 3 })
@@ -142,15 +147,15 @@ async function main() {
     { timeout: 8000 },
   )
 
-  await page.click('[data-friends-tab="notices"]')
-  await page.waitForSelector('#friends-notice-form')
+  await page.evaluate(() => document.querySelector('[data-friends-tab="notices"]')?.click())
+  await page.waitForSelector('#friends-notice-form', { timeout: 20000 })
   await page.type('#friends-notice-form input[name="title"]', '주말 공지')
   await page.type('#friends-notice-form textarea[name="body"]', '일요일 모임')
   await page.click('#friends-notice-form button[type="submit"]')
   await page.waitForFunction(() => (document.body.textContent || '').includes('주말 공지'))
 
-  await page.click('[data-friends-tab="events"]')
-  await page.waitForSelector('#friends-event-form')
+  await page.evaluate(() => document.querySelector('[data-friends-tab="events"]')?.click())
+  await page.waitForSelector('#friends-event-form', { timeout: 20000 })
   await page.type('#friends-event-form input[name="title"]', '병원')
   await page.click('#friends-event-form button[type="submit"]')
   await page.waitForFunction(() => (document.body.textContent || '').includes('병원'))

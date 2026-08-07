@@ -4,15 +4,28 @@
  * and rewrite-less snapshots return platform 404.
  */
 
+/** Primary + secondary screens that may appear in location.hash */
 export const APP_HASH_SCREENS = [
   'home',
   'chat',
   'life',
   'schedule',
   'family',
+  'family-helper',
+  'family-room',
   'more',
   'all',
   'navigation',
+  'settings',
+  'games',
+  'travel',
+  'restaurant',
+  'friends',
+  'customers',
+  'ai-camera',
+  'invest',
+  'actions',
+  'global',
 ] as const
 export type AppHashScreen = (typeof APP_HASH_SCREENS)[number]
 
@@ -73,8 +86,7 @@ export function sanitizeNavQuery(raw: unknown): string {
  * Parse location.hash forms:
  *   #navigation
  *   #navigation?q=역삼동
- *   #navigation?query=...
- *   #home | #chat | #life | #family | #all
+ *   #home | #chat | #schedule | #family | #settings | #games | …
  * Invalid → valid:false, screen defaults to home.
  */
 export function parseLocationHash(hash: string): ParsedHashRoute {
@@ -118,15 +130,48 @@ export function viewToHashScreen(
   view: string,
   opts?: { homeV2?: boolean; homeV2Pane?: string },
 ): AppHashScreen {
-  if (view === 'navigation') return 'navigation'
-  if (view === 'schedule' || view === 'life') return 'schedule'
-  if (view === 'family' || view === 'family-helper') return 'family'
-  if (view === 'more' || view === 'settings' || view === 'global' || view === 'actions') return 'more'
-  if (view === 'home') return 'home'
-  if (view === 'chat') return 'chat'
-  // Secondary screens keep more/home hash rather than inventing pathnames.
   void opts
-  return 'more'
+  switch (view) {
+    case 'navigation':
+      return 'navigation'
+    case 'schedule':
+    case 'life':
+      return 'schedule'
+    case 'family':
+      // Member chat space (멤버)
+      return 'family-room'
+    case 'family-helper':
+      // Prefer short #family for the primary 가족 tab
+      return 'family'
+    case 'more':
+      return 'more'
+    case 'settings':
+      return 'settings'
+    case 'games':
+      return 'games'
+    case 'travel':
+      return 'travel'
+    case 'restaurant':
+      return 'restaurant'
+    case 'friends':
+      return 'friends'
+    case 'customers':
+      return 'customers'
+    case 'ai-camera':
+      return 'ai-camera'
+    case 'invest':
+      return 'invest'
+    case 'actions':
+      return 'actions'
+    case 'global':
+      return 'global'
+    case 'home':
+      return 'home'
+    case 'chat':
+      return 'chat'
+    default:
+      return 'more'
+  }
 }
 
 export function hashScreenToView(screen: AppHashScreen): string {
@@ -137,10 +182,33 @@ export function hashScreenToView(screen: AppHashScreen): string {
     case 'schedule':
       return 'schedule'
     case 'family':
+    case 'family-helper':
       return 'family-helper'
+    case 'family-room':
+      return 'family'
     case 'more':
     case 'all':
       return 'more'
+    case 'settings':
+      return 'settings'
+    case 'games':
+      return 'games'
+    case 'travel':
+      return 'travel'
+    case 'restaurant':
+      return 'restaurant'
+    case 'friends':
+      return 'friends'
+    case 'customers':
+      return 'customers'
+    case 'ai-camera':
+      return 'ai-camera'
+    case 'invest':
+      return 'invest'
+    case 'actions':
+      return 'actions'
+    case 'global':
+      return 'global'
     case 'chat':
       return 'chat'
     case 'home':

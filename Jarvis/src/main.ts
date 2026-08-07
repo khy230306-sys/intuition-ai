@@ -444,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.5'
+const APP_VERSION = '1.30.6'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -1953,13 +1953,10 @@ function bootNavDelegation(): void {
       const t = e.target as HTMLElement | null
       if (!t) return
 
+      // Space sub-tabs (대화/공지/일정) must never be blocked by ghost-nav guard —
+      // they only remount the panel body, not the bottom primary nav.
       const famTab = t.closest?.('[data-family-tab]') as HTMLElement | null
       if (famTab) {
-        if (isNavGuarded(e)) {
-          e.preventDefault()
-          e.stopPropagation()
-          return
-        }
         const next = famTab.getAttribute('data-family-tab') as 'chat' | 'notices' | 'events' | null
         if (!next) return
         e.preventDefault()
@@ -1969,11 +1966,6 @@ function bootNavDelegation(): void {
 
       const frTab = t.closest?.('[data-friends-tab]') as HTMLElement | null
       if (frTab) {
-        if (isNavGuarded(e)) {
-          e.preventDefault()
-          e.stopPropagation()
-          return
-        }
         const next = frTab.getAttribute('data-friends-tab') as 'chat' | 'notices' | 'events' | null
         if (!next) return
         e.preventDefault()
@@ -5287,7 +5279,9 @@ function goToSpaceTab(kind: 'family' | 'friends', next: 'chat' | 'notices' | 'ev
     if (next === state.friendsTab) return
     state.friendsTab = next
   }
-  render({ pointer: ev ? { x: ev.clientX, y: ev.clientY } : undefined })
+  // No ghost-nav guard — sub-tab switches are intentional in-panel navigation
+  void ev
+  render({ guardNav: false })
 }
 
 function render(opts: RenderOpts = {}): void {

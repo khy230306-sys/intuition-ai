@@ -23,6 +23,20 @@ describe('spokenCommand', () => {
     expect(detectEverydayIntent('부산 날씨 어때')).toMatchObject({ city: '부산' })
   })
 
+  it('routes compact / current-location weather (not alarm or geo)', () => {
+    expect(wantsWeatherCommand('내일 내가있는곳의 날씨를알려줘')).toBe(true)
+    expect(detectEverydayIntent('내일 내가있는곳의 날씨를알려줘')).toEqual({
+      kind: 'weather',
+      city: '',
+    })
+    expect(wantsWeatherCommand('내일하루종일 날씨좀 알려줘 내가있는 위치')).toBe(true)
+    expect(detectEverydayIntent('내일하루종일 날씨좀 알려줘 내가있는 위치')).toEqual({
+      kind: 'weather',
+      city: '',
+    })
+    expect(detectEverydayIntent('내 위치 날씨 어때')?.kind).toBe('weather')
+  })
+
   it('detects time / briefing / location / clear chat', () => {
     expect(detectEverydayIntent('지금 몇 시야')?.kind).toBe('time')
     expect(detectEverydayIntent('브리핑')?.kind).toBe('briefing')

@@ -94,6 +94,9 @@ const CASES: Case[] = [
   { input: '울산 오늘 기온', expectedIntent: 'weather.query' },
   { input: '오늘 우산 필요해?', expectedIntent: 'weather.query' },
   { input: '날씨 알려줘', expectedIntent: 'weather.query' },
+  { input: '내일 내가있는곳의 날씨를알려줘', expectedIntent: 'weather.query' },
+  { input: '내일하루종일 날씨좀 알려줘 내가있는 위치', expectedIntent: 'weather.query' },
+  { input: '내 위치 날씨 어때', expectedIntent: 'weather.query' },
 
   // —— Calendar / reminder / todo ——
   { input: '오늘 일정 알려줘', expectedIntent: 'calendar.read' },
@@ -215,6 +218,26 @@ describe('required think() integration', () => {
   it('TEST03 weather query works', async () => {
     const r = await think('오늘 날씨 알려줘')
     expect(r.text).toMatch(/날씨/)
+  })
+
+  it('current-location weather is not alarm or geo lookup', async () => {
+    const a = await think('내일 내가있는곳의 날씨를알려줘')
+    expect(a.text).toMatch(/날씨/)
+    expect(a.text).not.toMatch(/시간을 함께 말해|내장 DB|웹 검색을 엽/)
+
+    const b = await think('내일하루종일 날씨좀 알려줘 내가있는 위치')
+    expect(b.text).toMatch(/날씨/)
+    expect(b.text).not.toMatch(/시간을 함께 말해|내장 DB|웹 검색을 엽|내일하루종일/)
+  })
+
+  it('everyday 알려줘 asks are not stolen by alarm', async () => {
+    const fx = await think('환율 알려줘')
+    expect(fx.text).toMatch(/환율|USD|원/i)
+    expect(fx.text).not.toMatch(/시간을 함께 말해/)
+
+    const news = await think('오늘 뉴스')
+    expect(news.text).toMatch(/뉴스/)
+    expect(news.text).not.toMatch(/음성을 잘 듣지|시간을 함께 말해/)
   })
 
   it('TEST04 oneshot with weather words is translation', async () => {

@@ -237,7 +237,26 @@ export function wantsLocalAlarm(text: string): boolean {
   // How-to / encyclopedia 「…방법 알려줘」 is not a timed alarm
   if (/(예약하는\s*방법|예약하는\s*법|어떻게\s*예약|만드는\s*법|무슨\s*뜻)/.test(t)) return false
   if (/(방법|하는\s*법|어떻게)\s*알려줘/.test(t)) return false
-  if (/알림|알람|알려줘/.test(t)) return true
+  // Weather / air-quality asks use 「알려줘」 but are not reminders
+  if (/(날씨|기온|미세먼지)/.test(t)) return false
+  if (/(우산)\s*(필요|챙)/.test(t)) return false
+  if (/비\s*(와|올|오나)/.test(t) && !/(알림|알람|리마인더)/.test(t)) return false
+  // Everyday info asks also use 「알려줘」 — never treat as timed alarm
+  if (
+    /(환율|환전|뉴스|시세|주가|일정|할\s*일|메뉴|뜻|의미|인구|수도|정보|로또|주사위)/.test(t) &&
+    !/(알림|알람|리마인더|\d+\s*(분|시간)\s*(뒤|후)|\d+\s*시)/.test(t)
+  ) {
+    return false
+  }
+  // Explicit alarm words
+  if (/알림|알람|리마인더|기억시켜/.test(t)) return true
+  // 「알려줘」 alone is too common (환율/뉴스/날씨…) — require a time cue
+  if (
+    /알려\s*줘|알려줘/.test(t) &&
+    (/(\d+)\s*(분|시간)\s*(뒤|후)|(?:오전|오후)\s*\d+\s*시|\d+\s*시|내일|모레/.test(t))
+  ) {
+    return true
+  }
   if (/(\d+)\s*(분|시간)\s*(뒤|후)/.test(t) && /(알려|알람|리마인더|기억)/.test(t)) return true
   if (/(오전|오후|내일).*\d+\s*시/.test(t) && /(알려|알람|알림|리마인더)/.test(t)) return true
   return false

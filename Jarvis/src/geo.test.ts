@@ -23,4 +23,11 @@ describe('world geography', () => {
     expect(wantsGeo('내 위치')).toBe(false)
     expect(wantsGeo('위치 알려줘')).toBe(false)
   })
+
+  it('does not claim current-location weather asks', async () => {
+    expect(wantsGeo('내일 내가있는곳의 날씨를알려줘')).toBe(false)
+    expect(wantsGeo('내일하루종일 날씨좀 알려줘 내가있는 위치')).toBe(false)
+    expect(await handleGeo('내일하루종일 날씨좀 알려줘 내가있는 위치')).toBeNull()
+    expect(await handleGeo('내일 내가있는곳의 날씨를알려줘')).toBeNull()
+  })
 })

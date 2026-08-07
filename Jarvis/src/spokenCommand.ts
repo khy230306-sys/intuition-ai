@@ -66,9 +66,14 @@ const WEATHER_SEEDS = [
   '오늘날씨알려줘',
   '오늘날씨어때',
   '날씨알려줘',
+  '날씨를알려줘',
+  '날씨좀알려줘',
   '날씨어때',
   '오늘날씨',
   '내일날씨',
+  '내일날씨알려줘',
+  '내가있는곳날씨',
+  '내위치날씨',
   '비와',
   '비올까',
   '우산필요해',
@@ -124,12 +129,19 @@ function extractWeatherCity(text: string): string {
     t.match(/^(?:날씨)\s*(.+)$/i)
   let city = (m?.[1] || '').trim()
   city = city
-    .replace(/^(오늘|내일|모레|지금)\s*/u, '')
+    .replace(/^(오늘|내일|모레|지금|이번\s*주)\s*/u, '')
+    .replace(/(하루\s*종일|종일|아침|점심|저녁|오후|오전)/gu, ' ')
+    // Self-location → use device/settings city (empty = current)
+    .replace(
+      /(내가\s*있는\s*곳(?:의)?|내가있는곳(?:의)?|내\s*위치|현재\s*위치|내가\s*있는\s*위치|있는\s*위치|여기|근처)/gu,
+      ' ',
+    )
+    .replace(/[을를의가에은는]\s*$/u, '')
     .replace(FILLER, '')
     .replace(/\s+/g, ' ')
     .trim()
   // Drop if city is pure filler / too long (likely not a place)
-  if (!city || city.length > 12 || /^(어때|알려|확인|좀)$/.test(city)) return ''
+  if (!city || city.length > 12 || /^(어때|알려|확인|좀|을|를|의)$/.test(city)) return ''
   return city
 }
 
@@ -310,7 +322,7 @@ export function looksLikeSttGarbage(text: string): boolean {
   // Hangul but no common content tokens and fails all seeds
   if (!/[가-힣]{2,}/.test(stripped)) return true
   const useful =
-    /날씨|시간|시세|브리핑|위치|번역|통역|가족|친구|게임|지출|알림|환율|통계|도움|시세|주가|검색|지도/.test(
+    /날씨|시간|시세|브리핑|위치|번역|통역|가족|친구|게임|지출|알림|환율|뉴스|속보|통계|도움|시세|주가|검색|지도|맛집|길안내|로또|주사위/.test(
       c,
     )
   if (useful) return false

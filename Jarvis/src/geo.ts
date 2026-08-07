@@ -87,6 +87,10 @@ function continentList(): string {
 }
 
 export function wantsGeo(text: string): boolean {
+  // Weather asks ("내 위치 날씨", "내가있는곳 날씨") must not become geo/wiki lookup
+  if (/(날씨|기온|미세먼지)/.test(text) && /(알려|어때|확인|좀|우산|비)/.test(text)) {
+    return false
+  }
   // Device GPS intents are handled in brain — do not treat as world-geo
   if (
     /^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) ||
@@ -121,6 +125,10 @@ function capitalQuestion(text: string): CountryInfo | null {
 
 export async function handleGeo(text: string): Promise<BrainReply | null> {
   const t = text.trim()
+  // Never claim weather-location questions (brain handles via weather skill)
+  if (/(날씨|기온|미세먼지)/.test(t) && /(알려|어때|확인|좀|우산|비|위치|곳)/.test(t)) {
+    return null
+  }
   if (!wantsGeo(t) && !findCountry(extractPlaceQuery(t)) && !findCity(extractPlaceQuery(t))) {
     // still allow bare country/city names as info requests when short
     const bare = extractPlaceQuery(t)

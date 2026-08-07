@@ -547,14 +547,25 @@ async function handleLife(text: string): Promise<BrainReply | null> {
         speak: true,
       }
     }
-    return {
-      text: '시간을 함께 말해 주세요.\n예: "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
-      speak: true,
+    // Only prompt for a time when the utterance is clearly an alarm (not bare 「…알려줘」)
+    if (/알림|알람|리마인더|기억시켜/.test(text) || /\d+\s*(분|시간|시)/.test(text)) {
+      return {
+        text: '시간을 함께 말해 주세요.\n예: "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
+        speak: true,
+      }
     }
   }
 
   const fx = await answerFx(text)
   if (fx) return { text: fx, speak: true }
+
+  if (/^(오늘|지금|최신)?\s*뉴스/.test(text.trim()) || /뉴스\s*(알려|보여|어때|요약)/.test(text)) {
+    return {
+      text: '오늘 주요 뉴스 검색을 엽니다.',
+      speak: true,
+      action: () => openSearch('오늘 주요 뉴스'),
+    }
+  }
 
   const converted = convertUnit(text)
   if (converted) return { text: converted, speak: true }
@@ -1352,10 +1363,13 @@ export async function think(
   const translated = await handleTranslate(text)
   if (translated) return translated
 
-  // Device GPS — before handleGeo so "현재 위치/위치 알려" is not wiki-hijacked
+  // Device GPS — before handleGeo so "현재 위치/위치 알려" is not wiki-hijacked.
+  // Weather+location ("내 위치 날씨") must stay with the weather skill above.
   if (
-    /^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) ||
-    /내\s*위치|지금\s*어디야|현재\s*위치|위치\s*알려\s*줘?/.test(text)
+    !isClearWeatherQuery(text) &&
+    !/(날씨|기온|미세먼지)/.test(text) &&
+    (/^(내\s*위치|지금\s*어디|현재\s*위치|위치\s*알려|where\s*am\s*i)/i.test(text) ||
+      /내\s*위치|지금\s*어디야|현재\s*위치|위치\s*알려\s*줘?/.test(text))
   ) {
     try {
       const report = await getLocationReport()

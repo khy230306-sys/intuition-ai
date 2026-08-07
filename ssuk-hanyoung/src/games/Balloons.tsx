@@ -33,6 +33,7 @@ export function Balloons() {
     if (b.popped || round.done) return
     if (b.colorId !== target.id) {
       speak('다른 색깔이에요')
+      round.fail()
       return
     }
     const next = balloons.map((x) => (x.id === b.id ? { ...x, popped: true } : x))

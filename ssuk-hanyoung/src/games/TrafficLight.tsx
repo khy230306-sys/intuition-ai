@@ -43,7 +43,7 @@ export function TrafficLight() {
       sfx.wait()
       speak('조금 더 기다려요')
     } else {
-      sfx.wrong()
+      round.fail()
       speak('빨간불! 멈춰요!')
     }
   }

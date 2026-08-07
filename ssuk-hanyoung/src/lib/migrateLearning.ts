@@ -32,7 +32,18 @@ export function migrateLearningFields<T extends Migratable>(p: T): T {
   }
   if (!next.activityLog) next.activityLog = []
   if (!next.parentSettings) next.parentSettings = { ...DEFAULT_PARENT_SETTINGS }
-  else next.parentSettings = { ...DEFAULT_PARENT_SETTINGS, ...next.parentSettings }
+  else {
+    const prev = next.parentSettings as ParentSettings & { difficultyBias?: string }
+    const merged: ParentSettings = {
+      ...DEFAULT_PARENT_SETTINGS,
+      ...prev,
+      parentPinSalt: prev.parentPinSalt ?? null,
+      parentRecoveryToken: prev.parentRecoveryToken ?? null,
+      difficultyBias:
+        (prev.difficultyBias as string) === 'balanced' ? 'auto' : (prev.difficultyBias as ParentSettings['difficultyBias']) || 'auto',
+    }
+    next.parentSettings = merged
+  }
   if (next.playStreak == null) next.playStreak = 0
   if (!next.lastPlayDate) next.lastPlayDate = ''
 

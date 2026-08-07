@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type PointerEvent } from 'react'
 import { speak } from '../lib/speech'
 import { sfx } from '../lib/sfx'
 import { addStars } from '../lib/store'
+import { recordFailure } from '../lib/learningEvents'
 import { GameShell } from '../components/GameShell'
 import { Confetti } from '../components/Confetti'
 import { PaintSubject } from '../components/PaintSubject'
@@ -58,6 +59,7 @@ export function MazeDrive() {
       if (Date.now() - lastWarn.current > 1400) {
         lastWarn.current = Date.now()
         sfx.wrong()
+        recordFailure('maze-drive', { duration: 2 })
         speak('길 위로 와요')
       }
       return

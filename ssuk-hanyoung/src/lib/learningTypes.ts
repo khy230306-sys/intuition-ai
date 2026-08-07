@@ -9,10 +9,16 @@ export type SkillProgress = {
   lastPlayedAt: string | null
   mastery: number
   streak: number
+  /** last 10 outcomes — true=success */
+  recent?: boolean[]
+  retries?: number
+  abandons?: number
 }
 
 export type CategoryProgress = Record<string, SkillProgress>
 export type LearningProgress = Record<LearningCategory, CategoryProgress>
+
+export type ActivityKind = 'success' | 'failure' | 'retry' | 'abandon' | 'complete'
 
 export type ActivityEntry = {
   at: string
@@ -22,14 +28,20 @@ export type ActivityEntry = {
   success: boolean
   durationSec: number
   score: number
+  kind?: ActivityKind
 }
+
+export type DifficultyBias = 'easy' | 'auto' | 'challenge'
 
 export type ParentSettings = {
   screenTimeMinutes: number
-  difficultyBias: 'easy' | 'balanced' | 'challenge'
+  difficultyBias: DifficultyBias
   muteBgm: boolean
   parentPinEnabled: boolean
   parentPinHash: string | null
+  parentPinSalt: string | null
+  /** recovery token for parent-settings-only reset */
+  parentRecoveryToken: string | null
 }
 
 export const EMPTY_SKILL = (): SkillProgress => ({
@@ -41,6 +53,9 @@ export const EMPTY_SKILL = (): SkillProgress => ({
   lastPlayedAt: null,
   mastery: 0,
   streak: 0,
+  recent: [],
+  retries: 0,
+  abandons: 0,
 })
 
 export function emptyLearningProgress(): LearningProgress {
@@ -58,8 +73,10 @@ export function emptyLearningProgress(): LearningProgress {
 
 export const DEFAULT_PARENT_SETTINGS: ParentSettings = {
   screenTimeMinutes: 30,
-  difficultyBias: 'balanced',
+  difficultyBias: 'auto',
   muteBgm: true,
   parentPinEnabled: false,
   parentPinHash: null,
+  parentPinSalt: null,
+  parentRecoveryToken: null,
 }

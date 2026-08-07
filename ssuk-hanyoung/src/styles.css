@@ -2255,3 +2255,139 @@ img {
     transition: none !important;
   }
 }
+
+/* ===== Visual V2 + PIN + motion tokens ===== */
+.home-char-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.illustration-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 6.5rem;
+  margin: 0 0 0.45rem;
+  border-radius: 1.1rem;
+  border: 3px solid #1a1510;
+  overflow: hidden;
+}
+
+.illustration-fallback {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-family: var(--font-display);
+  margin-bottom: 0.2rem;
+}
+
+.chip-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pin-gate {
+  text-align: center;
+  padding: 1rem 0.5rem 2rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  max-width: 16rem;
+  margin: 0.7rem auto 0;
+}
+
+.pin-key {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 1rem;
+  border: 3px solid #1a1510;
+  background: #fff;
+  box-shadow: 0 4px 0 #1a1510;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.pin-key:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #1a1510;
+}
+
+.pin-slot.filled {
+  background: var(--sunny);
+}
+
+.pin-error {
+  color: var(--berry);
+  font-weight: 700;
+  margin: 0.4rem 0 0;
+}
+
+.pin-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.4rem;
+}
+
+.recovery-code {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 0.8rem;
+  border: 3px dashed #1a1510;
+  background: #fff7cc;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.ssuk-character.state-celebrate { animation: ssuk-bounce 0.65s ease infinite alternate; }
+.ssuk-character.state-happy { animation: ssuk-float 2.2s ease-in-out infinite; }
+.ssuk-character.state-encourage { animation: ssuk-pulse 1.8s ease-in-out infinite; }
+.ssuk-character.state-surprised { animation: ssuk-bounce 0.4s ease 2; }
+.ssuk-character.state-sad { animation: none; }
+
+.anim-float { animation: ssuk-float 2.8s ease-in-out infinite; }
+.anim-bounce { animation: ssuk-bounce 0.55s ease; }
+.anim-celebrate { animation: ssuk-bounce 0.65s ease infinite alternate; }
+.anim-shake { animation: ssuk-shake 0.35s ease; }
+.anim-pulse { animation: ssuk-pulse 1.6s ease-in-out infinite; }
+.anim-sparkle { animation: ssuk-pulse 1.2s ease-in-out infinite; }
+
+@keyframes ssuk-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ssuk-character.state-celebrate,
+  .ssuk-character.state-happy,
+  .ssuk-character.state-encourage,
+  .ssuk-character.state-surprised,
+  .anim-float,
+  .anim-bounce,
+  .anim-celebrate,
+  .anim-shake,
+  .anim-pulse,
+  .anim-sparkle,
+  .anim-tap {
+    animation: none !important;
+    transition: none !important;
+  }
+}

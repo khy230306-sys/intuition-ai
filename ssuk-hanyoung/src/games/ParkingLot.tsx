@@ -40,6 +40,7 @@ export function ParkingLot() {
     if (!car) return
     if (car.colorId !== spot.colorId) {
       speak('이 자리는 다른 색깔이에요')
+      round.fail()
       return
     }
     const next = { ...parked, [spot.id]: car.id }

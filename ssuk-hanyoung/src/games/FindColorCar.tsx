@@ -43,6 +43,7 @@ export function FindColorCar() {
     if (item.found || round.done) return
     if (item.colorId !== target.id) {
       speak('이 색깔이 아니에요')
+      round.fail()
       return
     }
     const next = board.map((x) => (x.id === item.id ? { ...x, found: true } : x))

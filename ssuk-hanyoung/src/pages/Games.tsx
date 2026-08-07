@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { GAMES } from '../data/games'
 import { CATEGORIES, getLearningMeta, type LearningCategory } from '../data/learning'
+import { getGameIllustrationKey } from '../design/visualAssets'
 import { getProfile } from '../lib/store'
 import { GameArt } from '../components/GameArt'
 import { VisualIcon } from '../components/visual/VisualIcon'
@@ -49,7 +50,14 @@ export function Games() {
             className={`chip${filter === f.id ? ' on' : ''}`}
             onClick={() => select(f.id)}
           >
-            {f.label}
+            {f.id === 'all' ? (
+              f.label
+            ) : (
+              <span className="chip-with-icon">
+                <VisualIcon name={`category.${f.id}`} size={22} />
+                {f.label}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -64,11 +72,22 @@ export function Games() {
             const meta = getLearningMeta(g.id)
             const skill = meta ? profile.learningProgress?.[meta.category]?.[meta.skill] : undefined
             const mastery = skill?.mastery ?? 0
+            const cat = CATEGORIES.find((c) => c.id === meta?.category)
+            const illus = getGameIllustrationKey(g.id, cat ? `category.${cat.id}` : undefined)
             return (
               <Link key={g.id} to={`/games/${g.id}`} className="card art-card photo-card game-meta-card anim-tap">
-                <div className="art-wrap photo">
-                  <GameArt id={g.id} size={100} />
+                <div className="illustration-slot" style={{ background: cat ? `${cat.accent}22` : '#FFF7CC' }}>
+                  <GameArt id={g.id} size={88} />
+                  <span className="illustration-fallback" aria-hidden>
+                    <VisualIcon name={illus} size={36} />
+                  </span>
                 </div>
+                {cat && (
+                  <div className="cat-badge">
+                    <VisualIcon name={`category.${cat.id}`} size={18} />
+                    <span>{cat.short}</span>
+                  </div>
+                )}
                 <div className="card-title">{g.title}</div>
                 <div className="card-sub">{g.subtitle}</div>
                 {meta && (
@@ -83,7 +102,7 @@ export function Games() {
                     </span>
                   </div>
                 )}
-                <ProgressBar value={mastery} label="진도" color={CATEGORIES.find((c) => c.id === meta?.category)?.accent} />
+                <ProgressBar value={mastery} label="진도" color={cat?.accent} />
               </Link>
             )
           })}

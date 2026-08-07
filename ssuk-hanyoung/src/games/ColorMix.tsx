@@ -52,6 +52,7 @@ export function ColorMix() {
       setPicked([])
     } else {
       speak('다른 색깔이에요')
+      round.fail()
     }
   }
 

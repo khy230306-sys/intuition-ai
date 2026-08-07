@@ -38,7 +38,7 @@ export function CarBuilder() {
       sfx.tap()
       speak('거의 다 왔어요!')
     } else {
-      sfx.wrong()
+      round.fail()
       speak('다시 골라 볼까요?')
     }
   }

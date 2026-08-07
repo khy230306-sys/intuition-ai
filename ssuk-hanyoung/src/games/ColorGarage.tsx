@@ -44,6 +44,7 @@ export function ColorGarage() {
     if (!car) return
     if (car.colorId !== garageId) {
       speak('이 색깔 차고가 아니에요')
+      round.fail()
       setSelected(null)
       return
     }

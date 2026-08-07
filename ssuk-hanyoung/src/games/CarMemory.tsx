@@ -56,7 +56,7 @@ export function CarMemory() {
         round.win('모두 맞췄어요!')
       }
     } else {
-      sfx.wrong()
+      round.fail()
       speak('다시!')
       setTimeout(() => {
         setCards((cur) => cur.map((c) => (c.id === a || c.id === b ? { ...c, open: false } : c)))

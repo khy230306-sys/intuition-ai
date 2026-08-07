@@ -43,6 +43,7 @@ export function HiddenCars() {
     if (item.found || round.done) return
     if (!item.isCar) {
       speak('자동차가 아니에요')
+      round.fail()
       return
     }
     const next = items.map((x) => (x.id === item.id ? { ...x, found: true } : x))

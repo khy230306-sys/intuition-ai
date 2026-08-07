@@ -57,7 +57,7 @@ export function WaitGo() {
     if (phase === 'wait' || phase === 'too-soon') {
       clearTimers()
       setPhase('too-soon')
-      sfx.wrong()
+      round.fail()
       speak('아직이에요! 기다려요')
       window.setTimeout(() => {
         setRoundKey((k) => k + 1)

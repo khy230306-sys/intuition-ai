@@ -38,6 +38,7 @@ export function VroomRace() {
     if (r.colorId !== target.id) {
       setWrong(r.id)
       speak('다른 색깔이에요')
+      round.fail()
       setTimeout(() => setWrong(null), 350)
       return
     }

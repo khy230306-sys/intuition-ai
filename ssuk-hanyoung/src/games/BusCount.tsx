@@ -28,7 +28,7 @@ export function BusCount() {
       round.win('잘 세요!')
       setTimeout(() => setCount(2 + Math.floor(Math.random() * 4)), 600)
     } else {
-      sfx.wrong()
+      round.fail()
       speak('다시 세어 보아요')
     }
   }

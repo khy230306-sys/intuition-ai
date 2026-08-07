@@ -48,8 +48,10 @@ export function Home() {
       </section>
 
       <section className="home-hero-char card soft-card">
-        <Character name="hani" state={charState} size="large" />
-        <Character name="yeongi" state={charState === 'celebrate' ? 'happy' : 'idle'} size="md" />
+        <div className="home-char-pair">
+          <Character name="hani" state={charState} size="large" animate />
+          <Character name="youngi" state={charState === 'celebrate' ? 'happy' : 'idle'} size="md" animate />
+        </div>
         <div className="home-message">
           <p className="home-message-title">오늘의 메시지</p>
           <p>

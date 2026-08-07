@@ -83,6 +83,7 @@ export function CarPuzzle() {
     if (slots[slot] != null) return
     if (selected !== slot) {
       speak('이 자리가 아니에요')
+      round.fail()
       setSelected(null)
       return
     }

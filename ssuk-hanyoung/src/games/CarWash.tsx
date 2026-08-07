@@ -21,7 +21,7 @@ export function CarWash() {
 
   function doStep(i: number) {
     if (i !== step) {
-      sfx.wrong()
+      round.fail()
       speak('순서대로 해 보아요')
       return
     }

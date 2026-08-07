@@ -37,6 +37,7 @@ export function CarParade() {
     if (!car || !need) return
     if (car.colorId !== need.colorId) {
       speak('이 자리가 아니에요')
+      round.fail()
       return
     }
     if (filled[slot]) return

@@ -42,7 +42,7 @@ export function ColorFollow() {
   function tap(id: string) {
     if (phase !== 'play' || round.done) return
     if (id !== seq[step]) {
-      sfx.wrong()
+      round.fail()
       speak('다시 보아요')
       setPhase('watch')
       setStep(0)

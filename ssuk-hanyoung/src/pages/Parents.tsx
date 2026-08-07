@@ -2,18 +2,27 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getProfile, getSettings, setMuteSfx, setMuteSpeech, setName, useProfileSubscribe } from '../lib/store'
 import { formatMinutes, getParentDashboard, setParentSettings } from '../lib/learningProgress'
+import type { DifficultyBias } from '../lib/learningTypes'
 import { GameArt } from '../components/GameArt'
 import { ProgressBar } from '../components/visual/ProgressBar'
 import { VisualIcon } from '../components/visual/VisualIcon'
 import { Character } from '../components/visual/Character'
+import { ParentPinGate } from '../components/ParentPinGate'
 
 export function Parents() {
+  return (
+    <ParentPinGate>
+      <ParentsInner />
+    </ParentPinGate>
+  )
+}
+
+function ParentsInner() {
   const [name, setNameLocal] = useState(() => getProfile().name)
   const [profile, setProfile] = useState(getProfile)
   const [muteSpeech, setMuteSpeechLocal] = useState(() => getSettings().muteSpeech)
   const [muteSfx, setMuteSfxLocal] = useState(() => getSettings().muteSfx)
   const [dash, setDash] = useState(() => getParentDashboard())
-  const [pinReady, setPinReady] = useState(() => !!getProfile().parentSettings?.parentPinEnabled)
 
   useEffect(() => {
     return useProfileSubscribe(() => {
@@ -22,7 +31,6 @@ export function Parents() {
       setMuteSpeechLocal(s.muteSpeech)
       setMuteSfxLocal(s.muteSfx)
       setDash(getParentDashboard())
-      setPinReady(!!getProfile().parentSettings?.parentPinEnabled)
     })
   }, [])
 
@@ -36,10 +44,12 @@ export function Parents() {
       </p>
 
       <section className="card soft-card parents-hero">
-        <Character name="yeongi" state="encourage" size="md" />
+        <Character name="youngi" state="encourage" size="md" animate />
         <div>
           <div className="card-title">{profile.name}의 성장</div>
-          <div className="card-sub">연속 {dash.playStreak}일 · 별 {profile.stars} · 스티커 {profile.stickers.length}</div>
+          <div className="card-sub">
+            연속 {dash.playStreak}일 · 별 {profile.stars} · 스티커 {profile.stickers.length}
+          </div>
         </div>
       </section>
 
@@ -95,7 +105,7 @@ export function Parents() {
         {dash.last7.map((d) => (
           <div key={d.date} className="week-col">
             <div className="week-bar-wrap">
-              <div className="week-bar" style={{ height: `${Math.min(100, d.count * 18)}%` }} />
+              <div className="week-bar" style={{ height: `${Math.min(100, Math.max(8, d.count * 18))}%` }} />
             </div>
             <span>{d.label}</span>
           </div>
@@ -144,7 +154,7 @@ export function Parents() {
 
       <div className="card" style={{ marginBottom: '0.9rem' }}>
         <div className="card-title">스크린타임</div>
-        <p className="card-sub">하루 권장 놀이 시간 (알림용 준비)</p>
+        <p className="card-sub">하루 권장 놀이 시간</p>
         <div className="chip-row">
           {[15, 30, 45, 60].map((m) => (
             <button
@@ -164,8 +174,8 @@ export function Parents() {
         <div className="chip-row">
           {(
             [
-              ['easy', '쉽게'],
-              ['balanced', '균형'],
+              ['easy', '쉬움'],
+              ['auto', '자동'],
               ['challenge', '도전'],
             ] as const
           ).map(([id, label]) => (
@@ -173,7 +183,7 @@ export function Parents() {
               key={id}
               type="button"
               className={`chip${dash.settings.difficultyBias === id ? ' on' : ''}`}
-              onClick={() => setParentSettings({ difficultyBias: id })}
+              onClick={() => setParentSettings({ difficultyBias: id as DifficultyBias })}
             >
               {label}
             </button>
@@ -206,38 +216,13 @@ export function Parents() {
           <span>효과음 (빵빵·톡)</span>
         </label>
         <label className="parent-toggle">
-          <input
-            type="checkbox"
-            checked={!dash.settings.muteBgm}
-            onChange={(e) => setParentSettings({ muteBgm: !e.target.checked })}
-          />
+          <input type="checkbox" checked={!dash.settings.muteBgm} onChange={(e) => setParentSettings({ muteBgm: !e.target.checked })} />
           <span>배경음악 (준비됨 · 현재 미사용)</span>
         </label>
       </div>
 
-      <div className="card" style={{ marginBottom: '0.9rem' }}>
-        <div className="card-title">부모 PIN (준비)</div>
-        <p className="card-sub">나중에 설정 잠금에 쓸 구조만 준비해 두었어요. PIN 값은 아직 받지 않습니다.</p>
-        <label className="parent-toggle">
-          <input
-            type="checkbox"
-            checked={pinReady}
-            onChange={(e) => {
-              setPinReady(e.target.checked)
-              setParentSettings({ parentPinEnabled: e.target.checked, parentPinHash: null })
-            }}
-          />
-          <span>PIN 잠금 준비 켜기</span>
-        </label>
-        <div className="pin-slots" aria-hidden>
-          {[0, 1, 2, 3].map((i) => (
-            <span key={i} className="pin-slot" />
-          ))}
-        </div>
-      </div>
-
       <p className="section-sub" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-        <VisualIcon name="ui.gift" size={22} />
+        <VisualIcon name="reward.gift" size={22} />
         짧게 자주 하는 게 좋아요
       </p>
     </div>

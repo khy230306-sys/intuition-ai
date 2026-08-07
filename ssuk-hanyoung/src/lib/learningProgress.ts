@@ -5,6 +5,7 @@ import {
   EMPTY_SKILL,
   emptyLearningProgress,
   type ActivityEntry,
+  type ActivityKind,
   type LearningProgress,
   type ParentSettings,
   type SkillProgress,
@@ -32,17 +33,39 @@ function weekStartKey() {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
+/** Lightweight mastery: recent10 + overall + streak + difficulty − recent fails */
+export function computeMastery(skill: SkillProgress, difficulty = 1): number {
+  const recent = skill.recent || []
+  const recentRate = recent.length ? recent.filter(Boolean).length / recent.length : skill.successRate || 0
+  const overall = skill.successRate || 0
+  const streakBonus = Math.min(skill.streak || 0, 5) * 2.5
+  const diffBonus = difficulty * 4
+  const recentFails = recent.slice(-5).filter((x) => !x).length
+  const failPenalty = recentFails * 3.5
+  return clamp(Math.round(recentRate * 45 + overall * 30 + streakBonus + diffBonus - failPenalty), 0, 100)
+}
+
 export function getLearningProgress(): LearningProgress {
   return getProfile().learningProgress || emptyLearningProgress()
 }
 
 export function getParentSettings(): ParentSettings {
-  return getProfile().parentSettings || { ...DEFAULT_PARENT_SETTINGS }
+  const s = getProfile().parentSettings || { ...DEFAULT_PARENT_SETTINGS }
+  // migrate legacy 'balanced' → 'auto'
+  const bias = (s.difficultyBias as string) === 'balanced' ? 'auto' : s.difficultyBias
+  return { ...DEFAULT_PARENT_SETTINGS, ...s, difficultyBias: bias || 'auto' }
 }
 
 export function setParentSettings(patch: Partial<ParentSettings>) {
   const p = getProfile()
-  p.parentSettings = { ...(p.parentSettings || DEFAULT_PARENT_SETTINGS), ...patch }
+  p.parentSettings = { ...getParentSettings(), ...patch }
+  writeProfilePatch(p)
+}
+
+/** Reset parent settings only (PIN recovery) — never wipe stars/stickers/played */
+export function resetParentSettingsOnly() {
+  const p = getProfile()
+  p.parentSettings = { ...DEFAULT_PARENT_SETTINGS }
   writeProfilePatch(p)
 }
 
@@ -53,36 +76,47 @@ export type RecordInput = {
   success: boolean
   duration?: number
   score?: number
+  kind?: ActivityKind
+  /** when false, updates retries/abandons without counting as attempt */
+  countAttempt?: boolean
 }
 
 export function recordLearningActivity(input: RecordInput) {
   const meta = getLearningMeta(input.gameId)
   const category = input.category || meta?.category || 'exploration'
   const skill = input.skill || meta?.skill || input.gameId
+  const kind: ActivityKind = input.kind || (input.success ? 'success' : 'failure')
+  const countAttempt = input.countAttempt !== false && kind !== 'retry' && kind !== 'abandon'
   const p = getProfile()
   if (!p.learningProgress) p.learningProgress = emptyLearningProgress()
   if (!p.activityLog) p.activityLog = []
   const bag = p.learningProgress[category] || (p.learningProgress[category] = {})
-  const cur = bag[skill] || EMPTY_SKILL()
-  const attempts = cur.attempts + 1
-  const successes = cur.successes + (input.success ? 1 : 0)
-  const failures = cur.failures + (input.success ? 0 : 1)
-  const successRate = successes / attempts
-  let mastery = cur.mastery
-  if (input.success) mastery = clamp(mastery + (mastery < 40 ? 8 : mastery < 70 ? 5 : 2), 0, 100)
-  else mastery = clamp(mastery - 4, 0, 100)
-  const streak = input.success ? cur.streak + 1 : 0
-  const level = mastery >= 80 ? 3 : mastery >= 45 ? 2 : 1
-  bag[skill] = {
-    attempts,
-    successes,
-    failures,
-    successRate,
-    level,
-    lastPlayedAt: new Date().toISOString(),
-    mastery,
-    streak,
+  const cur = { ...EMPTY_SKILL(), ...(bag[skill] || {}) }
+  const recent = [...(cur.recent || [])]
+
+  if (kind === 'retry') {
+    cur.retries = (cur.retries || 0) + 1
+  } else if (kind === 'abandon') {
+    cur.abandons = (cur.abandons || 0) + 1
+  } else if (countAttempt) {
+    cur.attempts += 1
+    if (input.success) {
+      cur.successes += 1
+      cur.streak = (cur.streak || 0) + 1
+      recent.push(true)
+    } else {
+      cur.failures += 1
+      cur.streak = 0
+      recent.push(false)
+    }
+    cur.successRate = cur.attempts ? cur.successes / cur.attempts : 0
+    cur.recent = recent.slice(-10)
+    cur.mastery = computeMastery(cur, meta?.difficulty || 1)
+    cur.level = cur.mastery >= 80 ? 3 : cur.mastery >= 45 ? 2 : 1
+    cur.lastPlayedAt = new Date().toISOString()
   }
+
+  bag[skill] = cur
 
   const durationSec = Math.max(0, Math.round(input.duration || 0))
   p.activityLog = [
@@ -94,12 +128,13 @@ export function recordLearningActivity(input: RecordInput) {
       success: input.success,
       durationSec,
       score: input.score || 0,
+      kind,
     },
     ...p.activityLog,
-  ].slice(0, 200)
+  ].slice(0, 240)
 
   const t = todayKey()
-  if (p.lastPlayDate !== t) {
+  if (countAttempt && p.lastPlayDate !== t) {
     const y = new Date()
     y.setDate(y.getDate() - 1)
     const yKey = `${y.getFullYear()}-${y.getMonth() + 1}-${y.getDate()}`
@@ -125,13 +160,14 @@ export function getTodaysRecommendations(limit = 4): RecommendItem[] {
   const p = getProfile()
   const progress = p.learningProgress || emptyLearningProgress()
   const recentIds = (p.activityLog || []).slice(0, 8).map((a) => a.gameId)
-  const bias = p.parentSettings?.difficultyBias || 'balanced'
+  const bias = getParentSettings().difficultyBias
 
   const scored = LEARNING_GAMES.filter((g) => g.id !== 'sticker-book').map((g) => {
     const skill = progress[g.category]?.[g.skill]
     const mastery = skill?.mastery ?? 0
     const attempts = skill?.attempts ?? 0
     const failRate = skill ? 1 - skill.successRate : 0
+    const recentFails = (skill?.recent || []).slice(-5).filter((x) => !x).length
     const playedCount = p.played[g.id] || 0
 
     let score = 0
@@ -140,13 +176,16 @@ export function getTodaysRecommendations(limit = 4): RecommendItem[] {
     if (mastery >= 30 && mastery <= 70) score += 20
     else if (mastery < 30) score += 12
     else score += 4
-    score += failRate * 15
+    score += failRate * 12 + recentFails * 3
     if (mastery > 85 && g.difficulty === 1) score -= 18
     if (recentIds.includes(g.id)) score -= 25
     score += Math.max(0, 8 - playedCount)
-    if (bias === 'easy' && g.difficulty === 1) score += 6
-    if (bias === 'challenge' && g.difficulty >= 2) score += 8
-    if (bias === 'balanced' && g.difficulty === 2) score += 4
+    if (bias === 'easy' && g.difficulty === 1) score += 10
+    if (bias === 'easy' && g.difficulty >= 2) score -= 6
+    if (bias === 'challenge' && g.difficulty >= 2) score += 10
+    if (bias === 'challenge' && g.difficulty === 1) score -= 4
+    if (bias === 'auto' && g.difficulty === 2) score += 5
+    if (bias === 'auto' && mastery < 40 && g.difficulty === 1) score += 4
     if (attempts === 0) score += 10
 
     return { g, score, mastery }
@@ -238,7 +277,7 @@ export function getParentDashboard() {
     topGames,
     recommendations: getTodaysRecommendations(3),
     playStreak: p.playStreak || 0,
-    settings: p.parentSettings || DEFAULT_PARENT_SETTINGS,
+    settings: getParentSettings(),
   }
 }
 

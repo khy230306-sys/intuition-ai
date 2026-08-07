@@ -80,7 +80,7 @@ export function ShapeTouch() {
       speak(`맞아요! ${target.ko}`)
       round.win('잘했어요!')
     } else {
-      sfx.wrong()
+      round.fail()
       speak('다시 찾아 보아요')
     }
   }

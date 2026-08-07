@@ -6,6 +6,7 @@ import { Card } from './Card'
 import { GameOptions } from './GameOptions'
 import { HistoryBoard } from './HistoryBoard'
 import { PipLogo } from './PipLogo'
+import { PipRoadmap } from './roadmap/PipRoadmap'
 import styles from './GameTable.module.css'
 
 export function GameTable() {
@@ -226,6 +227,20 @@ export function GameTable() {
           <HistoryBoard history={game.shoe.history} stats={game.stats} />
         </aside>
       </div>
+
+      <PipRoadmap
+        history={game.shoe.history}
+        phase={game.phase}
+        shoeNumber={game.shoe.shoeNumber}
+        archivedShoes={game.archivedShoes}
+        sameIndependent={game.sameIndependent}
+        onSameIndependentChange={game.setSameIndependent}
+        activeHiddenValues={
+          game.phase === 'NEW_SHOE' || game.phase === 'HIDDEN_REVEAL'
+            ? game.shoe.hidden.map((card) => card.value)
+            : null
+        }
+      />
 
       {import.meta.env.DEV ? (
         <div className={styles.devBox}>

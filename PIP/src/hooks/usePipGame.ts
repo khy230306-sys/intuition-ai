@@ -3,6 +3,14 @@ import type { BundleAmountMode } from '../betting/selection'
 import { resolveSelections, summarizeSelection } from '../betting/selection'
 import { loadDemoPoints, saveDemoPoints } from '../game/demoStorage'
 import { computeStats } from '../game/history'
+import {
+  createArchivedShoe,
+  loadArchivedShoes,
+  loadSameIndependent,
+  pushArchivedShoe,
+  saveSameIndependent,
+  type ArchivedShoe,
+} from '../game/roadmap'
 import { settleBet } from '../game/payout'
 import { buildRoundResult } from '../game/rules'
 import {
@@ -59,6 +67,9 @@ export function usePipGame() {
   const [hiddenRevealIndex, setHiddenRevealIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('선택 가능 (10초)')
+  const [archivedShoes, setArchivedShoes] = useState<ArchivedShoe[]>(() => loadArchivedShoes())
+  const [sameIndependent, setSameIndependentState] = useState(() => loadSameIndependent())
+  const [shoeStartedAt, setShoeStartedAt] = useState(() => new Date().toISOString())
 
   const phaseRef = useRef<GamePhase>('BETTING_OPEN')
   const shoeRef = useRef(shoe)
@@ -66,6 +77,8 @@ export function usePipGame() {
   const timerId = useRef<number | null>(null)
   const lockingRef = useRef(false)
   const startedRef = useRef(false)
+  const shoeStartedAtRef = useRef(shoeStartedAt)
+  const archivedShoeNumbersRef = useRef<Set<number>>(new Set())
   const selectionRef = useRef({
     primaryMode: 'CARD_DUEL' as PrimaryMode,
     primaryChoice: null as string | null,
@@ -85,8 +98,25 @@ export function usePipGame() {
   }, [shoe])
 
   useEffect(() => {
+    shoeStartedAtRef.current = shoeStartedAt
+  }, [shoeStartedAt])
+
+  useEffect(() => {
     saveDemoPoints(demoPoints)
   }, [demoPoints])
+
+  const archiveCurrentShoeIfNeeded = useCallback((completed: Shoe) => {
+    if (archivedShoeNumbersRef.current.has(completed.shoeNumber)) return
+    if (completed.history.length === 0) return
+    const archive = createArchivedShoe(
+      completed,
+      shoeStartedAtRef.current,
+      new Date().toISOString(),
+      true,
+    )
+    archivedShoeNumbersRef.current.add(completed.shoeNumber)
+    setArchivedShoes(pushArchivedShoe(archive))
+  }, [])
 
   useEffect(() => {
     selectionRef.current = {
@@ -334,6 +364,7 @@ export function usePipGame() {
       if (isShoeComplete(nextShoe) || nextShoe.history.length >= ROUNDS_PER_SHOE) {
         go('SETTLEMENT', 'SHOE_COMPLETE')
         setMessage('슈 종료')
+        archiveCurrentShoeIfNeeded(nextShoe)
         await wait(800)
         if (token !== runToken.current) return
         go('SHOE_COMPLETE', 'HIDDEN_REVEAL')
@@ -358,7 +389,7 @@ export function usePipGame() {
         lockingRef.current = false
       }
     }
-  }, [buildSelectionsFromState, clearTimer, demoPoints, go, openBetting])
+  }, [archiveCurrentShoeIfNeeded, buildSelectionsFromState, clearTimer, demoPoints, go, openBetting])
 
   useEffect(() => {
     if (phase === 'BETTING_OPEN' && timer <= 0) {
@@ -372,15 +403,22 @@ export function usePipGame() {
     runToken.current += 1
     lockingRef.current = false
     setBusy(false)
+    archiveCurrentShoeIfNeeded(shoeRef.current)
     const next = createShoe(shoeRef.current.shoeNumber + 1)
     shoeRef.current = next
     setShoe(next)
+    setShoeStartedAt(new Date().toISOString())
     go('NEW_SHOE', 'SHOE_INIT')
     openBetting()
-  }, [clearTimer, go, openBetting])
+  }, [archiveCurrentShoeIfNeeded, clearTimer, go, openBetting])
 
   const resetPoints = useCallback(() => {
     setDemoPoints(INITIAL_DEMO_POINTS)
+  }, [])
+
+  const setSameIndependent = useCallback((value: boolean) => {
+    setSameIndependentState(value)
+    saveSameIndependent(value)
   }, [])
 
   return {
@@ -442,5 +480,8 @@ export function usePipGame() {
       !busy &&
       resolved.totalStake > 0 &&
       resolved.totalStake <= demoPoints,
+    archivedShoes,
+    sameIndependent,
+    setSameIndependent,
   }
 }

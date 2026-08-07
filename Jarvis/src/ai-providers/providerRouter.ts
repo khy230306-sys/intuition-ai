@@ -23,21 +23,33 @@ import type { HybridChatInput, HybridChatOutput, HybridProviderId } from './type
 
 function buildCandidateOrder(): HybridProviderId[] {
   const cfg = loadHybridAiConfig()
-  if (cfg.mode === 'fixed' && cfg.fixedProvider) {
-    return [cfg.fixedProvider]
-  }
 
-  const freeFirst = AUTO_PROVIDER_ORDER.filter((id) => {
+  const usable = (id: HybridProviderId, allowPaid: boolean): boolean => {
     const p = getHybridProvider(id)
     if (!p) return false
     if (!isProviderConfigured(id)) return false
-    const slot = p.getSlot()
-    if (slot.enabled === false) return false
-    if (p.category === 'paid' && !cfg.allowPaidFallback) return false
+    if (p.getSlot().enabled === false) return false
+    if (p.category === 'paid' && !allowPaid) return false
     return true
-  })
+  }
 
-  return freeFirst
+  // Fixed primary first, then free fallbacks (OpenAI quota → Gemini), then other paid if allowed
+  if (cfg.mode === 'fixed' && cfg.fixedProvider) {
+    const primary = cfg.fixedProvider
+    const freeRest = AUTO_PROVIDER_ORDER.filter((id) => {
+      if (id === primary) return false
+      const p = getHybridProvider(id)
+      return Boolean(
+        p && isProviderConfigured(id) && p.category === 'free' && p.getSlot().enabled !== false,
+      )
+    })
+    const paidRest = cfg.allowPaidFallback
+      ? AUTO_PROVIDER_ORDER.filter((id) => id !== primary && usable(id, true) && getHybridProvider(id)?.category === 'paid')
+      : []
+    return [...new Set([primary, ...freeRest, ...paidRest])].filter((id) => isProviderConfigured(id))
+  }
+
+  return AUTO_PROVIDER_ORDER.filter((id) => usable(id, Boolean(cfg.allowPaidFallback)))
 }
 
 /**

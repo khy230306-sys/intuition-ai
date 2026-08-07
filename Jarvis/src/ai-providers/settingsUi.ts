@@ -128,9 +128,9 @@ export function renderHybridAiSettingsHtml(): string {
 
   return `
     <h3 class="subsection-title">AIZIO 대화</h3>
-    <p class="hint"><strong>기본:</strong> AIZIO는 API 키 없이 바로 대화합니다. 아래 클라우드 연결은 더 긴 답·전문 지식을 위한 <strong>선택</strong>입니다.</p>
-    <h3 class="subsection-title">클라우드 두뇌 (선택 · Hybrid)</h3>
-    <p class="hint">연결하면 더 강한 모델로 이어집니다. <strong>저장됨 ≠ 연결 성공</strong> — 「키 저장」후 「연결 테스트」.</p>
+    <p class="hint"><strong>기본 클라우드:</strong> OpenAI(ChatGPT API) · 부족/오류 시 Gemini로 이어집니다. 키 없이도 내장 대화는 동작합니다.</p>
+    <h3 class="subsection-title">클라우드 두뇌 (Hybrid)</h3>
+    <p class="hint"><strong>저장됨 ≠ 연결 성공</strong> — 「키 저장」후 「연결 테스트」. 유료 OpenAI는 사용량 결제가 필요합니다.</p>
     ${previewHint}
     <p class="hint">${esc(usageSummaryLine())}</p>
     <label>선택 모드

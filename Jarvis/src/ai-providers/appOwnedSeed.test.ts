@@ -8,27 +8,24 @@ vi.stubGlobal('localStorage', {
   clear: () => store.clear(),
 })
 
-vi.mock('./models', async () => {
-  const actual = await vi.importActual<typeof import('./models')>('./models')
-  return { ...actual, GEMINI_DEFAULT_MODEL: 'gemini-flash-latest' }
-})
-
-describe('app-owned Gemini seed', () => {
+describe('app-owned provider seed', () => {
   beforeEach(() => {
     store.clear()
     vi.resetModules()
+    vi.stubEnv('VITE_AIZIO_OPENAI_API_KEY', 'sk-proj-test-openai-xxxxxxxxxxxx')
+    vi.stubEnv('VITE_AIZIO_GEMINI_API_KEY', 'AQ.test-gemini-key-xxxxxxxx')
   })
 
-  it('seeds gemini slot when VITE key is present', async () => {
-    vi.stubEnv('VITE_AIZIO_GEMINI_API_KEY', 'AQ.test-gemini-key-xxxxxxxx')
-    const { seedAppOwnedGeminiFromBuild } = await import('./appOwnedSeed')
+  it('seeds OpenAI as default when VITE key is present', async () => {
+    const { seedAppOwnedProvidersFromBuild } = await import('./appOwnedSeed')
     const { getProviderSlot, hasAnyConfiguredProvider, loadHybridAiConfig } = await import(
       './providerConfig'
     )
-    expect(seedAppOwnedGeminiFromBuild()).toBe(true)
-    expect(getProviderSlot('gemini').apiKey).toContain('AQ.test-gemini')
-    expect(getProviderSlot('gemini').model).toBe('gemini-flash-latest')
+    const r = seedAppOwnedProvidersFromBuild()
+    expect(r.openai).toBe(true)
+    expect(getProviderSlot('openai').apiKey.startsWith('sk-proj-test')).toBe(true)
     expect(hasAnyConfiguredProvider()).toBe(true)
-    expect(loadHybridAiConfig().fixedProvider).toBe('gemini')
+    expect(loadHybridAiConfig().fixedProvider).toBe('openai')
+    expect(loadHybridAiConfig().allowPaidFallback).toBe(true)
   })
 })

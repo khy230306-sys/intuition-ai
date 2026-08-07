@@ -137,7 +137,7 @@ import {
   warmPreviewApiBackendHint,
   type ApiKeyDiagReport,
 } from './apiKeys'
-import { seedAppOwnedGeminiFromBuild } from './ai-providers/appOwnedSeed'
+import { seedAppOwnedProvidersFromBuild } from './ai-providers/appOwnedSeed'
 import { isProviderConfigured } from './ai-providers/providerConfig'
 import { isServerConfigured } from './apiKeys/serverFlags'
 import {
@@ -444,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.29.9'
+const APP_VERSION = '1.30.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -8295,7 +8295,7 @@ function bootAppCore(): void {
   }
   void warmPreviewApiBackendHint()
   try {
-    seedAppOwnedGeminiFromBuild()
+    seedAppOwnedProvidersFromBuild()
   } catch {
     /* optional cloud seed */
   }

@@ -1,8 +1,52 @@
-/* 쑥쑥 색칠 스튜디오 — canvas-first mobile layout */
+/* 쑥쑥 색칠놀이 — 자동차 & 중장비 스튜디오 (canvas-first) */
+
+.studio-home {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.studio-home-lead {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.studio-mode-card {
+  border: 3px solid var(--fg);
+  border-radius: 1.2rem;
+  background: linear-gradient(160deg, #fff9ef, #e8f4ff);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.1rem;
+  text-align: left;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.studio-mode-card.soft {
+  background: linear-gradient(160deg, #fff9ef, #ffe8f0);
+}
+
+.studio-mode-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.studio-mode-sub {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.studio-art-note {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
 
 .studio-pick-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.4rem;
   margin-bottom: 0.5rem;
 }
 
@@ -56,15 +100,43 @@
   display: grid;
   gap: 0.25rem;
   text-align: left;
+  position: relative;
+}
+
+.studio-template-card.locked {
+  opacity: 0.72;
 }
 
 .studio-template-preview {
+  position: relative;
   aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
   background: linear-gradient(160deg, #fff9ef, #e8f4ff 55%, #ffe8f0);
   border-radius: 0.8rem;
   overflow: hidden;
+}
+
+.studio-badge {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  font-size: 0.65rem;
+  font-family: var(--font-display);
+  background: #1a1510;
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.studio-badge.temp {
+  background: #ff7a00;
+}
+
+.studio-art-required {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--muted);
 }
 
 .studio-template-preview svg {
@@ -93,6 +165,82 @@
   display: grid;
   gap: 0.45rem;
   margin-bottom: 0.45rem;
+}
+
+.studio-topbar-compact .tight {
+  justify-content: flex-start;
+}
+
+.studio-number-legend {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.studio-legend-chip {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--fg);
+  border-radius: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+}
+
+.studio-ref-preview {
+  display: grid;
+  place-items: center;
+  gap: 0.4rem;
+  height: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.studio-more-colors,
+.studio-native-picker {
+  flex: 0 0 auto;
+  border: 2px solid var(--fg);
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.55rem;
+  background: var(--card);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.studio-native-picker input {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.studio-finish-art.fx-siren {
+  animation: studio-siren 0.9s ease 2;
+}
+
+.studio-finish-art.fx-bucket {
+  animation: studio-pop 0.55s ease both;
+}
+
+.studio-finish-art.fx-crane .studio-easy-svg,
+.studio-finish-art.fx-dump .studio-easy-svg,
+.studio-finish-art.fx-door .studio-easy-svg {
+  animation: studio-pop 0.6s ease both;
+}
+
+@keyframes studio-siren {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 0 10px #ff2d55);
+  }
 }
 
 .studio-mode-toggle {

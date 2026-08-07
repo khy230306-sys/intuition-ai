@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, type PointerEvent as ReactPointerEvent } from 'react'
-import type { BrushSize, ColorTemplate, PaintTool } from '../../data/colorStudio'
-import { BRUSH_PX } from '../../data/colorStudio'
+import type { BrushSize, PaintTool, VehicleColoringTemplate } from '../../data/vehicleColoringTemplates'
+import { BRUSH_PX } from '../../data/vehicleColoringTemplates'
 import { floodFill, hexToRgb } from '../../lib/floodFill'
 import { LineArtSvg } from './LineArtSvg'
 
@@ -18,7 +18,7 @@ export type FreeCanvasHandle = {
 }
 
 type Props = {
-  template: ColorTemplate
+  template: VehicleColoringTemplate
   color: string
   tool: PaintTool
   brushSize: BrushSize
@@ -29,19 +29,49 @@ type Props = {
 
 function toolStyle(tool: PaintTool, color: string, size: number) {
   if (tool === 'eraser') {
-    return { strokeStyle: 'rgba(255,253,248,1)', lineWidth: size * 1.4, globalAlpha: 1, globalCompositeOperation: 'destination-out' as GlobalCompositeOperation }
+    return {
+      strokeStyle: 'rgba(255,253,248,1)',
+      lineWidth: size * 1.5,
+      globalAlpha: 1,
+      globalCompositeOperation: 'destination-out' as GlobalCompositeOperation,
+      shadowBlur: 0,
+    }
   }
   if (tool === 'pencil') {
-    return { strokeStyle: color, lineWidth: size * 0.55, globalAlpha: 0.85, globalCompositeOperation: 'source-over' as GlobalCompositeOperation }
+    return {
+      strokeStyle: color,
+      lineWidth: Math.max(2, size * 0.45),
+      globalAlpha: 0.92,
+      globalCompositeOperation: 'source-over' as GlobalCompositeOperation,
+      shadowBlur: 0,
+    }
   }
   if (tool === 'crayon') {
-    return { strokeStyle: color, lineWidth: size * 1.1, globalAlpha: 0.72, globalCompositeOperation: 'source-over' as GlobalCompositeOperation }
+    return {
+      strokeStyle: color,
+      lineWidth: size * 1.15,
+      globalAlpha: 0.68,
+      globalCompositeOperation: 'source-over' as GlobalCompositeOperation,
+      shadowBlur: size * 0.15,
+    }
   }
   if (tool === 'marker') {
-    return { strokeStyle: color, lineWidth: size * 1.25, globalAlpha: 0.55, globalCompositeOperation: 'source-over' as GlobalCompositeOperation }
+    return {
+      strokeStyle: color,
+      lineWidth: size * 1.35,
+      globalAlpha: 0.5,
+      globalCompositeOperation: 'multiply' as GlobalCompositeOperation,
+      shadowBlur: 0,
+    }
   }
-  // brush
-  return { strokeStyle: color, lineWidth: size, globalAlpha: 0.9, globalCompositeOperation: 'source-over' as GlobalCompositeOperation }
+  // brush — soft edge
+  return {
+    strokeStyle: color,
+    lineWidth: size * 1.05,
+    globalAlpha: 0.82,
+    globalCompositeOperation: 'source-over' as GlobalCompositeOperation,
+    shadowBlur: size * 0.35,
+  }
 }
 
 export const FreeCanvas = forwardRef<FreeCanvasHandle, Props>(function FreeCanvas(
@@ -236,12 +266,21 @@ export const FreeCanvas = forwardRef<FreeCanvasHandle, Props>(function FreeCanva
     ctx.globalAlpha = st.globalAlpha
     ctx.strokeStyle = st.strokeStyle
     ctx.lineWidth = st.lineWidth
+    ctx.shadowBlur = st.shadowBlur
+    ctx.shadowColor = st.shadowBlur ? color : 'transparent'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
     ctx.moveTo(p.x, p.y)
     ctx.lineTo(p.x + 0.01, p.y)
     ctx.stroke()
+    if (tool === 'crayon') {
+      ctx.globalAlpha = st.globalAlpha * 0.45
+      ctx.beginPath()
+      ctx.moveTo(p.x + 1.2, p.y - 1)
+      ctx.lineTo(p.x + 1.3, p.y)
+      ctx.stroke()
+    }
     ctx.restore()
   }
 
@@ -257,12 +296,21 @@ export const FreeCanvas = forwardRef<FreeCanvasHandle, Props>(function FreeCanva
     ctx.globalAlpha = st.globalAlpha
     ctx.strokeStyle = st.strokeStyle
     ctx.lineWidth = st.lineWidth
+    ctx.shadowBlur = st.shadowBlur
+    ctx.shadowColor = st.shadowBlur ? color : 'transparent'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
     ctx.moveTo(last.current.x, last.current.y)
     ctx.lineTo(p.x, p.y)
     ctx.stroke()
+    if (tool === 'crayon') {
+      ctx.globalAlpha = st.globalAlpha * 0.4
+      ctx.beginPath()
+      ctx.moveTo(last.current.x + 1.4, last.current.y - 1.2)
+      ctx.lineTo(p.x + 1.4, p.y - 1.2)
+      ctx.stroke()
+    }
     ctx.restore()
     last.current = p
   }

@@ -15,7 +15,11 @@ import {
   extractEngineCity,
   loadEngineSession,
   resetEngineSessionForTests,
+  resetProviderRegistryForTests,
   runAizioEngineTurn,
+  setAllowTestDoublesForTests,
+  setPlacesProviderForTests,
+  testPlacesProvider,
 } from './index'
 
 const store = new Map<string, string>()
@@ -66,7 +70,7 @@ function mockOpenMeteoDaily() {
           }),
         } as Response
       }
-      // Photon etc. — empty so curated path is used
+      // Places network unused when TestPlacesProvider is injected
       return { ok: true, json: async () => ({ features: [] }) } as Response
     }),
   )
@@ -76,12 +80,15 @@ describe('AIZIO Core Engine V1', () => {
   beforeEach(() => {
     store.clear()
     resetEngineSessionForTests()
+    resetProviderRegistryForTests()
     resetActionAgentForTests()
     clearTravelSession()
     clearRestaurantSession()
     clearInterpretMode()
     endTranslationSession()
     mockOpenMeteoDaily()
+    setAllowTestDoublesForTests(true)
+    setPlacesProviderForTests(testPlacesProvider)
   })
 
   it('detects city and weather turn', () => {
@@ -108,7 +115,7 @@ describe('AIZIO Core Engine V1', () => {
     expect(loadEngineSession()?.selected?.rank).toBe(2)
 
     const c = await runAizioEngineTurn('토요일 오후 2시에 일정 잡아줘.')
-    expect(c?.text).toMatch(/일정|저장/)
+    expect(c?.text).toMatch(/AIZIO 내부 일정에 저장했습니다|일정/)
     expect(loadEngineSession()?.lastVerified?.calendar).toBe(true)
     const reminders = loadReminders()
     expect(reminders.some((r) => r.text.includes(loadEngineSession()!.selected!.title))).toBe(true)
@@ -126,7 +133,7 @@ describe('AIZIO Core Engine V1', () => {
     expect(s.text).toMatch(/선택|두 번째|2/)
 
     const c = await think('토요일 오후 2시에 일정 잡아줘.')
-    expect(c.text).toMatch(/일정|저장/)
+    expect(c.text).toMatch(/AIZIO 내부 일정에 저장했습니다|일정/)
     expect(loadReminders().length).toBeGreaterThan(0)
   })
 })

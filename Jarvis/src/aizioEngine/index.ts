@@ -21,3 +21,23 @@ export {
   containsForbiddenSuccessClaim,
 } from './verifier'
 export type { EngineSession, EnginePlaceCandidate, EngineWeatherSnapshot } from './types'
+export {
+  resolvePlacesProvider,
+  resolveWeatherProvider,
+  getLocalCalendarProvider,
+  resolveExternalCalendarProvider,
+  listProviderStatuses,
+  setPlacesProviderForTests,
+  setLocalCalendarProviderForTests,
+  setExternalCalendarProviderForTests,
+  setAllowTestDoublesForTests,
+  resetProviderRegistryForTests,
+  assertProviderAllowed,
+  testPlacesProvider,
+  testCalendarProvider,
+  googlePlacesProvider,
+  googleCalendarProvider,
+  photonPlacesProvider,
+  localCalendarProvider,
+  isProductionRuntime,
+} from './providers'

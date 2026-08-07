@@ -1,8 +1,8 @@
 /**
- * Verifier V1.1 — never trust tool success flags alone.
+ * Verifier V1.2 — REAL requires provider identity + re-read where applicable.
  */
 
-import { loadReminders } from '../storage'
+import { getLocalCalendarProvider, resolveExternalCalendarProvider } from './providers'
 import type { SessionContext } from './context'
 import type { ToolResult } from './toolResult'
 import { makeToolResult } from './toolResult'
@@ -29,14 +29,12 @@ export function verifyWeatherResult(
         errorCode: raw.errorCode || 'weather_empty',
         errorMessage: raw.errorMessage || '날씨 데이터가 비어 있습니다.',
         verifiedAt: Date.now(),
+        verificationMethod: 'field_check',
       }),
       userMessage: '날씨 조회 결과를 확인하지 못했어요. 완료된 것으로 처리하지 않습니다.',
     }
   }
-  const hasPlace = Boolean(d.city?.trim())
-  const hasLabel = Boolean(d.label?.trim())
-  const hasDay = Boolean(d.dayLabel)
-  if (!hasPlace || !hasLabel || !hasDay) {
+  if (!d.city?.trim() || !d.label?.trim() || !d.dayLabel || !d.fetchedAt) {
     return {
       ok: false,
       result: makeToolResult({
@@ -48,15 +46,15 @@ export function verifyWeatherResult(
         sourceType: raw.sourceType,
         isRealData: false,
         errorCode: 'weather_incomplete',
-        errorMessage: '위치·날짜·예보 필드가 불완전합니다.',
+        errorMessage: '위치·날짜·예보·조회시각이 불완전합니다.',
         confidence: 0,
         verifiedAt: Date.now(),
+        verificationMethod: 'field_check',
       }),
       userMessage: '날씨 응답이 불완전해 신뢰할 수 없어요.',
     }
   }
-  // Live API only counts as real
-  const isReal = raw.sourceType === 'live_api' && raw.source.includes('open-meteo')
+  const isReal = raw.sourceType === 'live_api' && /open-meteo/i.test(raw.source)
   return {
     ok: true,
     result: makeToolResult({
@@ -67,13 +65,44 @@ export function verifyWeatherResult(
       isRealData: isReal,
       confidence: isReal ? Math.max(raw.confidence, 0.85) : Math.min(raw.confidence, 0.5),
       verifiedAt: Date.now(),
+      verificationMethod: 'field_check',
+      provider: raw.provider || raw.source,
     }),
   }
 }
 
+function placeIsRealShape(c: EnginePlaceCandidate): boolean {
+  if (!c.providerPlaceId?.trim()) return false
+  if (!c.provider?.trim()) return false
+  if (!c.title?.trim()) return false
+  if (!c.fetchedAt) return false
+  if (c.rawSourceAvailable !== true) return false
+  const hasGeo =
+    (c.latitude != null && c.longitude != null && Number.isFinite(c.latitude) && Number.isFinite(c.longitude)) ||
+    Boolean(c.address?.trim())
+  if (!hasGeo) return false
+  if (c.source === 'curated' || c.source === 'catalog') return false
+  return true
+}
+
 export function verifyPlacesResult(
-  raw: ToolResult<{ candidates: EnginePlaceCandidate[]; query: string }>,
-): VerifyOutcome<{ candidates: EnginePlaceCandidate[]; query: string }> {
+  raw: ToolResult<{ candidates: EnginePlaceCandidate[]; query: string; provider?: string; providerRequestId?: string }>,
+): VerifyOutcome<{ candidates: EnginePlaceCandidate[]; query: string; provider?: string; providerRequestId?: string }> {
+  const pendingExternal = raw.status === 'pending_external_setup'
+  if (pendingExternal) {
+    return {
+      ok: false,
+      result: makeToolResult({
+        ...raw,
+        success: false,
+        isRealData: false,
+        verifiedAt: Date.now(),
+        verificationMethod: 'none',
+      }),
+      userMessage: raw.errorMessage || '실제 장소 검색 서비스를 연결해야 합니다.',
+    }
+  }
+
   const d = raw.data
   if (!raw.success || !d?.candidates?.length) {
     return {
@@ -86,52 +115,81 @@ export function verifyPlacesResult(
         source: raw.source,
         sourceType: raw.sourceType,
         isRealData: false,
-        errorCode: 'places_empty',
-        errorMessage: '장소 후보가 없습니다.',
+        provider: raw.provider,
+        providerRequestId: raw.providerRequestId,
+        errorCode: raw.errorCode || 'places_empty',
+        errorMessage: raw.errorMessage || '장소 후보가 없습니다.',
         confidence: 0,
         verifiedAt: Date.now(),
+        verificationMethod: 'none',
       }),
-      userMessage: '장소 목록을 확인하지 못했어요. 추천이 완료된 것이 아닙니다.',
+      userMessage:
+        raw.errorMessage ||
+        '실제 장소 검색 결과를 확인하지 못했어요. 가짜 장소를 만들지 않습니다.',
     }
   }
-  const valid = d.candidates.every((c) => c.title?.trim() && c.mapsQuery?.trim() && c.rank >= 1)
-  if (!valid) {
+
+  if (!raw.provider && !d.provider) {
     return {
       ok: false,
       result: makeToolResult({
-        toolId: raw.toolId,
+        ...raw,
         success: false,
-        status: 'failed',
-        data: d,
-        source: raw.source,
-        sourceType: raw.sourceType,
         isRealData: false,
-        errorCode: 'places_invalid',
-        errorMessage: '장소명/위치/출처가 불완전합니다.',
-        confidence: 0,
+        errorCode: 'places_no_provider',
+        errorMessage: 'Provider 식별자가 없습니다.',
         verifiedAt: Date.now(),
+        verificationMethod: 'provider_id_and_geo',
       }),
-      userMessage: '장소 데이터 형식이 올바르지 않아 표시하지 않습니다.',
+      userMessage: '장소 Provider를 확인할 수 없어 REAL로 처리하지 않습니다.',
     }
   }
-  // photon/catalog live-ish; curated is honest but not live API
-  const isReal = raw.sourceType === 'live_api' || raw.sourceType === 'catalog'
+
+  const allRealShape = d.candidates.every(placeIsRealShape)
+  if (!allRealShape) {
+    return {
+      ok: false,
+      result: makeToolResult({
+        ...raw,
+        success: false,
+        status: 'failed',
+        isRealData: false,
+        errorCode: 'places_not_real_shape',
+        errorMessage:
+          'providerPlaceId·위치/주소·조회시각·출처가 불완전하거나 curated/catalog 결과입니다.',
+        confidence: 0,
+        verifiedAt: Date.now(),
+        verificationMethod: 'provider_id_and_geo',
+      }),
+      userMessage: '실제 외부 장소 데이터로 확인되지 않아 목록을 표시하지 않습니다.',
+    }
+  }
+
+  const isReal =
+    raw.sourceType === 'live_api' &&
+    allRealShape &&
+    Boolean(raw.providerRequestId || d.providerRequestId)
+
   return {
     ok: true,
     result: makeToolResult({
       ...raw,
       success: true,
       data: d,
-      isRealData: isReal && raw.sourceType !== 'curated',
-      confidence: raw.sourceType === 'curated' ? 0.55 : raw.confidence,
+      isRealData: isReal,
+      confidence: isReal ? Math.max(raw.confidence, 0.9) : 0.5,
       verifiedAt: Date.now(),
+      verificationMethod: 'provider_id_and_geo',
+      provider: raw.provider || d.provider,
+      providerRequestId: raw.providerRequestId || d.providerRequestId,
+      externalId: d.candidates[0]?.providerPlaceId,
     }),
   }
 }
 
-export function verifyCalendarWrite(
+export async function verifyCalendarWrite(
   raw: ToolResult<EngineCalendarWrite>,
-): VerifyOutcome<EngineCalendarWrite> {
+): Promise<VerifyOutcome<EngineCalendarWrite>> {
   const d = raw.data
   if (!raw.success || !d?.reminderId) {
     return {
@@ -139,58 +197,108 @@ export function verifyCalendarWrite(
       result: makeToolResult({
         toolId: raw.toolId,
         success: false,
-        status: 'failed',
+        status: raw.status === 'pending_external_setup' ? 'pending_external_setup' : 'failed',
         data: d,
         source: raw.source,
-        sourceType: 'local_store',
+        sourceType: raw.sourceType,
         isRealData: false,
+        provider: raw.provider,
         errorCode: raw.errorCode || 'calendar_write_failed',
         errorMessage: raw.errorMessage || '일정 저장 실패',
         confidence: 0,
         verifiedAt: Date.now(),
+        verificationMethod: 'none',
       }),
-      userMessage: '일정 저장에 실패했어요. 저장된 것으로 처리하지 않습니다.',
+      userMessage: raw.errorMessage || '일정 저장에 실패했어요. 저장된 것으로 처리하지 않습니다.',
     }
   }
-  // Re-read from storage
-  const found = loadReminders().find((r) => r.id === d.reminderId)
-  if (!found || found.text !== d.title) {
+
+  if (d.calendarKind === 'external') {
+    const ext = await resolveExternalCalendarProvider()
+    if (!ext.provider) {
+      return {
+        ok: false,
+        result: makeToolResult({
+          ...raw,
+          success: false,
+          status: 'pending_external_setup',
+          isRealData: false,
+          errorCode: 'PENDING_EXTERNAL_SETUP',
+          errorMessage: '외부 캘린더가 아직 연결되지 않았습니다.',
+          verifiedAt: Date.now(),
+        }),
+        userMessage: '외부 캘린더가 아직 연결되지 않았습니다.',
+      }
+    }
+    const found = await ext.provider.getEvent(d.externalEventId || d.reminderId)
+    if (!found || found.title !== d.title) {
+      return {
+        ok: false,
+        result: makeToolResult({
+          ...raw,
+          success: false,
+          isRealData: false,
+          errorCode: 'calendar_external_verify_miss',
+          errorMessage: '외부 캘린더 재조회에서 이벤트를 찾지 못했습니다.',
+          verifiedAt: Date.now(),
+          verificationMethod: 'external_reread',
+        }),
+        userMessage: '외부 캘린더 등록을 재조회로 확인하지 못했어요. 완료로 처리하지 않습니다.',
+      }
+    }
+    const verified: EngineCalendarWrite = { ...d, verified: true }
+    return {
+      ok: true,
+      result: makeToolResult({
+        ...raw,
+        success: true,
+        data: verified,
+        isRealData: true,
+        confidence: 0.95,
+        verifiedAt: Date.now(),
+        verificationMethod: 'external_reread',
+        provider: d.provider,
+        externalId: found.eventId,
+      }),
+    }
+  }
+
+  // Local AIZIO calendar
+  const local = getLocalCalendarProvider()
+  const found = await local.getEvent(d.reminderId)
+  if (!found || found.title !== d.title) {
     return {
       ok: false,
       result: makeToolResult({
-        toolId: raw.toolId,
+        ...raw,
         success: false,
-        status: 'failed',
-        data: d,
-        source: 'localStorage',
-        sourceType: 'local_store',
         isRealData: false,
         errorCode: 'calendar_verify_miss',
-        errorMessage: '저장소 재조회에서 일정을 찾지 못했습니다.',
-        confidence: 0,
+        errorMessage: 'AIZIO 내부 일정 재조회 실패',
         verifiedAt: Date.now(),
+        verificationMethod: 'store_reread',
       }),
-      userMessage: '저장 요청 후 목록에서 확인되지 않았어요. 완료·성공으로 처리하지 않습니다.',
+      userMessage: 'AIZIO 내부 일정 저장을 확인하지 못했어요. 완료로 처리하지 않습니다.',
     }
   }
-  const verified: EngineCalendarWrite = { ...d, verified: true }
+  const verified: EngineCalendarWrite = { ...d, verified: true, calendarKind: 'local' }
   return {
     ok: true,
     result: makeToolResult({
-      toolId: raw.toolId,
+      ...raw,
       success: true,
-      status: 'ok',
       data: verified,
-      source: 'localStorage',
-      sourceType: 'local_store',
       isRealData: true,
+      sourceType: 'local_store',
       confidence: 0.95,
       verifiedAt: Date.now(),
+      verificationMethod: 'store_reread',
+      provider: d.provider || 'aizio_local_calendar',
+      externalId: found.eventId,
     }),
   }
 }
 
-/** Generic memory re-read helper for session context fields. */
 export function verifyMemoryField(
   ctx: SessionContext,
   key: 'city' | 'selected',
@@ -232,7 +340,12 @@ export function verifyMemoryField(
   }
 }
 
-/** Forbidden success phrases when verification failed. */
 export function containsForbiddenSuccessClaim(text: string): boolean {
-  return /완료되었습니다|저장했습니다|예약했습니다|등록\s*완료|성공적으로\s*저장/.test(text)
+  // Honest success phrases are allowed; bare/fake completion claims are not.
+  if (/AIZIO 내부 일정에 저장/.test(text)) return false
+  if (/Google Calendar에 등록했습니다/.test(text)) return false
+  if (/외부 캘린더에 등록했습니다/.test(text)) return false
+  return /완료되었습니다|저장했습니다|예약했습니다|등록\s*완료|성공적으로\s*저장|캘린더에\s*등록했습니다/.test(
+    text,
+  )
 }

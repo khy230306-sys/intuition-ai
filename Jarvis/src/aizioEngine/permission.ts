@@ -56,7 +56,7 @@ export function actionPermissionLevel(action: EngineActionKind): PermissionLevel
  */
 export function checkPermission(
   action: EngineActionKind,
-  opts?: { userConfirmed?: boolean },
+  opts?: { userConfirmed?: boolean; connectorReady?: boolean },
 ): PermissionDecision {
   const level = actionPermissionLevel(action)
 
@@ -68,11 +68,17 @@ export function checkPermission(
     return { allowed: true, level, requiresUserConfirm: false }
   }
   if (level === 2) {
+    // External calendar write only when connector is READY (OAuth + health)
+    if (action === 'calendar.external_write' && opts?.connectorReady) {
+      return { allowed: true, level, requiresUserConfirm: false }
+    }
     return {
       allowed: false,
       level,
       reason:
-        '외부 서비스 쓰기(캘린더 동기화·메일 등)는 아직 연결되어 있지 않습니다. (PENDING_EXTERNAL_SETUP)',
+        action === 'calendar.external_write'
+          ? '외부 캘린더가 아직 연결되지 않았습니다. (PENDING_EXTERNAL_SETUP)'
+          : '외부 서비스 쓰기(캘린더 동기화·메일 등)는 아직 연결되어 있지 않습니다. (PENDING_EXTERNAL_SETUP)',
       status: 'pending_external_setup',
     }
   }

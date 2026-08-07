@@ -1,5 +1,6 @@
 /**
- * AIZIO Core Engine V1.1 — Context → Permission → Tool → Verify → Reply
+ * AIZIO Core Engine V1.2 — Context → Permission → Tool → Verify → Reply
+ * Places/Calendar via Provider Registry (no curated Production fallback).
  */
 
 import { openMaps } from '../actions'
@@ -27,7 +28,7 @@ import {
   loadEngineSession,
 } from './session'
 import { formatCalendarReply, runCalendarWriteTool } from './tools/calendarTool'
-import { formatPlacesReply, runPlacesTool } from './tools/placesTool'
+import { formatPlacesReply, formatPlacesUnavailable, runPlacesTool } from './tools/placesTool'
 import { formatWeatherReply, runWeatherTool } from './tools/weatherTool'
 import {
   containsForbiddenSuccessClaim,
@@ -162,17 +163,20 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
         context: { ...ctx, places: [], lastRequestKey: reqKey, lastRequestAt: Date.now() },
         lastVerified: { places: false },
       })
+      const msg =
+        verified.userMessage ||
+        verified.result.errorMessage ||
+        '실제 장소 검색 서비스를 연결해야 합니다.'
       return {
-        text: verified.userMessage || '장소 후보를 확인하지 못했어요. 추천이 완료된 것이 아닙니다.',
+        text: formatPlacesUnavailable(msg),
         speak: true,
       }
     }
 
     const candidates = verified.result.data.candidates
-    const sourceNote =
-      verified.result.isRealData === false
-        ? '※ 공개 장소 후보 목록입니다. 실시간 순위·예약 정보가 아닙니다.'
-        : undefined
+    const sourceNote = verified.result.isRealData
+      ? `※ 실제 외부 장소 데이터 (${verified.result.provider || 'provider'})`
+      : '※ 장소 데이터가 REAL 검증을 통과하지 못했습니다.'
 
     ctx = {
       ...ctx,
@@ -323,7 +327,7 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
       return { text: toolRaw.errorMessage || '언제로 잡을까요?', speak: true }
     }
 
-    const verified = verifyCalendarWrite(toolRaw)
+    const verified = await verifyCalendarWrite(toolRaw)
     ctx = rememberTool(
       {
         ...ctx,
@@ -355,11 +359,7 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
       return { text: msg, speak: true }
     }
 
-    const reply = formatCalendarReply(verified.result.data, true)
-    if (!verified.result.isRealData || containsForbiddenSuccessClaim(reply) === false) {
-      /* ok */
-    }
-    return { text: reply, speak: true }
+    return { text: formatCalendarReply(verified.result.data, true), speak: true }
   }
 
   return null

@@ -1,6 +1,5 @@
 /**
- * AIZIO Core Engine V1.1 types.
- * Orchestrates REAL tools only — never DEMO travel/restaurant catalogs.
+ * AIZIO Core Engine types (V1.2).
  */
 
 import type { SessionContext } from './context'
@@ -14,13 +13,25 @@ export type EngineTurnKind =
   | 'cancel'
   | 'none'
 
+/** Place candidate shown to user — REAL requires providerPlaceId + geo/address. */
 export type EnginePlaceCandidate = {
   rank: number
   id: string
   title: string
   subtitle?: string
   mapsQuery: string
-  source: 'photon' | 'catalog' | 'curated'
+  source: 'photon' | 'google_places' | 'test_places' | 'catalog' | 'curated'
+  provider?: string
+  providerPlaceId?: string
+  address?: string
+  latitude?: number | null
+  longitude?: number | null
+  category?: string
+  rating?: number | null
+  reviewCount?: number | null
+  mapsUrl?: string
+  fetchedAt?: number
+  rawSourceAvailable?: boolean
 }
 
 export type EngineWeatherSnapshot = {
@@ -40,15 +51,16 @@ export type EngineCalendarWrite = {
   whenLabel: string
   reminderId: string
   verified: boolean
+  /** local = AIZIO 내부 일정, external = Google 등 */
+  calendarKind: 'local' | 'external'
+  provider: string
+  externalEventId?: string
 }
 
-/** Persisted engine session — embeds structured SessionContext. */
 export type EngineSession = {
   id: string
   updatedAt: number
-  /** V1.1 structured context (source of truth for anaphora). */
   context: SessionContext
-  /** @deprecated V1 flat fields kept in sync for compatibility */
   city?: string
   weather?: EngineWeatherSnapshot
   places: EnginePlaceCandidate[]

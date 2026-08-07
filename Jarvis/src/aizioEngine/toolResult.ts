@@ -13,6 +13,13 @@ export type ToolStatus =
   | 'denied'
   | 'pending_external_setup'
 
+export type VerificationMethod =
+  | 'field_check'
+  | 'provider_id_and_geo'
+  | 'store_reread'
+  | 'external_reread'
+  | 'none'
+
 export type ToolResult<T = unknown> = {
   toolId: string
   success: boolean
@@ -25,8 +32,12 @@ export type ToolResult<T = unknown> = {
   errorCode: string | null
   errorMessage: string | null
   confidence: number
-  /** Fake/Mock/Demo/Fallback must never be true. */
+  /** Fake/Mock/Demo/Fallback/curated must never be true. */
   isRealData: boolean
+  provider?: string | null
+  providerRequestId?: string | null
+  externalId?: string | null
+  verificationMethod?: VerificationMethod | null
 }
 
 export function makeToolResult<T>(partial: {
@@ -42,6 +53,10 @@ export function makeToolResult<T>(partial: {
   isRealData: boolean
   fetchedAt?: number
   verifiedAt?: number | null
+  provider?: string | null
+  providerRequestId?: string | null
+  externalId?: string | null
+  verificationMethod?: VerificationMethod | null
 }): ToolResult<T> {
   const success = partial.success
   return {
@@ -57,10 +72,9 @@ export function makeToolResult<T>(partial: {
     errorMessage: partial.errorMessage ?? null,
     confidence: partial.confidence ?? (success ? 0.8 : 0),
     isRealData: partial.isRealData === true && success,
+    provider: partial.provider ?? null,
+    providerRequestId: partial.providerRequestId ?? null,
+    externalId: partial.externalId ?? null,
+    verificationMethod: partial.verificationMethod ?? null,
   }
-}
-
-/** Curated / catalog helpers are honest but not live API — isRealData=false. */
-export function markNonLiveHonest<T>(r: ToolResult<T>): ToolResult<T> {
-  return { ...r, isRealData: false, confidence: Math.min(r.confidence, 0.6) }
 }

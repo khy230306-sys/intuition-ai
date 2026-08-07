@@ -17,8 +17,12 @@ import {
   loadEngineSession,
   makeToolResult,
   resetEngineSessionForTests,
+  resetProviderRegistryForTests,
   resolveContextRef,
   runAizioEngineTurn,
+  setAllowTestDoublesForTests,
+  setPlacesProviderForTests,
+  testPlacesProvider,
   verifyCalendarWrite,
   verifyPlacesResult,
   verifyWeatherResult,
@@ -79,12 +83,15 @@ describe('Core Engine V1.1 context + verify + permission', () => {
   beforeEach(() => {
     store.clear()
     resetEngineSessionForTests()
+    resetProviderRegistryForTests()
     resetActionAgentForTests()
     clearTravelSession()
     clearRestaurantSession()
     clearInterpretMode()
     endTranslationSession()
     mockOpenMeteo()
+    setAllowTestDoublesForTests(true)
+    setPlacesProviderForTests(testPlacesProvider)
   })
 
   it('4-turn goal flow with 일정에 넣어줘', async () => {
@@ -103,8 +110,8 @@ describe('Core Engine V1.1 context + verify + permission', () => {
     expect(loadEngineSession()?.context.selected?.rank).toBe(2)
 
     const c = await runAizioEngineTurn('토요일 오후 2시 일정에 넣어줘')
-    expect(c?.text).toMatch(/확인했습니다|로컬 일정/)
-    expect(c?.text).not.toMatch(/예약했습니다/)
+    expect(c?.text).toMatch(/AIZIO 내부 일정에 저장했습니다/)
+    expect(c?.text).not.toMatch(/예약했습니다|Google Calendar에 등록했습니다/)
     expect(loadEngineSession()?.lastVerified?.calendar).toBe(true)
     const title = loadEngineSession()!.context.selected!.title
     expect(loadReminders().some((r) => r.text.includes(title))).toBe(true)
@@ -125,7 +132,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
     expect(there?.text).not.toMatch(/저장했습니다|완료되었습니다/)
 
     const withTime = await runAizioEngineTurn('토요일 오후 2시에 거기 일정 넣어줘')
-    expect(withTime?.text).toMatch(/확인했습니다|로컬 일정/)
+    expect(withTime?.text).toMatch(/AIZIO 내부 일정에 저장했습니다/)
   })
 
   it('date hints: 내일 / 모레 / 이번 주말 / 다음 주말', () => {
@@ -152,7 +159,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
     expect(r).toBeNull()
   })
 
-  it('verifier rejects empty weather / places; calendar re-read', () => {
+  it('verifier rejects empty weather / places; calendar re-read', async () => {
     const badW = verifyWeatherResult(
       makeToolResult({
         toolId: 'weather.forecast',
@@ -179,7 +186,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
     expect(badP.ok).toBe(false)
 
     // calendar: success flag but missing in store
-    const cal = verifyCalendarWrite(
+    const cal = await verifyCalendarWrite(
       makeToolResult({
         toolId: 'calendar.local_write',
         success: true,
@@ -189,6 +196,8 @@ describe('Core Engine V1.1 context + verify + permission', () => {
           whenLabel: '내일',
           reminderId: 'missing-id',
           verified: false,
+          calendarKind: 'local',
+          provider: 'aizio_local_calendar',
         },
         source: 'localStorage',
         sourceType: 'local_store',
@@ -199,7 +208,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
     expect(cal.userMessage).not.toMatch(/저장했습니다/)
   })
 
-  it('curated places never marked isRealData true after verify', () => {
+  it('curated places rejected (not shown as REAL or as user list)', () => {
     const curated = verifyPlacesResult(
       makeToolResult({
         toolId: 'places.family_seek',
@@ -221,7 +230,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
         isRealData: false,
       }),
     )
-    expect(curated.ok).toBe(true)
+    expect(curated.ok).toBe(false)
     expect(curated.result.isRealData).toBe(false)
   })
 
@@ -244,6 +253,7 @@ describe('Core Engine V1.1 context + verify + permission', () => {
 
   it('forbidden success claims detector', () => {
     expect(containsForbiddenSuccessClaim('저장했습니다')).toBe(true)
+    expect(containsForbiddenSuccessClaim('AIZIO 내부 일정에 저장했습니다')).toBe(false)
     expect(containsForbiddenSuccessClaim('로컬 일정에 저장했고 목록에서 확인했습니다')).toBe(false)
   })
 

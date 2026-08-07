@@ -110,7 +110,7 @@ export function renderHomeDashboard(opts: {
         emptyStart
           ? `<div class="nav-home-empty">
               <p><strong>시작하기</strong></p>
-              <p class="hint">아래 빠른 실행으로 일정·카메라·번역을 바로 쓰거나, 위 대화창에 말해 보세요.</p>
+              <p class="hint">아래 빠른 실행으로 길안내·일정·카메라·번역을 바로 쓰거나, 위 대화창에 말해 보세요.</p>
             </div>`
           : ''
       }

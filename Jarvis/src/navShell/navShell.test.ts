@@ -99,25 +99,30 @@ describe('quick + recent', () => {
     expect(listAddableQuickActions().every((q) => q.id !== 'ai-camera')).toBe(true)
   })
 
-  it('can add catalog items beyond the default six', () => {
-    hideQuickAction('todo-add')
-    const r = showQuickAction('navigate')
-    expect(r.ok).toBe(true)
+  it('default quick bar includes 길안내', () => {
     expect(listVisibleQuickActions().some((q) => q.id === 'navigate')).toBe(true)
+    expect(listVisibleQuickActions()[0]?.id).toBe('navigate')
+  })
+
+  it('can add catalog items beyond the default six', () => {
+    hideQuickAction('family-schedule')
+    const r = showQuickAction('todo-add')
+    expect(r.ok).toBe(true)
+    expect(listVisibleQuickActions().some((q) => q.id === 'todo-add')).toBe(true)
     expect(QUICK_ACTION_CATALOG.length).toBeGreaterThan(6)
   })
 
   it('replaces the last slot when adding while full', () => {
     expect(listVisibleQuickActions()).toHaveLength(6)
-    const blocked = showQuickAction('navigate')
+    const blocked = showQuickAction('todo-add')
     expect(blocked.ok).toBe(false)
     expect(blocked.reason).toBe('full')
-    const r = showQuickAction('navigate', { replaceLastIfFull: true })
+    const r = showQuickAction('todo-add', { replaceLastIfFull: true })
     expect(r.ok).toBe(true)
-    expect(r.replacedId).toBe('todo-add')
+    expect(r.replacedId).toBe('family-schedule')
     const ids = listVisibleQuickActions().map((q) => q.id)
-    expect(ids).toContain('navigate')
-    expect(ids).not.toContain('todo-add')
+    expect(ids).toContain('todo-add')
+    expect(ids).not.toContain('family-schedule')
     expect(ids).toHaveLength(6)
   })
 
@@ -126,12 +131,12 @@ describe('quick + recent', () => {
     showQuickAction('games')
     resetQuickActions()
     expect(listVisibleQuickActions().map((q) => q.id)).toEqual([
+      'navigate',
       'schedule-add',
       'reminder-add',
       'ai-camera',
       'translate',
       'family-schedule',
-      'todo-add',
     ])
   })
 
@@ -186,7 +191,8 @@ describe('quick + recent', () => {
     })
     expect(html).toContain('data-quick-edit')
     expect(html).toContain('data-quick-add="ai-camera"')
-    expect(html).toContain('data-quick-add="navigate"')
+    expect(html).toContain('data-quick-add="todo-add"')
+    expect(html).toContain('data-quick-hide="navigate"')
     expect(html).toContain('추가할 기능 고르기')
     expect(html).toContain('추가')
     expect(html).not.toMatch(/data-quick-add="[^"]+"\s+disabled/)

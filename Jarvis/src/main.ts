@@ -444,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.2'
+const APP_VERSION = '1.30.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -6769,6 +6769,7 @@ function bind(): void {
       else if (id === 'translate') recordRecentFeature('translate')
       else if (id === 'chat') recordRecentFeature('chat')
       else if (id === 'schedule' || id === 'schedule-add') recordRecentFeature('schedule')
+      else if (id === 'navigate') recordRecentFeature('navigation')
       if (kind === 'view' && payload) {
         goToView(payload as View)
         return

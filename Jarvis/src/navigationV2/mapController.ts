@@ -36,6 +36,25 @@ export function createMapController(): MapController {
     ready: false,
     async mount(el: HTMLElement) {
       if (destroyed) return
+      // Already attached to this live container — just resize.
+      if (map && api.ready && map.getContainer?.() === el && el.isConnected) {
+        try {
+          map.resize()
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+      // Stale map from a previous HTML remount — tear down before recreating.
+      if (map) {
+        try {
+          map.remove()
+        } catch {
+          /* ignore */
+        }
+        map = null
+        api.ready = false
+      }
       const mod = await import('maplibre-gl')
       await import('maplibre-gl/dist/maplibre-gl.css')
       maplibregl = mod.default || mod
@@ -48,14 +67,31 @@ export function createMapController(): MapController {
       })
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
       await new Promise<void>((resolve) => {
-        map.on('load', () => resolve())
+        let settled = false
+        const done = () => {
+          if (settled) return
+          settled = true
+          resolve()
+        }
+        map.on('load', done)
+        map.on('error', () => window.setTimeout(done, 50))
+        window.setTimeout(done, 8_000)
       })
       if (destroyed) {
-        map.remove()
+        try {
+          map.remove()
+        } catch {
+          /* ignore */
+        }
         map = null
         return
       }
       api.ready = true
+      try {
+        map.resize()
+      } catch {
+        /* ignore */
+      }
     },
     destroy() {
       destroyed = true
@@ -66,6 +102,8 @@ export function createMapController(): MapController {
         /* ignore */
       }
       map = null
+      // Allow a fresh controller to mount after view remounts.
+      destroyed = false
     },
     setUserLocation(p) {
       if (!map || !api.ready) return

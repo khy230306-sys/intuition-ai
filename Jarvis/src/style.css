@@ -3478,6 +3478,12 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   overflow: hidden;
   border: 1px solid rgba(0, 210, 190, 0.2);
   background: #0a121a;
+  flex-shrink: 0;
+}
+/* Keep search results / route actions above the fold — shrink map when results exist */
+.navv2-panel.has-results .navv2-map {
+  height: min(28vh, 220px);
+  min-height: 140px;
 }
 .navv2-attr { font-size: 0.7rem; opacity: 0.75; margin: 0; }
 .navv2-catalog-note { color: #fbbf24; }
@@ -3485,9 +3491,10 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 38vh;
+  max-height: min(46vh, 420px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  order: 0;
 }
 .navv2-cands { display: flex; flex-direction: column; gap: 6px; }
 .navv2-cand {

@@ -112,8 +112,9 @@ export function renderNavigationScreen(st: NavScreenState): string {
         })()
       : ''
 
+  const hasResults = Boolean(st.candidates.length || route || st.selected || ctx.guiding)
   return `
-    <section class="panel navv2-panel" data-navv2="1">
+    <section class="panel navv2-panel ${hasResults ? 'has-results' : ''}" data-navv2="1">
       <header class="navv2-head">
         <button type="button" class="ghost-btn tiny" data-action="navv2-back" aria-label="뒤로">뒤로</button>
         <strong>AIZIO 길안내</strong>
@@ -132,8 +133,6 @@ export function renderNavigationScreen(st: NavScreenState): string {
           })
           .join('')}
       </div>
-      <div id="navv2-map" class="navv2-map" role="application" aria-label="지도"></div>
-      <p class="navv2-attr hint">© OpenStreetMap · OpenFreeMap · AIZIO Navigation v2</p>
       ${
         st.catalogOnly && st.candidates.length
           ? `<p class="hint navv2-catalog-note">로컬 카탈로그 결과 · 전국 검색은 검색 버튼으로 실행됩니다.</p>`
@@ -144,13 +143,6 @@ export function renderNavigationScreen(st: NavScreenState): string {
       <p class="hint" data-navv2-status>${esc(st.status)}</p>
       <div class="navv2-sheet">
         ${guideHtml || routeHtml}
-        ${recentHtml}
-        <div class="navv2-cands">${candHtml}</div>
-        ${
-          st.candidates.length > 5 && !st.showAll
-            ? `<button type="button" class="ghost-btn" data-navv2-action="more">나머지 ${st.candidates.length - 5}곳 보기</button>`
-            : ''
-        }
         ${
           st.selected
             ? `<div class="navv2-detail">
@@ -163,7 +155,16 @@ export function renderNavigationScreen(st: NavScreenState): string {
               </div>`
             : ''
         }
+        ${recentHtml}
+        <div class="navv2-cands">${candHtml}</div>
+        ${
+          st.candidates.length > 5 && !st.showAll
+            ? `<button type="button" class="ghost-btn" data-navv2-action="more">나머지 ${st.candidates.length - 5}곳 보기</button>`
+            : ''
+        }
       </div>
+      <div id="navv2-map" class="navv2-map" role="application" aria-label="지도"></div>
+      <p class="navv2-attr hint">© OpenStreetMap · OpenFreeMap · AIZIO Navigation v2</p>
     </section>
   `
 }
@@ -176,6 +177,12 @@ export async function bindNavigationScreen(
   const mapEl = root.querySelector('#navv2-map') as HTMLElement | null
   if (mapEl) {
     if (!mapCtl) mapCtl = createMapController()
+    // Full `render()` replaces #navv2-map — remount when the canvas was discarded.
+    const hasCanvas = Boolean(mapEl.querySelector('.maplibregl-canvas, .maplibregl-map'))
+    if (mapCtl.ready && !hasCanvas) {
+      mapCtl.destroy()
+      mapCtl = createMapController()
+    }
     if (!mapCtl.ready) await mapCtl.mount(mapEl)
     const ctx = getNavV2Context()
     if (ctx.origin) mapCtl.setUserLocation(ctx.origin)

@@ -40,6 +40,7 @@ export type QuickActionDef = {
 
 /** Full pool users can add from. */
 export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
+  { id: 'navigate', title: '길안내', sub: '장소 · 경로', ico: 'N', kind: 'action', payload: 'navigate' },
   { id: 'schedule-add', title: '일정 추가', sub: '내일 병원…', ico: '+', kind: 'cmd', payload: '내일 오후 3시 병원 일정 추가해줘' },
   { id: 'reminder-add', title: '알림 추가', sub: '잊지 않게', ico: '!', kind: 'cmd', payload: '30분 뒤 알림 만들어줘' },
   { id: 'ai-camera', title: 'AI 카메라', sub: '사진 분석', ico: 'o', kind: 'view', payload: 'ai-camera' },
@@ -47,7 +48,6 @@ export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
   { id: 'family-schedule', title: '가족 일정', sub: '하원·학교', ico: 'F', kind: 'view', payload: 'family-helper' },
   { id: 'todo-add', title: '할 일 추가', sub: '오늘 할 일', ico: 'T', kind: 'cmd', payload: '할 일 추가해줘' },
   { id: 'briefing', title: '브리핑', sub: '오늘 한눈에', ico: 'B', kind: 'cmd', payload: '오늘 하루 요약해줘' },
-  { id: 'navigate', title: '길안내', sub: '장소 · 경로', ico: 'N', kind: 'action', payload: 'navigate' },
   { id: 'chat', title: '대화', sub: 'AIZIO 채팅', ico: 'C', kind: 'view', payload: 'chat' },
   { id: 'schedule', title: '일정', sub: '일정 허브', ico: 'S', kind: 'view', payload: 'schedule' },
   { id: 'family', title: '가족', sub: '가족 도우미', ico: 'H', kind: 'view', payload: 'family-helper' },
@@ -62,8 +62,15 @@ export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
   { id: 'restaurant', title: '맛집', sub: '식당 · 예약', ico: 'R', kind: 'view', payload: 'restaurant' },
 ]
 
-/** @deprecated alias — same as catalog defaults used for reset */
-export const DEFAULT_QUICK_ACTIONS: QuickActionDef[] = QUICK_ACTION_CATALOG.slice(0, 6)
+/** Default home quick bar — 길안내 first so navigation is one tap away. */
+export const DEFAULT_QUICK_ACTIONS: QuickActionDef[] = [
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'navigate')!,
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'schedule-add')!,
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'reminder-add')!,
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'ai-camera')!,
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'translate')!,
+  QUICK_ACTION_CATALOG.find((q) => q.id === 'family-schedule')!,
+]
 
 const DEFAULT_VISIBLE: QuickActionId[] = DEFAULT_QUICK_ACTIONS.map((q) => q.id)
 
@@ -91,7 +98,27 @@ function loadPrefs(): QuickPrefs {
     }
     // New format
     if (Array.isArray(p.visible) && p.visible.length) {
-      const visible = p.visible.filter(isQuickId).slice(0, QUICK_ACTION_MAX)
+      let visible = p.visible.filter(isQuickId).slice(0, QUICK_ACTION_MAX)
+      // One-time migrate: old factory default (no 길안내) → include navigate
+      const oldDefault = [
+        'schedule-add',
+        'reminder-add',
+        'ai-camera',
+        'translate',
+        'family-schedule',
+        'todo-add',
+      ]
+      if (
+        visible.length === oldDefault.length &&
+        oldDefault.every((id, i) => visible[i] === id)
+      ) {
+        visible = [...DEFAULT_VISIBLE]
+        try {
+          localStorage.setItem(KEY, JSON.stringify({ visible }))
+        } catch {
+          /* ignore */
+        }
+      }
       return { visible: visible.length ? visible : [...DEFAULT_VISIBLE] }
     }
     // Legacy: order + hidden → visible

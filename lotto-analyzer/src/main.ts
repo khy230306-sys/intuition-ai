@@ -244,7 +244,7 @@ function render() {
         <div class="float-ball g fb4">34</div>
         <div class="float-ball gn fb5">43</div>
       </div>
-      <div class="wrap" style="display:flex;flex-direction:column;min-height:100svh;position:relative;z-index:2;">
+      <div class="wrap hero-wrap">
         <nav class="nav">
           <div class="brand-mark">
             <span class="aizio">AIZIO</span>

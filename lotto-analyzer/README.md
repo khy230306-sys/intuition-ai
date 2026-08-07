@@ -4,7 +4,7 @@
 
 ## 모바일 접속 주소 (아이폰 · 안드로이드)
 
-**https://gl3gya6u.nivii.app**
+**https://pnly0n2h.nivii.app**
 
 휴대폰 브라우저(Safari / Chrome)에서 바로 열 수 있습니다.  
 아이폰: 공유 → 홈 화면에 추가 / 안드로이드: 메뉴 → 홈 화면에 추가

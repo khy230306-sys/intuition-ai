@@ -37,6 +37,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100svh;
   font-family: var(--font-body);
   color: var(--ink);
   background:
@@ -47,6 +48,10 @@ body {
   background-attachment: fixed;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 body::before {

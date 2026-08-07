@@ -7,10 +7,21 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "fetch-data": "node scripts/fetch-data.mjs"
+    "fetch-data": "node scripts/fetch-data.mjs",
+    "icons:ios": "node scripts/generate-ios-icons.mjs",
+    "cap:sync": "npm run build && npx cap sync ios",
+    "cap:copy": "npm run build && npx cap copy ios",
+    "cap:open": "npx cap open ios",
+    "ios:prepare": "npm run icons:ios && npm run cap:sync",
+    "smoke:ios": "node scripts/smoke-ios-prep.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
     "vite": "^7.1.2"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
   }
 }

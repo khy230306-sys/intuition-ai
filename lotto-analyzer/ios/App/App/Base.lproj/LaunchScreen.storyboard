@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="21701" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+    <device id="retina6_12" orientation="portrait" appearance="dark"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="21678"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="EHf-IW-A2E">
+            <objects>
+                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="AIZIO" textAlignment="center" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="aizio-label">
+                                <rect key="frame" x="40" y="360" width="313" height="28"/>
+                                <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
+                                <color key="textColor" red="0.949" green="0.757" blue="0.306" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="로또렌즈" textAlignment="center" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="kr-label">
+                                <rect key="frame" x="40" y="396" width="313" height="44"/>
+                                <fontDescription key="fontDescription" type="boldSystem" pointSize="36"/>
+                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="LottoLens" textAlignment="center" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="en-label">
+                                <rect key="frame" x="40" y="444" width="313" height="22"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <color key="textColor" red="0.718" green="0.831" blue="0.804" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </label>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="safe-area"/>
+                        <color key="backgroundColor" red="0.043" green="0.180" blue="0.165" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="aizio-label" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c1"/>
+                            <constraint firstItem="kr-label" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c2"/>
+                            <constraint firstItem="en-label" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c3"/>
+                            <constraint firstItem="kr-label" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="c4"/>
+                            <constraint firstItem="aizio-label" firstAttribute="bottom" secondItem="kr-label" secondAttribute="top" constant="-8" id="c5"/>
+                            <constraint firstItem="en-label" firstAttribute="top" secondItem="kr-label" secondAttribute="bottom" constant="8" id="c6"/>
+                            <constraint firstItem="aizio-label" firstAttribute="leading" secondItem="safe-area" secondAttribute="leading" constant="24" id="c7"/>
+                            <constraint firstItem="safe-area" firstAttribute="trailing" secondItem="aizio-label" secondAttribute="trailing" constant="24" id="c8"/>
+                            <constraint firstItem="kr-label" firstAttribute="leading" secondItem="safe-area" secondAttribute="leading" constant="24" id="c9"/>
+                            <constraint firstItem="safe-area" firstAttribute="trailing" secondItem="kr-label" secondAttribute="trailing" constant="24" id="c10"/>
+                            <constraint firstItem="en-label" firstAttribute="leading" secondItem="safe-area" secondAttribute="leading" constant="24" id="c11"/>
+                            <constraint firstItem="safe-area" firstAttribute="trailing" secondItem="en-label" secondAttribute="trailing" constant="24" id="c12"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="53" y="375"/>
+        </scene>
+    </scenes>
+</document>

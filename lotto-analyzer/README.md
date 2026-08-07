@@ -42,4 +42,17 @@ npm run preview
 
 ## 주의
 
-로또는 독립적 무작위 추첨입니다. 통계 분석은 오락·학습 목적이며 당첨을 보장하지 않습니다.
+본 서비스는 통계 및 엔터테인먼트 목적으로 제공되며 복권 당첨을 보장하지 않습니다. 로또렌즈는 실제 복권 판매·구매·결제 기능을 제공하지 않습니다.
+
+## iOS (App Store 준비)
+
+```bash
+npm install
+npm run ios:prepare   # icons + web build + cap sync ios
+npm run smoke:ios
+npx cap open ios      # Mac + Xcode 필요
+```
+
+- Bundle ID: `com.aizio.lottolens`
+- Version: `1.0.0` / Build: `1`
+- 문서: `../docs/IOS_APPSTORE_RELEASE_CHECKLIST.md`

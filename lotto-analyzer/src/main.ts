@@ -557,7 +557,7 @@ function render() {
 
     <footer class="footer">
       <div class="wrap">
-        <p class="disclaimer">로또는 독립적 무작위 추첨입니다. 본 분석은 오락·학습 목적이며 당첨을 보장하지 않습니다.</p>
+        <p class="disclaimer">본 서비스는 통계 및 엔터테인먼트 목적으로 제공되며 복권 당첨을 보장하지 않습니다. 로또는 독립적 무작위 추첨이며, 로또렌즈는 실제 복권 판매·구매·결제 기능을 제공하지 않습니다.</p>
         <p>AIZIO 로또렌즈 · 동행복권 실제 데이터 ${data.count}회차 (${draws[0].date} – ${latest.date})</p>
       </div>
     </footer>

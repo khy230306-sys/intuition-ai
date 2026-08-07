@@ -1,6 +1,6 @@
 {
-  "name": "로또렌즈",
-  "short_name": "로또렌즈",
+  "name": "AIZIO 로또렌즈",
+  "short_name": "AIZIO",
   "description": "동행복권 실제 당첨 데이터 기반 통계 분석기",
   "start_url": "./",
   "display": "standalone",

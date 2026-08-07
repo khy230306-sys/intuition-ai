@@ -158,8 +158,24 @@ img {
 }
 
 .brand-mark {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  line-height: 1;
+}
+
+.brand-mark .aizio {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+.brand-mark .product {
   font-family: var(--font-brand);
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   letter-spacing: -0.02em;
 }
 
@@ -180,6 +196,40 @@ img {
 @keyframes riseIn {
   from { opacity: 0; transform: translateY(28px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.aizio-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.55rem;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: clamp(1.05rem, 3.2vw, 1.45rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(242, 193, 78, 0.35);
+  animation: logoIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.aizio-logo::before {
+  content: '';
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 0.45rem;
+  background:
+    radial-gradient(circle at 32% 30%, #ffe28a, var(--gold) 58%),
+    linear-gradient(135deg, var(--sky), var(--mint));
+  box-shadow:
+    inset -2px -3px 6px rgba(0, 0, 0, 0.25),
+    0 6px 16px rgba(242, 193, 78, 0.3);
+  flex-shrink: 0;
+}
+
+@keyframes logoIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .brand-hero {

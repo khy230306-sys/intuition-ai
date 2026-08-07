@@ -246,10 +246,14 @@ function render() {
       </div>
       <div class="wrap" style="display:flex;flex-direction:column;min-height:100svh;position:relative;z-index:2;">
         <nav class="nav">
-          <div class="brand-mark">로또렌즈</div>
+          <div class="brand-mark">
+            <span class="aizio">AIZIO</span>
+            <span class="product">로또렌즈</span>
+          </div>
           <div class="nav-meta">${data.count}회차 · ${data.updated} 기준</div>
         </nav>
         <div class="hero-copy">
+          <p class="aizio-logo" aria-label="AIZIO">AIZIO</p>
           <p class="brand-hero">로또렌즈</p>
           <h1>실제 당첨 데이터로 읽는<br />번호의 결</h1>
           <p>1회부터 ${latest.round}회까지 ${data.count}번의 추첨을 빈도·공백·페어·회차 흐름으로 분해합니다.</p>
@@ -554,7 +558,7 @@ function render() {
     <footer class="footer">
       <div class="wrap">
         <p class="disclaimer">로또는 독립적 무작위 추첨입니다. 본 분석은 오락·학습 목적이며 당첨을 보장하지 않습니다.</p>
-        <p>로또렌즈 · 동행복권 실제 데이터 ${data.count}회차 (${draws[0].date} – ${latest.date})</p>
+        <p>AIZIO 로또렌즈 · 동행복권 실제 데이터 ${data.count}회차 (${draws[0].date} – ${latest.date})</p>
       </div>
     </footer>
   `

@@ -5,6 +5,7 @@ import { parseLifeOs2Intent } from '../life-os-2/intentParse'
 import { parseRelationshipUtterance } from '../relationship'
 import { isCasualChatText } from '../spokenCommand'
 import { parseReminderUtterance } from '../smartReminder'
+import { isTodoCreateUtterance } from '../life/todoShopping'
 import { extractEntities } from './entityExtractor'
 import type { CoreIntent, IntentClassification } from './types'
 import { lastIntent } from './brainState'
@@ -166,6 +167,16 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
       confidence: 0.9,
       source: 'local',
       entities: extractEntities(t, 'ask_information'),
+    }
+  }
+
+  // 「할 일 장보기 추가」 etc. — sentence frame before shopping / soft rules
+  if (isTodoCreateUtterance(t) && !/할\s*일\s*(목록|보여|리스트)/i.test(t)) {
+    return {
+      intent: 'create_todo',
+      confidence: 0.93,
+      source: 'local',
+      entities: extractEntities(t, 'create_todo'),
     }
   }
 

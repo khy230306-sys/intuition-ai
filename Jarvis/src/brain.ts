@@ -135,6 +135,7 @@ import { formatWeatherLine, loadCachedWeather, weatherPlaceMatches } from './wea
 import { localFunReply } from './localFun'
 import { answerEncyclopedia, isKnowledgeQuestion } from './encyclopedia/encyclopediaEngine'
 import { tryHandleLifeAssistant } from './life-assistant'
+import { classifyTodoShopping } from './life/todoShopping'
 
 function helpText(name: string): string {
   return [
@@ -579,24 +580,31 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     if (result !== null) return { text: `계산 결과: ${result}`, speak: true }
   }
 
-  const shopAdd =
-    text.match(/(?:장바구니|장보기)\s*(?:추가)?\s*(.+)$/i) ||
-    text.match(/^(.+?)\s*(?:장바구니|장보기)\s*(?:추가|넣어)/i)
-  if (shopAdd && !/목록|보여|리스트/.test(text)) {
-    const names = shopAdd[1].split(/[,，、과와랑및\s]+/).filter(Boolean)
-    const created = addShoppingItems(names)
-    return {
-      text: created.length
-        ? `장바구니에 추가: ${created.map((c) => c.name).join(', ')}`
-        : '이미 들어 있거나 추가할 항목이 없습니다.',
-      speak: true,
+  // TODO vs shopping — sentence structure wins over bare 「장보기」 keyword
+  {
+    const hit = classifyTodoShopping(text)
+    if (hit.kind === 'todo.create') {
+      const title = (hit.title || '').trim() || '할 일'
+      const item = addReminder(title)
+      return { text: `할 일 추가: ${item.text}`, speak: true }
     }
-  }
-
-  if (/장바구니\s*(목록|보여|리스트)|장보기\s*목록/.test(text)) {
-    const items = loadShopping().filter((s) => !s.done)
-    return {
-      text: items.length ? `장바구니:\n${items.map((s, i) => `${i + 1}. ${s.name}`).join('\n')}` : '장바구니가 비어 있습니다.',
+    if (hit.kind === 'shopping.add') {
+      const names = hit.items?.length ? hit.items : []
+      const created = addShoppingItems(names)
+      return {
+        text: created.length
+          ? `장바구니에 추가: ${created.map((c) => c.name).join(', ')}`
+          : '이미 들어 있거나 추가할 항목이 없습니다.',
+        speak: true,
+      }
+    }
+    if (hit.kind === 'shopping.list') {
+      const items = loadShopping().filter((s) => !s.done)
+      return {
+        text: items.length
+          ? `장바구니:\n${items.map((s, i) => `${i + 1}. ${s.name}`).join('\n')}`
+          : '장바구니가 비어 있습니다.',
+      }
     }
   }
 
@@ -672,9 +680,9 @@ async function handleLife(text: string): Promise<BrainReply | null> {
   }
 
   const remind =
-    text.match(/^(?:리마인더|할\s*일|기억시켜)\s*(.+)$/i) ||
+    text.match(/^(?:리마인더|기억시켜)\s*(.+)$/i) ||
     text.match(/^(.+?)\s*(?:기억시켜|할\s*일에\s*넣어)$/i)
-  if (remind && !/장바구니|습관/.test(text)) {
+  if (remind && !/장바구니|장보기|습관|할\s*일/.test(text)) {
     const item = addReminder(remind[1])
     return { text: `할 일 추가: ${item.text}`, speak: true }
   }

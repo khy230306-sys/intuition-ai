@@ -1,3 +1,4 @@
+import { extractTodoTitle, isTodoCreateUtterance } from '../life/todoShopping'
 import { extractKoreanDate, extractKoreanTime, extractReminderOffset } from './datetimeParse'
 import type { LifeAssistantIntentResult } from './types'
 
@@ -186,7 +187,17 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
     }
   }
 
-  // Tasks
+  // Tasks — sentence structure: 「할 일 X 추가」 before shopping keywords
+  if (isTodoCreateUtterance(t)) {
+    const title = extractTodoTitle(t)
+    return base(t, {
+      intent: 'task.create',
+      confidence: 0.93,
+      title,
+      missingFields: title ? [] : ['title'],
+      requiresConfirmation: !title,
+    })
+  }
   if (/할\s*일.*(우선|정리|보여|목록|알려)|오늘\s*해야\s*할\s*일|투두/.test(t)) {
     if (/추가|등록|넣/.test(t)) {
       const title = extractTitle(t, /할\s*일|추가|등록|해줘/g)

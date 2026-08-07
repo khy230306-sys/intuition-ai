@@ -21,6 +21,7 @@ import { getActiveMode, getTranslationSession } from './session'
 import type { AizioIntent, CommandRouterInput, CommandRouterResult } from './types'
 import { pushRouteDiag } from './diagnostics'
 import { isClearWeatherQuery } from './weatherQuery'
+import { isTodoCreateUtterance } from '../life/todoShopping'
 
 export { isClearWeatherQuery }
 
@@ -211,9 +212,7 @@ function isReminderCreate(text: string): boolean {
 }
 
 function isTodoCreate(text: string): boolean {
-  const t = text.trim()
-  if (/번역|통역/i.test(t)) return false
-  return /할\s*일\s*(추가|등록|만들)|투두\s*추가/i.test(t)
+  return isTodoCreateUtterance(text)
 }
 
 function isFamilyScheduleCreate(text: string): boolean {

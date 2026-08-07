@@ -21,7 +21,19 @@ import {
 export function useHandSession() {
   const [hole, setHole] = useState<Card[]>([])
   const [board, setBoard] = useState<Card[]>([])
-  const [opponents, setOpponents] = useState(1)
+  const [opponents, setOpponentsState] = useState(1)
+
+  const setOpponents = (n: number) => {
+    const clamped = Math.min(11, Math.max(1, Math.floor(Number.isFinite(n) ? n : 1)))
+    setOpponentsState(clamped)
+  }
+
+  /** Total players at table including hero (2–12). */
+  const players = opponents + 1
+  const setPlayers = (n: number) => {
+    const total = Math.min(12, Math.max(2, Math.floor(Number.isFinite(n) ? n : 2)))
+    setOpponentsState(total - 1)
+  }
   const [position, setPosition] = useState<Position>('middle')
   const [pickerFor, setPickerFor] = useState<'hole' | 'board' | null>(null)
   const [equity, setEquity] = useState<EquityResult | null>(null)
@@ -149,6 +161,8 @@ export function useHandSession() {
     board,
     opponents,
     setOpponents,
+    players,
+    setPlayers,
     position,
     setPosition,
     pickerFor,

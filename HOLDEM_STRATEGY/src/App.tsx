@@ -130,20 +130,31 @@ export default function App() {
           </section>
 
           {/* Compact settings */}
-          <section className="grid shrink-0 grid-cols-[5.5rem_1fr] gap-2">
+          <section className="grid shrink-0 grid-cols-[6.5rem_1fr] gap-2">
             <label className="rounded-xl border border-line bg-panel/80 px-2 py-1.5">
-              <div className="text-[10px] text-mute">상대</div>
-              <select
-                className="he-num w-full bg-transparent text-sm font-semibold outline-none"
-                value={s.opponents}
-                onChange={(e) => s.setOpponents(Number(e.target.value))}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n}명
-                  </option>
-                ))}
-              </select>
+              <div className="text-[10px] text-mute">플레이어</div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={2}
+                  max={12}
+                  step={1}
+                  className="he-num w-full min-w-0 bg-transparent text-sm font-semibold outline-none"
+                  value={s.players}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '') return
+                    s.setPlayers(Number(raw))
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.target.value)
+                    s.setPlayers(Number.isFinite(n) ? n : 2)
+                  }}
+                  aria-label="플레이어 수 (최대 12명)"
+                />
+                <span className="shrink-0 text-xs text-mute">명</span>
+              </div>
             </label>
             <div className="grid grid-cols-4 gap-1 rounded-xl border border-line bg-panel/80 p-1">
               {POSITIONS.map((p) => (

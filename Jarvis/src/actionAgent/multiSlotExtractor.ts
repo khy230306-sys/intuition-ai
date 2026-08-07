@@ -67,6 +67,17 @@ export const DESTINATION_PLACES: Record<string, string> = {
 const DEST_KEYS = Object.keys(DESTINATION_PLACES).sort((a, b) => b.length - a.length)
 const ORIGIN_KEYS = Object.keys(ORIGIN_PLACES).sort((a, b) => b.length - a.length)
 
+/** Strip quotative / case particles so 「호치민이라고」「부산에서」 resolve to place names. */
+export function normalizePlaceAnswer(text: string): string {
+  let t = text.trim().replace(/\s+/g, '')
+  if (!t) return t
+  // Longest discourse / quotative endings first
+  t = t.replace(/(이라고요|이라고|라고요|라고|인데요|이요|예요|에요|이야요|이야)$/u, '')
+  // Direction / case particles (including 「행」 as in 호치민행)
+  t = t.replace(/(으로|로|에서|에게|에|을|를|은|는|이|가|행)$/u, '')
+  return t
+}
+
 export type SlotExtractContext = {
   pendingQuestion?: string | null
   existing?: TaskSlots
@@ -91,12 +102,17 @@ export function isBarePlaceUtterance(text: string): boolean {
   const t = text.trim().replace(/\s+/g, '')
   if (isExplicitCityInfoQuery(text)) return false
   if (/날씨|기온|습도|미세먼지/.test(text)) return false
+  const normalized = normalizePlaceAnswer(t)
   for (const k of DEST_KEYS) {
     if (
       t === k ||
+      normalized === k ||
       t === `${k}으로` ||
       t === `${k}로` ||
       t === `${k}에` ||
+      t === `${k}행` ||
+      t === `${k}이라고` ||
+      t === `${k}라고` ||
       new RegExp(`^${k}(으로|로)?갈(거야|꺼야|래요|게)$`).test(t)
     ) {
       return true
@@ -182,13 +198,16 @@ function extractOrigin(text: string): string | undefined {
 function extractDestination(text: string, origin?: string): string | undefined {
   const t = text.trim()
   const compact = t.replace(/\s+/g, '')
+  const normalized = normalizePlaceAnswer(compact)
 
-  // Prefer particle-bound destination: X으로 / X로 / X 갈…
+  // Prefer particle-bound destination: X으로 / X로 / X행 / X 갈…
   for (const k of DEST_KEYS) {
     const canon = DESTINATION_PLACES[k]
     if (origin && canon === origin) continue
     if (
       new RegExp(`${k}\\s*(으로|로)(\\s*갈|$)`).test(t) ||
+      new RegExp(`${k}\\s*행`).test(t) ||
+      compact.includes(`${k}행`) ||
       new RegExp(`${k}(으로|로)?갈`).test(compact) ||
       new RegExp(`${k}\\s*갈(거야|꺼야|래요|게|까)`).test(t)
     ) {
@@ -199,25 +218,29 @@ function extractDestination(text: string, origin?: string): string | undefined {
   // 「인천에서 호치민」 — place after 에서
   const afterOrigin = t.match(/에서\s*([가-힣A-Za-z]{2,12})/)
   if (afterOrigin) {
-    const token = afterOrigin[1].replace(/(으로|로|을|를|이|가)$/, '')
+    const token = normalizePlaceAnswer(afterOrigin[1])
     for (const k of DEST_KEYS) {
       if (token === k || token.startsWith(k)) return DESTINATION_PLACES[k]
     }
   }
 
-  // Bare destination token (short answers / 「제주 갈거야」 without 으로)
+  // Bare destination token (short answers / 「제주 갈거야」 / 「호치민이라고」)
   for (const k of DEST_KEYS) {
     const canon = DESTINATION_PLACES[k]
     if (origin && canon === origin) continue
     if (
       compact === k ||
+      normalized === k ||
       compact === `${k}으로` ||
       compact === `${k}로` ||
       compact === `${k}에` ||
+      compact === `${k}행` ||
+      compact === `${k}이라고` ||
+      compact === `${k}라고` ||
       new RegExp(`(?:^|\\s)${k}(?:\\s|$)`).test(t)
     ) {
       // Avoid treating origin-only 「인천에서」 as destination
-      if (new RegExp(`${k}\\s*에서`).test(t) && !new RegExp(`${k}\\s*(으로|로|갈)`).test(t)) {
+      if (new RegExp(`${k}\\s*에서`).test(t) && !new RegExp(`${k}\\s*(으로|로|갈|행)`).test(t)) {
         continue
       }
       return canon
@@ -299,14 +322,21 @@ export function extractMultiSlots(text: string, ctx: SlotExtractContext = {}, no
 
   // Pending-question short answers for places not in maps
   if (!slots.destination && ctx.pendingQuestion === 'destination') {
-    const m = t.match(/^([가-힣A-Za-z]{2,12})(으로|로)?$/)
-    if (m && !/명|월|일|편도|왕복/.test(m[1]) && !ORIGIN_PLACES[m[1]]) {
-      slots.destination = m[1]
+    const token = normalizePlaceAnswer(t)
+    if (
+      token.length >= 2 &&
+      token.length <= 12 &&
+      !/명|월|일|편도|왕복|혼자|출발/.test(token) &&
+      !ORIGIN_PLACES[token]
+    ) {
+      slots.destination = DESTINATION_PLACES[token] || token
     }
   }
   if (!slots.origin && ctx.pendingQuestion === 'origin') {
-    const m = t.match(/^([가-힣A-Za-z]{2,12})(에서|로)?$/)
-    if (m && !/명|월|일/.test(m[1])) slots.origin = ORIGIN_PLACES[m[1]] || m[1]
+    const token = normalizePlaceAnswer(t)
+    if (token.length >= 2 && token.length <= 12 && !/명|월|일|출발/.test(token)) {
+      slots.origin = ORIGIN_PLACES[token] || token
+    }
   }
 
   const pax = extractPassengers(t)

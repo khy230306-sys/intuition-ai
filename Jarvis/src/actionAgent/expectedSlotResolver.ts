@@ -2,7 +2,11 @@
  * Expected-slot resolver — pendingQuestion / expectedSlot beats generic extractors.
  */
 
-import { extractAbsoluteMonthDaySlots, extractMultiSlots } from './multiSlotExtractor'
+import {
+  extractAbsoluteMonthDaySlots,
+  extractMultiSlots,
+  normalizePlaceAnswer,
+} from './multiSlotExtractor'
 import { extractDateFromUtterance, resolveKoreanDate } from './dates'
 import { normalizeTripType } from './tripTypeNormalize'
 import type { SlotUpdateProposal } from './slotMerge'
@@ -246,11 +250,13 @@ export function resolveExpectedSlot(
         : expected === 'origin'
           ? multi.origin
           : multi.location || multi.destination
-    // Bare token fallback
+    // Bare token fallback (strip 「이라고」「행」 etc.)
     let resolved = val
     if (!resolved) {
-      const m = t.match(/^([가-힣A-Za-z]{2,12})(으로|로|에서)?$/)
-      if (m && !/명|월|일|편도|왕복|완복/.test(m[1])) resolved = m[1]
+      const token = normalizePlaceAnswer(t)
+      if (token.length >= 2 && token.length <= 12 && !/명|월|일|편도|왕복|완복|혼자|출발/.test(token)) {
+        resolved = token
+      }
     }
     if (!resolved) {
       return { ok: false, proposals: [], parseFailed: true, normalizedInput: t }

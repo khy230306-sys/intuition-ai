@@ -177,4 +177,15 @@ describe('Multi-turn Context E2E (device repro via think)', () => {
     expect(c.destination).toBe('호치민')
     expect(c.departureDate?.resolvedDate).toMatch(/-08-10$/)
   })
+
+  it('호치민행 + 호치민이라고 particle stripping', () => {
+    const a = extractMultiSlots('호치민행 비행기표를 검색해줘')
+    expect(a.destination).toBe('호치민')
+
+    const b = extractMultiSlots('호치민이라고', { pendingQuestion: 'destination' })
+    expect(b.destination).toBe('호치민')
+
+    const c = extractMultiSlots('내일', { pendingQuestion: 'departureDate' })
+    expect(c.departureDate?.resolvedDate).toBeTruthy()
+  })
 })

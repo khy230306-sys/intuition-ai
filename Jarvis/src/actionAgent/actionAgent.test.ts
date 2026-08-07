@@ -176,16 +176,32 @@ describe('Action Agent V1', () => {
     expect(e?.resolvedDate).toBeTruthy()
   })
 
-  it('production path reports NEEDS_PROVIDER without fixtures', async () => {
+  it('demo provider returns DEMO flights without fixtures flag', async () => {
     setActionAgentAllowFixtures(false)
+    localStorage.removeItem('aizio_travel_services_v1')
     await turn('다음 주 금요일 제주도 가는 비행기 알아봐')
-    // force fixtures off for this search
     const routed = routeCommand({ text: '김포' })
     await processActionAgentTurn('김포', routed, { allowFixtures: false })
     await processActionAgentTurn('편도', routeCommand({ text: '편도' }), { allowFixtures: false })
     const r = await processActionAgentTurn('2명', routeCommand({ text: '2명' }), { allowFixtures: false })
-    expect(r.replyText).toMatch(/제공자|연결되지|NEEDS_PROVIDER|검색 제공자/)
+    expect(r.replyText).toMatch(/DEMO|항공/)
+    expect(getActiveTask()?.results?.length).toBeGreaterThan(0)
+    expect(getActiveTask()?.status).not.toBe('needs_provider')
+  })
+
+  it('live provider without keys reports NEEDS_PROVIDER', async () => {
+    setActionAgentAllowFixtures(false)
+    localStorage.setItem(
+      'aizio_travel_services_v1',
+      JSON.stringify({ flightProvider: 'duffel', duffelKey: '' }),
+    )
+    await turn('다음 주 금요일 제주도 가는 비행기 알아봐')
+    await processActionAgentTurn('김포', routeCommand({ text: '김포' }), { allowFixtures: false })
+    await processActionAgentTurn('편도', routeCommand({ text: '편도' }), { allowFixtures: false })
+    const r = await processActionAgentTurn('2명', routeCommand({ text: '2명' }), { allowFixtures: false })
+    expect(r.replyText).toMatch(/제공자|연결|API 키|NEEDS_PROVIDER/)
     expect(getActiveTask()?.status).toBe('needs_provider')
+    localStorage.removeItem('aizio_travel_services_v1')
   })
 
   it('chat path tryHandleRoutedCommand uses Action Agent', async () => {

@@ -12,7 +12,7 @@
  * Reusable across flight / hotel / restaurant / calendar / reminder.
  */
 
-import { extractMultiSlots } from './multiSlotExtractor'
+import { extractMultiSlots, normalizePlaceAnswer } from './multiSlotExtractor'
 import {
   extractSemanticDates,
   isDepartureCorrection,
@@ -373,8 +373,10 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
             ? multi.origin
             : multi.location || multi.destination
       if (!val) {
-        const bare = t.match(/^([가-힣A-Za-z]{2,12})(으로|로|에서)?$/)
-        if (bare && !/명|월|일|편도|왕복|완복/.test(bare[1])) val = bare[1]
+        const token = normalizePlaceAnswer(t)
+        if (token.length >= 2 && token.length <= 12 && !/명|월|일|편도|왕복|완복|혼자|출발/.test(token)) {
+          val = token
+        }
       }
       if (!val) parseFailed = true
       else {

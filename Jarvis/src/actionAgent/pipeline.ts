@@ -105,6 +105,38 @@ function summarizeTask(task: TaskSession): string {
   return lines.join('\n')
 }
 
+/** Short natural ack of newly filled slots before the next question. */
+function acknowledgeSlotDelta(
+  before: TaskSession['slots'] | undefined,
+  after: TaskSession['slots'],
+): string {
+  if (!before) return ''
+  const parts: string[] = []
+  if (after.destination && after.destination !== before.destination) {
+    parts.push(`${after.destination} 목적지`)
+  }
+  if (after.origin && after.origin !== before.origin) {
+    parts.push(`${after.origin} 출발`)
+  }
+  if (
+    after.departureDate?.resolvedDate &&
+    after.departureDate.resolvedDate !== before.departureDate?.resolvedDate
+  ) {
+    parts.push(`${after.departureDate.resolvedDate} 출발일`)
+  }
+  if (after.returnDate?.resolvedDate && after.returnDate.resolvedDate !== before.returnDate?.resolvedDate) {
+    parts.push(`${after.returnDate.resolvedDate} 귀국일`)
+  }
+  if (after.tripType && after.tripType !== 'unknown' && after.tripType !== before.tripType) {
+    parts.push(after.tripType === 'round_trip' ? '왕복' : '편도')
+  }
+  if (after.passengers && after.passengers !== before.passengers) {
+    parts.push(`${after.passengers}명`)
+  }
+  if (!parts.length) return ''
+  return `${parts.join(', ')}로 반영했어요.`
+}
+
 function setExpectedQuestion(task: TaskSession, expectedSlot: string | null): TaskSession {
   const questionId = expectedSlot ? `q_${task.id}_${expectedSlot}` : null
   return saveTask({
@@ -146,7 +178,11 @@ async function runSearch(task: TaskSession, opts: PipelineOpts): Promise<ActionA
   return { handled: true, replyText: text, speak: true, task: next }
 }
 
-async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<ActionAgentTurnResult> {
+async function collectOrSearch(
+  task: TaskSession,
+  opts: PipelineOpts,
+  ackPrefix = '',
+): Promise<ActionAgentTurnResult> {
   const missing = computeMissingSlots(task)
   let next = saveTask({ ...task, missingSlots: missing })
   if (missing.length) {
@@ -169,9 +205,10 @@ async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<A
         },
       })
     }
+    const head = [ackPrefix, q?.ask || '정보가 더 필요해요.'].filter(Boolean).join('\n')
     return {
       handled: true,
-      replyText: `${q?.ask || '정보가 더 필요해요.'}\n\n${summarizeTask(next)}`,
+      replyText: `${head}\n\n${summarizeTask(next)}`,
       speak: true,
       task: next,
     }
@@ -184,7 +221,11 @@ async function collectOrSearch(task: TaskSession, opts: PipelineOpts): Promise<A
     questionId: null,
     lastParseFailure: null,
   })
-  return runSearch(next, opts)
+  const searched = await runSearch(next, opts)
+  if (ackPrefix && searched.handled) {
+    searched.replyText = `${ackPrefix}\n\n${searched.replyText}`
+  }
+  return searched
 }
 
 async function applySlotsAndContinue(
@@ -331,7 +372,8 @@ async function applySlotsAndContinue(
   }
 
   // Recompute missing from full latest task
-  return collectOrSearch(getActiveTask() || next, opts)
+  const ack = acknowledgeSlotDelta(applied.beforeSlots, applied.slots)
+  return collectOrSearch(getActiveTask() || next, opts, ack)
 }
 
 function startFlightTask(text: string): TaskSession {

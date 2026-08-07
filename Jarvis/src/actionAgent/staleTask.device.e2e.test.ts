@@ -140,6 +140,26 @@ describe('Stale Travel Task + semantic dates (device regression)', () => {
     expect(rRet.text).not.toMatch(/돌아오는 날짜는 언제인가요/)
   })
 
+  it('CASE: 호치민행 → 내일 → 부산 → 편도 → 혼자 (no re-ask destination, DEMO results)', async () => {
+    const r1 = await think('호치민행 비행기표를 검색해줘')
+    expect(getActiveTask()?.slots.destination).toBe('호치민')
+    expect(r1.text).not.toMatch(/어디로 가시나요/)
+
+    await think('내일')
+    expect(getActiveTask()?.slots.departureDate?.resolvedDate).toBeTruthy()
+    expect(getActiveTask()?.slots.destination).toBe('호치민')
+
+    await think('부산에서 출발')
+    expect(getActiveTask()?.slots.origin).toBe('부산')
+
+    await think('편도')
+    const r = await think('혼자')
+    expect(getActiveTask()?.slots.passengers).toBe(1)
+    expect(r.text).toMatch(/DEMO|항공|대한|아시아나/)
+    expect(getActiveTask()?.status).not.toBe('needs_provider')
+    expect(getActiveTask()?.results?.length).toBeGreaterThan(0)
+  })
+
   it('semantic extractor unit: device phrases', () => {
     const a = extractSemanticDates('8월10 호치민으로 여행갈꺼야 비행기표를 알아봐줘')
     expect(a.some((d) => d.role === 'departureDate' && d.value.endsWith('-08-10'))).toBe(true)

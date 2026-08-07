@@ -1,0 +1,8 @@
+happy.webp
+sad.webp
+angry.webp
+surprised.webp
+shy.webp
+scared.webp
+proud.webp
+calm.webp

@@ -5,6 +5,7 @@
 
 import { clearAllTasks, getActiveTask, cancelActiveTask } from './actionAgent/sessionStore'
 import { endTranslationSession, getActiveMode } from './commandRouter/session'
+import { clearRestaurantSession } from './restaurantAgent/session'
 import { clearChat } from './storage'
 import { clearTravelSession } from './travelAgent/session'
 
@@ -24,6 +25,11 @@ function clearTaskSessions(): string | null {
   clearAllTasks()
   try {
     clearTravelSession()
+  } catch {
+    /* optional legacy session */
+  }
+  try {
+    clearRestaurantSession()
   } catch {
     /* optional legacy session */
   }

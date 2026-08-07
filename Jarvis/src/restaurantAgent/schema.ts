@@ -122,6 +122,8 @@ export const RestaurantSessionSchema = z.object({
   guestPhone: z.string().optional(),
   specialRequests: z.string().optional(),
   pendingQuestion: z.string().optional(),
+  /** True when user started a booking/family-dinner flow that still needs partySize. */
+  bookingFlow: z.boolean().optional(),
   lastReservationAttemptId: z.string().optional(),
   reservationStatus: ReservationStatusSchema.default('NOT_STARTED'),
   status: z.enum([

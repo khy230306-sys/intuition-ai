@@ -89,15 +89,36 @@ describe('Natural language restaurant commands', () => {
   ]
 
   it.each(cases)('%s routes to restaurant', async (input) => {
-    // Seed session for filter-only phrases
+    // Seed session for filter-only phrases (list browse no longer asks party size)
     if (/주차|아이|조용|룸/.test(input) && !/맛집|한식|삼산|저녁/.test(input)) {
       await handleRestaurantAgent('울산 삼산 맛집')
-      await handleRestaurantAgent('4명')
-      await handleRestaurantAgent('한식으로')
     }
     const r = await think(input)
     expect(r.text.length).toBeGreaterThan(3)
     expect(routeCommand({ text: input }).intent.startsWith('restaurant.') || loadRestaurantSession()).toBeTruthy()
+  })
+
+  it('나트랑 맛집 browse returns list without asking party size', async () => {
+    const r = await handleRestaurantAgent('나트랑 맛집좀 찾아줘')
+    expect(r?.text).toMatch(/DEMO|맛집|식당/)
+    expect(r?.text).not.toMatch(/몇 명이서|인원을 숫자/)
+    expect(loadRestaurantSession()?.results.length).toBeGreaterThan(0)
+    expect(loadRestaurantSession()?.pendingQuestion).toBeFalsy()
+  })
+
+  it('partySize pending honors list-only bypass', async () => {
+    const { saveRestaurantSession, createRestaurantSession } = await import('./session')
+    const sess = createRestaurantSession({
+      bookingFlow: true,
+      pendingQuestion: 'partySize',
+      searchInput: { location: '나트랑' },
+      status: 'searching',
+    })
+    saveRestaurantSession(sess)
+    const r = await handleRestaurantAgent('그냥 맛집 리스트만줘')
+    expect(r?.text).toMatch(/DEMO|맛집|식당/)
+    expect(r?.text).not.toMatch(/인원을 숫자/)
+    expect(loadRestaurantSession()?.results.length).toBeGreaterThan(0)
   })
 })
 
@@ -155,8 +176,6 @@ describe('Booking safety + calendar', () => {
 
   it('prepare uses reservationAttemptId and confirm stays DEMO-honest', async () => {
     await handleRestaurantAgent('울산 삼산 맛집')
-    await handleRestaurantAgent('4명')
-    await handleRestaurantAgent('한식으로')
     await handleRestaurantAgent('첫 번째')
     const sess = loadRestaurantSession()!
     sess.selectedDate = '2026-08-10'
@@ -173,8 +192,6 @@ describe('Booking safety + calendar', () => {
 
   it('adds reservation to calendar on request', async () => {
     await handleRestaurantAgent('울산 삼산 맛집')
-    await handleRestaurantAgent('4명')
-    await handleRestaurantAgent('한식으로')
     await handleRestaurantAgent('첫 번째')
     const sess = loadRestaurantSession()!
     // patch via agent follow-up

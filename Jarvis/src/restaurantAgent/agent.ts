@@ -40,7 +40,36 @@ function mergeInput(session: RestaurantSession, text: string): RestaurantSearchI
   return parseRestaurantQuery(text, session.searchInput || {})
 }
 
-async function runSearch(session: RestaurantSession): Promise<RestaurantAgentResult> {
+/** User wants a browse/list — do NOT trap on partySize. */
+export function wantsRestaurantListOnly(text: string): boolean {
+  const t = text.trim()
+  if (
+    /리스트\s*만|맛집\s*만|그냥\s*(맛집|리스트|찾아|보여)|추천\s*만|목록\s*만|인원\s*(없이|말고)|명수\s*없이|몇\s*명\s*(말고|없이)|그냥\s*찾아/.test(
+      t,
+    )
+  ) {
+    return true
+  }
+  // 「나트랑 맛집좀 찾아줘」 browse — not booking
+  if (/맛집\s*(좀\s*)?(찾아|알려|추천)/.test(t) && !/(예약|몇\s*명|\d+\s*명|가족이랑)/.test(t)) {
+    return true
+  }
+  return false
+}
+
+/** Booking-oriented utterances that still need party size. */
+function wantsBookingFlow(text: string, session?: RestaurantSession | null): boolean {
+  const t = text.trim()
+  if (/(예약|자리\s*있|가능\s*한지|\d+\s*명|몇\s*명|가족이랑|외식)/.test(t)) return true
+  if (session?.bookingFlow) return true
+  if (session?.status === 'ready_to_book' || session?.reservationStatus === 'PREPARING') return true
+  return false
+}
+
+async function runSearch(
+  session: RestaurantSession,
+  opts?: { skipPartyAsk?: boolean },
+): Promise<RestaurantAgentResult> {
   const input: RestaurantSearchInput = { ...(session.searchInput || {}) }
   if (!input.location && !input.nearMe) {
     saveRestaurantSession({ ...session, pendingQuestion: 'location', status: 'searching' })
@@ -50,31 +79,37 @@ async function runSearch(session: RestaurantSession): Promise<RestaurantAgentRes
     saveRestaurantSession({ ...session, pendingQuestion: 'location', status: 'searching' })
     return reply('위치 권한이 없어 근처 검색을 못 했어요. 지역을 알려 주세요.', 'RESTAURANT_SEARCH')
   }
-  if (!input.partySize && session.pendingQuestion !== 'skip_party') {
-    if (!session.partySize) {
-      saveRestaurantSession({ ...session, pendingQuestion: 'partySize', status: 'searching' })
-      return reply('몇 명이서 가시나요?', 'RESTAURANT_SEARCH')
-    }
+
+  // Browse/list by default — never block on party size unless booking flow asks.
+  const mustAskParty = opts?.skipPartyAsk === false
+  if (mustAskParty && !input.partySize && !session.partySize) {
+    saveRestaurantSession({ ...session, pendingQuestion: 'partySize', status: 'searching' })
+    return reply('몇 명이서 가시나요?', 'RESTAURANT_SEARCH')
   }
+
+  const partyForSearch = session.partySize || input.partySize || 2
   if (!navigator.onLine) {
-    return reply('실시간 맛집 검색에는 인터넷 연결이 필요합니다. 저장된 예약은 오프라인에서도 볼 수 있어요.', 'RESTAURANT_SEARCH')
+    return reply(
+      '실시간 맛집 검색에는 인터넷 연결이 필요합니다. 저장된 예약은 오프라인에서도 볼 수 있어요.',
+      'RESTAURANT_SEARCH',
+    )
   }
   try {
     const prov = getRestaurantProvider()
     const res = await prov.searchRestaurants({
       ...input,
-      partySize: session.partySize || input.partySize,
+      partySize: partyForSearch,
     })
     const next = saveRestaurantSession({
       ...session,
-      searchInput: input,
+      searchInput: { ...input, partySize: input.partySize || partyForSearch },
       results: res.offers,
       status: 'selecting',
       pendingQuestion: undefined,
       demo: res.demo || isDemoRestaurantMode(),
       selectedDate: session.selectedDate || input.date,
       selectedTime: session.selectedTime || input.time,
-      partySize: session.partySize || input.partySize,
+      partySize: session.partySize || input.partySize || partyForSearch,
     })
     return reply(formatRestaurantList(res.offers, next.demo, input), 'RESTAURANT_SEARCH')
   } catch (e) {
@@ -144,25 +179,49 @@ export async function handleRestaurantAgent(
   if (session?.pendingQuestion === 'location') {
     const input = mergeInput(session, t)
     if (!input.location) input.location = t.replace(/이요|요$|입니다$/, '').trim()
-    session = saveRestaurantSession({ ...session, searchInput: input, pendingQuestion: 'partySize' })
-    return reply('몇 명이서 가시나요?', 'RESTAURANT_SEARCH')
+    session = saveRestaurantSession({ ...session, searchInput: input, pendingQuestion: undefined })
+    // Booking/family dinner → ask party; plain location (list browse) → show results
+    if (session.bookingFlow && !input.partySize) {
+      session = saveRestaurantSession({ ...session, pendingQuestion: 'partySize' })
+      return reply('몇 명이서 가시나요?', 'RESTAURANT_SEARCH')
+    }
+    return runSearch(session, { skipPartyAsk: true })
   }
   if (session?.pendingQuestion === 'partySize') {
+    // User bypass: 「그냥 맛집 리스트만줘」 — stop looping, show results
+    if (wantsRestaurantListOnly(t) || /리스트|목록|추천\s*만|그냥/.test(t)) {
+      session = saveRestaurantSession({
+        ...session,
+        bookingFlow: false,
+        pendingQuestion: undefined,
+        partySize: session.partySize || 2,
+      })
+      return runSearch(session, { skipPartyAsk: true })
+    }
     const input = mergeInput(session, t)
-    const n = input.partySize || Number(t.match(/(\d+)/)?.[1] || 0)
-    if (!n) return reply('인원을 숫자로 알려 주세요. (예: 4명)', 'RESTAURANT_SEARCH')
+    const n = input.partySize || Number(t.match(/(\d+)\s*명/)?.[1] || t.match(/^(\d+)$/)?.[1] || 0)
+    if (!n) {
+      // Don't infinite-loop: offer escape hatch
+      return reply(
+        '인원을 숫자로 알려 주세요. (예: 4명)\n또는 「맛집 리스트만 줘」라고 하시면 바로 보여드릴게요.',
+        'RESTAURANT_SEARCH',
+      )
+    }
     session = saveRestaurantSession({
       ...session,
       searchInput: { ...input, partySize: n },
       partySize: n,
       pendingQuestion: undefined,
     })
-    // If cuisine not set and user might say next — if this message only had party, wait or search
-    if (!session.searchInput?.cuisine && !/(한식|고기|일식|중식|양식|카페)/.test(t)) {
-      // continue — user may send cuisine next; if force search from multi-turn they'll say 한식으로
+    // Cuisine optional for list; booking multi-turn may still ask
+    if (
+      session.bookingFlow &&
+      !session.searchInput?.cuisine &&
+      !/(한식|고기|일식|중식|양식|카페)/.test(t)
+    ) {
       return reply('어떤 음식으로 할까요? (한식, 고기, 일식…)', 'RESTAURANT_SEARCH')
     }
-    return runSearch(session)
+    return runSearch(session, { skipPartyAsk: true })
   }
 
   // Cuisine after party in multi-turn
@@ -176,7 +235,7 @@ export async function handleRestaurantAgent(
   ) {
     const input = mergeInput(session, t)
     session = saveRestaurantSession({ ...session, searchInput: input })
-    return runSearch(session)
+    return runSearch(session, { skipPartyAsk: true })
   }
 
   if (active && session) {
@@ -200,7 +259,7 @@ export async function handleRestaurantAgent(
           return reply(av.message + (av.available ? '\n예약 준비할까요?' : ''), 'RESTAURANT_AVAILABILITY')
         }
       }
-      return runSearch(session)
+      return runSearch(session, { skipPartyAsk: true })
     }
 
     // Availability check
@@ -242,7 +301,7 @@ export async function handleRestaurantAgent(
       const input = mergeInput(session, t)
       if (/더\s*싼|싼\s*곳/.test(t)) input.sortBy = 'price'
       session = saveRestaurantSession({ ...session, searchInput: input })
-      return runSearch(session)
+      return runSearch(session, { skipPartyAsk: true })
     }
 
     // Select / details / compare
@@ -312,15 +371,32 @@ export async function handleRestaurantAgent(
     session = createRestaurantSession()
   }
   const input = mergeInput(session, t)
-  session = saveRestaurantSession({ ...session, searchInput: input, status: 'searching' })
+  const bookingFlow = wantsBookingFlow(t, session) && !wantsRestaurantListOnly(t)
+  session = saveRestaurantSession({
+    ...session,
+    searchInput: input,
+    status: 'searching',
+    bookingFlow: bookingFlow || undefined,
+  })
 
   // Multi-turn soft start: 오늘 저녁 가족들이랑 외식
   if (/외식|가족/.test(t) && !input.location) {
-    session = saveRestaurantSession({ ...session, pendingQuestion: 'location' })
+    session = saveRestaurantSession({
+      ...session,
+      bookingFlow: true,
+      pendingQuestion: 'location',
+    })
     return reply('좋아요. 어느 지역에서 찾으실까요?', 'RESTAURANT_SEARCH')
   }
 
-  return runSearch(session)
+  // List/browse (default): search immediately with default party size
+  // Booking with location but no party: ask party once
+  if (bookingFlow && input.location && !input.partySize) {
+    session = saveRestaurantSession({ ...session, pendingQuestion: 'partySize' })
+    return reply('몇 명이서 가시나요?', 'RESTAURANT_SEARCH')
+  }
+
+  return runSearch(session, { skipPartyAsk: true })
 }
 
 export function getRestaurantSessionSnapshot(): RestaurantSession | null {

@@ -248,19 +248,21 @@ async function main() {
   }
   ok('damage_applied', damaged, enemyHpText)
 
-  // Observe enemy turn then return — poll tightly while playing
+  // Observe enemy turn then return — cascade FX lengthens each move
   let sawEnemy = false
   let sawPlayerAgain = false
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 80; i++) {
     const t = await page.evaluate(() => document.querySelector('.aq-turn')?.textContent || '')
     const body = await page.evaluate(() => document.body.innerText || '')
-    if (/적 턴|ENEMY MOVE/.test(t) || /ENEMY MOVE/.test(body)) sawEnemy = true
-    if (sawEnemy && /내 턴/.test(t)) {
+    const dbg = await page.evaluate(() => document.querySelector('[data-aq-debug]')?.textContent || '')
+    if (/적 턴|ENEMY MOVE/.test(t) || /ENEMY MOVE/.test(body) || /turn=enemy/.test(dbg)) {
+      sawEnemy = true
+    }
+    if (sawEnemy && (/내 턴/.test(t) || /turn=player/.test(dbg)) && !/처리 중|행동 중|연결 처리/.test(t)) {
       sawPlayerAgain = true
       break
     }
-    if (/VICTORY|DEFEAT/.test(body)) {
-      // Battle ended — count as loop progressed
+    if (/VICTORY|DEFEAT|승리|패배/.test(body)) {
       sawEnemy = true
       sawPlayerAgain = true
       break
@@ -268,7 +270,7 @@ async function main() {
     if (/내 턴/.test(t) && !/처리 중/.test(t)) {
       await dragLegalMove(page)
     }
-    await new Promise((r) => setTimeout(r, 200))
+    await new Promise((r) => setTimeout(r, 250))
   }
   ok('enemy_turn_seen', sawEnemy)
   ok('player_turn_return', sawPlayerAgain)

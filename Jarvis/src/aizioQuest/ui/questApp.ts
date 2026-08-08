@@ -161,9 +161,14 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
 
   function turnBannerHtml(): string {
     if (!battle) return ''
-    if (battle.animLock) return `<span class="aq-turn-busy">처리 중…</span>`
-    if (battle.turn === 'player') return `<span class="aq-turn-me">내 턴 · GEM을 밀어 맞추세요</span>`
-    return `<span class="aq-turn-enemy">적 턴</span>`
+    // Keep whose-turn visible during cascade/enemy FX so the loop feels connected.
+    if (battle.turn === 'enemy') {
+      return battle.animLock
+        ? `<span class="aq-turn-enemy">적 턴 · 행동 중…</span>`
+        : `<span class="aq-turn-enemy">적 턴</span>`
+    }
+    if (battle.animLock) return `<span class="aq-turn-busy">내 턴 · 연결 처리 중…</span>`
+    return `<span class="aq-turn-me">내 턴 · GEM을 밀어 맞추세요</span>`
   }
 
   function coachHtml(): string {

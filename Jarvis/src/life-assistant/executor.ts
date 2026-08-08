@@ -14,9 +14,52 @@ import { looksLikeLifeAssistantCommand, routeLifeAssistantIntent } from './inten
 import type { LifeAssistantIntentResult } from './types'
 import {
   addFamilyHelperSchedule,
+  deleteFamilyHelperSchedule,
   listFamilyHelperSchedules,
   listFamilyMembers,
+  updateFamilyHelperSchedule,
 } from '../family-helper/store'
+import type { FamilyHelperSchedule } from '../family-helper/types'
+
+/** Last touched schedule for anaphora (「그거 취소」「3시로」). */
+let lastTouchedScheduleId = ''
+
+function rememberSchedule(s: FamilyHelperSchedule | null | undefined): void {
+  if (s?.id) lastTouchedScheduleId = s.id
+}
+
+function findScheduleForUtterance(
+  r: LifeAssistantIntentResult,
+): FamilyHelperSchedule | null {
+  const all = listFamilyHelperSchedules({ days: 4000, includeDone: true }).filter((s) => !s.done)
+  if (!all.length) return null
+  const title = (r.title || r.extractedEntities.title || '').trim()
+  const date = r.date || r.extractedEntities.date
+  const time = r.time || r.extractedEntities.time
+  if (title) {
+    const hit = all.find(
+      (s) =>
+        s.title.includes(title) ||
+        title.includes(s.title) ||
+        (/병원/.test(title) && /병원/.test(s.title)),
+    )
+    if (hit) return hit
+  }
+  if (date) {
+    const byDate = all.filter((s) => s.date === date)
+    if (byDate.length === 1) return byDate[0]
+    if (time) {
+      const byTime = byDate.find((s) => s.time === time)
+      if (byTime) return byTime
+    }
+  }
+  if (lastTouchedScheduleId) {
+    const last = all.find((s) => s.id === lastTouchedScheduleId)
+    if (last) return last
+  }
+  if (all.length === 1) return all[0]
+  return null
+}
 
 function mergeMissing(r: LifeAssistantIntentResult): string[] {
   const missing = [...(r.missingFields || [])]
@@ -130,6 +173,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
         note: r.extractedEntities.note,
         notifyMinutesBefore: 30,
       })
+      rememberSchedule(sched)
       // Also mirror into family room calendar when a room exists
       if (loadFamilyRoom()) {
         const ev = addFamilyEvent(title, date, time, person ? `${person}` : undefined)
@@ -144,16 +188,68 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
       }
     }
 
-    case 'calendar.update':
-    case 'calendar.delete':
+    case 'calendar.update': {
+      const target = findScheduleForUtterance(r)
+      if (!target) {
+        return {
+          text: '어떤 일정을 바꿀까요? 제목이나 날짜를 알려 주세요. 예: 「엄마 병원 일정 3시로」',
+          speak: true,
+        }
+      }
+      const nextTime = r.time || r.extractedEntities.time
+      const nextDate = r.date || r.extractedEntities.date
+      const nextTitle = (r.title || r.extractedEntities.title || '').trim()
+      const patch: Partial<FamilyHelperSchedule> = {}
+      if (nextTime) patch.time = nextTime
+      if (nextDate) patch.date = nextDate
+      if (nextTitle && nextTitle !== target.title && !/^(그거|그것|이거|일정)$/.test(nextTitle)) {
+        patch.title = nextTitle
+      }
+      if (!Object.keys(patch).length) {
+        return {
+          text: `「${target.title}」일정을 어떻게 바꿀까요? 예: 「3시로」 / 「화요일로」`,
+          speak: true,
+        }
+      }
+      const updated = updateFamilyHelperSchedule(target.id, patch)
+      if (!updated) {
+        return { text: '일정 변경에 실패했어요. 저장소를 다시 확인해 주세요.', speak: true }
+      }
+      rememberSchedule(updated)
       return {
-        text:
-          r.intent === 'calendar.delete'
-            ? '일정 삭제는 가족 도우미 화면에서 해당 일정을 선택한 뒤 삭제해 주세요.'
-            : '일정 수정은 가족 도우미 화면에서 해당 일정을 열어 주세요.',
+        text: `일정을 바꿨어요.\n· ${updated.date}${updated.time ? ` ${updated.time}` : ''} ${updated.title}`,
         speak: true,
         view: 'family-helper',
       }
+    }
+
+    case 'calendar.delete': {
+      const target = findScheduleForUtterance(r)
+      if (!target) {
+        const open = listFamilyHelperSchedules({ days: 60, includeDone: true }).filter((s) => !s.done)
+        if (!open.length) {
+          return { text: '취소할 일정이 없어요.', speak: true }
+        }
+        return {
+          text: [
+            '어떤 일정을 취소할까요?',
+            ...open.slice(0, 5).map((s, i) => `${i + 1}. ${s.date}${s.time ? ` ${s.time}` : ''} ${s.title}`),
+          ].join('\n'),
+          speak: true,
+          view: 'family-helper',
+        }
+      }
+      const ok = deleteFamilyHelperSchedule(target.id)
+      if (!ok) {
+        return { text: '일정 취소에 실패했어요. 다시 시도해 주세요.', speak: true }
+      }
+      if (lastTouchedScheduleId === target.id) lastTouchedScheduleId = ''
+      return {
+        text: `일정을 취소했어요.\n· ${target.date}${target.time ? ` ${target.time}` : ''} ${target.title}`,
+        speak: true,
+        view: 'family-helper',
+      }
+    }
 
     case 'task.read': {
       const todos = loadReminders().filter((x) => !x.done)

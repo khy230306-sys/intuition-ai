@@ -14,8 +14,11 @@ import {
 import {
   clearProviderCooldown,
   isProviderInCooldown,
+  isProviderRoutable,
   markProviderCooldown,
 } from './providerCooldown'
+import { PROVIDER_ATTEMPT_TIMEOUT_MS, withTimeoutSignal } from './fetchTimeout'
+import { markTurn } from '../perf/turnTrace'
 import {
   isFallbackableError,
   mapAiErrorToHybrid,
@@ -32,11 +35,8 @@ function buildCandidateOrder(): HybridProviderId[] {
   const usable = (id: HybridProviderId, allowPaid: boolean): boolean => {
     const p = getHybridProvider(id)
     if (!p) return false
-    if (!isProviderConfigured(id)) return false
-    if (p.getSlot().enabled === false) return false
     if (p.category === 'paid' && !allowPaid) return false
-    if (isProviderInCooldown(p.getSlot())) return false
-    return true
+    return isProviderRoutable(id)
   }
 
   const allowPaid = Boolean(cfg.allowPaidFallback)
@@ -176,15 +176,18 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
     let providerGaveUp = false
     for (let mi = 0; mi < modelOrder.length; mi++) {
       const model = modelOrder[mi]
+      const timed = withTimeoutSignal(input.signal, PROVIDER_ATTEMPT_TIMEOUT_MS)
       try {
+        markTurn('T6_llm_start', { provider: id, model })
         const result = await provider.sendChat({
           messages: messages.map((m) => ({
             role: m.role,
             content: m.content,
           })),
           model,
-          signal: input.signal,
+          signal: timed.signal,
         })
+        markTurn('T8_llm_complete', { provider: id })
         const validated = validateAiResponse(result.text)
         if (!validated.ok) {
           throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
@@ -197,6 +200,7 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
           clearProviderCooldown(id)
         }
         recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
+        timed.cancel()
         return {
           text: validated.text,
           providerId: id,
@@ -205,8 +209,12 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
           attempted,
         }
       } catch (err) {
+        timed.cancel()
         lastErr = err
-        const code = mapAiErrorToHybrid(err)
+        const aborted =
+          timed.signal.aborted &&
+          !(input.signal && input.signal.aborted)
+        const code = aborted ? 'network' : mapAiErrorToHybrid(err)
         const status =
           code === 'quota'
             ? 'quota'
@@ -217,9 +225,13 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
                 : 'error'
         markProviderCooldown(
           id,
-          code,
+          aborted ? 'network' : code,
           status,
-          err instanceof Error ? err.message : String(err),
+          aborted
+            ? `provider timeout ${PROVIDER_ATTEMPT_TIMEOUT_MS}ms`
+            : err instanceof Error
+              ? err.message
+              : String(err),
         )
         recordUsage({ provider: id, ok: false, fallback: fallbackUsed })
         // Dead model → try next recommended model on same provider
@@ -227,7 +239,7 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
           fallbackUsed = true
           continue
         }
-        if (!isFallbackableError(err)) {
+        if (!aborted && !isFallbackableError(err)) {
           providerGaveUp = true
           break
         }

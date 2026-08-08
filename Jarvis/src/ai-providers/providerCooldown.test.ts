@@ -42,7 +42,7 @@ describe('providerCooldown', () => {
     expect(isProviderInCooldown(slot)).toBe(true)
     expect(isProviderRoutable('openai')).toBe(false)
     expect(isProviderRoutable('gemini')).toBe(true)
-    expect((slot.cooldownUntil || 0) - Date.now()).toBeGreaterThan(10 * 60_000)
+    expect((slot.cooldownUntil || 0) - Date.now()).toBeGreaterThan(12 * 60 * 60_000)
   })
 
   it('clears cooldown on success', () => {
@@ -53,13 +53,19 @@ describe('providerCooldown', () => {
     expect(getProviderSlot('openai').status).toBe('ok')
   })
 
-  it('expires cooldown after ttl', () => {
+  it('expires cooldown after ttl for transient network errors', () => {
     vi.useFakeTimers()
     markProviderCooldown('openai', 'network', 'error', 'fetch failed')
     expect(isProviderRoutable('openai')).toBe(false)
-    vi.advanceTimersByTime(25_000)
+    vi.advanceTimersByTime(30_000)
     expect(isProviderRoutable('openai')).toBe(true)
     vi.useRealTimers()
+  })
+
+  it('keeps sticky auth blocked even after short clock skew', () => {
+    markProviderCooldown('openai', 'payment_required', 'auth', 'billing')
+    expect(isProviderRoutable('openai')).toBe(false)
+    expect(getProviderSlot('openai').status).toBe('auth')
   })
 
   it('persists cooldownUntil in hybrid config storage', () => {

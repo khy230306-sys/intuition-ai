@@ -16,6 +16,21 @@ const WEEKDAY: Record<string, number> = {
   토: 6,
 }
 
+function startOfNextKoreanWeek(now: Date): Date {
+  // Korean “다음 주” ≈ next Monday 00:12 → Sunday
+  const d = new Date(now)
+  d.setHours(12, 0, 0, 0)
+  const day = d.getDay() // 0=Sun … 6=Sat
+  const add = day === 0 ? 1 : 8 - day // days until next Monday
+  return addDays(d, add)
+}
+
+function weekdayOnWeek(monday: Date, weekday: number): Date {
+  // monday=Mon; weekday: 0=Sun … 5=Fri 6=Sat
+  const offset = weekday === 0 ? 6 : weekday - 1
+  return addDays(monday, offset)
+}
+
 function resolveWeekday(t: string, now: Date, nextWeek: boolean, weekOffset = 0): Date | null {
   // 「금요일」·「금요」· bare 「금」(after 주) · 「금요」
   const key =
@@ -23,9 +38,15 @@ function resolveWeekday(t: string, now: Date, nextWeek: boolean, weekOffset = 0)
     (t.match(/(?:주)\s*([월화수목금토일])(?:요일)?/) || [])[1] ||
     (t.match(/^([월화수목금토일])$/) || [])[1]
   if (!key || WEEKDAY[key] == null) return null
-  let d = nextWeekday(now, WEEKDAY[key])
-  if (nextWeek && d.getTime() - now.getTime() < 6 * 86400000) d = addDays(d, 7)
-  if (!nextWeek && d.getTime() <= now.getTime()) d = addDays(d, 7)
+  let d: Date
+  if (nextWeek) {
+    // Keep 다음 주 금/일 in the SAME calendar week (fixes return-before-departure)
+    const monday = startOfNextKoreanWeek(now)
+    d = weekdayOnWeek(monday, WEEKDAY[key])
+  } else {
+    d = nextWeekday(now, WEEKDAY[key])
+    if (d.getTime() <= now.getTime()) d = addDays(d, 7)
+  }
   if (weekOffset > 0) d = addDays(d, weekOffset)
   return d
 }

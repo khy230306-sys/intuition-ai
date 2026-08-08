@@ -367,16 +367,18 @@ async function sendChat(page, text) {
   try {
     await page.waitForFunction(
       (n) => document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length > n,
-      { timeout: 45000 },
+      { timeout: 18000 },
       beforeCount,
     )
   } catch {
     /* may reuse bubble */
   }
   try {
-    await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 45000 })
+    await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 18000 })
   } catch {
+    // App should unlock by 18s; if harness still sees disabled, soft-recover for next turn
     await page.evaluate(() => {
+      location.hash = '#chat'
       const d = document.getElementById('draft')
       if (d) d.disabled = false
     })

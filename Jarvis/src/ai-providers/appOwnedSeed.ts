@@ -39,12 +39,15 @@ function geminiKeyFromBuild(): string {
 function seedOpenAI(): boolean {
   const key = openAiKeyFromBuild()
   if (!key) return false
+  const prev = getProviderSlot('openai')
+  // Preserve sticky auth/quota/cooldown across boot so we never re-probe dead billing keys.
   updateProviderSlot('openai', {
     apiKey: key,
-    model: getProviderSlot('openai').model || OPENAI_DEFAULT_MODEL,
+    model: prev.model || OPENAI_DEFAULT_MODEL,
     enabled: true,
-    status: 'unknown',
-    lastError: '',
+    status: prev.status === 'auth' || prev.status === 'quota' ? prev.status : prev.status || 'unknown',
+    lastError: prev.lastError || '',
+    cooldownUntil: prev.cooldownUntil,
   })
   localStorage.setItem(SEEDED_OPENAI, key.slice(-8))
   return true
@@ -53,12 +56,14 @@ function seedOpenAI(): boolean {
 function seedGemini(): boolean {
   const key = geminiKeyFromBuild()
   if (!key) return false
+  const prev = getProviderSlot('gemini')
   updateProviderSlot('gemini', {
     apiKey: key,
-    model: getProviderSlot('gemini').model || GEMINI_DEFAULT_MODEL,
+    model: prev.model || GEMINI_DEFAULT_MODEL,
     enabled: true,
-    status: 'unknown',
-    lastError: '',
+    status: prev.status === 'auth' || prev.status === 'quota' ? prev.status : prev.status || 'unknown',
+    lastError: prev.lastError || '',
+    cooldownUntil: prev.cooldownUntil,
   })
   localStorage.setItem(SEEDED_GEMINI, key.slice(-8))
   return true

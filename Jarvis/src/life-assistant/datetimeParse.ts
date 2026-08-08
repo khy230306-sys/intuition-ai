@@ -67,6 +67,19 @@ export function extractKoreanDate(text: string, now = new Date()): string | unde
   }
   if (/이번\s*주/.test(t)) return ymd(now)
 
+  // Bare weekday 「월요일」→ upcoming that day (today if same weekday)
+  const bareDow = t.match(/([월화수목금토일])요일/)
+  if (bareDow) {
+    const dow = DOW[bareDow[1]!]
+    if (dow != null) {
+      const d = new Date(now)
+      const day = d.getDay()
+      const add = (dow - day + 7) % 7
+      d.setDate(d.getDate() + add)
+      return ymd(d)
+    }
+  }
+
   const md = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/)
   if (md) {
     const m = Number(md[1])

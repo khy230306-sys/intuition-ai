@@ -168,16 +168,15 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
         extractTitle(t, /가족\s*일정|추가|등록|해줘|잡아|넣어/g) ||
         (/하원|하교/.test(t) ? '하원' : /병원/.test(t) ? '병원' : '가족 일정')
       const missing: string[] = []
-      if (!extractKoreanDate(t) && !/오늘|내일|모레|다음|이번/.test(t)) missing.push('date')
-      // Do not invent time — only ask if write intent but no time for timed events
-      if (!extractKoreanTime(t) && /하원|병원|학원/.test(t) && !extractReminderOffset(t)) {
-        /* time optional — ask only one field if date also missing */
-      }
+      if (!extractKoreanDate(t) && !/오늘|내일|모레|다음|이번|[월화수목금토일]요일/.test(t))
+        missing.push('date')
       return base(t, {
         intent: 'family.schedule.create',
         confidence: 0.9,
         title,
         person,
+        date: extractKoreanDate(t),
+        time: extractKoreanTime(t),
         missingFields: missing.slice(0, 1),
         requiresConfirmation: missing.length > 0,
       })
@@ -229,26 +228,53 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
     const missing: string[] = []
     if (!title) missing.push('title')
     // Ask only for date if missing — never invent a time
-    if (!extractKoreanDate(t) && !/오늘|내일|모레|다음|이번/.test(t)) missing.push('date')
+    if (!extractKoreanDate(t) && !/오늘|내일|모레|다음|이번|[월화수목금토일]요일/.test(t))
+      missing.push('date')
     return base(t, {
       intent: 'calendar.create',
       confidence: 0.91,
       title,
+      date: extractKoreanDate(t),
+      time: extractKoreanTime(t),
       missingFields: missing.slice(0, 1),
       requiresConfirmation: missing.length > 0,
     })
   }
 
-  // Calendar delete/update (「그 일정 취소해」 / 「일정 취소」)
-  if (/(그\s*)?일정\s*(삭제|지워|취소)|일정\s*취소해/.test(t)) {
-    const title = extractTitle(t, /그|일정|삭제|지워|취소|해줘|해/g)
-    const hasTitle = Boolean(title && title.length >= 2 && !/^(그거|그것|이거)$/.test(title))
+  // Calendar delete/update (「그 일정 취소해」 / 「아까 병원 일정 취소」)
+  if (/(그\s*)?일정\s*(삭제|지워|취소)|일정\s*취소해|취소해/.test(t) && /일정|병원|약속/.test(t)) {
+    const title = extractTitle(t, /그|아까|일정|삭제|지워|취소|해줘|해|말이야/g)
+    const anaphora = /그거|그것|아까|그\s*일정|병원\s*일정/.test(t)
+    const hasTitle = Boolean(title && title.length >= 2 && !/^(그거|그것|이거|아까)$/.test(title))
     return base(t, {
       intent: 'calendar.delete',
-      confidence: 0.92,
-      title: hasTitle ? title : undefined,
-      requiresConfirmation: !hasTitle,
-      missingFields: hasTitle ? [] : ['title'],
+      confidence: 0.93,
+      title: hasTitle ? title : anaphora ? '병원' : undefined,
+      requiresConfirmation: !hasTitle && !anaphora,
+      missingFields: hasTitle || anaphora ? [] : ['title'],
+    })
+  }
+  // 「3시로 바꿔」「아 3시로」
+  if (
+    /(바꿔|변경|수정|옮겨)/.test(t) &&
+    /(시|요일|일정|병원)/.test(t)
+  ) {
+    return base(t, {
+      intent: 'calendar.update',
+      confidence: 0.9,
+      extractedEntities: {
+        time: (() => {
+          const m = t.match(/(오전|오후)?\s*(\d{1,2})\s*시/)
+          if (!m) return undefined
+          let h = Number(m[2])
+          if (/오후/.test(t) && h < 12) h += 12
+          if (/오전/.test(t) && h === 12) h = 0
+          return `${String(h).padStart(2, '0')}:00`
+        })(),
+      },
+      title: /병원/.test(t) ? '병원' : undefined,
+      requiresConfirmation: false,
+      missingFields: [],
     })
   }
   if (/일정\s*(수정|변경|옮겨)/.test(t)) {

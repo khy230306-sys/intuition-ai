@@ -444,7 +444,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.14'
+const APP_VERSION = '1.30.15'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2260,19 +2260,27 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
   state.draft = ''
   stopSpeaking()
   pushMsg('user', text)
+  // Immediate status feedback (≤300ms) — never invent tool results here
+  try {
+    const { beginTurnTrace, markTurn, thinkingStatusFor } = await import('./perf/turnTrace')
+    beginTurnTrace(text)
+    markTurn('T1_ui_ack')
+    state.voiceHint = thinkingStatusFor(text)
+  } catch {
+    state.voiceHint = '확인하고 있어요…'
+  }
   render()
   scrollChat()
 
   let timedOut = false
-  const heavy =
-    /포트폴리오|관심\s*종목|워치|종목\s*추천|시세|차트|보유|분석/.test(text) ||
-    hasAnyConfiguredProvider()
-  const thinkMs = heavy ? 22_000 : 12_000
+  // Hard UI budget: never leave the composer locked past 18s (release gate)
+  const thinkMs = 18_000
   const timeoutId = window.setTimeout(() => {
     timedOut = true
     if (gen !== thinkGen) return
-    pushMsg('assistant', '응답 시간이 초과되었습니다. 다시 시도해 주세요.')
+    pushMsg('assistant', '응답이 길어져 중단했어요. 다시 한번 보내 주세요.')
     state.busy = false
+    state.voiceHint = ''
     render()
     scrollChat()
   }, thinkMs)
@@ -2281,6 +2289,13 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
     const history = state.messages.map((m) => ({ role: m.role, text: m.text }))
     const reply = await think(text, history.slice(0, -1), { source: opts?.source || 'text' })
     window.clearTimeout(timeoutId)
+    state.voiceHint = ''
+    try {
+      const { endTurnTrace } = await import('./perf/turnTrace')
+      endTurnTrace({ view: reply.view })
+    } catch {
+      /* ignore */
+    }
     if (reply.clearChat) {
       // Honor wipe even if a newer turn started — storage must stay empty.
       resetConversationState('reset_conversation')
@@ -2392,6 +2407,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
     if (gen === thinkGen && !timedOut) {
       window.clearTimeout(timeoutId)
       state.busy = false
+      state.voiceHint = ''
       render()
       scrollChat()
     }

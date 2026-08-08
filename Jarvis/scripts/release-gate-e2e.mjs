@@ -82,22 +82,15 @@ async function ensureChat(page) {
     await page.waitForSelector('#draft', { timeout: 20000 })
   }
   await dismiss(page)
-  const stuck = await page.evaluate(() => Boolean(document.querySelector('#draft')?.disabled))
-  if (stuck) {
-    await page.evaluate(() => {
-      location.hash = '#home'
-    })
-    await new Promise((r) => setTimeout(r, 200))
+  try {
+    await page.waitForSelector('#draft:not([disabled])', { timeout: 6000 })
+  } catch {
     await page.evaluate(() => {
       location.hash = '#chat'
-    })
-    await page.waitForSelector('#draft', { timeout: 20000 })
-    await page.evaluate(() => {
       const d = document.getElementById('draft')
       if (d) d.disabled = false
     })
   }
-  await page.waitForSelector('#draft:not([disabled])', { timeout: 20000 })
 }
 
 async function send(page, text) {

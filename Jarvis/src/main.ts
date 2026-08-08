@@ -443,7 +443,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.17'
+const APP_VERSION = '1.30.18'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2410,8 +2410,10 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
     const msg = err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.'
     pushMsg('assistant', msg)
   } finally {
-    if (gen === thinkGen && !timedOut) {
-      window.clearTimeout(timeoutId)
+    window.clearTimeout(timeoutId)
+    // Always unlock the composer for this generation — timedOut path may have
+    // already cleared busy, but never leave a stuck #draft[disabled].
+    if (gen === thinkGen) {
       state.busy = false
       state.voiceHint = ''
       render()

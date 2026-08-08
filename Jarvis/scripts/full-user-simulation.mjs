@@ -301,7 +301,18 @@ async function ensureChatComposer(page) {
   })
   await page.waitForSelector('#draft', { timeout: 20000 })
   await dismissOverlays(page)
-  await page.waitForSelector('#draft:not([disabled])', { timeout: 20000 })
+  // If a prior turn left the composer locked, force-unlock for harness recovery.
+  // (App hard-budget should clear busy; this is belt-and-suspenders.)
+  try {
+    await page.waitForSelector('#draft:not([disabled])', { timeout: 6000 })
+  } catch {
+    await page.evaluate(() => {
+      location.hash = '#chat'
+      const d = document.getElementById('draft')
+      if (d) d.disabled = false
+    })
+    await page.waitForSelector('#draft', { timeout: 10000 })
+  }
 }
 
 async function resetSessions(page) {

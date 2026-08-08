@@ -8,7 +8,8 @@ import {
   tryHandleLifeAssistant,
 } from './executor'
 import { clearParkingMemory, loadParkingMemory, saveParkingMemory } from './storage'
-import { buildLifeBriefing } from './briefing'
+import { buildLifeBriefing, renderBriefingStripHtml } from './briefing'
+import { addReminder, saveReminders } from '../storage'
 
 const store = new Map<string, string>()
 vi.stubGlobal('localStorage', {
@@ -162,6 +163,21 @@ describe('life assistant execution', () => {
   it('briefing omits empty sections', () => {
     const b = buildLifeBriefing()
     expect(b.items.every((i) => i.label)).toBe(true)
+  })
+
+  it('briefing lists each incomplete todo with delete control', () => {
+    saveReminders([])
+    const a = addReminder('우유 사기')
+    const b = addReminder('약 챙기기')
+    const brief = buildLifeBriefing()
+    const todos = brief.items.filter((i) => i.kind === 'todo')
+    expect(todos).toHaveLength(2)
+    expect(todos.map((t) => t.entityId).sort()).toEqual([a.id, b.id].sort())
+    expect(todos.every((t) => t.label === '할 일')).toBe(true)
+    const html = renderBriefingStripHtml(brief)
+    expect(html).toContain('data-action="life-brief-todo-del"')
+    expect(html).toContain(`data-todo-id="${a.id}"`)
+    expect(html).toContain(`data-todo-id="${b.id}"`)
   })
 
   it('opens camera view for document command', async () => {

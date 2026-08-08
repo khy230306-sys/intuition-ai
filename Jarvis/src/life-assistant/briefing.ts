@@ -135,12 +135,13 @@ export function buildLifeBriefing(now = new Date()): LifeBriefing {
     })
   }
 
-  if (todos.length) {
+  for (const todo of todos) {
     items.push({
-      id: 'todo',
+      id: `todo-${todo.id}`,
       kind: 'todo',
-      label: `미완료 할 일 ${todos.length}건`,
-      detail: todos[0]?.text,
+      label: '할 일',
+      detail: todo.text,
+      entityId: todo.id,
       targetView: 'life',
       chatHint: '오늘 해야 할 일 정리해줘',
     })
@@ -244,7 +245,39 @@ function chipClass(it: LifeBriefingItem): string {
     else if (it.tone === 'down') parts.push('down')
   }
   if (it.kind === 'news') parts.push('life-brief-chip-news')
+  if (it.kind === 'todo') parts.push('life-brief-chip-todo')
   return parts.join(' ')
+}
+
+function renderBriefingChipHtml(
+  it: LifeBriefingItem,
+  esc: (s: string) => string,
+): string {
+  const body = `
+            <span class="life-brief-chip-l">${esc(it.label)}</span>
+            ${it.detail ? `<span class="life-brief-chip-d">${esc(it.detail)}</span>` : ''}`
+  if (it.kind === 'todo' && it.entityId) {
+    return `
+          <div class="${chipClass(it)}" data-brief-id="${esc(it.id)}">
+            <button type="button" class="life-brief-chip-main" data-action="life-brief-item"
+              data-brief-id="${esc(it.id)}"
+              data-brief-view="${esc(it.targetView || '')}"
+              data-brief-hint="${esc(it.chatHint || '')}"
+              data-brief-href="">
+              ${body}
+            </button>
+            <button type="button" class="life-brief-todo-del" data-action="life-brief-todo-del"
+              data-todo-id="${esc(it.entityId)}" aria-label="할 일 삭제">삭제</button>
+          </div>`
+  }
+  return `
+          <button type="button" class="${chipClass(it)}" data-action="life-brief-item"
+            data-brief-id="${esc(it.id)}"
+            data-brief-view="${esc(it.targetView || '')}"
+            data-brief-hint="${esc(it.chatHint || '')}"
+            data-brief-href="${esc(it.href || '')}">
+            ${body}
+          </button>`
 }
 
 export function renderBriefingStripHtml(brief: LifeBriefing): string {
@@ -267,19 +300,7 @@ export function renderBriefingStripHtml(brief: LifeBriefing): string {
         <button type="button" class="ghost-btn tiny" data-action="life-brief-refresh">새로고침</button>
       </div>
       <div class="life-brief-items">
-        ${brief.items
-          .map(
-            (it) => `
-          <button type="button" class="${chipClass(it)}" data-action="life-brief-item"
-            data-brief-id="${esc(it.id)}"
-            data-brief-view="${esc(it.targetView || '')}"
-            data-brief-hint="${esc(it.chatHint || '')}"
-            data-brief-href="${esc(it.href || '')}">
-            <span class="life-brief-chip-l">${esc(it.label)}</span>
-            ${it.detail ? `<span class="life-brief-chip-d">${esc(it.detail)}</span>` : ''}
-          </button>`,
-          )
-          .join('')}
+        ${brief.items.map((it) => renderBriefingChipHtml(it, esc)).join('')}
       </div>
     </section>
   `

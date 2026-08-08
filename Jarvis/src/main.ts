@@ -462,7 +462,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.10'
+const APP_VERSION = '1.33.11'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2248,6 +2248,44 @@ async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: str
   }
 }
 
+/** True while the chat composer (#draft) is focused — avoid full remounts that kick the keyboard / look like a home jump. */
+function isChatComposerActive(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  if (el.id === 'draft') return true
+  return Boolean(el.closest?.('#composer'))
+}
+
+/** Soft-replace the briefing strip without remounting the chat composer. */
+function patchLifeBriefingStrip(): boolean {
+  const existing = document.querySelector('[data-life-brief="1"]')
+  if (!existing) return false
+  const html = renderBriefingStripHtml(buildLifeBriefing()).trim()
+  if (!html) {
+    existing.remove()
+    return true
+  }
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  const next = tmp.firstElementChild
+  if (!next) return false
+  existing.replaceWith(next)
+  bindLifeBriefingControls()
+  return true
+}
+
+/** Background weather/briefing paint — never yank focus out of the chat input. */
+function softRefreshHomeOrChatChrome(): void {
+  if (!state.locationReady || state.busy) return
+  if (state.view === 'chat') {
+    if (patchLifeBriefingStrip()) return
+    if (isChatComposerActive()) return
+  }
+  if (state.view === 'home' || state.view === 'chat') {
+    render({ guardNav: false })
+  }
+}
+
 async function refreshWeather(): Promise<void> {
   const fix = state.lastFix
   if (!fix) return
@@ -2261,10 +2299,7 @@ async function refreshWeather(): Promise<void> {
       state.settings = { ...state.settings, city: place }
       saveSettings(state.settings)
     }
-    if (state.locationReady && (state.view === 'home' || state.view === 'chat') && !state.busy) {
-      // Remount so briefing chip + header weather line both show the GPS city
-      render()
-    }
+    softRefreshHomeOrChatChrome()
   }
 }
 
@@ -2285,7 +2320,7 @@ function scheduleBriefingLiveRefresh(force = false): void {
         (state.view === 'home' || state.view === 'chat') &&
         document.querySelector('[data-life-brief="1"]')
       ) {
-        render({ guardNav: false })
+        softRefreshHomeOrChatChrome()
       }
     } catch {
       /* keep cache */
@@ -5575,6 +5610,18 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
     bindLocationGate()
     return
   }
+  // Preserve chat composer focus/caret + thread scroll across remounts (background weather/briefing used to kick users “home”).
+  const prevDraft = document.getElementById('draft') as HTMLInputElement | null
+  const restoreDraftFocus =
+    Boolean(prevDraft) &&
+    (document.activeElement === prevDraft || (document.activeElement as HTMLElement | null)?.closest?.('#composer'))
+  const draftSelStart = prevDraft?.selectionStart ?? null
+  const draftSelEnd = prevDraft?.selectionEnd ?? null
+  if (prevDraft && document.activeElement === prevDraft) {
+    state.draft = prevDraft.value
+  }
+  const prevThread = document.getElementById('chat-thread')
+  const threadScrollTop = prevThread?.scrollTop ?? null
   invalidateSpaceInboxCache()
   const homeV2On = activeHomeVariant() === 'v2'
   const translatePane = state.homeV2TranslateSheetOpen
@@ -5704,6 +5751,23 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
     }
   }
   bind()
+  if (restoreDraftFocus && state.view === 'chat') {
+    const draft = document.getElementById('draft') as HTMLInputElement | null
+    if (draft && !draft.disabled) {
+      try {
+        draft.focus({ preventScroll: true })
+        if (draftSelStart != null) {
+          draft.setSelectionRange(draftSelStart, draftSelEnd ?? draftSelStart)
+        }
+      } catch {
+        /* ignore focus failures */
+      }
+    }
+  }
+  if (threadScrollTop != null && state.view === 'chat') {
+    const thread = document.getElementById('chat-thread')
+    if (thread) thread.scrollTop = threadScrollTop
+  }
   void refreshNavPermStatus()
   if (state.view === 'navigation') {
     if (navRouteError) {
@@ -6008,6 +6072,75 @@ async function refreshQuotes(): Promise<void> {
     }),
   )
   if (state.view === 'invest') render()
+}
+
+function bindLifeBriefingControls(): void {
+  document.querySelector('[data-action="life-brief-refresh"]')?.addEventListener('click', () => {
+    const btn = document.querySelector<HTMLButtonElement>('[data-action="life-brief-refresh"]')
+    if (btn) {
+      btn.disabled = true
+      btn.textContent = '갱신 중…'
+    }
+    void (async () => {
+      try {
+        if (state.locationReady) await refreshWeather()
+        await refreshBriefingLive({ force: true })
+        showFlash('브리핑을 새로고침했습니다.')
+      } catch {
+        showFlash('일부 정보를 가져오지 못했어요. 캐시로 표시합니다.')
+      } finally {
+        if (state.view === 'chat' && patchLifeBriefingStrip()) return
+        render({ guardNav: false })
+      }
+    })()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="life-brief-item"]').forEach((btn) => {
+    if (btn.dataset.boundBrief === '1') return
+    btn.dataset.boundBrief = '1'
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.briefView as View | undefined
+      const hint = btn.dataset.briefHint || ''
+      const href = btn.dataset.briefHref || ''
+      if (href && /^https?:\/\//i.test(href)) {
+        openUrl(href, '뉴스')
+        return
+      }
+      if (
+        view === 'ai-camera' ||
+        view === 'family-helper' ||
+        view === 'life' ||
+        view === 'family' ||
+        view === 'navigation' ||
+        view === 'invest'
+      ) {
+        goToView(view)
+        return
+      }
+      if (hint.startsWith('뉴스 ')) {
+        openSearch(hint.replace(/^뉴스\s+/, '') || '오늘 주요 뉴스')
+        return
+      }
+      if (hint) {
+        void handleUserText(hint)
+        return
+      }
+      void handleUserText('오늘 하루 요약해줘')
+    })
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="life-brief-todo-del"]').forEach((btn) => {
+    if (btn.dataset.boundBriefDel === '1') return
+    btn.dataset.boundBriefDel = '1'
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const id = btn.dataset.todoId || ''
+      if (!id) return
+      deleteReminder(id)
+      showFlash('할 일을 삭제했습니다')
+      if (state.view === 'chat' && patchLifeBriefingStrip()) return
+      render({ guardNav: false })
+    })
+  })
 }
 
 function bind(): void {
@@ -6560,55 +6693,7 @@ function bind(): void {
     goToView('chat')
     void handleUserText('오늘 하루 요약해줘')
   })
-  document.querySelector('[data-action="life-brief-refresh"]')?.addEventListener('click', () => {
-    const btn = document.querySelector<HTMLButtonElement>('[data-action="life-brief-refresh"]')
-    if (btn) {
-      btn.disabled = true
-      btn.textContent = '갱신 중…'
-    }
-    void (async () => {
-      try {
-        if (state.locationReady) await refreshWeather()
-        await refreshBriefingLive({ force: true })
-        showFlash('브리핑을 새로고침했습니다.')
-      } catch {
-        showFlash('일부 정보를 가져오지 못했어요. 캐시로 표시합니다.')
-      } finally {
-        render({ guardNav: false })
-      }
-    })()
-  })
-  document.querySelectorAll<HTMLButtonElement>('[data-action="life-brief-item"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const view = btn.dataset.briefView as View | undefined
-      const hint = btn.dataset.briefHint || ''
-      const href = btn.dataset.briefHref || ''
-      if (href && /^https?:\/\//i.test(href)) {
-        openUrl(href, '뉴스')
-        return
-      }
-      if (
-        view === 'ai-camera' ||
-        view === 'family-helper' ||
-        view === 'life' ||
-        view === 'family' ||
-        view === 'navigation' ||
-        view === 'invest'
-      ) {
-        goToView(view)
-        return
-      }
-      if (hint.startsWith('뉴스 ')) {
-        openSearch(hint.replace(/^뉴스\s+/, '') || '오늘 주요 뉴스')
-        return
-      }
-      if (hint) {
-        void handleUserText(hint)
-        return
-      }
-      void handleUserText('오늘 하루 요약해줘')
-    })
-  })
+  bindLifeBriefingControls()
   document.querySelectorAll('[data-action="open-ai-camera"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.homeV2MoreOpen = false
@@ -8968,11 +9053,12 @@ function bootAppCore(): void {
         })
         if (state.locationReady) void refreshWeather()
       }
-      // Soft refresh strip when leaving/entering offline
+      // Soft refresh strip when leaving/entering offline — never remount while typing in chat
+      if (isChatComposerActive()) return
       if (status === 'offline' || status === 'degraded' || status === 'captive') {
-        if (!document.querySelector('[data-offline-strip="1"]')) render()
+        if (!document.querySelector('[data-offline-strip="1"]')) render({ guardNav: false })
       } else if (document.querySelector('[data-offline-strip="1"]')) {
-        render()
+        render({ guardNav: false })
       }
     })
   })

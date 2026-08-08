@@ -86,6 +86,8 @@ export type LifeBriefingItem = {
   href?: string
   /** market: up | down | flat */
   tone?: 'up' | 'down' | 'flat'
+  /** Linked local entity id (e.g. reminder/todo id for delete) */
+  entityId?: string
 }
 
 export type LifeBriefing = {

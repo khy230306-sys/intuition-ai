@@ -183,7 +183,8 @@ export async function executeRoutedCommand(
       const content = (routed.content || routed.normalized || '').trim()
       const to = routed.targetLanguage || 'en'
       if (!content) return finish(replyFromExec('번역할 문장을 보내 주세요.'), { status: 'needs_input', success: false })
-      const isolated = await isolateFeature('translation', () => translateText(content, 'ko', to))
+      // Detect source language — foreign text in lock mode must not force ko→to
+      const isolated = await isolateFeature('translation', () => translateText(content, 'auto', to))
       if (!isolated.ok) {
         const pol = providerFailurePolicy('translation')
         return finish(replyFromExec(pol.userMessage, { listenLang: 'ko-KR' }), {

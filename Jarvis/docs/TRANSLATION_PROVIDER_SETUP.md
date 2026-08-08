@@ -1,20 +1,18 @@
 # Translation provider setup
 
-## Current (wired)
+## Current (wired) — waterfall
 
-| Provider | Where | Auth |
-|----------|--------|------|
-| Offline phrase dict + cache | `src/offlineDict.ts` | none |
-| MyMemory | `src/translate.ts` `translateOnline` | public endpoint, rate-limited |
+| Order | Provider | Where | Needs |
+|-------|----------|--------|--------|
+| 1 | Offline phrase dict + prior cache | `src/offlineDict.ts` | none (airplane OK) |
+| 2 | MyMemory | `src/translate.ts` `translateOnline` | network |
+| 3 | Hybrid LLM (Gemini / OpenAI / …) | `src/translateHybrid.ts` | API key in settings |
+| 4 | Partial offline glue / clear error | — | never invents text |
 
-No OpenAI key is required for room message translation.
+Successful online/Hybrid hits are cached so the same sentence works offline later.
 
-## Future adapters (not connected)
+## User action
 
-- Dedicated DeepL / Google Cloud Translate via **server proxy** (do not put secret keys in `VITE_` / client bundle)
-- Can plug into `globalChat/translationService.ts` behind the same `translateChatMessage` interface
-
-## User action required
-
-- None for basic MyMemory/offline path
-- For paid APIs: add server-side proxy + keys (user must supply keys; never commit them)
+- Travel/daily short phrases: work with **no data**
+- Free-form sentences: connect **Gemini** (or other Hybrid provider) in settings, or translate once online to seed cache
+- Dedicated DeepL / Google Cloud Translate via server proxy remains optional future work

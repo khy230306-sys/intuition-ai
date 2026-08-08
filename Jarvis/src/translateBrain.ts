@@ -296,9 +296,9 @@ async function translateLocked(text: string, mode: InterpretMode): Promise<Brain
     return null
   }
 
-  const from = mode.langA || 'ko'
   const to = mode.langB
-  const result = await translateText(text, from, to)
+  // Auto-detect source so foreign paste / mixed input still translates correctly.
+  const result = await translateText(text, 'auto', to)
   if (!result.ok) {
     return {
       text: [
@@ -315,11 +315,19 @@ async function translateLocked(text: string, mode: InterpretMode): Promise<Brain
     }
   }
 
+  const engineHint =
+    result.provider === 'hybrid-ai'
+      ? '·AI'
+      : result.provider === 'mymemory'
+        ? ''
+        : result.offline
+          ? '·오프라인'
+          : ''
   const showOrig = mode.showOriginal !== false
   return {
     text: showOrig
       ? [`원문`, text, '', langLabel(to), result.text].join('\n')
-      : [`【${langLabel(to)}${result.offline ? '·오프라인' : ''}】`, result.text].join('\n'),
+      : [`【${langLabel(to)}${engineHint}】`, result.text].join('\n'),
     speak: true,
     speakLang: bcp47(to),
     listenLang: 'ko-KR',

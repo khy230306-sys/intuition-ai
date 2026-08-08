@@ -87,6 +87,8 @@ export interface TranslateResult {
   error?: string
   offline?: boolean
   partial?: boolean
+  /** Which engine produced the text when known. */
+  provider?: 'offline-dict' | 'mymemory' | 'hybrid-ai' | 'cache'
 }
 
 function isOnline(): boolean {
@@ -123,19 +125,27 @@ async function translateOnline(text: string, from: string, to: string): Promise<
 }
 
 /**
- * Offline-first translation.
- * 1) local phrase dictionary / cache (no data needed)
- * 2) optional online MyMemory when connected (result cached for later offline use)
+ * Offline-first translation waterfall:
+ * 1) local phrase dictionary / prior cache (no data needed)
+ * 2) MyMemory when connected
+ * 3) Hybrid LLM (Gemini/OpenAI…) when API keys are configured — free-form sentences
+ * 4) partial offline phrase glue
+ * 5) clear user-facing error (never invent)
  *
  * Concurrent identical requests share one in-flight promise so Core + legacy
  * (or double-submit) cannot emit online then offline duplicates.
  */
 const inflightTranslate = new Map<string, Promise<TranslateResult>>()
 
-export async function translateText(text: string, from: string, to: string): Promise<TranslateResult> {
+export async function translateText(
+  text: string,
+  from: string,
+  to: string,
+  opts?: { signal?: AbortSignal },
+): Promise<TranslateResult> {
   const q = text.trim()
   if (!q) return { ok: false, text: '', from, to, error: '번역할 문장이 없습니다.' }
-  if (from === to) return { ok: true, text: q, from, to, offline: true }
+  if (from === to) return { ok: true, text: q, from, to, offline: true, provider: 'offline-dict' }
 
   const resolvedFrom = from === 'auto' ? detectLangCode(q) : from
   const key = `${resolvedFrom}|${to}|${q}`
@@ -154,11 +164,30 @@ export async function translateText(text: string, from: string, to: string): Pro
         to,
         offline: true,
         partial: false,
+        provider: offline.method === 'cache' ? 'cache' : 'offline-dict',
       }
     }
 
     const online = await translateOnline(q, resolvedFrom, to)
-    if (online?.ok) return online
+    if (online?.ok) return { ...online, provider: 'mymemory' }
+
+    // Cloud AI keys → free-form translation (also caches for next offline use)
+    try {
+      const { translateViaHybrid } = await import('./translateHybrid')
+      const hybrid = await translateViaHybrid(q, resolvedFrom, to, opts?.signal)
+      if (hybrid?.ok) {
+        return {
+          ok: true,
+          text: hybrid.text,
+          from: resolvedFrom,
+          to,
+          offline: false,
+          provider: 'hybrid-ai',
+        }
+      }
+    } catch {
+      /* hybrid optional */
+    }
 
     if (offline.ok) {
       return {
@@ -168,17 +197,20 @@ export async function translateText(text: string, from: string, to: string): Pro
         to,
         offline: true,
         partial: offline.partial,
+        provider: 'offline-dict',
       }
     }
 
+    const noNet = !isOnline()
     return {
       ok: false,
       text: '',
       from: resolvedFrom,
       to,
-      error:
-        '오프라인 사전에 없는 문장입니다. 기본 여행·일상 표현은 데이터 없이 되고, 한번 온라인으로 번역한 문장은 다음에 오프라인에서도 됩니다.',
-      offline: true,
+      error: noNet
+        ? '지금 오프라인이라 이 문장은 번역할 수 없어요. 여행·일상 기본 표현은 데이터 없이 되고, 설정에 AI를 연결하거나 온라인에서 한 번 번역하면 다음에 오프라인에서도 됩니다.'
+        : '이 문장은 로컬 사전에 없고 온라인 번역도 실패했어요. 설정에서 Gemini 등 AI를 연결하면 자유 문장 번역이 훨씬 잘 됩니다. 한번 성공한 번역은 다음에 데이터 없이도 재사용됩니다.',
+      offline: noNet,
     }
   })()
 

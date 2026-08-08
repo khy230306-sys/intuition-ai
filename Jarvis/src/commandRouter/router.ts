@@ -221,7 +221,12 @@ function isCalendarRead(text: string): boolean {
 function isReminderCreate(text: string): boolean {
   const t = text.trim()
   if (/번역|통역/i.test(t)) return false
-  return /(분|시간)\s*뒤.*(?:알려|알림)|알림\s*(만들어|설정|추가|등록)|깨워\s*줘|리마인더/i.test(t)
+  return (
+    /(분|시간)\s*뒤.*(?:알려|알림|알람)|알림\s*(만들어|설정|추가|등록)|알람\s*(맞춰|설정|추가|등록)|깨워\s*줘|리마인더|맞춰\s*줘/i.test(
+      t,
+    ) &&
+    /(?:알림|알람|리마인더|깨워|알려|\d+\s*시|\d+\s*분)/.test(t)
+  )
 }
 
 function isTodoCreate(text: string): boolean {

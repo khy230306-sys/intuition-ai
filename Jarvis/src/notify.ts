@@ -227,7 +227,14 @@ export function parseWhenFromText(text: string, now = Date.now()): ParsedWhen | 
   rest = rest
     .replace(/^(?:알림|알람|리마인더|알려줘|기억시켜)\s*/i, '')
     .replace(/\s*(?:알림|알람|알려줘|기억시켜)$/i, '')
-    .replace(/^(?:에|에다)\s*/, '')
+    .replace(/^(?:에|에다|을|를)\s*/, '')
+    .replace(/알람\s*을?\s*맞춰\s*줘?/g, ' ')
+    .replace(/알림\s*을?\s*맞춰\s*줘?/g, ' ')
+    .replace(/알람\s*설정\s*해\s*줘?/g, ' ')
+    .replace(/깨워\s*줘?/g, ' ')
+    .replace(/맞춰\s*줘?/g, ' ')
+    .replace(/^(?:을|를|에)\s*/, '')
+    .replace(/\s+/g, ' ')
     .trim()
   return { whenAt, label, rest }
 }
@@ -248,8 +255,8 @@ export function wantsLocalAlarm(text: string): boolean {
   ) {
     return false
   }
-  // Explicit alarm words
-  if (/알림|알람|리마인더|기억시켜/.test(t)) return true
+  // Explicit alarm words / set-alarm verbs
+  if (/알림|알람|리마인더|기억시켜|깨워\s*줘|맞춰\s*줘/.test(t)) return true
   // 「알려줘」 alone is too common (환율/뉴스/날씨…) — require a time cue
   if (
     /알려\s*줘|알려줘/.test(t) &&
@@ -258,7 +265,7 @@ export function wantsLocalAlarm(text: string): boolean {
     return true
   }
   if (/(\d+)\s*(분|시간)\s*(뒤|후)/.test(t) && /(알려|알람|리마인더|기억)/.test(t)) return true
-  if (/(오전|오후|내일).*\d+\s*시/.test(t) && /(알려|알람|알림|리마인더)/.test(t)) return true
+  if (/(오전|오후|내일).*\d+\s*시/.test(t) && /(알려|알람|알림|리마인더|맞춰|깨워)/.test(t)) return true
   return false
 }
 
@@ -266,7 +273,21 @@ export function buildAlarmFromText(text: string, now = Date.now()): { alarm: Loc
   if (!wantsLocalAlarm(text)) return null
   const parsed = parseWhenFromText(text, now)
   if (!parsed) return null
-  const body = parsed.rest || '알림 시간입니다'
+  let body = parsed.rest || ''
+  if (!body || /^(을|를|에|줘|해줘)$/.test(body) || body.length < 2) {
+    body = /알람|깨워|기상/.test(text) ? '기상 알람' : '알림 시간입니다'
+  }
   const alarm = scheduleAlarm('AIZIO 알림', body, parsed.whenAt)
   return { alarm, whenLabel: parsed.label }
+}
+
+/** User-facing confirmation after a local alarm is scheduled. */
+export function formatAlarmSetReply(body: string, whenLabel: string, whenAt: number): string {
+  const whenStr = formatWhenAt(whenAt)
+  return [
+    `알람을 맞춰 두었어요.`,
+    `· ${body}`,
+    `· ${whenStr} (${whenLabel})`,
+    `시간에 알림·진동으로 알려 드릴게요. (앱이 열려 있거나 홈 화면 설치 시 더 확실해요)`,
+  ].join('\n')
 }

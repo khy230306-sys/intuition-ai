@@ -281,10 +281,35 @@ export async function executeRoutedCommand(
       if (!isolated.ok) return null
       return finish(isolated.value)
     }
+    case 'reminder.create': {
+      // Schedule local alarm immediately — do not fall through to Hybrid AI refusal.
+      try {
+        const { wantsLocalAlarm, buildAlarmFromText, formatAlarmSetReply, formatWhenAt } =
+          await import('../notify')
+        const { addReminder } = await import('../storage')
+        if (wantsLocalAlarm(utterance)) {
+          const built = buildAlarmFromText(utterance)
+          if (built) {
+            const whenStr = formatWhenAt(built.alarm.whenAt)
+            addReminder(built.alarm.body, whenStr, built.alarm.whenAt)
+            return finish({
+              text: formatAlarmSetReply(built.alarm.body, built.whenLabel, built.alarm.whenAt),
+              speak: true,
+            })
+          }
+          return finish({
+            text: '시간을 함께 말해 주세요.\n예: "오전 5시에 알람 맞춰줘" · "알림 30분 뒤 약"',
+            speak: true,
+          })
+        }
+      } catch {
+        /* fall through */
+      }
+      return null
+    }
     case 'weather.query':
     case 'calendar.create':
     case 'calendar.read':
-    case 'reminder.create':
     case 'todo.create':
     case 'family.schedule.create':
     case 'family.schedule.read':

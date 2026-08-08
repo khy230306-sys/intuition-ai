@@ -124,7 +124,7 @@ describe('brain wiring for practical features', () => {
     const e = await think('커피 4500')
     expect(e.text).toMatch(/4,500|지출/)
     const a = await think('알림 5분 뒤 물 마시기')
-    expect(a.text).toMatch(/알림 예약|저장|알려드릴게요/)
+    expect(a.text).toMatch(/알람을 맞춰 두었어요|알림 예약|알려 드릴게요|알려드릴게요/)
   })
 
   it('answers fx convert (network or fallback)', async () => {

@@ -15,7 +15,7 @@ export type ReminderUtterance = {
 }
 
 const SCHEDULE_CUES =
-  /예약|진찰|병원|치과|약속|미팅|회의|알림|알려|리마인더|일정|검진|수술|면회|픽업|데리러/
+  /예약|진찰|병원|치과|약속|미팅|회의|알림|알람|알려|리마인더|일정|검진|수술|면회|픽업|데리러|맞춰|깨워/
 
 export function parseReminderUtterance(raw: string): ReminderUtterance | null {
   const text = String(raw || '').trim()

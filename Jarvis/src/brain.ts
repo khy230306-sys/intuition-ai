@@ -50,7 +50,12 @@ import {
 } from './smart'
 import { answerFx } from './fx'
 import { parseExpenseLine } from './expenseParse'
-import { buildAlarmFromText, formatWhenAt, wantsLocalAlarm } from './notify'
+import {
+  buildAlarmFromText,
+  formatAlarmSetReply,
+  formatWhenAt,
+  wantsLocalAlarm,
+} from './notify'
 import { getAppLocale } from './i18n'
 import { tryHandleMusicSkill } from './music'
 import { coreResultToBrainReply, processCoreBrain, stripWakeWord } from './core-brain'
@@ -540,14 +545,14 @@ async function handleLife(text: string): Promise<BrainReply | null> {
       const whenStr = formatWhenAt(built.alarm.whenAt)
       addReminder(built.alarm.body, whenStr, built.alarm.whenAt)
       return {
-        text: `알림 예약: ${built.alarm.body}\n시간: ${whenStr} (${built.whenLabel})\n앱이 열려 있으면 알림·진동으로 알려 드립니다.`,
+        text: formatAlarmSetReply(built.alarm.body, built.whenLabel, built.alarm.whenAt),
         speak: true,
       }
     }
     // Only prompt for a time when the utterance is clearly an alarm (not bare 「…알려줘」)
-    if (/알림|알람|리마인더|기억시켜/.test(text) || /\d+\s*(분|시간|시)/.test(text)) {
+    if (/알림|알람|리마인더|기억시켜|맞춰\s*줘|깨워/.test(text) || /\d+\s*(분|시간|시)/.test(text)) {
       return {
-        text: '시간을 함께 말해 주세요.\n예: "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
+        text: '시간을 함께 말해 주세요.\n예: "오전 5시에 알람 맞춰줘" · "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
         speak: true,
       }
     }
@@ -814,6 +819,29 @@ export async function think(
       if (tr) {
         if (orchPlan) tr.debug = { ...(tr.debug || {}), orch: orchPlan }
         return tr
+      }
+    }
+  }
+
+  // —— Local alarm / timed reminder (terminal) ——
+  // Must beat Hybrid AI — otherwise the model refuses with “PWA라 시계 알람 불가”.
+  {
+    const alarmText = strippedForPlan
+    if (wantsLocalAlarm(alarmText)) {
+      const built = buildAlarmFromText(alarmText)
+      if (built) {
+        const whenStr = formatWhenAt(built.alarm.whenAt)
+        addReminder(built.alarm.body, whenStr, built.alarm.whenAt)
+        return {
+          text: formatAlarmSetReply(built.alarm.body, built.whenLabel, built.alarm.whenAt),
+          speak: true,
+        }
+      }
+      if (/알림|알람|리마인더|기억시켜|맞춰\s*줘|깨워/.test(alarmText) || /\d+\s*(분|시간|시)/.test(alarmText)) {
+        return {
+          text: '시간을 함께 말해 주세요.\n예: "오전 5시에 알람 맞춰줘" · "알림 30분 뒤 약" · "오후 3시에 알려줘 회의"',
+          speak: true,
+        }
       }
     }
   }

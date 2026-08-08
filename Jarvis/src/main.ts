@@ -2341,6 +2341,10 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       }
     }
     if (reply.view) state.view = reply.view
+    // Leaving chat for another screen — keep a short confirmation visible.
+    if (reply.view && reply.view !== 'chat' && reply.text) {
+      showFlash(reply.text.split('\n')[0].slice(0, 120))
+    }
     // Unified HOME already shows chat — keep pane on home.
     if (reply.view === 'navigation') {
       navRouteError = null

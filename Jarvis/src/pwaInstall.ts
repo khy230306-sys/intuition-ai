@@ -248,9 +248,11 @@ export async function openInstallShareSheet(
     if (!canShare) return 'unavailable'
     await navigator.share({
       title: 'AIZIO',
-      text: '공유 목록에서 「홈 화면에 추가」를 누르면 설치됩니다.',
+      text: '아래로 스크롤 → 「홈 화면에 추가」→「추가」를 누르면 설치됩니다.',
       url,
     })
+    // Resolves when the share sheet finishes an action. iOS does not tell us
+    // whether the user picked 「홈 화면에 추가」 vs another share target.
     return 'shared'
   } catch (err) {
     const name = err && typeof err === 'object' && 'name' in err ? String((err as { name: string }).name) : ''

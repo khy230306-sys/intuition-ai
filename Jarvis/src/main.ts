@@ -457,7 +457,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.32.1'
+const APP_VERSION = '1.32.2'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -750,17 +750,22 @@ async function updateAppToLatestWithHomeAndOffline(): Promise<void> {
           : '홈 화면 앱 확인 · 최신 빌드·오프라인 저장으로 이어갑니다…',
       )
     } else if (result.kind === 'shared') {
-      markUpdateAwaitHome()
+      // iOS: no install API / no callback for 「홈 화면에 추가」.
+      // When the share sheet closes after an action, continue automatically
+      // so the user does not need a second 「업데이트 계속」 tap.
       state.installGuideOpen = detectInstallPlatform()
-      showFlash('공유 창에서 「홈 화면에 추가」→「추가」를 누른 뒤, 「업데이트 계속」을 눌러 주세요.')
-      render()
+      showFlash('공유 완료 · 최신 빌드·오프라인 저장을 바로 이어갑니다…')
+      await new Promise((r) => setTimeout(r, 600))
+      await updateAppToLatest()
       return
     } else {
-      // need-guide / dismissed — show steps, let user continue when ready
+      // Cancelled share or no share API — keep one-tap continue as fallback
       markUpdateAwaitHome()
       state.installGuideOpen =
         result.kind === 'need-guide' ? result.platform : detectInstallPlatform()
-      showFlash('위 안내대로 홈 화면에 추가한 뒤 「업데이트 계속」을 눌러 주세요. (이미 추가했다면 바로 계속)')
+      showFlash(
+        '공유가 취소되었어요. 「홈 화면에 추가」안내를 확인한 뒤 「업데이트 계속」을 눌러 주세요.',
+      )
       render()
       return
     }
@@ -819,8 +824,8 @@ function renderUpdateCard(): string {
         ? `최신 확인됨 · v${escapeHtml(remote)}`
         : `현재 v${APP_VERSION}`
   const continueBtn = awaitHome
-    ? `<button type="button" class="primary-btn update-btn" data-action="app-update-continue">홈 화면 추가 완료 · 업데이트 계속</button>
-       <p class="hint">iPhone은 「홈 화면에 추가」를 시스템이 직접 눌러야 합니다. 추가했다면 위 버튼으로 최신 빌드·오프라인 저장을 이어 주세요.</p>`
+    ? `<button type="button" class="primary-btn update-btn" data-action="app-update-continue">업데이트 계속 · 오프라인 저장</button>
+       <p class="hint">iPhone은 Apple 정책상 앱이 대신 「홈 화면에 추가」를 누를 수 없어요. 공유에서 추가했거나 이미 아이콘이 있으면 위 버튼으로 이어 주세요.</p>`
     : `<button type="button" class="primary-btn update-btn" data-action="app-update">최신 빌드로 업데이트 · 오프라인·홈화면</button>`
   return `
     <div class="update-card ${newer ? 'has-update' : ''}${awaitHome ? ' await-home' : ''}">
@@ -8804,6 +8809,18 @@ function bootAppCore(): void {
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      // Home-screen icon launch → mark installed (iOS has no install event)
+      if (isRunningAsInstalledPwa()) {
+        markPwaInstalled()
+        refreshInstallHint()
+        if (peekUpdateAwaitHome()) {
+          clearUpdateAwaitHome()
+          markPostUpdateOfflineHome()
+          showFlash('홈 화면 앱으로 확인됨 · 최신 빌드·오프라인 저장을 이어갑니다…')
+          void updateAppToLatest()
+          return
+        }
+      }
       scheduleResumeSpaceSync('force')
       void refreshRemoteVersionBadge()
       void probeNetwork({ force: true })

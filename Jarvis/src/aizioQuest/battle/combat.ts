@@ -2,6 +2,7 @@
 
 import type {
   BattleRuntime,
+  Board,
   GemKind,
   HeroDef,
   MatchGroup,
@@ -23,6 +24,7 @@ import {
   resolveBoard,
   shuffleBoard,
   trySwap,
+  type CascadeStep,
 } from '../match3/board'
 import { chooseEnemyMove } from './enemyAi'
 import { mulberry32 } from '../match3/rng'
@@ -149,8 +151,8 @@ export type TurnFx = {
   extraTurn: boolean
   log: string[]
   /** Cascade waves for UI animation (player swaps only) */
-  steps?: import('../match3/board').CascadeStep[]
-  swapped?: import('../match3/board').Board
+  steps?: CascadeStep[]
+  swapped?: Board
   from?: { r: number; c: number }
   to?: { r: number; c: number }
 }

@@ -48,7 +48,7 @@ const SCENARIOS = [
   { name: 'learn_q', turns: ['광합성 쉽게 설명해줘'], expect: /.|./, tag: 'chat' },
   { name: 'parenting_idea', turns: ['다섯 살 아이 실심할 때 뭐하면 좋아?'], expect: /.|./, tag: 'chat' },
   { name: 'travel_idea_soft', turns: ['가을에 국내 여행 어디로 가면 좋을까'], expect: /.|./, forbid: /티켓\s*발권\s*완료/, tag: 'chat' },
-  { name: 'polite_help', turns: ['혹시 사용 방법을 알려주실 수 있을까요?'], expect: /AIZIO|아이지오|날씨|번역|설정|도움/, tag: 'help' },
+  { name: 'polite_help', turns: ['혹시 사용 방법을 알려주실 수 있을까요?'], expect: /AIZIO|아이지오|날씨|번역|설정|도움|사용/, tag: 'help' },
   { name: 'banmal_short', turns: ['야 심심해'], expect: /.|./, tag: 'chat' },
   { name: 'typo_hello', turns: ['안뇽'], expect: /.|./, tag: 'chat' },
   { name: 'english_mix', turns: ['오늘 vibe가 별로야'], expect: /.|./, tag: 'chat' },

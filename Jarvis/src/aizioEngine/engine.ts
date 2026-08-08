@@ -294,6 +294,30 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     }
   }
 
+  // —— PLACE HOURS (selected place; never invent opening hours) ——
+  if (kind === 'place_hours') {
+    const place = ctx.selected || session?.selected
+    if (!place) {
+      return {
+        text: '어떤 장소의 영업 시간을 볼까요? 먼저 목록에서 번호를 골라 주세요.',
+        speak: true,
+      }
+    }
+    return {
+      text: [
+        `「${place.title}」의 정확한 영업 시간은 이 검색 결과에 포함되어 있지 않아요.`,
+        '지도를 열어 영업시간을 확인해 드릴까요? 예: 「지도로 보여줘」',
+        place.address ? `주소: ${place.address}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      speak: true,
+      action: () => {
+        void openMaps(place.mapsQuery)
+      },
+    }
+  }
+
   // —— CALENDAR LOCAL WRITE (LEVEL 1) ——
   if (kind === 'calendar_write') {
     // Resolve 「거기」 etc.

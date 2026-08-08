@@ -649,25 +649,33 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     gb?.classList.remove('swap-fail')
   }
 
-  /** In-place board paint — keeps DOM nodes so clear → fall → cascade feels continuous. */
+  function gemElAt(boardEl: Element, r: number, c: number): HTMLElement | null {
+    return boardEl.querySelector(`.aq-gem[data-r="${r}"][data-c="${c}"]`) as HTMLElement | null
+  }
+
+  function paintGemFace(el: HTMLElement, cell: { id: string; kind: GemKind; special?: string }): void {
+    el.dataset.kind = cell.kind
+    el.dataset.special = cell.special || 'none'
+    el.dataset.id = cell.id
+    const sym = el.querySelector('.aq-sym')
+    if (sym) sym.textContent = GEM_SYM[cell.kind]
+  }
+
+  /** In-place board paint — keeps slot nodes; optional match/swap highlights. */
   function syncBoardDom(
     board: Board,
-    opts?: { matched?: Set<string>; falling?: boolean; swapCells?: CellPos[] },
+    opts?: { matched?: Set<string>; swapCells?: CellPos[] },
   ): void {
     const boardEl = root.querySelector('[data-aq-board="1"]')
     if (!boardEl) return
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const cell = board[r]![c]!
-        const el = boardEl.querySelector(`.aq-gem[data-r="${r}"][data-c="${c}"]`) as HTMLElement | null
+        const el = gemElAt(boardEl, r, c)
         if (!el) continue
-        const prevKind = el.dataset.kind
-        const prevId = el.dataset.id
-        el.dataset.kind = cell.kind
-        el.dataset.special = cell.special || 'none'
-        el.dataset.id = cell.id
-        const sym = el.querySelector('.aq-sym')
-        if (sym) sym.textContent = GEM_SYM[cell.kind]
+        el.style.transform = ''
+        el.style.transition = ''
+        paintGemFace(el, cell)
         el.classList.remove(
           'matched',
           'popping',
@@ -677,15 +685,102 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
           'hint',
           'coach',
           'coach-target',
+          'empty-slot',
         )
         if (opts?.matched?.has(`${r},${c}`)) el.classList.add('matched')
-        if (opts?.falling && (prevKind !== cell.kind || prevId !== cell.id)) el.classList.add('falling')
         if (opts?.swapCells?.some((p) => p.r === r && p.c === c)) el.classList.add('swap-ok')
       }
     }
   }
 
-  /** Animate match waves: swap → highlight → pop → gravity/refill → next wave. */
+  /**
+   * Gravity with gem identity (FLIP): surviving gems slide from old slots to new
+   * ones; only refill gems spawn from above. Prevents “whole board reshuffle” look.
+   */
+  async function animateGravityFlip(fromBoard: Board, toBoard: Board, cleared: Set<string>): Promise<void> {
+    const boardEl = root.querySelector('[data-aq-board="1"]')
+    if (!boardEl) return
+
+    const first = new Map<string, DOMRect>()
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (cleared.has(`${r},${c}`)) continue
+        const cell = fromBoard[r]![c]
+        if (!cell?.id) continue
+        const el = boardEl.querySelector(`.aq-gem[data-id="${cell.id}"]`) as HTMLElement | null
+        if (el) first.set(cell.id, el.getBoundingClientRect())
+      }
+    }
+
+    // Lay out destination board (same 64 slots)
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const cell = toBoard[r]![c]!
+        const el = gemElAt(boardEl, r, c)
+        if (!el) continue
+        el.classList.remove('matched', 'popping', 'falling', 'swap-ok', 'empty-slot')
+        paintGemFace(el, cell)
+        el.style.transition = 'none'
+        el.style.transform = ''
+        el.style.opacity = '1'
+      }
+    }
+
+    // FLIP survivors + drop-in for new gems
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const cell = toBoard[r]![c]!
+        const el = gemElAt(boardEl, r, c)
+        if (!el) continue
+        const prev = first.get(cell.id)
+        if (prev) {
+          const last = el.getBoundingClientRect()
+          const dx = prev.left - last.left
+          const dy = prev.top - last.top
+          if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+            el.style.transform = `translate(${dx}px, ${dy}px)`
+            el.classList.add('falling')
+          }
+        } else {
+          // New refill gem — enter from above its column
+          const cellH = el.getBoundingClientRect().height || 36
+          el.style.transform = `translateY(${-cellH * (r + 1.2)}px)`
+          el.style.opacity = '0.35'
+          el.classList.add('falling')
+        }
+      }
+    }
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+              const el = gemElAt(boardEl, r, c)
+              if (!el) continue
+              el.style.transition = 'transform 0.28s cubic-bezier(0.22, 0.85, 0.35, 1), opacity 0.22s ease'
+              el.style.transform = ''
+              el.style.opacity = '1'
+            }
+          }
+          window.setTimeout(() => resolve(), 300)
+        })
+      })
+    })
+
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const el = gemElAt(boardEl, r, c)
+        if (!el) continue
+        el.style.transition = ''
+        el.style.transform = ''
+        el.style.opacity = ''
+        el.classList.remove('falling')
+      }
+    }
+  }
+
+  /** Animate match waves: swap → highlight → pop → identity gravity → next wave. */
   async function playCascadeFx(fx: TurnFx): Promise<void> {
     const steps = fx.steps || []
     if (fx.swapped) {
@@ -707,20 +802,52 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
 
       syncBoardDom(step.matchedBoard, { matched })
       playQuestSfx(i === 0 ? 'match' : 'cascade', save.settings.sfx)
-      await wait(210)
+      await wait(200)
 
       const boardEl = root.querySelector('[data-aq-board="1"]')
       for (const key of matched) {
         const [rs, cs] = key.split(',')
-        boardEl
-          ?.querySelector(`.aq-gem[data-r="${rs}"][data-c="${cs}"]`)
-          ?.classList.add('popping')
+        const el = boardEl?.querySelector(`.aq-gem[data-r="${rs}"][data-c="${cs}"]`) as HTMLElement | null
+        el?.classList.add('popping')
       }
-      await wait(170)
+      await wait(160)
 
-      syncBoardDom(step.afterBoard, { falling: true })
-      await wait(260)
+      await animateGravityFlip(step.matchedBoard, step.afterBoard, matched)
     }
+  }
+
+  /** Update HP/EN chrome without remounting the board (keeps cascade continuity). */
+  function patchBattleChrome(): void {
+    if (!battle) return
+    const b = battle
+    const ePct = Math.max(0, Math.round((b.enemy.hp / b.enemy.maxHp) * 100))
+    const pPct = Math.max(0, Math.round((b.player.hp / b.player.maxHp) * 100))
+    const enPct = Math.max(0, Math.round((b.player.energy / b.player.maxEnergy) * 100))
+    const eBar = root.querySelector('[data-aq-ehp]') as HTMLElement | null
+    const pBar = root.querySelector('[data-aq-php]') as HTMLElement | null
+    const enBar = root.querySelector('[data-aq-pen]') as HTMLElement | null
+    if (eBar) eBar.style.width = `${ePct}%`
+    if (pBar) pBar.style.width = `${pPct}%`
+    if (enBar) enBar.style.width = `${enPct}%`
+    const eText = root.querySelector('[data-aq-ehp-text]')
+    const pText = root.querySelector('[data-aq-php-text]')
+    if (eText)
+      eText.textContent = `HP ${b.enemy.hp}/${b.enemy.maxHp}${b.phase ? ` · P${b.phase + 1}` : ''}`
+    if (pText)
+      pText.textContent = `HP ${b.player.hp} · EN ${b.player.energy}/${b.player.maxEnergy} · SH ${b.player.shield}`
+    const turnEl = root.querySelector('.aq-turn')
+    if (turnEl) turnEl.innerHTML = turnBannerHtml()
+    const floatEl = root.querySelector('[data-aq-float]') as HTMLElement | null
+    if (floatEl) {
+      if (floatText) {
+        floatEl.style.display = ''
+        floatEl.textContent = floatText
+      } else {
+        floatEl.style.display = 'none'
+      }
+    }
+    const combo = root.querySelector('.aq-topbar .aq-muted')
+    if (combo) combo.textContent = `C${b.combo}`
   }
 
   async function playerMove(a: CellPos, b: CellPos): Promise<void> {
@@ -786,13 +913,13 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       }
     }
 
-    // Restore real turn only after cascade visuals finish
+    // Restore real turn only after cascade visuals finish — keep board DOM, patch chrome
     battle = { ...battle, turn: pendingTurn }
-    paint() // remount chrome + final board after cascade chain finishes
-    await wait(320)
+    syncBoardDom(battle.board)
+    patchBattleChrome()
+    await wait(280)
     floatText = ''
-    const floatEl = root.querySelector('[data-aq-float]') as HTMLElement | null
-    if (floatEl) floatEl.style.display = 'none'
+    patchBattleChrome()
 
     if (isVictory(battle)) {
       finishVictory(res.fx)
@@ -802,12 +929,12 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     if (battle.turn === 'enemy') {
       if (battle.tutorialStep === 2) {
         battle = { ...battle, tutorialStep: 3 }
-        paint()
+        patchBattleChrome()
         await wait(600)
       }
       await enemyPhase()
     } else {
-      // extra turn
+      // extra turn — remount only to refresh skill disabled states / coach
       battle = { ...battle, animLock: false }
       if (battle.tutorialStep === 0) tutorialCoach = pickTutorialMove(findAllMoves(battle.board))
       paint()
@@ -849,19 +976,25 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
   async function enemyPhase(): Promise<void> {
     if (!battle) return
     battle = { ...battle, turn: 'enemy', animLock: true }
-    paint()
-    await wait(550)
+    patchBattleChrome()
+    await wait(420)
     const res = runEnemyTurn(battle, save)
+    // Animate enemy cascade on the same board before applying final chrome
+    if (res.fx.steps?.length) {
+      await playCascadeFx(res.fx)
+    }
     battle = res.battle
+    syncBoardDom(battle.board)
     if (res.fx.damageToPlayer) {
       playQuestSfx('damage', save.settings.sfx)
       floatText = `-${res.fx.damageToPlayer}`
-    } else {
+    } else if (!res.fx.steps?.length) {
       floatText = 'ENEMY MOVE'
     }
-    paint()
-    await wait(500)
+    patchBattleChrome()
+    await wait(420)
     floatText = ''
+    patchBattleChrome()
     if (isDefeat(battle)) {
       finishDefeat()
       return

@@ -299,8 +299,11 @@
 .aq-gem.popping .aq-sym {
   opacity: 0;
 }
+/* Fall motion is driven by FLIP transforms in JS (gem identity). */
 .aq-gem.falling {
-  animation: aqGemFall 0.26s cubic-bezier(0.22, 0.85, 0.35, 1);
+  z-index: 4;
+  will-change: transform;
+  pointer-events: none;
 }
 @keyframes aqMatchPulse {
   from {

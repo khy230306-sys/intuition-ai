@@ -299,6 +299,10 @@ export function runEnemyTurn(battle: BattleRuntime, save: QuestSave): { battle: 
         damageToPlayer: dmg,
         combo: result.combos,
         log: [`적 공격 ${dmg}`],
+        steps: result.steps,
+        swapped: result.swapped,
+        from: move.a,
+        to: move.b,
       }
       next.log = [...next.log, `적 공격 ${dmg}`]
     }
@@ -313,7 +317,9 @@ export function runEnemyTurn(battle: BattleRuntime, save: QuestSave): { battle: 
     next.log = [...next.log, '보드가 오염된다…']
   }
 
-  next.board = ensurePlayable(board, battle.seed + next.moves + 3)
+  // Keep cascade-resolved board for FX; only reshuffle when truly dead (no moves).
+  const playable = ensurePlayable(board, battle.seed + next.moves + 3)
+  next.board = playable
   next.turn = next.player.hp <= 0 ? 'enemy' : 'player'
   return { battle: next, fx }
 }

@@ -396,36 +396,43 @@ export function trySwap(
   }
 }
 
+/** Reshuffle gem multiset in place. Retries until no matches and ≥1 move. */
 export function shuffleBoard(board: Board, seed: number): Board {
-  const rng = mulberry32(seed)
-  const cells = board.flat().map((c) => ({ ...c, id: nextGemId() }))
-  for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    const t = cells[i]!
-    cells[i] = cells[j]!
-    cells[j] = t
+  const base = board.flat().map((c) => ({ kind: c.kind, special: c.special || ('none' as const) }))
+  let s = seed
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const rng = mulberry32(s++)
+    const cells = base.map((c) => createCell(c.kind, c.special))
+    for (let i = cells.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1))
+      const t = cells[i]!
+      cells[i] = cells[j]!
+      cells[j] = t
+    }
+    const next = emptyBoard()
+    let k = 0
+    for (let r = 0; r < BOARD_SIZE; r++)
+      for (let c = 0; c < BOARD_SIZE; c++) next[r]![c] = cells[k++]!
+    if (!findMatches(next).length && findAllMoves(next).length > 0) return next
   }
-  const next = emptyBoard()
-  let k = 0
-  for (let r = 0; r < BOARD_SIZE; r++)
-    for (let c = 0; c < BOARD_SIZE; c++) next[r]![c] = cells[k++]!
-  // If still no moves or immediate match flood, regenerate
-  if (findMatches(next).length || findAllMoves(next).length === 0) {
-    return generateBoard(seed + 13)
-  }
-  return next
+  // Last resort only — avoid on the normal match path
+  return generateBoard(seed + 13)
 }
 
+/**
+ * Stabilize board for play. Does NOT reshuffle after a normal cascade —
+ * only resolves leftover matches, then shuffles if zero legal moves.
+ */
 export function ensurePlayable(board: Board, seed: number): Board {
   let cur = board
   let s = seed
-  for (let i = 0; i < 8; i++) {
-    if (findMatches(cur).length) {
-      cur = resolveBoard(cur, s++).board
-      continue
-    }
-    if (findAllMoves(cur).length) return cur
+  if (findMatches(cur).length) {
+    cur = resolveBoard(cur, s++).board
+  }
+  if (findAllMoves(cur).length) return cur
+  for (let i = 0; i < 6; i++) {
     cur = shuffleBoard(cur, s++)
+    if (!findMatches(cur).length && findAllMoves(cur).length) return cur
   }
   return generateBoard(seed + 999)
 }

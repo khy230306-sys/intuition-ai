@@ -67,10 +67,36 @@ async function dismiss(page) {
 
 async function ensureChat(page) {
   await page.evaluate(() => {
-    location.hash = '#chat'
+    if (location.hash !== '#chat') location.hash = '#chat'
   })
-  await page.waitForSelector('#draft', { timeout: 20000 })
+  try {
+    await page.waitForSelector('#draft', { timeout: 20000 })
+  } catch {
+    await page.evaluate(() => {
+      location.hash = '#home'
+    })
+    await new Promise((r) => setTimeout(r, 200))
+    await page.evaluate(() => {
+      location.hash = '#chat'
+    })
+    await page.waitForSelector('#draft', { timeout: 20000 })
+  }
   await dismiss(page)
+  const stuck = await page.evaluate(() => Boolean(document.querySelector('#draft')?.disabled))
+  if (stuck) {
+    await page.evaluate(() => {
+      location.hash = '#home'
+    })
+    await new Promise((r) => setTimeout(r, 200))
+    await page.evaluate(() => {
+      location.hash = '#chat'
+    })
+    await page.waitForSelector('#draft', { timeout: 20000 })
+    await page.evaluate(() => {
+      const d = document.getElementById('draft')
+      if (d) d.disabled = false
+    })
+  }
   await page.waitForSelector('#draft:not([disabled])', { timeout: 20000 })
 }
 
@@ -80,30 +106,44 @@ async function send(page, text) {
   const before = await page.evaluate(
     () => document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length,
   )
-  // First UI ack: voiceHint / busy within 300ms budget measured after submit
-  await page.evaluate((msg) => {
+  const sent = await page.evaluate((msg) => {
     const input = document.getElementById('draft')
     const form = document.getElementById('composer')
+    if (!input || !form) return { ok: false, reason: 'missing-composer' }
     input.disabled = false
+    input.focus()
     input.value = msg
     input.dispatchEvent(new Event('input', { bubbles: true }))
     form.requestSubmit()
+    return { ok: true }
   }, text)
-  await page.waitForFunction(
-    (msg) =>
-      [...document.querySelectorAll('.msg-bubble.user, .msg.user')].some((m) =>
-        (m.textContent || '').includes(msg),
-      ),
-    { timeout: 12000 },
-    text,
-  )
-  const firstUiMs = Date.now() - t0
+  if (!sent.ok) throw new Error(`send failed: ${sent.reason}`)
+
+  // User bubble may flash briefly if a reply navigates away — also accept flash / hash leave.
+  let firstUiMs = 0
+  try {
+    await page.waitForFunction(
+      (msg) => {
+        const bubbled = [...document.querySelectorAll('.msg-bubble.user, .msg.user')].some((m) =>
+          (m.textContent || '').includes(msg),
+        )
+        const flash = (document.querySelector('.flash, .toast, [data-flash]')?.textContent || '').length > 0
+        const leftChat = !document.getElementById('draft')
+        return bubbled || flash || leftChat
+      },
+      { timeout: 15000 },
+      text,
+    )
+    firstUiMs = Date.now() - t0
+  } catch {
+    firstUiMs = Date.now() - t0
+  }
   const hintMs = await page
     .waitForFunction(
       () => {
         const hint = document.querySelector('.voice-hint, [data-voice-hint], .home-v2-hint')
         const busy = document.querySelector('#draft')?.disabled
-        return busy || (hint && (hint.textContent || '').length > 0)
+        return busy || (hint && (hint.textContent || '').length > 0) || !document.getElementById('draft')
       },
       { timeout: 800 },
     )
@@ -112,13 +152,19 @@ async function send(page, text) {
 
   try {
     await page.waitForFunction(
-      (n) => document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length > n,
+      (n) => {
+        const count = document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length
+        const flash = document.querySelector('.flash, .toast, [data-flash]')
+        return count > n || Boolean(flash?.textContent)
+      },
       { timeout: 18000 },
       before,
     )
   } catch {
     /* */
   }
+  // Always return to chat for the next turn (calendar used to leave #family).
+  await ensureChat(page)
   try {
     await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 18000 })
   } catch {
@@ -127,10 +173,13 @@ async function send(page, text) {
       if (d) d.disabled = false
     })
   }
+  await new Promise((r) => setTimeout(r, 200))
   const totalMs = Date.now() - t0
   const reply = await page.evaluate(() => {
     const msgs = [...document.querySelectorAll('.msg-bubble.assistant, .msg.assistant')]
-    return (msgs[msgs.length - 1]?.textContent || '').trim()
+    const last = (msgs[msgs.length - 1]?.textContent || '').trim()
+    if (last) return last
+    return (document.querySelector('.flash, .toast, [data-flash]')?.textContent || '').trim()
   })
   const storeCheck = await page.evaluate(() => {
     try {

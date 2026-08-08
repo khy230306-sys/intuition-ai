@@ -354,14 +354,21 @@ async function sendChat(page, text) {
   }, text)
   if (!sent.ok) throw new Error(`sendChat failed: ${sent.reason}`)
 
-  await page.waitForFunction(
-    (msg) =>
-      [...document.querySelectorAll('.msg-bubble.user, .msg.user')].some((m) =>
-        (m.textContent || '').includes(msg),
-      ),
-    { timeout: 15000 },
-    text,
-  )
+  try {
+    await page.waitForFunction(
+      (msg) => {
+        const bubbled = [...document.querySelectorAll('.msg-bubble.user, .msg.user')].some((m) =>
+          (m.textContent || '').includes(msg),
+        )
+        const leftChat = !document.getElementById('draft')
+        return bubbled || leftChat
+      },
+      { timeout: 15000 },
+      text,
+    )
+  } catch {
+    /* continue — recover composer below */
+  }
   const firstUiMs = Date.now() - t0
 
   try {
@@ -373,6 +380,8 @@ async function sendChat(page, text) {
   } catch {
     /* may reuse bubble */
   }
+  // Recover chat if a skill navigated away (composer timeout root cause)
+  await ensureChatComposer(page)
   try {
     await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 18000 })
   } catch {

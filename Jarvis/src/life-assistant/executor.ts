@@ -114,7 +114,8 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
         for (const e of missed.slice(0, 8)) {
           lines.push(`· ${e.date} ${'title' in e ? e.title : (e as { title: string }).title}`)
         }
-        return { text: lines.join('\n'), speak: true, view: 'family-helper' }
+        // Stay on chat — navigating away detaches the composer mid-conversation.
+        return { text: lines.join('\n'), speak: true, view: 'chat' }
       }
       const important = r.extractedEntities.importantOnly
       lines.push(r.date ? `【${r.date} 일정】` : '【다가오는 일정】')
@@ -130,7 +131,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
       if (!famLines.length && !helpLines.length) {
         return { text: '등록된 일정이 거의 없어요. 「내일 오후 3시 병원 예약 추가해줘」로 넣을 수 있어요.', speak: true }
       }
-      return { text: [...lines, ...famLines, ...helpLines].join('\n'), speak: true, view: 'family-helper' }
+      return { text: [...lines, ...famLines, ...helpLines].join('\n'), speak: true, view: 'chat' }
     }
 
     case 'calendar.create':
@@ -161,7 +162,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
         return {
           text: `같은 일정이 이미 있어요.\n· ${date}${time ? ` ${time}` : ''} ${title}\n중복으로 넣지 않았어요.`,
           speak: true,
-          view: 'family-helper',
+          view: 'chat',
         }
       }
       const sched = addFamilyHelperSchedule({
@@ -184,7 +185,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
           member ? ` · ${member.name}` : ''
         }`,
         speak: true,
-        view: 'family-helper',
+        view: 'chat',
       }
     }
 
@@ -196,12 +197,24 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
           speak: true,
         }
       }
-      const nextTime = r.time || r.extractedEntities.time
+      let nextTime = r.time || r.extractedEntities.time
       const nextDate = r.date || r.extractedEntities.date
       const nextTitle = (r.title || r.extractedEntities.title || '').trim()
+      const notifyBefore = r.extractedEntities.notifyMinutesBefore
+      // 「3시로」 after an afternoon appointment → keep PM unless 오전 was said
+      if (nextTime && target.time && !/오전|오후/.test(r.sourceText)) {
+        const prevH = Number(String(target.time).slice(0, 2))
+        const nextH = Number(String(nextTime).slice(0, 2))
+        if (Number.isFinite(prevH) && Number.isFinite(nextH) && prevH >= 12 && nextH > 0 && nextH < 12) {
+          nextTime = `${String(nextH + 12).padStart(2, '0')}:00`
+        }
+      }
       const patch: Partial<FamilyHelperSchedule> = {}
       if (nextTime) patch.time = nextTime
       if (nextDate) patch.date = nextDate
+      if (typeof notifyBefore === 'number' && Number.isFinite(notifyBefore)) {
+        patch.notifyMinutesBefore = notifyBefore
+      }
       if (nextTitle && nextTitle !== target.title && !/^(그거|그것|이거|일정)$/.test(nextTitle)) {
         patch.title = nextTitle
       }
@@ -216,10 +229,19 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
         return { text: '일정 변경에 실패했어요. 저장소를 다시 확인해 주세요.', speak: true }
       }
       rememberSchedule(updated)
+      if (typeof notifyBefore === 'number') {
+        return {
+          text: `알림을 ${notifyBefore}분 전으로 맞춰 뒀어요.\n· ${updated.date}${
+            updated.time ? ` ${updated.time}` : ''
+          } ${updated.title}`,
+          speak: true,
+          view: 'chat',
+        }
+      }
       return {
         text: `일정을 바꿨어요.\n· ${updated.date}${updated.time ? ` ${updated.time}` : ''} ${updated.title}`,
         speak: true,
-        view: 'family-helper',
+        view: 'chat',
       }
     }
 
@@ -236,7 +258,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
             ...open.slice(0, 5).map((s, i) => `${i + 1}. ${s.date}${s.time ? ` ${s.time}` : ''} ${s.title}`),
           ].join('\n'),
           speak: true,
-          view: 'family-helper',
+          view: 'chat',
         }
       }
       const ok = deleteFamilyHelperSchedule(target.id)
@@ -247,7 +269,7 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
       return {
         text: `일정을 취소했어요.\n· ${target.date}${target.time ? ` ${target.time}` : ''} ${target.title}`,
         speak: true,
-        view: 'family-helper',
+        view: 'chat',
       }
     }
 
@@ -308,15 +330,15 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
         return {
           text: person
             ? `${person} 관련 가족 일정이 아직 없어요.`
-            : '가족 일정이 아직 없어요. 가족 도우미에서 추가하거나 말해 주세요.',
+            : '가족 일정이 아직 없어요. 채팅에서 추가하거나 말해 주세요.',
           speak: true,
-          view: 'family-helper',
+          view: 'chat',
         }
       }
       return {
         text: `【가족 일정${person ? ` · ${person}` : ''}】\n${lines.slice(0, 12).join('\n')}`,
         speak: true,
-        view: 'family-helper',
+        view: 'chat',
       }
     }
 

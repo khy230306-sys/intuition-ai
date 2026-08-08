@@ -39,6 +39,17 @@ describe('life assistant intent rules', () => {
     expect(r?.reminderOffset).toBe('30m')
   })
 
+  it('classifies notify-before as calendar update', () => {
+    const r = classifyLifeAssistantRules('30분 전에 알려줘')
+    expect(r?.intent).toBe('calendar.update')
+    expect(r?.extractedEntities.notifyMinutesBefore).toBe(30)
+  })
+
+  it('classifies anaphora cancel and reschedule', () => {
+    expect(classifyLifeAssistantRules('그거 취소해')?.intent).toBe('calendar.delete')
+    expect(classifyLifeAssistantRules('아 3시로 바꿔')?.intent).toBe('calendar.update')
+  })
+
   it('classifies parking save/read', () => {
     expect(classifyLifeAssistantRules('주차 위치 기억해줘')?.intent).toBe('parking.save')
     expect(classifyLifeAssistantRules('내가 주차한 곳 알려줘')?.intent).toBe('parking.read')
@@ -112,8 +123,22 @@ describe('life assistant execution', () => {
       source: 'rules',
     })
     expect(r?.text).toMatch(/추가/)
+    expect(r?.view).toBe('chat')
     const bundle = JSON.parse(store.get('aizio_family_helper_v1') || '{}')
     expect(bundle.schedules?.[0]?.title).toMatch(/병원/)
+  })
+
+  it('multiturn: notify / reschedule / cancel via anaphora', async () => {
+    await tryHandleLifeAssistant('월요일 엄마 병원 오후 2시 기억해줘')
+    const notify = await tryHandleLifeAssistant('30분 전에 알려줘')
+    expect(notify?.text).toMatch(/알림|30/)
+    const move = await tryHandleLifeAssistant('아 3시로 바꿔')
+    expect(move?.text).toMatch(/바꿨|15:00|3\s*시/)
+    const cancel = await tryHandleLifeAssistant('그거 취소해')
+    expect(cancel?.text).toMatch(/취소/)
+    const bundle = JSON.parse(store.get('aizio_family_helper_v1') || '{}')
+    const open = (bundle.schedules || []).filter((s: { done?: boolean }) => !s.done)
+    expect(open.length).toBe(0)
   })
 
   it('asks for missing fields', async () => {

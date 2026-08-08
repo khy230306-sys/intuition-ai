@@ -135,6 +135,20 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
     })
   }
 
+  // 「30분 전에 알려줘」 → update last schedule reminder offset (anaphora)
+  {
+    const before = t.match(/(\d+)\s*분\s*전(?:에)?\s*(알려|알림|리마인더)/)
+    if (before && !/(뒤|후)/.test(t)) {
+      return base(t, {
+        intent: 'calendar.update',
+        confidence: 0.93,
+        extractedEntities: { notifyMinutesBefore: Number(before[1]) },
+        requiresConfirmation: false,
+        missingFields: [],
+      })
+    }
+  }
+
   // Reminder — before family patterns so 「2시간 뒤 … 알려줘」 is not stolen
   if (
     (/(\d+\s*분|\d+\s*시간)\s*(뒤|후)/.test(t) && /알려|알림|리마인더|만들|잊지/.test(t)) ||
@@ -241,23 +255,36 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
     })
   }
 
-  // Calendar delete/update (「그 일정 취소해」 / 「아까 병원 일정 취소」)
-  if (/(그\s*)?일정\s*(삭제|지워|취소)|일정\s*취소해|취소해/.test(t) && /일정|병원|약속/.test(t)) {
+  // Calendar delete/update (「그 일정 취소해」 / 「그거 취소해」 / 「아까 병원 일정 취소」)
+  if (
+    /(그\s*)?일정\s*(삭제|지워|취소)|일정\s*취소해|그거\s*취소|그것\s*취소|취소해/.test(t) &&
+    (/일정|병원|약속|그거|그것|아까/.test(t) || /취소/.test(t))
+  ) {
     const title = extractTitle(t, /그|아까|일정|삭제|지워|취소|해줘|해|말이야/g)
     const anaphora = /그거|그것|아까|그\s*일정|병원\s*일정/.test(t)
     const hasTitle = Boolean(title && title.length >= 2 && !/^(그거|그것|이거|아까)$/.test(title))
     return base(t, {
       intent: 'calendar.delete',
       confidence: 0.93,
-      title: hasTitle ? title : anaphora ? '병원' : undefined,
+      title: hasTitle ? title : anaphora ? undefined : undefined,
       requiresConfirmation: !hasTitle && !anaphora,
       missingFields: hasTitle || anaphora ? [] : ['title'],
     })
   }
+  // 「아까 병원 일정 말이야」 — resolve anaphora without mutating
+  if (/아까\s*.*(일정|병원|약속)\s*말이야|그\s*병원\s*일정/.test(t) && !/취소|바꿔|변경|삭제/.test(t)) {
+    return base(t, {
+      intent: 'calendar.read',
+      confidence: 0.88,
+      title: /병원/.test(t) ? '병원' : extractTitle(t, /아까|말이야|그|일정/g),
+    })
+  }
   // 「3시로 바꿔」「아 3시로」
   if (
-    /(바꿔|변경|수정|옮겨)/.test(t) &&
-    /(시|요일|일정|병원)/.test(t)
+    (/(바꿔|변경|수정|옮겨)/.test(t) && /(시|요일|일정|병원)/.test(t)) ||
+    (/^\s*아?\s*(오전|오후)?\s*\d{1,2}\s*시로\s*$/.test(t) && /(바꿔|로)/.test(t)) ||
+    /아\s*\d{1,2}\s*시로\s*바꿔/.test(t) ||
+    /\d{1,2}\s*시로\s*바꿔/.test(t)
   ) {
     return base(t, {
       intent: 'calendar.update',
@@ -269,6 +296,7 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
           let h = Number(m[2])
           if (/오후/.test(t) && h < 12) h += 12
           if (/오전/.test(t) && h === 12) h = 0
+          // Bare 「3시로」 after afternoon schedule — keep hour as spoken (15 if 오후 else as-is)
           return `${String(h).padStart(2, '0')}:00`
         })(),
       },

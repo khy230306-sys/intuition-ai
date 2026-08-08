@@ -51,7 +51,6 @@ import {
 import {
   dismissAiWizard,
   getProviderSlot,
-  hasAnyConfiguredProvider,
   loadHybridAiConfig,
   mergeKeyInput,
   saveHybridAiConfig,
@@ -2260,17 +2259,20 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
   state.draft = ''
   stopSpeaking()
   pushMsg('user', text)
+  // Paint user bubble + status BEFORE any async import (composer must not look frozen)
+  state.voiceHint = '확인하고 있어요…'
+  render()
+  scrollChat()
   // Immediate status feedback (≤300ms) — never invent tool results here
   try {
     const { beginTurnTrace, markTurn, thinkingStatusFor } = await import('./perf/turnTrace')
     beginTurnTrace(text)
     markTurn('T1_ui_ack')
     state.voiceHint = thinkingStatusFor(text)
+    render()
   } catch {
-    state.voiceHint = '확인하고 있어요…'
+    /* keep default hint */
   }
-  render()
-  scrollChat()
 
   let timedOut = false
   // Hard UI budget: never leave the composer locked past 18s (release gate)

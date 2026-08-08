@@ -26,6 +26,8 @@ export type LifeAssistantEntities = {
   person?: string
   location?: string
   reminderOffset?: string
+  /** Minutes before schedule to notify (「30분 전에 알려줘」). */
+  notifyMinutesBefore?: number
   note?: string
   replySource?: string
   priority?: boolean

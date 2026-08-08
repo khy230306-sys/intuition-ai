@@ -78,11 +78,12 @@ function readyCopy(intent: MusicIntentResult, locale: AppLocale): string {
   if (intent.mood === 'focus' || intent.activity === 'focus') return msg(locale, 'focusReady')
   if (intent.mood === 'sleep' || intent.activity === 'sleep') return msg(locale, 'sleepReady')
   if (intent.mood === 'calm' || intent.mood === 'relaxing') {
-    if (locale === 'en') return 'Found calm music. Tap the play button below.'
-    if (locale === 'ja') return '落ち着いた音楽を見つけました。下の再生ボタンを押してください。'
-    if (locale === 'vi') return 'Đã tìm nhạc êm. Nhấn nút phát bên dưới.'
-    if (locale === 'zh') return '已找到舒缓音乐。请点击下方播放按钮。'
-    return '잔잔한 음악을 찾았어요. 아래 재생 버튼을 눌러 주세요.'
+    // Never claim autoplay success — gesture / YouTube open required.
+    if (locale === 'en') return 'Calm music is ready. Tap the play button below to start.'
+    if (locale === 'ja') return '落ち着いた音楽を用意しました。下の再生ボタンを押してください。'
+    if (locale === 'vi') return 'Nhạc êm đã sẵn sàng. Nhấn nút phát bên dưới để bắt đầu.'
+    if (locale === 'zh') return '已准备好舒缓音乐。请点击下方播放按钮开始。'
+    return '잔잔한 음악을 준비했어요. 아래 재생 버튼을 눌러 주세요.'
   }
   return msg(locale, 'ready')
 }

@@ -1,5 +1,6 @@
 /**
- * AIZIO QUEST UI controller — mounts into a root element, fully offline.
+ * AIZIO QUEST UI — playable Match-3 combat surface.
+ * Input is board-delegated Pointer Events; never remount DOM mid-gesture.
  */
 
 import './quest.css'
@@ -24,9 +25,10 @@ import {
   runEnemyTurn,
   startBattle,
 } from '../battle/combat'
-import { BOARD_SIZE, areAdjacent } from '../match3/board'
+import { findAllMoves, type Move } from '../match3/board'
 import { hashSeed } from '../match3/rng'
 import { haptic, playQuestSfx } from '../audio/questAudio'
+import { attachBoardInput, dirLabel, pickTutorialMove, type CellPos } from './boardInput'
 
 const GEM_SYM: Record<GemKind, string> = {
   fire: '▲',
@@ -37,36 +39,148 @@ const GEM_SYM: Record<GemKind, string> = {
   guard: '▣',
 }
 
+const HINT_MS = 5000
+const DEV_DEBUG =
+  typeof location !== 'undefined' &&
+  (location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    /[?&]aqdebug=1(?:&|$)/.test(location.search))
+
 type MountApi = { destroy: () => void }
 
 export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void }): MountApi {
   let save = loadQuestSave()
   let screen: QuestScreen = save.heroId ? 'campaign' : 'title'
   let battle: BattleRuntime | null = null
-  let selected: { r: number; c: number } | null = null
-  let dragStart: { r: number; c: number; x: number; y: number } | null = null
+  let selected: CellPos | null = null
   let toast = ''
   let toastTimer: number | null = null
   let lastReward: { xp: number; credit: number; itemName?: string; ach: string[] } | null = null
   let floatText = ''
   let destroyed = false
+  let detachBoard: (() => void) | null = null
+  let hintTimer: number | null = null
+  let hintMove: Move | null = null
+  let lastSwap: string = ''
+  let tutorialCoach: Move | null = null
+  let statusLine = ''
 
   const showToast = (msg: string) => {
     toast = msg
     if (toastTimer) window.clearTimeout(toastTimer)
     toastTimer = window.setTimeout(() => {
       toast = ''
-      paint()
+      if (screen !== 'battle') paint()
+      else patchToast()
     }, 2200)
-    paint()
+    if (screen !== 'battle') paint()
+    else patchToast()
   }
 
   const persist = () => saveQuestSave(save)
 
+  const canInteract = () =>
+    !!battle && battle.turn === 'player' && !battle.animLock && screen === 'battle'
+
+  function clearHintTimer(): void {
+    if (hintTimer) {
+      window.clearTimeout(hintTimer)
+      hintTimer = null
+    }
+  }
+
+  function scheduleHint(): void {
+    clearHintTimer()
+    hintMove = null
+    if (!battle || battle.tutorialStep != null) return
+    hintTimer = window.setTimeout(() => {
+      if (!canInteract() || !battle) return
+      const moves = findAllMoves(battle.board)
+      hintMove = moves[0] || null
+      paintBoardClasses()
+    }, HINT_MS)
+  }
+
   function paint(): void {
     if (destroyed) return
+    detachBoard?.()
+    detachBoard = null
     root.innerHTML = render()
-    bind()
+    bindChrome()
+    if (screen === 'battle' && battle) {
+      bindBoard()
+      scheduleHint()
+    }
+  }
+
+  function patchToast(): void {
+    const el = root.querySelector('.aq-toast')
+    if (toast) {
+      if (el) el.textContent = toast
+      else root.insertAdjacentHTML('beforeend', `<div class="aq-toast">${esc(toast)}</div>`)
+    } else el?.remove()
+  }
+
+  function paintBoardClasses(): void {
+    if (!battle) return
+    const boardEl = root.querySelector('[data-aq-board="1"]')
+    if (!boardEl) return
+    boardEl.querySelectorAll('.aq-gem').forEach((g) => {
+      g.classList.remove('selected', 'hint', 'coach', 'coach-target')
+    })
+    if (selected) {
+      boardEl
+        .querySelector(`.aq-gem[data-r="${selected.r}"][data-c="${selected.c}"]`)
+        ?.classList.add('selected')
+    }
+    const coach = battle.tutorialStep === 0 ? tutorialCoach : null
+    if (coach) {
+      boardEl
+        .querySelector(`.aq-gem[data-r="${coach.a.r}"][data-c="${coach.a.c}"]`)
+        ?.classList.add('coach')
+      boardEl
+        .querySelector(`.aq-gem[data-r="${coach.b.r}"][data-c="${coach.b.c}"]`)
+        ?.classList.add('coach-target')
+    }
+    if (hintMove && battle.tutorialStep == null) {
+      boardEl
+        .querySelector(`.aq-gem[data-r="${hintMove.a.r}"][data-c="${hintMove.a.c}"]`)
+        ?.classList.add('hint')
+      boardEl
+        .querySelector(`.aq-gem[data-r="${hintMove.b.r}"][data-c="${hintMove.b.c}"]`)
+        ?.classList.add('hint')
+    }
+    const turnEl = root.querySelector('.aq-turn')
+    if (turnEl) turnEl.innerHTML = turnBannerHtml()
+    const coachEl = root.querySelector('[data-aq-coach]')
+    if (coachEl) coachEl.innerHTML = coachHtml()
+    const dbg = root.querySelector('[data-aq-debug]')
+    if (dbg) dbg.innerHTML = debugHtml()
+  }
+
+  function turnBannerHtml(): string {
+    if (!battle) return ''
+    if (battle.animLock) return `<span class="aq-turn-busy">처리 중…</span>`
+    if (battle.turn === 'player') return `<span class="aq-turn-me">내 턴 · GEM을 밀어 맞추세요</span>`
+    return `<span class="aq-turn-enemy">적 턴</span>`
+  }
+
+  function coachHtml(): string {
+    if (!battle || battle.tutorialStep == null) return ''
+    const step = battle.tutorialStep
+    if (step === 0 && tutorialCoach) {
+      return `이 보석을 <strong>${dirLabel(tutorialCoach)}</strong>으로 밀어보세요`
+    }
+    if (step === 1) return `같은 보석 3개를 맞추면 공격합니다`
+    if (step === 2) return `ENERGY가 모이면 아래 스킬을 쓰세요`
+    if (step === 3) return `내 행동이 끝나면 적이 움직입니다`
+    return ''
+  }
+
+  function debugHtml(): string {
+    if (!DEV_DEBUG || !battle) return ''
+    const moves = findAllMoves(battle.board).length
+    return `turn=${battle.turn} lock=${battle.animLock} sel=${selected ? `${selected.r},${selected.c}` : '-'} moves=${moves} last=${lastSwap || '-'} tut=${battle.tutorialStep ?? '-'} ${statusLine}`
   }
 
   function render(): string {
@@ -119,7 +233,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
         <div class="aq-card">
           <h2>CHAPTER 1 · 잔광 전선</h2>
           <p class="aq-muted">${esc(heroById(save.heroId || 'kael')?.name || '')} · XP ${save.xp}/${xpToNext(save.level)}</p>
-          ${next ? `<button type="button" class="aq-btn primary" data-aq="fight" data-stage="${next.id}" style="width:100%;margin-top:8px">다음 전투 · ${esc(next.name)}</button>` : `<p class="aq-muted">챕터 1 완료. 더 많은 전선이 준비 중입니다.</p>`}
+          ${next ? `<button type="button" class="aq-btn primary" data-aq="fight" data-stage="${next.id}" style="width:100%;margin-top:8px">다음 전투 · ${esc(next.name)}</button>` : `<p class="aq-muted">챕터 1 완료.</p>`}
           ${!save.tutorialDone ? `<button type="button" class="aq-btn" data-aq="tutorial" style="width:100%;margin-top:8px">튜토리얼</button>` : ''}
         </div>
         <div class="aq-stage-list">
@@ -134,9 +248,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
         </div>${toastHtml()}`
     }
 
-    if (screen === 'battle' && battle) {
-      return renderBattle()
-    }
+    if (screen === 'battle' && battle) return renderBattle()
 
     if (screen === 'victory' && lastReward) {
       return `${top}
@@ -216,7 +328,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       return `${top}
         <div class="aq-card">
           <h2>튜토리얼</h2>
-          <p class="aq-muted">인접 GEM을 스와이프해 3개 이상 맞추세요. FIRE=공격 · WATER/LIGHT=에너지 · NATURE=회복 · GUARD=방어 · DARK=관통.</p>
+          <p class="aq-muted">보드 위에서 직접 배웁니다. 강조된 보석을 밀어 맞추세요.</p>
           <button type="button" class="aq-btn primary" data-aq="tutorial-start">실전으로 배우기</button>
           <button type="button" class="aq-btn" data-aq="tutorial-skip" style="margin-top:8px;width:100%">건너뛰기</button>
         </div>${toastHtml()}`
@@ -237,6 +349,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     const ePct = Math.max(0, Math.round((b.enemy.hp / b.enemy.maxHp) * 100))
     const enPct = Math.max(0, Math.round((b.player.energy / b.player.maxEnergy) * 100))
     const stage = stageById(b.stageId)
+    const coach = b.tutorialStep === 0 ? tutorialCoach : null
     return `
       <div class="aq-topbar">
         <button type="button" class="aq-btn" data-aq="flee">후퇴</button>
@@ -249,52 +362,76 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
             <div class="aq-portrait" style="--h-accent:#ff6b4a;width:56px;height:56px"></div>
             <div>
               <strong>${esc(b.enemy.name)}</strong>
-              <div class="aq-bar"><i style="width:${ePct}%"></i></div>
-              <div class="aq-muted">HP ${b.enemy.hp}/${b.enemy.maxHp}${b.phase ? ` · P${b.phase + 1}` : ''}</div>
+              <div class="aq-bar"><i style="width:${ePct}%" data-aq-ehp></i></div>
+              <div class="aq-muted" data-aq-ehp-text>HP ${b.enemy.hp}/${b.enemy.maxHp}${b.phase ? ` · P${b.phase + 1}` : ''}</div>
             </div>
           </div>
         </div>
-        <div class="aq-turn">${b.turn === 'player' ? 'YOUR TURN' : 'ENEMY TURN'}${b.tutorialStep != null ? ` · TIP: GEM을 스와이프` : ''}</div>
+        <div class="aq-turn">${turnBannerHtml()}</div>
+        ${b.tutorialStep != null ? `<div class="aq-coach" data-aq-coach>${coachHtml()}</div>
+          <button type="button" class="aq-btn aq-skip-tut" data-aq="tutorial-skip-battle">튜토리얼 건너뛰기</button>` : ''}
         <div class="aq-board-wrap">
-          <div class="aq-board" data-aq-board="1">
+          <div class="aq-board" data-aq-board="1" style="touch-action:none">
             ${b.board
               .map((row, r) =>
                 row
                   .map((cell, c) => {
                     const sel = selected && selected.r === r && selected.c === c ? ' selected' : ''
-                    return `<button type="button" class="aq-gem${sel}" data-kind="${cell.kind}" data-special="${cell.special || 'none'}" data-r="${r}" data-c="${c}" aria-label="${cell.kind}"><span class="aq-sym">${GEM_SYM[cell.kind]}</span></button>`
+                    const isCoach = coach && coach.a.r === r && coach.a.c === c ? ' coach' : ''
+                    const isTarget = coach && coach.b.r === r && coach.b.c === c ? ' coach-target' : ''
+                    return `<button type="button" class="aq-gem${sel}${isCoach}${isTarget}" data-kind="${cell.kind}" data-special="${cell.special || 'none'}" data-r="${r}" data-c="${c}" aria-label="${cell.kind}"><span class="aq-sym">${GEM_SYM[cell.kind]}</span></button>`
                   })
                   .join(''),
               )
               .join('')}
           </div>
-          ${floatText ? `<div class="aq-float">${esc(floatText)}</div>` : ''}
+          ${coach ? `<div class="aq-arrow" data-dir="${dirLabel(coach)}" aria-hidden="true">➜</div>` : ''}
+          <div class="aq-float" data-aq-float style="${floatText ? '' : 'display:none'}">${esc(floatText)}</div>
         </div>
         <div class="aq-card" style="padding:10px">
           <div class="aq-fighter">
             <div class="aq-portrait" style="--h-accent:${hero.accent};width:56px;height:56px"></div>
             <div>
               <strong>${esc(b.player.name)}</strong>
-              <div class="aq-bar"><i style="width:${pPct}%"></i></div>
-              <div class="aq-bar energy"><i style="width:${enPct}%"></i></div>
-              <div class="aq-muted">HP ${b.player.hp} · EN ${b.player.energy}/${b.player.maxEnergy} · SH ${b.player.shield}</div>
+              <div class="aq-bar"><i style="width:${pPct}%" data-aq-php></i></div>
+              <div class="aq-bar energy"><i style="width:${enPct}%" data-aq-pen></i></div>
+              <div class="aq-muted" data-aq-php-text>HP ${b.player.hp} · EN ${b.player.energy}/${b.player.maxEnergy} · SH ${b.player.shield}</div>
             </div>
           </div>
           <div class="aq-skills" style="margin-top:8px">
             ${skills
               .map(
                 (sk) =>
-                  `<button type="button" class="aq-btn" data-aq="skill" data-id="${sk.id}" ${b.turn !== 'player' || b.player.energy < sk.energyCost ? 'disabled' : ''}><strong>${esc(sk.name)}</strong><div class="aq-muted">EN ${sk.energyCost} · ${esc(sk.desc)}</div></button>`,
+                  `<button type="button" class="aq-btn" data-aq="skill" data-id="${sk.id}" ${b.turn !== 'player' || b.player.energy < sk.energyCost || b.animLock ? 'disabled' : ''}><strong>${esc(sk.name)}</strong><div class="aq-muted">EN ${sk.energyCost} · ${esc(sk.desc)}</div></button>`,
               )
               .join('')}
           </div>
         </div>
+        ${DEV_DEBUG ? `<pre class="aq-debug" data-aq-debug>${debugHtml()}</pre>` : ''}
       </div>${toastHtml()}`
   }
 
-  function bind(): void {
+  function bindBoard(): void {
+    const boardEl = root.querySelector('[data-aq-board="1"]') as HTMLElement | null
+    if (!boardEl || !battle) return
+    detachBoard = attachBoardInput(boardEl, {
+      canInteract,
+      forcedMove: () => (battle?.tutorialStep === 0 ? tutorialCoach : null),
+      onSelect: (cell) => {
+        selected = cell
+        // class-only update — no remount
+        paintBoardClasses()
+      },
+      onSwap: (a, b) => {
+        void playerMove(a, b)
+      },
+    })
+  }
+
+  function bindChrome(): void {
     root.querySelector('[data-aq="back"]')?.addEventListener('click', () => {
       if (screen === 'battle') {
+        clearHintTimer()
         screen = 'campaign'
         battle = null
         paint()
@@ -303,16 +440,14 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       opts?.onExit?.()
     })
     root.querySelector('[data-aq="flee"]')?.addEventListener('click', () => {
+      clearHintTimer()
       screen = 'campaign'
       battle = null
       paint()
     })
     root.querySelector('[data-aq="new"]')?.addEventListener('click', () => {
-      if (!save.heroId) {
-        screen = 'heroSelect'
-      } else {
-        screen = 'campaign'
-      }
+      if (!save.heroId) screen = 'heroSelect'
+      else screen = 'campaign'
       paint()
     })
     root.querySelector('[data-aq="campaign"]')?.addEventListener('click', () => {
@@ -339,12 +474,20 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       screen = 'tutorial'
       paint()
     })
-    root.querySelector('[data-aq="tutorial-skip"]')?.addEventListener('click', () => {
+    const skipTut = () => {
       save = { ...save, tutorialDone: true }
       persist()
-      screen = 'campaign'
-      paint()
-    })
+      if (battle) {
+        battle = { ...battle, tutorialStep: undefined }
+        tutorialCoach = null
+        paint()
+      } else {
+        screen = 'campaign'
+        paint()
+      }
+    }
+    root.querySelector('[data-aq="tutorial-skip"]')?.addEventListener('click', skipTut)
+    root.querySelector('[data-aq="tutorial-skip-battle"]')?.addEventListener('click', skipTut)
     root.querySelector('[data-aq="tutorial-start"]')?.addEventListener('click', () => {
       beginStage('c1-s1', true)
     })
@@ -354,15 +497,21 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
         if (!id || !save.unlockedHeroes.includes(id)) return
         save = { ...save, heroId: id }
         persist()
-        screen = save.tutorialDone ? 'campaign' : 'tutorial'
+        // First play always starts interactive tutorial battle
+        if (!save.tutorialDone) beginStage('c1-s1', true)
+        else {
+          screen = 'campaign'
+          paint()
+        }
         playQuestSfx('ui', save.settings.sfx)
-        paint()
       })
     })
     root.querySelectorAll('[data-aq="fight"]').forEach((el) => {
       el.addEventListener('click', () => {
         const id = (el as HTMLElement).dataset.stage || ''
-        beginStage(id, false)
+        // Force tutorial on first ever battle
+        const needTut = !save.tutorialDone && id === 'c1-s1'
+        beginStage(id, needTut)
       })
     })
     root.querySelector('[data-aq="daily-fight"]')?.addEventListener('click', () => {
@@ -380,8 +529,10 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     })
     root.querySelector('[data-aq="retry"]')?.addEventListener('click', () => {
       if (battle) beginStage(battle.stageId, false)
-      else screen = 'campaign'
-      paint()
+      else {
+        screen = 'campaign'
+        paint()
+      }
     })
     root.querySelectorAll('[data-aq="equip"]').forEach((el) => {
       el.addEventListener('click', () => {
@@ -405,60 +556,16 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       save = { ...save, settings: { ...save.settings, haptic: (e.target as HTMLInputElement).checked } }
       persist()
     })
-
     root.querySelectorAll('[data-aq="skill"]').forEach((el) => {
       el.addEventListener('click', () => {
-        if (!battle) return
+        if (!battle || !canInteract()) return
         const id = (el as HTMLElement).dataset.id || ''
         const hero = heroById(save.heroId || 'kael')!
         const skill = [...hero.skills, hero.ultimate].find((s) => s.id === id)
         if (!skill) return
-        useSkill(skill)
+        void useSkill(skill)
       })
     })
-
-    const board = root.querySelector('[data-aq-board="1"]')
-    if (board && battle) {
-      board.querySelectorAll<HTMLElement>('.aq-gem').forEach((gem) => {
-        gem.addEventListener('pointerdown', (ev) => {
-          if (!battle || battle.turn !== 'player' || battle.animLock) return
-          const r = Number(gem.dataset.r)
-          const c = Number(gem.dataset.c)
-          selected = { r, c }
-          dragStart = { r, c, x: ev.clientX, y: ev.clientY }
-          gem.setPointerCapture(ev.pointerId)
-          paint()
-        })
-        gem.addEventListener('pointerup', (ev) => {
-          if (!dragStart || !battle) return
-          const r = Number(gem.dataset.r)
-          const c = Number(gem.dataset.c)
-          const dx = ev.clientX - dragStart.x
-          const dy = ev.clientY - dragStart.y
-          let tr = dragStart.r
-          let tc = dragStart.c
-          if (Math.abs(dx) > 18 || Math.abs(dy) > 18) {
-            if (Math.abs(dx) > Math.abs(dy)) tc += dx > 0 ? 1 : -1
-            else tr += dy > 0 ? 1 : -1
-          } else if (selected && !(selected.r === r && selected.c === c)) {
-            tr = r
-            tc = c
-          } else {
-            dragStart = null
-            return
-          }
-          const from = { r: dragStart.r, c: dragStart.c }
-          dragStart = null
-          selected = null
-          if (tr >= 0 && tr < BOARD_SIZE && tc >= 0 && tc < BOARD_SIZE && areAdjacent(from, { r: tr, c: tc })) {
-            void playerMove(from, { r: tr, c: tc })
-          } else {
-            playQuestSfx('swap', save.settings.sfx)
-            paint()
-          }
-        })
-      })
-    }
   }
 
   function beginStage(stageId: string, tutorial: boolean): void {
@@ -471,6 +578,18 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     }
     const seed = hashSeed(`${stageId}-${save.battlesWon}-${Date.now() % 10000}`)
     battle = startBattle(save, stage, seed, tutorial)
+    selected = null
+    hintMove = null
+    tutorialCoach = null
+    if (tutorial) {
+      battle.tutorialStep = 0
+      tutorialCoach = pickTutorialMove(findAllMoves(battle.board))
+      if (!tutorialCoach) {
+        // ensure a playable board for tutorial
+        battle.board = battle.board
+        tutorialCoach = pickTutorialMove(findAllMoves(battle.board))
+      }
+    }
     screen = 'battle'
     if (stage.isBoss) {
       playQuestSfx('boss', save.settings.sfx)
@@ -480,54 +599,117 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     paint()
   }
 
-  async function playerMove(a: { r: number; c: number }, b: { r: number; c: number }): Promise<void> {
-    if (!battle || battle.animLock) return
-    battle = { ...battle, animLock: true }
+  async function flashInvalidSwap(a: CellPos, b: CellPos): Promise<void> {
+    const boardEl = root.querySelector('[data-aq-board="1"]')
+    if (!boardEl) return
+    const ga = boardEl.querySelector(`.aq-gem[data-r="${a.r}"][data-c="${a.c}"]`)
+    const gb = boardEl.querySelector(`.aq-gem[data-r="${b.r}"][data-c="${b.c}"]`)
+    ga?.classList.add('swap-fail')
+    gb?.classList.add('swap-fail')
+    playQuestSfx('swap', save.settings.sfx)
+    await wait(180)
+    ga?.classList.remove('swap-fail')
+    gb?.classList.remove('swap-fail')
+  }
+
+  async function playerMove(a: CellPos, b: CellPos): Promise<void> {
+    if (!battle || battle.animLock || battle.turn !== 'player') return
+    clearHintTimer()
+    hintMove = null
+    lastSwap = `${a.r},${a.c}->${b.r},${b.c}`
+    // Resolve swap BEFORE locking UI state into the engine call.
     const res = applyPlayerSwap(battle, save, a, b)
     if (!res.ok) {
-      playQuestSfx('swap', save.settings.sfx)
+      battle = { ...battle, animLock: true }
+      paintBoardClasses()
+      await flashInvalidSwap(a, b)
       battle = { ...battle, animLock: false }
       selected = null
-      paint()
+      const moves = findAllMoves(battle.board)
+      if (!moves.length) {
+        showToast('움직일 수 있는 보석이 없어 섞습니다')
+        const { ensurePlayable } = await import('../match3/board')
+        battle = {
+          ...battle,
+          board: ensurePlayable(battle.board, battle.seed + battle.moves + 77),
+          animLock: false,
+        }
+        if (battle.tutorialStep === 0) tutorialCoach = pickTutorialMove(findAllMoves(battle.board))
+        paint()
+        return
+      }
+      if (battle.tutorialStep === 0) showToast('강조된 보석을 안내 방향으로 밀어주세요')
+      paintBoardClasses()
+      scheduleHint()
       return
     }
-    battle = res.battle
+    battle = { ...res.battle, animLock: true }
+    paintBoardClasses()
+
+    statusLine = `dmg=${res.fx.damageToEnemy} heal=${res.fx.heal} en=${res.fx.energyGain} combo=${res.fx.combo}`
     playQuestSfx(res.fx.combo > 1 ? 'cascade' : 'match', save.settings.sfx)
     if (res.fx.hadFive) {
       playQuestSfx('critical', save.settings.sfx)
       haptic([20, 30, 20], save.settings.haptic)
     } else haptic(10, save.settings.haptic)
-    floatText = res.fx.damageToEnemy ? `-${res.fx.damageToEnemy}` : ''
+
+    floatText = res.fx.damageToEnemy ? `-${res.fx.damageToEnemy}` : res.fx.heal ? `+${res.fx.heal}` : 'MATCH'
     save = {
       ...save,
       gemsCleared: save.gemsCleared + Math.max(3, res.fx.combo * 3),
       bestCombo: Math.max(save.bestCombo, res.fx.combo),
     }
-    paint()
-    await wait(280)
+
+    // Advance tutorial steps on successful interactive actions
+    if (battle.tutorialStep != null) {
+      if (battle.tutorialStep === 0) {
+        battle = { ...battle, tutorialStep: 1 }
+        tutorialCoach = null
+      } else if (battle.tutorialStep === 1) {
+        battle = { ...battle, tutorialStep: 2 }
+      }
+    }
+
+    paint() // remount after resolved board — gesture already finished
+    await wait(320)
     floatText = ''
+    const floatEl = root.querySelector('[data-aq-float]') as HTMLElement | null
+    if (floatEl) floatEl.style.display = 'none'
+
     if (isVictory(battle)) {
       finishVictory(res.fx)
       return
     }
+
     if (battle.turn === 'enemy') {
+      if (battle.tutorialStep === 2) {
+        battle = { ...battle, tutorialStep: 3 }
+        paint()
+        await wait(600)
+      }
       await enemyPhase()
     } else {
+      // extra turn
       battle = { ...battle, animLock: false }
+      if (battle.tutorialStep === 0) tutorialCoach = pickTutorialMove(findAllMoves(battle.board))
       paint()
+      scheduleHint()
     }
   }
 
   async function useSkill(skill: SkillDef): Promise<void> {
-    if (!battle || battle.animLock) return
+    if (!battle || battle.animLock || battle.turn !== 'player') return
+    clearHintTimer()
     battle = { ...battle, animLock: true }
     const res = castSkill(battle, save, skill)
     if (!res.ok) {
       battle = { ...battle, animLock: false }
       showToast('에너지가 부족하거나 사용할 수 없습니다')
+      paintBoardClasses()
       return
     }
     battle = res.battle
+    if (battle.tutorialStep === 2) battle = { ...battle, tutorialStep: 3 }
     playQuestSfx('skill', save.settings.sfx)
     haptic(25, save.settings.haptic)
     floatText = res.fx.damageToEnemy ? `SKL -${res.fx.damageToEnemy}` : skill.name
@@ -542,31 +724,46 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     else {
       battle = { ...battle, animLock: false }
       paint()
+      scheduleHint()
     }
   }
 
   async function enemyPhase(): Promise<void> {
     if (!battle) return
-    await wait(200)
+    battle = { ...battle, turn: 'enemy', animLock: true }
+    paint()
+    await wait(550)
     const res = runEnemyTurn(battle, save)
     battle = res.battle
     if (res.fx.damageToPlayer) {
       playQuestSfx('damage', save.settings.sfx)
       floatText = `-${res.fx.damageToPlayer}`
+    } else {
+      floatText = 'ENEMY MOVE'
     }
     paint()
-    await wait(280)
+    await wait(500)
     floatText = ''
     if (isDefeat(battle)) {
       finishDefeat()
       return
     }
+    // Complete tutorial after first enemy turn
+    if (battle.tutorialStep === 3) {
+      battle = { ...battle, tutorialStep: undefined }
+      save = { ...save, tutorialDone: true }
+      persist()
+      showToast('튜토리얼 완료 · 계속 전투하세요')
+    }
     battle = { ...battle, animLock: false, turn: 'player' }
+    selected = null
     paint()
+    scheduleHint()
   }
 
   function finishVictory(fx: { combo: number; hadFive: boolean }): void {
     if (!battle) return
+    clearHintTimer()
     const stage = stageById(battle.stageId)!
     playQuestSfx('victory', save.settings.sfx)
     const item = rollLoot(battle.seed + 99, Boolean(stage.isElite || stage.isBoss))
@@ -577,9 +774,6 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       stageCleared: Math.max(save.stageCleared, stage.index),
       inventory: [...save.inventory, item].slice(-40),
       tutorialDone: true,
-    }
-    if (stage.isBoss || stage.index >= 19) {
-      /* chapter complete flag via stageCleared */
     }
     next = applyXp(next, stage.xp)
     next = unlockHeroesForStage(next, next.stageCleared)
@@ -605,6 +799,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
   }
 
   function finishDefeat(): void {
+    clearHintTimer()
     playQuestSfx('defeat', save.settings.sfx)
     save = { ...save, battlesLost: save.battlesLost + 1 }
     persist()
@@ -616,6 +811,8 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
   return {
     destroy: () => {
       destroyed = true
+      clearHintTimer()
+      detachBoard?.()
       root.innerHTML = ''
     },
   }

@@ -156,7 +156,8 @@ export function applyPlayerSwap(
   a: { r: number; c: number },
   b: { r: number; c: number },
 ): { battle: BattleRuntime; fx: TurnFx; ok: boolean } {
-  if (battle.turn !== 'player' || battle.animLock) {
+  // animLock is a UI concern — engine only requires player turn.
+  if (battle.turn !== 'player') {
     return { battle, fx: emptyFx(), ok: false }
   }
   const hero = heroById(save.heroId || 'kael')!

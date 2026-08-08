@@ -270,6 +270,7 @@ import {
   loadCachedFix,
   queryPermissionState,
   requestLocation,
+  resolvePlaceLabel,
   wasLocationGranted,
   type GeoFix,
 } from './location'
@@ -461,7 +462,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.8'
+const APP_VERSION = '1.33.9'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2250,18 +2251,19 @@ async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: str
 async function refreshWeather(): Promise<void> {
   const fix = state.lastFix
   if (!fix) return
-  const place = state.settings.city || '현재 위치'
+  // Place must come from GPS — settings.city defaults to「서울」and was mislabeling Ulsan etc.
+  const place = await resolvePlaceLabel(fix.lat, fix.lon)
   const w = await fetchWeather(fix.lat, fix.lon, place)
   if (w) {
     state.weather = w
-    if (state.locationReady && state.view === 'chat' && !state.busy) {
-      const widget = document.querySelector('[data-home-widget] .home-weather')
-      if (widget) {
-        const s = buildHomeSummary(w)
-        widget.textContent = s.weatherLine
-      } else {
-        render()
-      }
+    // Keep settings city in sync with real GPS city for briefing / home summary
+    if (place && place !== '현재 위치' && place !== state.settings.city) {
+      state.settings = { ...state.settings, city: place }
+      saveSettings(state.settings)
+    }
+    if (state.locationReady && (state.view === 'home' || state.view === 'chat') && !state.busy) {
+      // Remount so briefing chip + header weather line both show the GPS city
+      render()
     }
   }
 }

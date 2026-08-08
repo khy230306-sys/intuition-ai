@@ -97,6 +97,12 @@ export async function fetchWeather(
     Date.now() - cached.at < CACHE_MS &&
     weatherCoordsMatch(cached, lat, lon)
   ) {
+    // Keep temperature cache, but correct a stale city label (e.g. GPS=울산, label=서울).
+    if (place && place !== '현재 위치' && place !== cached.place) {
+      const fixed: WeatherSnap = { ...cached, place, lat, lon }
+      writeCache(fixed)
+      return fixed
+    }
     return cached
   }
 

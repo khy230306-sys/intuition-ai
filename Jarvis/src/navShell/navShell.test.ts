@@ -50,7 +50,7 @@ describe('primary tabs', () => {
     expect(html).toContain('홈')
     expect(html).toContain('대화')
     expect(html).toContain('일정')
-    expect(html).toContain('가족')
+    expect(html).toContain('멤버')
     expect(html).toContain('더보기')
     expect(html).toMatch(/aria-current="page"/)
   })

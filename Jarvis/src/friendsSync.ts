@@ -322,7 +322,7 @@ export async function disconnectFriendsSync(): Promise<void> {
 
 async function joinFresh(): Promise<{ ok: boolean; message: string }> {
   const room = loadFriendsRoom()
-  if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
+  if (!room) return { ok: false, message: '먼저 멤버를 만들거나 코드로 참여하세요.' }
 
   try {
     packetRelay = await createSpacePacketRelay({
@@ -383,7 +383,7 @@ let pendingForce = false
 
 export async function ensureFriendsSync(opts?: { force?: boolean }): Promise<{ ok: boolean; message: string }> {
   const room = loadFriendsRoom()
-  if (!room) return { ok: false, message: '먼저 친구 공간을 만들거나 코드로 참여하세요.' }
+  if (!room) return { ok: false, message: '먼저 멤버를 만들거나 코드로 참여하세요.' }
 
   if (opts?.force) pendingForce = true
   if (ensureWait) return ensureWait

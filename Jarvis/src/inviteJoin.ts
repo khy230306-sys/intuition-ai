@@ -5,7 +5,7 @@ export type SpaceKind = 'family' | 'friends'
 /** Same alphabet used when generating room codes. */
 export const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
-const GENERIC_NAMES = new Set(['친구 공간', '가족 공간', '멤버', '우리 친구', '우리 가족', ''])
+const GENERIC_NAMES = new Set(['친구 공간', '가족 공간', '멤버', '멤버 1', '멤버 2', '우리 친구', '우리 가족', ''])
 
 export function isValidInviteCode(code: string): boolean {
   if (code.length < 4 || code.length > 8) return false

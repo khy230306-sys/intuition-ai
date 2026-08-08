@@ -14,7 +14,8 @@ export const PRIMARY_TABS: PrimaryTab[] = [
   { id: 'home', label: '홈', ico: '홈', view: 'home' },
   { id: 'chat', label: '대화', ico: '대화', view: 'chat' },
   { id: 'schedule', label: '일정', ico: '일정', view: 'schedule' },
-  { id: 'family', label: '가족', ico: '가족', view: 'family-helper' },
+  /** Unified member spaces (family + friends rooms under one 멤버 label). */
+  { id: 'family', label: '멤버', ico: '멤버', view: 'family' },
   { id: 'more', label: '더보기', ico: '더보기', view: 'more' },
 ]
 
@@ -28,8 +29,9 @@ export function primaryTabForView(view: View | string): PrimaryTabId {
     case 'schedule':
     case 'life':
       return 'schedule'
-    case 'family-helper':
     case 'family':
+    case 'friends':
+    case 'family-helper':
       return 'family'
     case 'more':
     case 'settings':
@@ -37,7 +39,6 @@ export function primaryTabForView(view: View | string): PrimaryTabId {
     case 'actions':
     case 'invest':
     case 'games':
-    case 'friends':
     case 'customers':
     case 'ai-camera':
     case 'navigation':

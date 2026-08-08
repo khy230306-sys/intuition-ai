@@ -461,7 +461,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.4'
+const APP_VERSION = '1.33.5'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -1603,7 +1603,7 @@ async function openShareModal(kind: 'app' | 'backup' | 'arcade'): Promise<void> 
 async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   const room = kind === 'family' ? loadFamilyRoom() : loadFriendsRoom()
   if (!room) {
-    showFlash(kind === 'family' ? '먼저 멤버를 만들어 주세요.' : '먼저 친구 공간을 만들어 주세요.')
+    showFlash('먼저 멤버를 만들어 주세요.')
     return
   }
   const link = buildSpaceInviteUrl(kind, room.code, appShareUrl())
@@ -1616,7 +1616,7 @@ async function openInviteModal(kind: 'family' | 'friends'): Promise<void> {
   state.shareQrSvg = ''
   state.shareStatus = ''
   state.shareStatusOk = null
-  state.shareHint = `친구가 링크를 열고 «승인하고 입장»만 누르면 끝입니다.\n초대자도 AIZIO를 열어 두면 멤버가 자동 표시됩니다.\n${link}`
+  state.shareHint = `멤버가 링크를 열고 «승인하고 입장»만 누르면 끝입니다.\n초대자도 AIZIO를 열어 두면 멤버가 자동 표시됩니다.\n${link}`
   render()
   try {
     // Deep-link URL only — phone camera can open it
@@ -1773,15 +1773,15 @@ function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
         state.pendingInvite = pending
         savePendingInvite(pending)
         if (forceView || state.view === 'friends') state.view = 'friends'
-        showFlash(`초대 ${pending.code} 수신 · 친구 탭에서 «전환 참여»`)
+        showFlash(`초대 ${pending.code} 수신 · 멤버 탭에서 «전환 참여»`)
         return 'needs-switch'
       }
-      joinFriendsRoomLocal(pending.code, '친구 공간', member)
+      joinFriendsRoomLocal(pending.code, '멤버 2', member)
       state.view = 'friends'
       state.friendsTab = 'chat'
       state.prefillJoinCode = ''
       postJoinPresence('friends')
-      showFlash(`친구 초대 승인 · 코드 ${pending.code} 입장 완료`)
+      showFlash(`멤버 초대 승인 · 코드 ${pending.code} 입장 완료`)
       void ensureFriendsSyncOnce(true)
       return 'joined'
     }
@@ -1795,7 +1795,7 @@ function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
       state.pendingInvite = pending
       savePendingInvite(pending)
       if (forceView || state.view === 'family') state.view = 'family'
-      showFlash(`초대 ${pending.code} 수신 · 가족 탭에서 «전환 참여»`)
+      showFlash(`초대 ${pending.code} 수신 · 멤버 탭에서 «전환 참여»`)
       return 'needs-switch'
     }
     joinFamilyRoomLocal(pending.code, '멤버', member)
@@ -1821,7 +1821,7 @@ function applyPendingInvite(opts?: { forceView?: boolean }): InviteApplyResult {
 function inviteSwitchBanner(kind: SpaceKind, currentCode: string): string {
   const code = state.prefillJoinCode.trim().toUpperCase()
   if (!code || code === currentCode) return ''
-  const label = kind === 'friends' ? '친구' : '멤버'
+  const label = '멤버'
   return `
     <div class="invite-switch" role="status">
       <p><strong>새 ${label} 초대</strong> · 코드 <span class="invite-switch-code">${escapeHtml(code)}</span></p>
@@ -1860,7 +1860,7 @@ async function switchToInvite(kind: SpaceKind): Promise<void> {
     if (kind === 'friends') {
       await disconnectFriendsSync()
       leaveFriendsRoom()
-      joinFriendsRoomLocal(code, '친구 공간', member)
+      joinFriendsRoomLocal(code, '멤버 2', member)
       state.friendsTab = 'chat'
       state.view = 'friends'
       postJoinPresence('friends')
@@ -2194,7 +2194,7 @@ function persistMemberName(memberName: string): void {
 async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: string): Promise<void> {
   const detected = detectInviteKind(raw)
   if (detected && detected !== kind) {
-    showFlash(`${detected === 'friends' ? '친구' : '멤버'} 초대로 전환합니다…`)
+    showFlash('멤버 초대로 전환합니다…')
     kind = detected
   }
   const code = parseInviteCode(raw)
@@ -2208,20 +2208,20 @@ async function completeJoinFromRaw(kind: SpaceKind, raw: string, memberName: str
       const current = loadFriendsRoom()
       if (current && current.code !== code) {
         const ok = window.confirm(
-          `지금 친구 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+          `지금 멤버 공간 코드 ${current.code}에 있습니다.\n코드 ${code}로 바꾸면 현재 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
         await disconnectFriendsSync()
         leaveFriendsRoom()
       }
       const wasSame = Boolean(current && current.code === code)
-      joinFriendsRoomLocal(code, '친구 공간', memberName)
+      joinFriendsRoomLocal(code, '멤버 2', memberName)
       state.friendsTab = 'chat'
       state.view = 'friends'
       state.prefillJoinCode = ''
       if (!wasSame) postJoinPresence('friends')
       else void ensureFriendsSyncOnce(true)
-      showFlash(`친구 초대 승인 · 코드 ${code} 입장 완료`)
+      showFlash(`멤버 초대 승인 · 코드 ${code} 입장 완료`)
     } else {
       const current = loadFamilyRoom()
       if (current && current.code !== code) {
@@ -3459,8 +3459,8 @@ function renderLocationGate(): string {
     : ''
   const invite = state.pendingInvite
   const inviteBlock = invite
-    ? `<p class="loc-invite"><strong>${invite.kind === 'friends' ? '친구' : '멤버'} 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
-        <p class="loc-body">한 번만 승인하면 AIZIO ${invite.kind === 'friends' ? '친구 공간으로' : '멤버로'} 바로 입장합니다.</p>
+    ? `<p class="loc-invite"><strong>멤버 초대</strong> · 코드 <strong>${escapeHtml(invite.code)}</strong></p>
+        <p class="loc-body">한 번만 승인하면 AIZIO 멤버로 바로 입장합니다.</p>
         <button type="button" class="primary-btn loc-invite-go" data-action="accept-invite-start" ${
           state.locationBusy ? 'disabled' : ''
         }>승인하고 입장</button>`
@@ -3750,14 +3750,15 @@ function mountActiveArcade(): void {
 }
 
 function renderHomeRoomCard(box: SpaceInboxSummary): string {
+  const emptyLabel = box.kind === 'family' ? '멤버 1' : '멤버 2'
   if (!box.hasRoom) {
     return `
       <button type="button" class="home-room-card empty" data-view="${box.kind}">
         <div class="home-room-head">
-          <strong>${box.kind === 'family' ? '멤버' : '친구 방'}</strong>
+          <strong>${emptyLabel}</strong>
           <span class="home-room-count">없음</span>
         </div>
-        <p class="hint">${box.kind === 'family' ? '멤버' : '친구'}를 만들거나 참여하세요.</p>
+        <p class="hint">멤버를 만들거나 참여하세요.</p>
       </button>`
   }
   const recent =
@@ -3782,15 +3783,15 @@ function renderHomeRoomCard(box: SpaceInboxSummary): string {
     </button>`
 }
 
-/** Expandable family/friends inbox on the chat home. */
+/** Expandable member-space inbox on the chat home. */
 function renderHomeRoomsPanel(compact = false): string {
   const inbox = getHomeSpaceInbox()
   const famLabel = inbox.family.hasRoom
-    ? `가족 ${inbox.family.total}${inbox.family.unread ? ` · 새 ${inbox.family.unread}` : ''}`
-    : '가족 없음'
+    ? `${inbox.family.name || '멤버 1'} ${inbox.family.total}${inbox.family.unread ? ` · 새 ${inbox.family.unread}` : ''}`
+    : '멤버 1 없음'
   const frLabel = inbox.friends.hasRoom
-    ? `친구 ${inbox.friends.total}${inbox.friends.unread ? ` · 새 ${inbox.friends.unread}` : ''}`
-    : '친구 없음'
+    ? `${inbox.friends.name || '멤버 2'} ${inbox.friends.total}${inbox.friends.unread ? ` · 새 ${inbox.friends.unread}` : ''}`
+    : '멤버 2 없음'
   const autoOpen = inbox.unreadTotal > 0 || !compact
   const open =
     state.homeRoomsOpen === null ? autoOpen : state.homeRoomsOpen
@@ -3798,7 +3799,7 @@ function renderHomeRoomsPanel(compact = false): string {
   return `
     <details class="home-rooms ${compact ? 'compact' : ''}" data-home-rooms="1"${openAttr}>
       <summary class="home-rooms-summary">
-        <span class="home-rooms-title">대화방</span>
+        <span class="home-rooms-title">멤버</span>
         <span class="home-rooms-stats">
           <span class="${inbox.family.unread ? 'hot' : ''}">${escapeHtml(famLabel)}</span>
           <span class="dot">·</span>
@@ -3858,7 +3859,7 @@ function renderShareModal(): string {
         : state.shareModal === 'invite'
           ? state.shareInviteKind === 'family'
             ? '멤버 초대'
-            : '친구 초대'
+            : '멤버 초대'
           : '백업 QR / 공유'
   const actions =
     state.shareModal === 'app'
@@ -3888,7 +3889,7 @@ function renderShareModal(): string {
         <div class="invite-code-block">
           <span class="invite-code-label">초대 코드 · v${APP_VERSION}</span>
           <input class="invite-code-input" data-invite-select="code" readonly value="${escapeAttr(state.shareInviteCode)}" aria-label="초대 코드" />
-          <p class="hint">친구가 링크를 열어 <strong>승인하고 입장</strong>하면 끝입니다.</p>
+          <p class="hint">멤버가 링크를 열어 <strong>승인하고 입장</strong>하면 끝입니다.</p>
         </div>`
       : ''
   const statusClass =
@@ -4779,12 +4780,27 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Unified 멤버 shell: switch between family / friends rooms without separate product names. */
+function membersSpaceSwitcherHtml(active: 'family' | 'friends'): string {
+  const fam = loadFamilyRoom()
+  const fr = loadFriendsRoom()
+  const famLabel = (fam?.name || '').trim() || '멤버 1'
+  const frLabel = (fr?.name || '').trim() || '멤버 2'
+  return `
+    <div class="members-space-switch" role="tablist" aria-label="멤버">
+      <button type="button" role="tab" class="members-space-tab ${active === 'family' ? 'active' : ''}" data-view="family" aria-selected="${active === 'family' ? 'true' : 'false'}">${escapeHtml(famLabel)}${fam ? '' : '<span class="members-space-empty" aria-hidden="true">+</span>'}</button>
+      <button type="button" role="tab" class="members-space-tab ${active === 'friends' ? 'active' : ''}" data-view="friends" aria-selected="${active === 'friends' ? 'true' : 'false'}">${escapeHtml(frLabel)}${fr ? '' : '<span class="members-space-empty" aria-hidden="true">+</span>'}</button>
+    </div>
+  `
+}
+
 function renderFamily(): string {
   const room = loadFamilyRoom()
   if (!room) {
     return `
       <section class="panel view-scroll family-panel">
         <h2 class="section-title">멤버</h2>
+        ${membersSpaceSwitcherHtml('family')}
         <p class="hint">멤버 단체 대화 · 공지 · 일정을 한곳에서. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다.</p>
         <div class="family-setup">
           <h3>새 멤버</h3>
@@ -4799,7 +4815,7 @@ function renderFamily(): string {
           </form>
           <h3>코드·링크로 참여</h3>
           <form id="family-join" class="settings-form">
-            <label>가족 코드 또는 초대 링크·문구
+            <label>멤버 코드 또는 초대 링크·문구
               <textarea name="code" rows="3" placeholder="K7M2PQ 또는 초대 링크/카톡 문구 전체 붙여넣기" autocapitalize="characters" autocomplete="off" spellcheck="false" required>${escapeHtml(state.view === 'family' ? state.prefillJoinCode : '')}</textarea>
             </label>
             <label>내 이름
@@ -4882,7 +4898,7 @@ function renderFamily(): string {
       .join('')
     body = `
       <form id="family-notice-form" class="settings-form">
-        <label>제목 <input name="title" required maxlength="80" placeholder="주말 가족 회의" /></label>
+        <label>제목 <input name="title" required maxlength="80" placeholder="주말 멤버 모임" /></label>
         <label>내용 <textarea name="body" rows="3" maxlength="1000" placeholder="일요일 오후 2시 거실"></textarea></label>
         <div class="toggle-row"><span>상단 고정</span><input type="checkbox" name="pinned" /></div>
         <button class="primary-btn" type="submit">공지 등록</button>
@@ -4924,8 +4940,9 @@ function renderFamily(): string {
     <section class="panel family-panel ${chatMode ? 'space-chat-panel' : 'view-scroll'}">
       <div class="family-head ${chatMode ? 'compact' : ''}">
         <div>
-          <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 온라인 <strong>${online}</strong></p>
+          <h2 class="section-title">멤버</h2>
+          ${membersSpaceSwitcherHtml('family')}
+          <p class="hint"><strong>${escapeHtml(room.name)}</strong> · 코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.familySyncStatus)} · 온라인 <strong>${online}</strong></p>
           ${chatMode ? '' : `<p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>`}
         </div>
       </div>
@@ -4965,13 +4982,14 @@ function renderFriends(): string {
   if (!room) {
     return `
       <section class="panel view-scroll family-panel friends-panel">
-        <h2 class="section-title">FRIENDS</h2>
-        <p class="hint">친구 단체 대화 · 공지 · 일정을 한곳에서. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다. 게임 순위는 게임 탭에서 공유하세요.</p>
+        <h2 class="section-title">멤버</h2>
+        ${membersSpaceSwitcherHtml('friends')}
+        <p class="hint">두 번째 멤버 공간 · 대화 · 공지 · 일정. 같은 코드로 참여하면 온라인일 때 서로 동기화됩니다. 게임 순위는 게임 탭에서 공유하세요.</p>
         <div class="family-setup">
-          <h3>새 친구 공간</h3>
+          <h3>새 멤버</h3>
           <form id="friends-create" class="settings-form">
             <label>멤버 이름
-              <input name="name" value="우리 친구" maxlength="40" required />
+              <input name="name" value="멤버 2" maxlength="40" required />
             </label>
             <label>내 이름
               <input name="member" value="${escapeAttr(state.settings.displayName)}" maxlength="20" required />
@@ -4980,7 +4998,7 @@ function renderFriends(): string {
           </form>
           <h3>코드·링크로 참여</h3>
           <form id="friends-join" class="settings-form">
-            <label>친구 코드 또는 초대 링크·문구
+            <label>멤버 코드 또는 초대 링크·문구
               <textarea name="code" rows="3" placeholder="K7M2PQ 또는 초대 링크/카톡 문구 전체 붙여넣기" autocapitalize="characters" autocomplete="off" spellcheck="false" required>${escapeHtml(state.view === 'friends' ? state.prefillJoinCode : '')}</textarea>
             </label>
             <label>내 이름
@@ -5021,7 +5039,7 @@ function renderFriends(): string {
       .join('')
     body = `
       <div class="space-chat-shell">
-        <div class="fam-chat friends-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">친구가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
+        <div class="fam-chat friends-chat chat-thread">${msgs || '<div class="empty">첫 메시지를 남겨 보세요.<br/><span class="hint">멤버가 같은 코드로 앱을 열면 대화·이름이 동기화됩니다.</span></div>'}</div>
         <div id="friends-voice-caption" class="voice-caption ${state.listening && state.dictationTarget === 'friends' ? 'live' : ''}" ${
           state.listening && state.dictationTarget === 'friends' || state.voiceHint && state.dictationTarget === 'friends' ? '' : 'hidden'
         }>${escapeHtml(
@@ -5037,7 +5055,7 @@ function renderFriends(): string {
             <label class="icon-btn file-scan-btn" title="${escapeAttr(t('chat.media.add'))}">＋
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" data-space-media="friends" hidden />
             </label>
-            <input id="friends-draft" name="text" type="text" placeholder="친구에게 메시지…" maxlength="500" autocomplete="off" />
+            <input id="friends-draft" name="text" type="text" placeholder="멤버에게 메시지…" maxlength="500" autocomplete="off" />
             <button class="primary-btn send-btn" type="submit">${escapeHtml(t('common.send'))}</button>
           </form>
           <div class="row-btns space-chat-tools">
@@ -5105,8 +5123,9 @@ function renderFriends(): string {
     <section class="panel family-panel friends-panel ${chatMode ? 'space-chat-panel' : 'view-scroll'}">
       <div class="family-head friends-head ${chatMode ? 'compact' : ''}">
         <div>
-          <h2 class="section-title">${escapeHtml(room.name)}</h2>
-          <p class="hint">코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 온라인 <strong>${online}</strong></p>
+          <h2 class="section-title">멤버</h2>
+          ${membersSpaceSwitcherHtml('friends')}
+          <p class="hint"><strong>${escapeHtml(room.name)}</strong> · 코드 <strong>${escapeHtml(room.code)}</strong> · ${escapeHtml(state.friendsSyncStatus)} · 온라인 <strong>${online}</strong></p>
           ${chatMode ? '' : `<p class="hint">등록 멤버 ${memberNames.length}명: ${members}</p>`}
         </div>
       </div>
@@ -5122,15 +5141,15 @@ function renderFriends(): string {
           <button type="button" class="ghost-btn" data-action="friends-join-share">내 참여 확인 보내기</button>
         </div>
         <form id="friends-join-receipt" class="settings-form">
-          <label>친구가 보낸 참여 확인 문구
-            <textarea name="receipt" rows="3" placeholder="AIZIO 친구 참여 확인 … 붙여넣기" required></textarea>
+          <label>멤버가 보낸 참여 확인 문구
+            <textarea name="receipt" rows="3" placeholder="AIZIO 멤버 참여 확인 … 붙여넣기" required></textarea>
           </label>
           <button class="primary-btn" type="submit">멤버로 등록</button>
         </form>
         <p class="hint">보통은 초대 링크만으로 멤버가 자동 등록됩니다.</p>
         <form id="friends-switch" class="settings-form">
           <label>다른 코드로 전환
-            <textarea name="code" rows="2" placeholder="새 친구 코드 또는 링크" required></textarea>
+            <textarea name="code" rows="2" placeholder="새 멤버 코드 또는 링크" required></textarea>
           </label>
           <button class="primary-btn" type="submit">전환 참여</button>
         </form>
@@ -5274,18 +5293,18 @@ function renderSettings(): string {
         })()}
         <h3 class="subsection-title">채팅 알림</h3>
         <div class="toggle-row">
-          <span>멤버 대화 알림</span>
+          <span>멤버 1 대화 알림</span>
           <input type="checkbox" name="notifyFamilyChat" ${s.notifyFamilyChat !== false ? 'checked' : ''} />
         </div>
         <div class="toggle-row">
-          <span>친구 대화 알림</span>
+          <span>멤버 2 대화 알림</span>
           <input type="checkbox" name="notifyFriendsChat" ${s.notifyFriendsChat !== false ? 'checked' : ''} />
         </div>
         <div class="toggle-row">
           <span>해당 탭을 보고 있을 때도 알림</span>
           <input type="checkbox" name="notifyWhileOpen" ${s.notifyWhileOpen ? 'checked' : ''} />
         </div>
-        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 가족·친구 채팅 백그라운드 푸시는 홈 화면 PWA + 아래 버튼으로 켤 수 있습니다. 개인 일정(스마트 리마인더)의 앱 종료 알림은 푸시 서버가 필요하며, 서버 없이는 완성되지 않습니다.</p>
+        <p class="hint">알림 권한: <strong>${escapeHtml(pushPerm)}</strong>. 멤버 채팅 백그라운드 푸시는 홈 화면 PWA + 아래 버튼으로 켤 수 있습니다. 개인 일정(스마트 리마인더)의 앱 종료 알림은 푸시 서버가 필요하며, 서버 없이는 완성되지 않습니다.</p>
         <label>일정 알림 내용 표시
           <select name="notifyPrivacyMode">
             <option value="simple" ${(s.notifyPrivacyMode || 'simple') === 'simple' ? 'selected' : ''}>간단히 (예약된 일정 시간입니다)</option>
@@ -5903,7 +5922,7 @@ function bindLocationGate(): void {
     } else if (invited === 'failed') {
       /* error flash already set */
     } else {
-      showFlash('초대를 처리하지 못했습니다. 친구/가족 탭에서 코드를 붙여넣으세요.')
+      showFlash('초대를 처리하지 못했습니다. 멤버 탭에서 코드를 붙여넣으세요.')
     }
     render()
     void bootSpaceSyncAndPush()
@@ -6166,7 +6185,7 @@ function bind(): void {
       const existing = loadFriendsRoom()
       if (existing) {
         const ok = window.confirm(
-          `이미 친구 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
+          `이미 멤버 공간 «${existing.name}»(코드 ${existing.code})이 있습니다.\n새로 만들면 대화·공지·일정이 이 기기에서 사라집니다. 계속할까요?`,
         )
         if (!ok) return
         await disconnectFriendsSync()
@@ -6177,7 +6196,7 @@ function bind(): void {
       persistMemberName(member)
       createFriendsRoom(String(fd.get('name') || ''), member)
       state.friendsTab = 'chat'
-      showFlash('친구 공간을 만들었습니다. «초대 공유»로 친구를 초대하세요.')
+      showFlash('멤버를 만들었습니다. «초대 공유»로 초대하세요.')
       render()
     })()
   })
@@ -6302,7 +6321,7 @@ function bind(): void {
       memberId: room.memberId,
       memberName: room.memberName,
     })
-    void shareText(built.message, { title: 'AIZIO 친구 참여 확인' }).then((r) => {
+    void shareText(built.message, { title: 'AIZIO 멤버 참여 확인' }).then((r) => {
       if (r.ok) {
         showFlash('참여 확인을 공유했습니다. (오프라인 등록용)')
         return
@@ -6362,7 +6381,7 @@ function bind(): void {
     }
     // WebView / blocked clipboard → select visible text, then try native share
     selectVisibleInviteText(kind === 'text' ? text : `${label}\n${payload}`)
-    const title = space === 'family' ? 'AIZIO 멤버 초대' : 'AIZIO 친구 초대'
+    const title = 'AIZIO 멤버 초대'
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       void navigator
         .share({ title, text: payload, url: kind === 'text' ? link : undefined })
@@ -6383,7 +6402,7 @@ function bind(): void {
       setShareStatus('초대 문구가 없습니다.', false)
       return
     }
-    const title = kind === 'family' ? 'AIZIO 멤버 초대' : 'AIZIO 친구 초대'
+    const title = 'AIZIO 멤버 초대'
     const url = buildSpaceInviteUrl(kind, code, appShareUrl())
     void shareText(text, { title, url }).then((r) => setShareStatus(r.message, r.ok))
   })
@@ -6423,7 +6442,7 @@ function bind(): void {
     void (async () => {
       await disconnectFriendsSync()
       leaveFriendsRoom()
-      showFlash('친구 공간에서 나갔습니다.')
+      showFlash('멤버에서 나갔습니다.')
       render()
     })()
   })
@@ -6432,12 +6451,12 @@ function bind(): void {
     const room = loadFriendsRoom()
     if (!room) return
     const ok = window.confirm(
-      `친구 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
+      `멤버 대화 ${room.messages.length}개를 지울까요?\n공지·일정·멤버는 그대로 둡니다.`,
     )
     if (!ok) return
     const clearedAt = Date.now()
     if (clearFriendsChat(clearedAt)) {
-      showFlash('친구 대화를 초기화했습니다.')
+      showFlash('멤버 대화를 초기화했습니다.')
       render()
       scrollSpaceChat('friends')
       void (async () => {

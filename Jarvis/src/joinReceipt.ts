@@ -25,7 +25,7 @@ export function buildJoinReceipt(input: {
     kind: input.kind,
     code: input.code.trim().toUpperCase(),
     memberId: input.memberId.slice(0, 64),
-    memberName: (input.memberName || '친구').trim().slice(0, 20) || '친구',
+    memberName: (input.memberName || '멤버').trim().slice(0, 20) || '멤버',
     at: input.at ?? Date.now(),
   }
   const payload = [
@@ -37,7 +37,7 @@ export function buildJoinReceipt(input: {
     receipt.memberName.replace(/\|/g, ' '),
     String(receipt.at),
   ].join('|')
-  const label = receipt.kind === 'family' ? '멤버' : '친구'
+  const label = '멤버'
   const message = [
     `AIZIO ${label} 참여 확인 (오프라인용)`,
     `${receipt.memberName} · 코드 ${receipt.code}`,
@@ -73,7 +73,7 @@ export function parseJoinReceipt(raw: string): { ok: true; receipt: JoinReceipt 
   const kind = parts[2]
   const code = (parts[3] || '').toUpperCase()
   const memberId = parts[4] || ''
-  const memberName = parts[5] || '친구'
+  const memberName = parts[5] || '멤버'
   const at = Number(parts[6])
   if ((kind !== 'family' && kind !== 'friends') || !code || !memberId) {
     return { ok: false, message: '참여 확인 필드를 읽지 못했습니다.' }
@@ -85,7 +85,7 @@ export function parseJoinReceipt(raw: string): { ok: true; receipt: JoinReceipt 
       kind,
       code,
       memberId: memberId.slice(0, 64),
-      memberName: memberName.slice(0, 20) || '친구',
+      memberName: memberName.slice(0, 20) || '멤버',
       at: Number.isFinite(at) ? at : Date.now(),
     },
   }

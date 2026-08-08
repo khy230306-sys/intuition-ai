@@ -2157,6 +2157,46 @@ body[data-jarvis-view='friends'] .orb::after {
   margin-bottom: 8px;
 }
 
+.members-space-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+.members-space-tab {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  border-radius: 12px;
+  padding: 9px 10px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
+}
+
+.members-space-tab.active {
+  color: var(--cyan-bright);
+  border-color: rgba(0, 210, 190, 0.45);
+  background: rgba(0, 210, 190, 0.12);
+}
+
+.members-space-empty {
+  opacity: 0.55;
+  font-weight: 500;
+}
+
+.space-chat-panel .members-space-switch {
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
 .family-setup h3 {
   margin: 18px 0 8px;
   font-size: 0.95rem;

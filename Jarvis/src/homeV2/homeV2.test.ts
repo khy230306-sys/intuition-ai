@@ -218,7 +218,7 @@ describe('HOME v2 render', () => {
     expect(more).toContain('data-view="ai-camera"')
     expect(more).toContain('data-view="family"')
     expect(more).toContain('멤버')
-    expect(more).toContain('data-view="friends"')
+    expect(more).not.toContain('data-view="friends"')
     expect(more).toContain('data-view="settings"')
     expect(more).toContain('data-action="install-show-guide"')
     expect(more).toContain('번역하기')

@@ -69,7 +69,7 @@ export function buildSmartCard(input: SmartCardInput): SmartCardModel {
     if (fr > 0) {
       items.push({
         id: 'msg-fr',
-        label: `${input.friendsName || '친구방'} · 새 메시지 ${fr}개`,
+        label: `${input.friendsName || '멤버 2'} · 새 메시지 ${fr}개`,
       })
     }
     return {

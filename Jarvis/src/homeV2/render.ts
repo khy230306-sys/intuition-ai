@@ -220,8 +220,8 @@ function moreItem(label: string, attrs: string): string {
  */
 export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string {
   const inbox = getHomeSpaceInbox()
-  const famBadge = inbox.family.unread > 0 ? ` (${inbox.family.unread > 99 ? '99+' : inbox.family.unread})` : ''
-  const frBadge = inbox.friends.unread > 0 ? ` (${inbox.friends.unread > 99 ? '99+' : inbox.friends.unread})` : ''
+  const memUnread = (inbox.family.unread || 0) + (inbox.friends.unread || 0)
+  const memBadge = memUnread > 0 ? ` (${memUnread > 99 ? '99+' : memUnread})` : ''
   const showInstall = opts?.showInstall ?? shouldShowInstallButton()
   return `
     <div class="home-v2-more" data-home-v2-more="1" role="dialog" aria-label="메뉴">
@@ -238,7 +238,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
             ${moreItem('홈', 'data-view="home"')}
             ${moreItem('대화', 'data-view="chat"')}
             ${moreItem('일정', 'data-view="schedule"')}
-            ${moreItem(`가족${famBadge}`, 'data-view="family-helper"')}
+            ${moreItem('가족 도우미', 'data-view="family-helper"')}
             ${moreItem('더보기 · 검색', 'data-view="more"')}
           </ul>
         </div>
@@ -249,8 +249,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
             ${moreItem('AI 카메라', 'data-view="ai-camera"')}
             ${moreItem('AIZIO PLAY', 'data-view="games"')}
             ${moreItem('번역하기', 'data-action="home-v2-quick" data-quick-id="translate"')}
-            ${moreItem(`멤버${famBadge}`, 'data-view="family"')}
-            ${moreItem(`친구${frBadge}`, 'data-view="friends"')}
+            ${moreItem(`멤버${memBadge}`, 'data-view="family"')}
             ${moreItem('설정', 'data-view="settings"')}
             ${showInstall ? moreItem('홈 화면 설치 방법', 'data-action="install-show-guide"') : ''}
             ${moreItem('진단', 'data-action="home-v2-goto-diag"')}

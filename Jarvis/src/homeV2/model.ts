@@ -172,8 +172,8 @@ export function buildHomeV2Model(opts: {
         .map((r) => r.text),
       familyUnread: inbox.family.unread,
       friendsUnread: inbox.friends.unread,
-      familyName: inbox.family.hasRoom ? inbox.family.name : '멤버',
-      friendsName: inbox.friends.hasRoom ? inbox.friends.name : '친구방',
+      familyName: inbox.family.hasRoom ? inbox.family.name : '멤버 1',
+      friendsName: inbox.friends.hasRoom ? inbox.friends.name : '멤버 2',
       activeFocusLabel: (() => {
         try {
           if (!isLifeOs2Enabled('focusEnabled')) return null

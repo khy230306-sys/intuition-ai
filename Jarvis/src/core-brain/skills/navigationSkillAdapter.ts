@@ -36,7 +36,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
       success: false,
       status: 'needs_user_action',
       data: {},
-      message: '이동할 메뉴를 말해 주세요. 예: 「설정 열어줘」 · 「가족 화면 가줘」',
+      message: '이동할 메뉴를 말해 주세요. 예: 「설정 열어줘」 · 「멤버 화면 가줘」',
       error: { code: 'user_action_required' },
     }
   }
@@ -48,7 +48,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     invest: '투자',
     life: '생활',
     family: '멤버',
-    friends: '친구',
+    friends: '멤버',
     games: '게임',
     actions: '빠른 실행',
     settings: '설정',
@@ -56,7 +56,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     customers: '손님관리',
     navigation: '길안내',
     'ai-camera': 'AI 카메라',
-    'family-helper': '가족',
+    'family-helper': '가족 도우미',
     travel: '여행',
     restaurant: '맛집',
   }

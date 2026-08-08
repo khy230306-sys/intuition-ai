@@ -20,7 +20,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
         hint: 'Personal calendar create is not wired; use family/friends tabs for shared events.',
       },
       message:
-        '현재 개인 일정 추가 기능은 연결되어 있지 않습니다. 가족·친구 공간 일정은 각 탭에서 추가해 주세요.',
+        '현재 개인 일정 추가 기능은 연결되어 있지 않습니다. 멤버 일정은 멤버 탭에서 추가해 주세요.',
       speakText: '개인 일정 추가는 아직 연결되지 않았어요.',
       error: { code: 'no_skill_available' },
     }
@@ -63,7 +63,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
       status: 'partial',
       data: { count: 0 },
       message:
-        '다가오는 가족·친구 일정이 없습니다. 개인 전용 캘린더는 아직 연결되지 않았습니다. 가족/친구 탭에서 일정을 추가할 수 있어요.',
+        '다가오는 멤버 일정이 없습니다. 개인 전용 캘린더는 아직 연결되지 않았습니다. 멤버 탭에서 일정을 추가할 수 있어요.',
       speakText: '등록된 일정이 없어요.',
       error: null,
     }

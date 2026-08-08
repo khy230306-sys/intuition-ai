@@ -33,6 +33,9 @@ import {
   type ShellReadyReport,
 } from './offline/shellReady'
 import { mirrorDurableLocalData, restoreDurableLocalData } from './offline/idbKv'
+import { renderAnywhereSettingsPanel, renderAnywhereEngineBadge } from './anywhere/anywhereUi'
+import { markAnywhereOfflineReady } from './anywhere/packState'
+import type { DeviceCapability } from './anywhere/deviceCapability'
 import {
   renderOfflineBadge,
   renderOfflineSettingsPanel,
@@ -446,7 +449,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.31.0'
+const APP_VERSION = '1.32.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -812,6 +815,7 @@ const state = {
   netStatus: (typeof navigator === 'undefined' || navigator.onLine ? 'online' : 'offline') as NetStatus,
   shellReady: null as ShellReadyReport | null,
   storageBytes: 0,
+  deviceCapability: null as DeviceCapability | null,
   outboxModalOpen: false,
   /** Latest version string from jarvis-app.shipstatic.com, if checked. */
   remoteVersion: null as string | null,
@@ -3153,6 +3157,7 @@ function renderBrand(): string {
       </div>
       <div class="brand-bar-right">
         ${renderOfflineBadge(state.netStatus)}
+        ${renderAnywhereEngineBadge()}
         <div class="status-pill">${status}</div>
         ${topActions}
       </div>
@@ -4989,6 +4994,10 @@ function renderSettings(): string {
     <section class="panel view-scroll">
       <h2 class="section-title">SETTINGS</h2>
       ${renderUpdateCard()}
+      ${renderAnywhereSettingsPanel({
+        appVersion: APP_VERSION,
+        device: state.deviceCapability,
+      })}
       ${renderOfflineSettingsPanel({
         appVersion: APP_VERSION,
         netStatus: state.netStatus,
@@ -8155,6 +8164,66 @@ function bind(): void {
     })
   })
 
+  document.querySelectorAll('[data-action="anywhere-download-pack"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.packId || ''
+      if (!id) return
+      showFlash('오프라인 팩 다운로드 중… (완료될 때까지 앱을 열어 두세요)')
+      void import('./anywhere/localAiRuntime').then(({ downloadPack }) =>
+        downloadPack(id, (p) => {
+          if (p.progress === 100) showFlash('다운로드 완료')
+          else if (p.progress > 0 && p.progress % 20 === 0) showFlash(`다운로드 ${p.progress}%`)
+        }).then((ok) => {
+          showFlash(ok ? '설치 완료 · 비행기 모드에서도 사용 가능' : '다운로드 실패 · 온라인에서 다시 시도')
+          render()
+        }),
+      )
+    })
+  })
+  document.querySelectorAll('[data-action="anywhere-delete-pack"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.packId || ''
+      if (!id || !confirm('이 오프라인 AI/언어팩만 삭제할까요? 일정·메모는 삭제되지 않습니다.')) return
+      void import('./anywhere/localAiRuntime').then(({ deletePack }) => {
+        void deletePack(id)
+        showFlash('팩을 삭제했습니다')
+        render()
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="anywhere-download-recommended"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showFlash('추천 Lite 오프라인 AI 다운로드…')
+      void import('./anywhere/localAiRuntime').then(({ downloadPack }) =>
+        downloadPack('chat-smollm2-135m').then((ok) => {
+          showFlash(ok ? '오프라인 AI Lite 설치 완료' : '다운로드 실패')
+          render()
+        }),
+      )
+    })
+  })
+  document.querySelectorAll('[data-action="anywhere-prepare-travel"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void import('./anywhere/travelOfflinePack').then(({ ensureSampleHochiminhPack, formatTravelPackReply }) => {
+        const pack = ensureSampleHochiminhPack()
+        showFlash('여행 오프라인 팩 준비됨')
+        pushMsg('assistant', formatTravelPackReply(pack))
+        saveChat(state.messages)
+        state.view = 'chat'
+        render()
+      })
+    })
+  })
+  document.querySelectorAll('[data-action="anywhere-persist-storage"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void import('./anywhere/deviceCapability').then(({ requestPersistentStorage }) =>
+        requestPersistentStorage().then((ok) => {
+          showFlash(ok ? '저장공간 고정 허용됨' : '브라우저가 저장공간 고정을 거부했거나 미지원입니다')
+        }),
+      )
+    })
+  })
+
   document.querySelectorAll('[data-action="offline-continue"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       showFlash('오프라인으로 계속합니다 · 로컬 기능을 사용하세요')
@@ -8269,9 +8338,11 @@ function boot(): void {
       })
     },
     onOfflineReady() {
-      showFlash('오프라인 실행 준비 완료 · 홈 화면에서도 열 수 있습니다')
+      markAnywhereOfflineReady(true)
+      showFlash('AIZIO Anywhere 오프라인 준비 완료')
       void warmAppShell(APP_VERSION).then(() => verifyAppShell(APP_VERSION)).then((report) => {
         state.shellReady = report
+        if (report.ready) markAnywhereOfflineReady(true)
       })
     },
     onRegisteredSW(_url, reg) {
@@ -8284,6 +8355,10 @@ function boot(): void {
         .then(() => verifyAppShell(APP_VERSION))
         .then((report) => {
           state.shellReady = report
+          if (report.ready) {
+            markAnywhereOfflineReady(true)
+            showFlash('AIZIO Anywhere 오프라인 준비 완료')
+          }
         })
     },
   })
@@ -8646,6 +8721,11 @@ function bootAppCore(): void {
   render()
   void refreshRemoteVersionBadge()
   void mirrorDurableLocalData()
+  void import('./anywhere/deviceCapability').then(({ probeDeviceCapability }) =>
+    probeDeviceCapability().then((cap) => {
+      state.deviceCapability = cap
+    }),
+  )
 }
 
 boot()

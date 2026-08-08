@@ -119,13 +119,10 @@ import {
 } from './friendsStore'
 import { broadcastFriendsPacket } from './friendsSyncLazy'
 import { openShareUi, shareBackupFile } from './shareKit'
-import { aiEngineErrorText } from './ai'
-import { aizioLocalChat, shouldUseAizioLocalChat } from './aizioAi'
 import { hasAnyConfiguredProvider, runHybridChat } from './ai-providers'
 import type { BrainReply, JarvisSettings } from './types'
 import {
   detectEverydayIntent,
-  localCasualReply,
   looksLikeSttGarbage,
   wantsWeatherCommand,
 } from './spokenCommand'
@@ -819,6 +816,67 @@ export async function think(
         if (orchPlan) tr.debug = { ...(tr.debug || {}), orch: orchPlan }
         return tr
       }
+    }
+  }
+
+  // —— AIZIO Anywhere: travel snapshot + offline Local chat must beat live travel search ——
+  // Otherwise 「호텔 주소」「문장 바꿔줘: 호텔까지…」 are stolen by Action Agent slots.
+  {
+    try {
+      const { getNetStatus } = await import('./offline/networkStatus')
+      const net = getNetStatus()
+      const offline = net === 'offline' || net === 'captive'
+      const anywhereText = strippedForPlan
+
+      if (/여행\s*오프라인\s*준비|오프라인\s*여행\s*팩/i.test(anywhereText)) {
+        const { ensureSampleHochiminhPack, formatTravelPackReply } = await import(
+          './anywhere/travelOfflinePack'
+        )
+        const pack = ensureSampleHochiminhPack()
+        return {
+          text: `여행 오프라인 팩을 준비했어요.\n\n${formatTravelPackReply(pack)}`,
+          speak: true,
+        }
+      }
+
+      if (
+        /호치민\s*일정|호텔\s*주소|숙소\s*주소|저장된\s*(호텔|항공|여행)|여행\s*(오프라인\s*)?(정보|팩)/i.test(
+          anywhereText,
+        ) &&
+        !/가격|요금|예약\s*해|찾아|검색/i.test(anywhereText)
+      ) {
+        const { findTravelPack, formatTravelPackReply, listTravelPacks } = await import(
+          './anywhere/travelOfflinePack'
+        )
+        const pack = findTravelPack(anywhereText) || listTravelPacks()[0]
+        if (pack) {
+          return { text: formatTravelPackReply(pack), speak: true }
+        }
+        if (offline) {
+          return {
+            text: '저장된 여행 오프라인 팩이 없어요. 온라인에서 「여행 오프라인 준비」를 한 뒤 다시 물어봐 주세요.',
+            speak: true,
+          }
+        }
+      }
+
+      // Offline generative / polish / quiz — skip live hotel/flight Action Agent
+      // (do not blanket-refuse network facts here — FX/lifestyle/etc. have their own fallbacks)
+      if (
+        offline &&
+        /(자연스럽|바꿔\s*줘|다듬|요약해|설명해|아이디어|퀴즈|심심|읽어\s*줘|문장)/i.test(anywhereText) &&
+        !/(날씨|항공권|표\s*값|호텔\s*가격|맛집\s*찾|예약\s*해)/i.test(anywhereText)
+      ) {
+        const { runRoutedChat } = await import('./anywhere/cloudLocalRouter')
+        const routed = await runRoutedChat({
+          message: anywhereText,
+          history,
+          displayName: name,
+        })
+        return { text: routed.text, speak: routed.speak }
+      }
+    } catch {
+      /* anywhere early gate must never block */
     }
   }
 
@@ -1570,32 +1628,9 @@ export async function think(
     return { text: 'YouTube를 엽니다.', speak: true, action: () => openApp('유튜브') }
   }
 
-  // Optional cloud upgrade (server/device keys). Built-in AIZIO chat always remains.
-  if (hasAnyConfiguredProvider()) {
-    try {
-      const cloud = await callCloudLLM(text, settings, history)
-      if (cloud) return enrich({ text: cloud, speak: true })
-    } catch (err) {
-      const fun = localFunReply(text)
-      if (fun) return enrich({ text: fun, speak: true })
-      if (shouldUseAizioLocalChat(text)) {
-        const local = await aizioLocalChat({ text, history, displayName: name })
-        return enrich(local)
-      }
-      return enrich({
-        text: [
-          aiEngineErrorText(err),
-          '',
-          '지금은 내장 AIZIO로 이어서 대화할 수 있어요. 편하게 다시 말해 주세요.',
-        ].join('\n'),
-        speak: true,
-      })
-    }
-  }
-
-  // Soft fallback: if looks like ticker, try quote
+  // Soft fallback: if looks like ticker, try quote (online only)
   const maybe = extractTickerFromText(text)
-  if (maybe && text.length < 40) {
+  if (maybe && text.length < 40 && typeof navigator !== 'undefined' && navigator.onLine !== false) {
     try {
       const q = await fetchQuote(maybe.symbol)
       if (q) return { text: formatQuote(q) + '\n면책: 참고용입니다.', speak: true }
@@ -1604,17 +1639,6 @@ export async function think(
     }
   }
 
-  // Built-in AIZIO conversation — no user API key required
-  if (shouldUseAizioLocalChat(text) && !looksLikeSttGarbage(text)) {
-    const local = await aizioLocalChat({ text, history, displayName: name })
-    return enrich(local)
-  }
-
-  // Readable casual chat (compliment / thanks / emotion) — never STT-error path
-  const casual = localCasualReply(text)
-  if (casual) return enrich({ text: casual, speak: true })
-
-  // STT garbage only for true gibberish — not for unknown-but-readable chat
   if (looksLikeSttGarbage(text)) {
     const lines = ['음성을 잘 듣지 못했어요. 다시 말해 주세요.']
     if (loadInterpretMode().active) {
@@ -1623,7 +1647,21 @@ export async function think(
     return { text: lines.join('\n'), speak: true }
   }
 
-  // Last resort: still stay in AIZIO voice
-  const local = await aizioLocalChat({ text, history, displayName: name })
-  return enrich(local)
+  // Automatic Cloud / Local AI router (AIZIO Anywhere)
+  const { runRoutedChat } = await import('./anywhere/cloudLocalRouter')
+  const routed = await runRoutedChat({
+    message: text,
+    history,
+    displayName: name,
+    runCloud: async () => {
+      if (!hasAnyConfiguredProvider()) return null
+      try {
+        const cloud = await callCloudLLM(text, settings, history)
+        return cloud ? { text: cloud } : null
+      } catch {
+        return null
+      }
+    },
+  })
+  return enrich({ text: routed.text, speak: routed.speak })
 }

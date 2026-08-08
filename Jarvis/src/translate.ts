@@ -88,7 +88,7 @@ export interface TranslateResult {
   offline?: boolean
   partial?: boolean
   /** Which engine produced the text when known. */
-  provider?: 'offline-dict' | 'mymemory' | 'hybrid-ai' | 'cache'
+  provider?: 'offline-dict' | 'mymemory' | 'hybrid-ai' | 'cache' | 'local-neural-mt'
 }
 
 function isOnline(): boolean {
@@ -166,6 +166,41 @@ export async function translateText(
         partial: false,
         provider: offline.method === 'cache' ? 'cache' : 'offline-dict',
       }
+    }
+
+    // Downloadable on-device neural MT (transformers.js) — real local inference
+    try {
+      const { localNeuralTranslate } = await import('./anywhere/localTranslateRuntime')
+      const neural = await localNeuralTranslate(q, resolvedFrom, to)
+      if ('text' in neural && neural.text) {
+        rememberTranslation(resolvedFrom, to, q, neural.text)
+        return {
+          ok: true,
+          text: neural.text,
+          from: resolvedFrom,
+          to,
+          offline: true,
+          provider: 'local-neural-mt',
+        }
+      }
+      // If offline and pack missing, surface install hint instead of opaque failure
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.onLine === false &&
+        'error' in neural &&
+        neural.error
+      ) {
+        return {
+          ok: false,
+          text: '',
+          from: resolvedFrom,
+          to,
+          offline: true,
+          error: neural.error,
+        }
+      }
+    } catch {
+      /* neural optional */
     }
 
     const online = await translateOnline(q, resolvedFrom, to)

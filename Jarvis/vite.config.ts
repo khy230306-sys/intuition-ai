@@ -13,6 +13,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     sourcemap: false,
   },
+  optimizeDeps: {
+    exclude: ['@huggingface/transformers'],
+  },
+  worker: {
+    format: 'es',
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

@@ -3763,6 +3763,28 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.aizio-engine-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.aizio-engine-cloud { color: #9ec5ff; border-color: rgba(158, 197, 255, 0.4); }
+.aizio-engine-local { color: #7dffc8; border-color: rgba(0, 210, 190, 0.4); }
+.aizio-anywhere-panel { margin: 10px 0 14px; }
+.aizio-anywhere-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.primary-btn.tiny, .ghost-btn.tiny { font-size: 0.78rem; padding: 6px 10px; }
 .aizio-offline-strip-compact {
   display: flex;
   align-items: center;

@@ -457,7 +457,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.32.2'
+const APP_VERSION = '1.32.3'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -3576,14 +3576,14 @@ function renderGames(): string {
         ? `<p class="game-meta">타일 탭 또는 스와이프로 빈칸으로 밀기 · 시간 안에 클리어 · 게임오버 시 화면 탭</p>`
         : state.arcadeId === 'gyeokpa'
           ? `<p class="game-meta">드래그 이동 · 자동사격 · 웨이브·보스 · 무기(펄스→트윈→스프레드) · 라이프·실드·폭탄 · 게임오버 시 화면 탭</p>`
-          : state.arcadeId === 'breakout' || state.arcadeId === 'pong' || state.arcadeId === 'dodge'
+          : state.arcadeId === 'breakout'
             ? `<p class="game-meta">좌우 드래그 · 게임오버 시 화면 탭</p>`
             : `<p class="game-meta">좌우 드래그 · 자동발사 · 초록 M / 금색 W(Lv20+) 아이템 · 게임오버 시 화면 탭</p>`
 
   return `
     <section class="panel view-scroll games-panel">
       <h2 class="section-title">ARCADE</h2>
-      <p class="hint">오프라인 아케이드 · 8종 · v${APP_VERSION}</p>
+      <p class="hint">오프라인 아케이드 · 6종 · v${APP_VERSION}</p>
       <p class="hint arcade-new-hint">새 게임 · 지오대시 (탭 점프 · 효과음)</p>
       <div class="game-tabs">${tabs}</div>
       <div class="arcade-toolbar">

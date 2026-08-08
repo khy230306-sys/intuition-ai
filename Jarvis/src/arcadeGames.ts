@@ -6,8 +6,6 @@ export type ArcadeId =
   | 'breakout'
   | 'shooter'
   | 'flappy'
-  | 'dodge'
-  | 'pong'
   | 'slide'
   | 'gyeokpa'
   | 'dash'
@@ -15,8 +13,6 @@ export type ArcadeId =
 export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   shooter: { title: '스페이스', blurb: '미사일 진화 · Lv20+ 와이드 · Lv21부터 속도 완화' },
   flappy: { title: '플래피', blurb: '기둥 5개마다 레벨업 · 간격 축소' },
-  dodge: { title: '닷지', blurb: '8개 회피마다 레벨업 · 낙하 가속' },
-  pong: { title: '퐁', blurb: '5회 받아칠 때마다 레벨업 · 공 가속' },
   breakout: { title: '벽돌깨기', blurb: '스테이지를 깨면 다음 레벨 · 벽돌·속도 증가' },
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
   gyeokpa: {
@@ -36,8 +32,6 @@ export type ArcadeBest = {
   breakout: number | null
   shooter: number | null
   flappy: number | null
-  dodge: number | null
-  pong: number | null
   slide: number | null
   gyeokpa: number | null
   dash: number | null
@@ -49,8 +43,6 @@ const EMPTY_BEST: ArcadeBest = {
   breakout: null,
   shooter: null,
   flappy: null,
-  dodge: null,
-  pong: null,
   slide: null,
   gyeokpa: null,
   dash: null,
@@ -112,10 +104,6 @@ export function unitsPerLevel(id: ArcadeId): number {
     case 'shooter':
       return 5
     case 'flappy':
-      return 5
-    case 'dodge':
-      return 8
-    case 'pong':
       return 5
     case 'slide':
       return 1
@@ -957,257 +945,6 @@ export function mountFlappy(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcad
       birdV = flap
       sfxUnlock()
       sfxJump()
-    },
-    restart: () => reset(),
-    getScore: () => score,
-    getLevel: () => level,
-    isOver: () => over,
-  }
-}
-
-/** —— DODGE —— */
-export function mountDodge(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
-  let w = 320
-  let h = 400
-  let playerX = 160
-  let hazards: Array<{ x: number; y: number; s: number; vy: number }> = []
-  let score = 0
-  let level = 1
-  let levelUpUntil = 0
-  let over = false
-  let spawn = 0
-  let elapsed = 0
-  const loop: Loop = { running: true, raf: 0, last: 0 }
-  const pw = 36
-  const ph = 18
-
-  function reset(): void {
-    const s = sizeCanvas(canvas)
-    w = s.w
-    h = s.h
-    playerX = w / 2
-    hazards = []
-    score = 0
-    level = 1
-    levelUpUntil = 0
-    over = false
-    spawn = 0
-    elapsed = 0
-    onScore?.(0, level)
-  }
-
-  function step(dt: number): void {
-    if (over) return
-    elapsed += dt
-    spawn += dt
-    const rate = Math.max(0.22, 0.95 - level * 0.07)
-    if (spawn > rate) {
-      spawn = 0
-      const s = 18 + Math.random() * 22
-      hazards.push({
-        x: s / 2 + Math.random() * (w - s),
-        y: -s,
-        s,
-        vy: 150 + level * 25 + Math.random() * 80,
-      })
-    }
-    for (const hz of hazards) hz.y += hz.vy * dt
-    const before = hazards.length
-    hazards = hazards.filter((hz) => hz.y - hz.s < h + 10)
-    const passed = before - hazards.length
-    if (passed > 0) {
-      score += passed
-      const next = levelFromUnits('dodge', score)
-      const noted = noteLevel('dodge', level, next, score, onScore)
-      level = noted.level
-      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
-      bumpBest('dodge', score)
-    }
-    const px = playerX - pw / 2
-    const py = h - 42
-    for (const hz of hazards) {
-      if (
-        px < hz.x + hz.s / 2 &&
-        px + pw > hz.x - hz.s / 2 &&
-        py < hz.y + hz.s / 2 &&
-        py + ph > hz.y - hz.s / 2
-      ) {
-        over = true
-        bumpBest('dodge', score)
-        bumpBestLevel('dodge', level)
-        break
-      }
-    }
-  }
-
-  function draw(): void {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const s = sizeCanvas(canvas)
-    w = s.w
-    h = s.h
-    ctx.fillStyle = '#0b121c'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#ff6b6b'
-    for (const hz of hazards) {
-      ctx.fillRect(hz.x - hz.s / 2, hz.y - hz.s / 2, hz.s, hz.s)
-    }
-    ctx.fillStyle = '#5affe8'
-    ctx.fillRect(playerX - pw / 2, h - 42, pw, ph)
-    drawHud(ctx, w, h, score, level, over, 'DODGE', { levelUpUntil })
-  }
-
-  function frame(t: number): void {
-    if (!loop.running) return
-    if (!loop.last) loop.last = t
-    const dt = Math.min(0.033, (t - loop.last) / 1000)
-    loop.last = t
-    step(dt)
-    draw()
-    loop.raf = requestAnimationFrame(frame)
-  }
-
-  reset()
-  loop.raf = requestAnimationFrame(frame)
-
-  return {
-    stop: () => {
-      loop.running = false
-      cancelAnimationFrame(loop.raf)
-    },
-    pointer: (x, _y, type) => {
-      if (over && type === 'down') {
-        reset()
-        return
-      }
-      if (over) return
-      playerX = Math.max(pw / 2, Math.min(w - pw / 2, x))
-    },
-    restart: () => reset(),
-    getScore: () => score,
-    getLevel: () => level,
-    isOver: () => over,
-  }
-}
-
-/** —— PONG (solo wall) —— */
-export function mountPong(canvas: HTMLCanvasElement, onScore?: ScoreCb): ArcadeHandle {
-  let w = 320
-  let h = 400
-  let paddleX = 120
-  let ball = { x: 160, y: 200, vx: 160, vy: -220 }
-  let score = 0
-  let level = 1
-  let levelUpUntil = 0
-  let over = false
-  const loop: Loop = { running: true, raf: 0, last: 0 }
-  const paddleH = 12
-  const ballR = 8
-
-  function paddleW(): number {
-    return Math.max(48, 86 - level * 4)
-  }
-
-  function reset(): void {
-    const s = sizeCanvas(canvas)
-    w = s.w
-    h = s.h
-    paddleX = w / 2 - paddleW() / 2
-    ball = { x: w / 2, y: h * 0.45, vx: 150 * (Math.random() < 0.5 ? -1 : 1), vy: -220 }
-    score = 0
-    level = 1
-    levelUpUntil = 0
-    over = false
-    onScore?.(0, level)
-  }
-
-  function step(dt: number): void {
-    if (over) return
-    const pw = paddleW()
-    const speedMul = 1 + (level - 1) * 0.08
-    ball.x += ball.vx * dt * speedMul
-    ball.y += ball.vy * dt * speedMul
-    if (ball.x - ballR < 0) {
-      ball.x = ballR
-      ball.vx = Math.abs(ball.vx)
-    }
-    if (ball.x + ballR > w) {
-      ball.x = w - ballR
-      ball.vx = -Math.abs(ball.vx)
-    }
-    if (ball.y - ballR < 28) {
-      ball.y = 28 + ballR
-      ball.vy = Math.abs(ball.vy)
-    }
-    const py = h - 36
-    if (
-      ball.vy > 0 &&
-      ball.y + ballR >= py &&
-      ball.y - ballR <= py + paddleH &&
-      ball.x >= paddleX &&
-      ball.x <= paddleX + pw
-    ) {
-      ball.y = py - ballR
-      ball.vy = -Math.abs(ball.vy) * 1.03
-      ball.vx = pongPaddleBounce(ball.x, paddleX, pw)
-      score += 1
-      const next = levelFromUnits('pong', score)
-      const noted = noteLevel('pong', level, next, score, onScore)
-      level = noted.level
-      if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
-      bumpBest('pong', score)
-    }
-    if (ball.y - ballR > h) {
-      over = true
-      bumpBest('pong', score)
-      bumpBestLevel('pong', level)
-    }
-  }
-
-  function draw(): void {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const s = sizeCanvas(canvas)
-    w = s.w
-    h = s.h
-    const pw = paddleW()
-    ctx.fillStyle = '#071018'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#5ac8ff'
-    ctx.fillRect(paddleX, h - 36, pw, paddleH)
-    ctx.fillStyle = '#fff'
-    ctx.beginPath()
-    ctx.arc(ball.x, ball.y, ballR, 0, Math.PI * 2)
-    ctx.fill()
-    drawHud(ctx, w, h, score, level, over, 'PONG', { levelUpUntil })
-  }
-
-  function frame(t: number): void {
-    if (!loop.running) return
-    if (!loop.last) loop.last = t
-    const dt = Math.min(0.033, (t - loop.last) / 1000)
-    loop.last = t
-    step(dt)
-    draw()
-    loop.raf = requestAnimationFrame(frame)
-  }
-
-  reset()
-  loop.raf = requestAnimationFrame(frame)
-
-  return {
-    stop: () => {
-      loop.running = false
-      cancelAnimationFrame(loop.raf)
-    },
-    pointer: (x, _y, type) => {
-      if (over && type === 'down') {
-        reset()
-        return
-      }
-      if (over) return
-      const pw = paddleW()
-      paddleX = Math.max(0, Math.min(w - pw, x - pw / 2))
     },
     restart: () => reset(),
     getScore: () => score,
@@ -2512,11 +2249,10 @@ export function mountArcade(
   if (id === 'breakout') return mountBreakout(canvas, onScore)
   if (id === 'shooter') return mountShooter(canvas, onScore)
   if (id === 'flappy') return mountFlappy(canvas, onScore)
-  if (id === 'dodge') return mountDodge(canvas, onScore)
   if (id === 'slide') return mountSlide(canvas, onScore)
   if (id === 'gyeokpa') return mountGyeokpa(canvas, onScore)
   if (id === 'dash') return mountDash(canvas, onScore)
-  return mountPong(canvas, onScore)
+  return mountShooter(canvas, onScore)
 }
 
 /** Pure helpers for unit tests */
@@ -2525,10 +2261,6 @@ export function breakoutPaddleBounce(ballX: number, paddleX: number, paddleW: nu
   return hit * 220
 }
 
-export function pongPaddleBounce(ballX: number, paddleX: number, paddleW: number): number {
-  const hit = (ballX - (paddleX + paddleW / 2)) / (paddleW / 2)
-  return hit * 260
-}
 
 export function flappyPipeCleared(birdX: number, pipeX: number, pipeW: number, already: boolean): boolean {
   if (already) return false

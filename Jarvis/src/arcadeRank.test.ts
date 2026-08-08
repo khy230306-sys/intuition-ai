@@ -48,11 +48,11 @@ describe('arcade rank share', () => {
     setArcadePlayerName('나')
     store.set(
       'jarvis.arcade.best.v1',
-      JSON.stringify({ breakout: 30, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 30, shooter: null, flappy: null, slide: null, gyeokpa: null, dash: null }),
     )
     store.set(
       'jarvis.arcade.bestLevel.v1',
-      JSON.stringify({ breakout: 2, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 2, shooter: null, flappy: null, slide: null, gyeokpa: null, dash: null }),
     )
     const me = getArcadePlayerId()
     expect(getArcadePlayerName()).toBe('나')
@@ -140,6 +140,6 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   })
 
   it('returns null card when no personal best', () => {
-    expect(buildMyScoreCard('pong')).toBeNull()
+    expect(buildMyScoreCard('slide')).toBeNull()
   })
 })

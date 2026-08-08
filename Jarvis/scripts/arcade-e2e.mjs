@@ -75,11 +75,11 @@ async function main() {
   await page.evaluate(() => {
     localStorage.setItem(
       'jarvis.arcade.best.v1',
-      JSON.stringify({ breakout: 12, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 12, shooter: null, flappy: null, slide: null, gyeokpa: null, dash: null }),
     )
     localStorage.setItem(
       'jarvis.arcade.bestLevel.v1',
-      JSON.stringify({ breakout: 2, shooter: null, flappy: null, dodge: null, pong: null }),
+      JSON.stringify({ breakout: 2, shooter: null, flappy: null, slide: null, gyeokpa: null, dash: null }),
     )
   })
   await page.click('[data-arcade="breakout"]')
@@ -133,7 +133,7 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   )
   await page.waitForFunction(() => (document.body.textContent || '').includes('미사일 진화'))
 
-  const ids = ['breakout', 'shooter', 'flappy', 'dodge', 'pong', 'slide', 'gyeokpa', 'dash']
+  const ids = ['breakout', 'shooter', 'flappy', 'slide', 'gyeokpa', 'dash']
   for (const id of ids) {
     await page.click(`[data-arcade="${id}"]`)
     await page.waitForFunction(

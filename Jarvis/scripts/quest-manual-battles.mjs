@@ -342,9 +342,10 @@ async function main() {
   const report = {
     results,
     passed:
-      results.some((r) => r.name === 'tutorial_battle' && r.hasCoach && (r.result === 'victory' || r.result === 'ongoing' || r.moves > 0)) &&
+      results.some((r) => r.name === 'tutorial_battle' && r.hasCoach && r.result === 'victory') &&
+      results.some((r) => r.name === 'continue_win' && r.result === 'victory') &&
       results.some((r) => r.moves > 0) &&
-      results.length === 3,
+      results.length >= 3,
   }
   writeFileSync('/opt/cursor/artifacts/quest-manual-battles.json', JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))

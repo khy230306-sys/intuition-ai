@@ -17,4 +17,9 @@ describe('isClearWeatherQuery colloquial', () => {
   it('rejects translate-framed weather', () => {
     expect(isClearWeatherQuery('오늘 날씨 좋다고 영어로 번역해줘')).toBe(false)
   })
+
+  it('matches place + 날씨는? without ask verb', () => {
+    expect(isClearWeatherQuery('호치민 날씨는?')).toBe(true)
+    expect(isClearWeatherQuery('울산 날씨?')).toBe(true)
+  })
 })

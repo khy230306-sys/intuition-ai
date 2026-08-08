@@ -59,6 +59,10 @@ export function requestLocation(timeoutMs = 20000): Promise<GeoFix> {
       reject(new Error('이 기기는 위치 서비스를 지원하지 않습니다.'))
       return
     }
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+    // Airplane mode / offline: prefer cache, short GPS budget (no 20s gate stall).
+    const budget = offline ? Math.min(timeoutMs, 2500) : timeoutMs
+    const cached = loadCachedFix()
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const fix: GeoFix = {
@@ -71,6 +75,10 @@ export function requestLocation(timeoutMs = 20000): Promise<GeoFix> {
         resolve(fix)
       },
       (err) => {
+        if (cached && (offline || err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)) {
+          resolve(cached)
+          return
+        }
         if (err.code === err.PERMISSION_DENIED) {
           reject(new Error('위치 권한이 거부되었습니다. 설정 → Safari/AIZIO → 위치 → 허용으로 바꿔 주세요.'))
         } else if (err.code === err.TIMEOUT) {
@@ -80,9 +88,9 @@ export function requestLocation(timeoutMs = 20000): Promise<GeoFix> {
         }
       },
       {
-        enableHighAccuracy: true,
-        timeout: timeoutMs,
-        maximumAge: 30_000,
+        enableHighAccuracy: !offline,
+        timeout: budget,
+        maximumAge: offline ? 86_400_000 : 30_000,
       },
     )
   })
@@ -125,7 +133,20 @@ export function formatFix(fix: GeoFix, place?: string | null): string {
 }
 
 export async function getLocationReport(): Promise<string> {
-  const fix = await requestLocation()
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  let fix: GeoFix
+  try {
+    fix = await requestLocation(offline ? 2500 : 12_000)
+  } catch (err) {
+    const cached = loadCachedFix()
+    if (cached) {
+      return `${formatFix(cached, null)}\n(저장된 최근 위치 · 실시간 GPS 없음)`
+    }
+    throw err
+  }
+  if (offline) {
+    return `${formatFix(fix, null)}\n(오프라인 · 주소 검색 생략 · 좌표/지도 링크 제공)`
+  }
   const place = await reverseGeocode(fix.lat, fix.lon)
   return formatFix(fix, place)
 }

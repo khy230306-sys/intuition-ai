@@ -1,6 +1,13 @@
 /** Network status with light health probe — not navigator.onLine alone. */
 
-export type NetStatus = 'online' | 'degraded' | 'offline' | 'checking'
+import {
+  classifyConnection,
+  connectionLabelKo,
+  offlineUserMessage,
+  type ConnectionKind,
+} from './connectionModel'
+
+export type NetStatus = 'online' | 'degraded' | 'offline' | 'checking' | 'captive'
 
 export type NetStatusListener = (status: NetStatus, detail?: { reason?: string }) => void
 
@@ -8,6 +15,8 @@ const HEALTH_PATH = './build-meta.json'
 const HEALTH_TIMEOUT_MS = 3500
 
 let current: NetStatus = typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline'
+let connectionKind: ConnectionKind =
+  typeof navigator !== 'undefined' && navigator.onLine ? 'ONLINE' : 'OFFLINE'
 let listeners: NetStatusListener[] = []
 let probeTimer: ReturnType<typeof setInterval> | null = null
 let probing = false
@@ -16,17 +25,42 @@ export function getNetStatus(): NetStatus {
   return current
 }
 
+export function getConnectionKind(): ConnectionKind {
+  return connectionKind
+}
+
+export function isEffectivelyOffline(status: NetStatus = current): boolean {
+  return status === 'offline' || status === 'captive'
+}
+
+function toNetStatus(kind: ConnectionKind, checking = false): NetStatus {
+  if (checking) return 'checking'
+  switch (kind) {
+    case 'ONLINE':
+      return 'online'
+    case 'DEGRADED':
+      return 'degraded'
+    case 'CAPTIVE_PORTAL':
+      return 'captive'
+    case 'OFFLINE':
+    default:
+      return 'offline'
+  }
+}
+
 export function netStatusLabelKo(status: NetStatus = current): string {
   switch (status) {
     case 'online':
-      return '온라인'
+      return connectionLabelKo('ONLINE')
     case 'degraded':
-      return '제한된 연결'
+      return connectionLabelKo('DEGRADED')
+    case 'captive':
+      return connectionLabelKo('CAPTIVE_PORTAL')
     case 'checking':
       return '연결 확인 중'
     case 'offline':
     default:
-      return '오프라인'
+      return connectionLabelKo('OFFLINE')
   }
 }
 
@@ -37,7 +71,12 @@ export function subscribeNetStatus(fn: NetStatusListener): () => void {
   }
 }
 
-function emit(status: NetStatus, reason?: string): void {
+function emit(status: NetStatus, reason?: string, kind?: ConnectionKind): void {
+  if (kind) connectionKind = kind
+  else if (status === 'offline') connectionKind = 'OFFLINE'
+  else if (status === 'online') connectionKind = 'ONLINE'
+  else if (status === 'degraded') connectionKind = 'DEGRADED'
+  else if (status === 'captive') connectionKind = 'CAPTIVE_PORTAL'
   if (current === status && !reason) return
   current = status
   for (const fn of listeners) {
@@ -54,7 +93,7 @@ export async function probeNetwork(opts?: { force?: boolean }): Promise<NetStatu
   probing = true
   const browserOnline = typeof navigator === 'undefined' ? true : navigator.onLine
   if (!browserOnline) {
-    emit('offline', 'navigator')
+    emit('offline', 'navigator', 'OFFLINE')
     probing = false
     return 'offline'
   }
@@ -71,20 +110,25 @@ export async function probeNetwork(opts?: { force?: boolean }): Promise<NetStatu
       signal: ctrl?.signal,
       headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
     })
-    if (res.ok) {
-      emit('online', 'health-ok')
+    const ct = (res.headers.get('content-type') || '').toLowerCase()
+    const jsonOk = res.ok && ct.includes('json')
+    if (jsonOk) {
+      emit('online', 'health-ok', 'ONLINE')
       return 'online'
     }
-    emit('degraded', `http-${res.status}`)
-    return 'degraded'
+    const kind = classifyConnection({
+      navigatorOnline: true,
+      healthOk: false,
+      healthStatus: res.status,
+    })
+    const net = toNetStatus(kind)
+    emit(net, `http-${res.status}`, kind)
+    return net
   } catch {
-    // Browser says online but probe failed — degraded if onLine, else offline
-    if (browserOnline) {
-      emit('degraded', 'probe-fail')
-      return 'degraded'
-    }
-    emit('offline', 'probe-fail')
-    return 'offline'
+    const kind = classifyConnection({ navigatorOnline: browserOnline, healthOk: false })
+    const net = toNetStatus(kind)
+    emit(net, 'probe-fail', kind)
+    return net
   } finally {
     if (timer) clearTimeout(timer)
     probing = false
@@ -128,19 +172,19 @@ export type OnlineOnlyFeature =
 export function onlineOnlyMessage(feature: OnlineOnlyFeature): string {
   switch (feature) {
     case 'weather':
-      return '현재 오프라인이라 최신 날씨를 확인할 수 없습니다.'
+      return offlineUserMessage('weather')
     case 'ai':
-      return '현재 오프라인이라 온라인 AI를 사용할 수 없습니다. 저장된 대화와 로컬 기능은 이용할 수 있습니다.'
+      return offlineUserMessage('ai_llm')
     case 'place-search':
-      return '현재 오프라인이라 장소 검색을 할 수 없습니다.'
+      return offlineUserMessage('places')
     case 'map-tiles':
-      return '현재 오프라인이라 새 지도 타일을 불러올 수 없습니다. 이미 본 지역만 제한적으로 표시될 수 있습니다.'
+      return offlineUserMessage('maps_tiles')
     case 'music-stream':
-      return '현재 오프라인이라 음악 스트리밍을 열 수 없습니다.'
+      return offlineUserMessage('music_stream')
     case 'push-diag':
-      return '현재 오프라인이라 푸시 서버 진단을 할 수 없습니다.'
+      return offlineUserMessage('push_sync')
     case 'web-search':
-      return '현재 오프라인이라 인터넷 검색을 할 수 없습니다.'
+      return '현재 인터넷 연결이 없어 검색할 수 없어요. 연결되면 바로 확인할 수 있습니다.'
     default:
       return '현재 오프라인이라 이 기능을 사용할 수 없습니다.'
   }

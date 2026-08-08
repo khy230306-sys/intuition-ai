@@ -63,9 +63,9 @@ describe('offline outbox', () => {
 
 describe('offline network + UI', () => {
   it('labels and online-only messages', () => {
-    expect(netStatusLabelKo('offline')).toBe('오프라인')
+    expect(netStatusLabelKo('offline')).toMatch(/오프라인/)
     expect(netStatusLabelKo('online')).toBe('온라인')
-    expect(onlineOnlyMessage('weather')).toMatch(/오프라인/)
+    expect(onlineOnlyMessage('weather')).toMatch(/인터넷 연결이 없어|오프라인/)
   })
 
   it('probeNetwork marks offline when navigator.onLine is false', async () => {

@@ -21,7 +21,7 @@ export function renderOfflineBadge(status: NetStatus): string {
   const cls =
     status === 'online'
       ? 'ok'
-      : status === 'degraded'
+      : status === 'degraded' || status === 'captive'
         ? 'warn'
         : status === 'checking'
           ? 'check'
@@ -29,29 +29,24 @@ export function renderOfflineBadge(status: NetStatus): string {
   return `<span class="aizio-net-badge aizio-net-${cls}" data-net-badge="1" title="네트워크 상태">${esc(label)}</span>`
 }
 
-/** Inline strip — not a modal. */
+/** Compact strip — never a full-screen error. */
 export function renderOfflineStrip(status: NetStatus): string {
   if (status === 'online') return ''
-  const title = status === 'checking' ? '연결 확인 중' : status === 'degraded' ? '제한된 연결' : '오프라인 모드'
-  const body =
+  const title =
     status === 'checking'
-      ? '네트워크 상태를 확인하는 중입니다.'
+      ? '연결 확인 중'
       : status === 'degraded'
-        ? '일부 온라인 기능이 지연되거나 실패할 수 있습니다. 로컬 데이터는 그대로 사용할 수 있습니다.'
-        : '인터넷 연결 없이 기기에 저장된 기능으로 작동 중입니다.'
+        ? '제한된 연결'
+        : status === 'captive'
+          ? '로그인 필요 네트워크'
+          : '오프라인 모드'
   return `
-    <div class="aizio-offline-strip" data-offline-strip="1" role="status">
+    <div class="aizio-offline-strip aizio-offline-strip-compact" data-offline-strip="1" role="status">
       <div class="aizio-offline-strip-copy">
         <strong>${esc(title)}</strong>
-        <p>${esc(body)}</p>
-        <p class="hint">사용 가능: 대화 기록 · 일정 · 할 일 · 메모 · 로컬 알림 · 내장 번역 · 저장된 가족/친구 · 설정</p>
-        <p class="hint">불가: 최신 날씨 · 인터넷 검색 · 온라인 AI · 새 지도/장소 · 클라우드 동기화</p>
       </div>
       <div class="aizio-offline-strip-actions">
-        <button type="button" class="ghost-btn tiny" data-action="offline-continue">오프라인으로 계속</button>
-        <button type="button" class="ghost-btn tiny" data-action="offline-recheck">연결 다시 확인</button>
-        <button type="button" class="ghost-btn tiny" data-action="offline-outbox">저장된 작업 보기</button>
-        <button type="button" class="ghost-btn tiny" data-action="offline-diag">진단</button>
+        <button type="button" class="ghost-btn tiny" data-action="offline-recheck">다시 확인</button>
       </div>
     </div>`
 }

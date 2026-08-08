@@ -35,6 +35,7 @@ export function renderChatShell(opts: {
         <button type="button" role="menuitem" data-view="schedule">일정</button>
         <button type="button" role="menuitem" data-view="family-helper">가족</button>
         <button type="button" role="menuitem" data-action="life-brief-open">브리핑</button>
+        <button type="button" role="menuitem" data-action="my-location">내 위치</button>
         <button type="button" role="menuitem" data-action="clear-chat">대화 초기화</button>
       </div>`
     : ''
@@ -44,7 +45,10 @@ export function renderChatShell(opts: {
       <header class="nav-hub-head nav-chat-head">
         <div class="nav-chat-head-row">
           <h1 class="section-title">대화</h1>
-          <button type="button" class="ghost-btn tiny danger-btn nav-chat-clear-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+          <div class="nav-chat-head-actions">
+            <button type="button" class="ghost-btn tiny nav-chat-loc-btn" data-action="my-location" aria-label="내 위치 정보">내 위치</button>
+            <button type="button" class="ghost-btn tiny danger-btn nav-chat-clear-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
+          </div>
         </div>
         <p class="hint">생활비서 · 음성 · 번역 · 일정 명령을 여기에 말하세요 · v${esc(opts.appVersion)}</p>
       </header>

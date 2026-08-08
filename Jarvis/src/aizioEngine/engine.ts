@@ -36,6 +36,7 @@ import {
   runPlacesTool,
 } from './tools/placesTool'
 import { formatWeatherReply, runWeatherTool } from './tools/weatherTool'
+import { offlineUserMessage } from '../offline/connectionModel'
 import {
   containsForbiddenSuccessClaim,
   verifyCalendarWrite,
@@ -91,6 +92,9 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     }
 
     const day = extractWeatherDay(text)
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { text: offlineUserMessage('weather'), speak: true }
+    }
     const reqKey = requestFingerprint('weather', `${city}|${day}`)
     if (session && isDuplicateRequest(ctx, reqKey)) {
       const prev = ctx.lastTools['weather.forecast']
@@ -143,6 +147,9 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     const perm = checkPermission('places.search')
     if (!perm.allowed) return { text: perm.reason, speak: true }
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { text: offlineUserMessage('places'), speak: true }
+    }
     const city = extractEngineCity(text) || ctx.city || ctx.weather?.city || ''
     if (!city) {
       session = ensureEngineSession({ context: ctx })

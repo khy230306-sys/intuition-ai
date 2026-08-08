@@ -1,7 +1,7 @@
 {
   "name": "aizio-iphone",
   "private": true,
-  "version": "1.30.18",
+  "version": "1.31.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

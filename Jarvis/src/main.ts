@@ -32,6 +32,7 @@ import {
   warmAppShell,
   type ShellReadyReport,
 } from './offline/shellReady'
+import { mirrorDurableLocalData, restoreDurableLocalData } from './offline/idbKv'
 import {
   renderOfflineBadge,
   renderOfflineSettingsPanel,
@@ -251,6 +252,8 @@ import { nextChatSendGuard, shouldAcceptChatSend, type ChatSendGuardState } from
 import { bcp47, detectLangCode, translateText } from './translate'
 import {
   canUseGeolocation,
+  getLocationReport,
+  loadCachedFix,
   queryPermissionState,
   requestLocation,
   wasLocationGranted,
@@ -443,7 +446,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.18'
+const APP_VERSION = '1.31.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -3310,11 +3313,12 @@ function renderLocationGate(): string {
           state.locationBusy ? 'disabled' : ''
         }>승인하고 입장</button>`
     : ''
+  const netBadge = renderOfflineBadge(state.netStatus || 'offline')
   return `
     <section class="location-gate">
       <div class="loc-card">
         <div class="big-orb"></div>
-        <h1>AIZIO</h1>
+        <h1>AIZIO ${netBadge}</h1>
         <p class="loc-lead">위치를 허용하면 날씨·주변 기능이 정확해집니다.</p>
         <p class="loc-body">
           홈 화면에 추가한 뒤 앱을 실행하면,<br/>
@@ -4137,6 +4141,7 @@ function renderChat(): string {
   // Always show on chat home (empty hero) and in active threads — was hidden when empty
   const chatTools = `
       <div class="chat-tools">
+        <button type="button" class="ghost-btn tiny" data-action="my-location" aria-label="내 위치 정보">내 위치</button>
         <button type="button" class="ghost-btn tiny danger-btn" data-action="clear-chat" aria-label="지난 대화 삭제">대화 초기화</button>
       </div>`
 
@@ -5702,6 +5707,19 @@ function bindLocationGate(): void {
 }
 
 async function ensureLocation(interactive: boolean): Promise<boolean> {
+  // Airplane / offline: never block App Shell on GPS. Use cache or enter immediately.
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  if (offline) {
+    const cached = loadCachedFix()
+    if (cached) state.lastFix = cached
+    state.locationSkipped = !cached
+    state.locationReady = true
+    state.locationBusy = false
+    state.locationError = ''
+    render()
+    void bootSpaceSyncAndPush()
+    return true
+  }
   if (!canUseGeolocation()) {
     state.locationError = '이 브라우저는 위치를 지원하지 않습니다. iPhone Safari를 사용해 주세요.'
     state.locationReady = false
@@ -5729,6 +5747,16 @@ async function ensureLocation(interactive: boolean): Promise<boolean> {
     void bootSpaceSyncAndPush()
     return true
   } catch (err) {
+    // Soft-enter with cached fix so shell still opens (online GPS failure).
+    const cached = loadCachedFix()
+    if (cached && !interactive) {
+      state.lastFix = cached
+      state.locationReady = true
+      state.locationError = ''
+      render()
+      void bootSpaceSyncAndPush()
+      return true
+    }
     state.locationReady = false
     state.locationError = err instanceof Error ? err.message : '위치 권한이 필요합니다.'
     render()
@@ -8081,6 +8109,35 @@ function bind(): void {
       resetChatHistory({ confirm: true })
     })
   })
+  document.querySelectorAll('[data-action="my-location"]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      void (async () => {
+        showFlash('내 위치를 확인하고 있어요…')
+        try {
+          const report = await getLocationReport()
+          pushMsg('user', '내 위치')
+          pushMsg('assistant', `【내 위치】\n${report}`)
+          saveChat(state.messages)
+          state.view = 'chat'
+          render()
+          scrollChat()
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : '위치를 확인할 수 없어요. 설정에서 위치 권한을 허용해 주세요.'
+          pushMsg('user', '내 위치')
+          pushMsg('assistant', msg)
+          saveChat(state.messages)
+          state.view = 'chat'
+          render()
+          scrollChat()
+        }
+      })()
+    })
+  })
   document.querySelectorAll('[data-action="hard-refresh"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       showFlash('앱을 새로고침합니다…')
@@ -8314,6 +8371,17 @@ function continueBootAfterRefresh(): void {
 }
 
 function bootAppCore(): void {
+  // Restore durable local blobs from IndexedDB if Cache wipe left localStorage empty.
+  void restoreDurableLocalData().then((n) => {
+    if (n > 0) {
+      try {
+        state.messages = loadChat()
+        state.settings = loadSettings()
+      } catch {
+        /* ignore */
+      }
+    }
+  })
   // Guest local userId/deviceId — does not change legacy jarvis_* keys.
   void import('./account').then((m) => m.ensureGuestIdentity())
   void import('./smartReminder').then((m) => m.migrateSmartRemindersPushFields())
@@ -8324,6 +8392,7 @@ function bootAppCore(): void {
   } catch {
     /* schema markers must never block boot */
   }
+  // Network warmups — never await; offline must not block first paint.
   void warmPreviewApiBackendHint()
   try {
     seedAppOwnedProvidersFromBuild()
@@ -8521,13 +8590,15 @@ function bootAppCore(): void {
         void flushOutbox({ isOnline: () => true }).then((r) => {
           if (r.synced > 0) showFlash(`연결 복구 · 대기 작업 ${r.synced}건 동기화`)
         })
+        void mirrorDurableLocalData()
         if (state.locationReady) scheduleResumeSpaceSync('force')
         void warmAppShell(APP_VERSION).then(() => verifyAppShell(APP_VERSION)).then((report) => {
           state.shellReady = report
         })
+        if (state.locationReady) void refreshWeather()
       }
       // Soft refresh strip when leaving/entering offline
-      if (status === 'offline' || status === 'degraded') {
+      if (status === 'offline' || status === 'degraded' || status === 'captive') {
         if (!document.querySelector('[data-offline-strip="1"]')) render()
       } else if (document.querySelector('[data-offline-strip="1"]')) {
         render()
@@ -8553,14 +8624,17 @@ function bootAppCore(): void {
   })
   // Do NOT hook window "focus" — iOS fires it on taps and caused reconnect/render flicker.
 
-  // Always require a fresh location grant on launch (standalone / Safari)
+  // Location: offline opens shell immediately; online may prompt / use prior grant.
   void (async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await ensureLocation(false)
+      return
+    }
     const perm = await queryPermissionState()
     if (perm === 'granted' || wasLocationGranted()) {
       const ok = await ensureLocation(false)
       if (ok) {
         void refreshWeather()
-        // ensureLocation already applies pending invite + render + space sync/push
       } else {
         render()
       }
@@ -8571,6 +8645,7 @@ function bootAppCore(): void {
   })()
   render()
   void refreshRemoteVersionBadge()
+  void mirrorDurableLocalData()
 }
 
 boot()

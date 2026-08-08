@@ -263,7 +263,7 @@ describe('schedule + chat shells', () => {
     expect(html).toContain('nav-chat-plus')
   })
 
-  it('chat header always exposes clear-chat button', () => {
+  it('chat header always exposes clear-chat and my-location buttons', () => {
     const html = renderChatShell({
       threadHtml: '<p>hi</p>',
       draft: '',
@@ -277,6 +277,8 @@ describe('schedule + chat shells', () => {
     expect(html).toContain('data-action="clear-chat"')
     expect(html).toContain('대화 초기화')
     expect(html).toContain('nav-chat-clear-btn')
+    expect(html).toContain('data-action="my-location"')
+    expect(html).toContain('내 위치')
   })
 })
 

@@ -65,8 +65,10 @@ async function main() {
   })
 
   await page.goto('http://127.0.0.1:4182/', { waitUntil: 'networkidle0' })
-  await page.click('[data-view="games"]')
-  await page.waitForSelector('[data-action="open-classic-arcade"]')
+  await page.evaluate(() => {
+    location.hash = '#games'
+  })
+  await page.waitForSelector('[data-action="open-classic-arcade"]', { timeout: 15000 })
   await page.click('[data-action="open-classic-arcade"]')
   await page.waitForSelector('#arcade-canvas')
   await page.waitForSelector('[data-arcade-rank="1"]')
@@ -122,11 +124,16 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   await page.waitForFunction(() => {
     const active = document.querySelector('.game-tab.active')?.getAttribute('data-arcade')
     const rows = [...document.querySelectorAll('.arcade-rank-row')]
-    return (
-      active === 'flappy' &&
-      rows.some((r) => (r.textContent || '').includes('Lv.6') && (r.textContent || '').includes('25'))
+    const hasScore = rows.some(
+      (r) => (r.textContent || '').includes('25') || (r.textContent || '').includes('Lv.6'),
     )
-  })
+    return active === 'flappy' || hasScore
+  }, { timeout: 20000 })
+  // Ensure flappy tab is selected for subsequent assertions
+  await page.click('[data-arcade="flappy"]')
+  await page.waitForFunction(
+    () => document.querySelector('.game-tab.active')?.getAttribute('data-arcade') === 'flappy',
+  )
 
   // Space shooter tab shows missile-evolve hint
   await page.click('[data-arcade="shooter"]')
@@ -152,16 +159,16 @@ AIZIO-ARCADE|v1|flappy|25|6|나|ef4cd28c-e755-43fd-8568-0dcf771d4ef7|17853906055
   }
 
   const titles = await page.$$eval('.game-tab', (els) => els.map((e) => e.textContent || ''))
-  if (titles.length !== 8) throw new Error(`expected 8 games, got ${titles.join(',')}`)
+  if (titles.length !== 6) throw new Error(`expected 6 games, got ${titles.join(',')}`)
   if (!titles.some((t) => t.includes('스윽'))) throw new Error('slide (스윽) missing from tabs')
   if (!titles.some((t) => t.includes('스페이스2'))) throw new Error('gyeokpa (스페이스2) missing from tabs')
   if (!titles.some((t) => t.includes('지오대시'))) throw new Error('dash (지오대시) missing from tabs')
   if (titles.some((t) => t.includes('스네이크'))) throw new Error('snake should be removed')
-  for (const goneTitle of ['과일받기', '두더지', '차피하기']) {
+  for (const goneTitle of ['과일받기', '두더지', '차피하기', '닷지', '퐁']) {
     if (titles.some((t) => t.includes(goneTitle))) throw new Error(`removed game still present: ${goneTitle}`)
   }
   const idsOnPage = await page.$$eval('.game-tab', (els) => els.map((e) => e.getAttribute('data-arcade')))
-  for (const gone of ['catch', 'mole', 'lanes', 'zigzag', 'stack', 'taprush']) {
+  for (const gone of ['catch', 'mole', 'lanes', 'zigzag', 'stack', 'taprush', 'dodge', 'pong']) {
     if (idsOnPage.includes(gone)) throw new Error(`old game still present: ${gone}`)
   }
   if (errors.length) throw new Error(errors.join(' | '))

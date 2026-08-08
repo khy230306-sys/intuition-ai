@@ -247,6 +247,7 @@ export function renderHomeV2MoreSheet(opts?: { showInstall?: boolean }): string 
           <h4>바로가기</h4>
           <ul class="home-v2-more-list">
             ${moreItem('AI 카메라', 'data-view="ai-camera"')}
+            ${moreItem('AIZIO PLAY', 'data-view="games"')}
             ${moreItem('번역하기', 'data-action="home-v2-quick" data-quick-id="translate"')}
             ${moreItem(`멤버${famBadge}`, 'data-view="family"')}
             ${moreItem(`친구${frBadge}`, 'data-view="friends"')}

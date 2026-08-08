@@ -5,9 +5,11 @@ export { HEROES } from './content/heroes'
 export { runBattleSimulation } from './sim/battleSim'
 export type { QuestSave } from './types'
 
+import { runBattleSimulation as runSim } from './sim/battleSim'
+
 /** Browser QA hook — local battle sim without cloud AI. */
 if (typeof window !== 'undefined') {
-  ;(window as unknown as { __AIZIO_QUEST__?: unknown }).__AIZIO_QUEST__ = {
-    runBattleSimulation,
+  ;(window as unknown as { __AIZIO_QUEST__?: { runBattleSimulation: typeof runSim } }).__AIZIO_QUEST__ = {
+    runBattleSimulation: runSim,
   }
 }

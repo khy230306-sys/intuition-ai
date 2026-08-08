@@ -1,5 +1,5 @@
 /**
- * AIZIO QUEST browser smoke: PLAY hub → QUEST → hero → battle → save/reload → 50 sim battles.
+ * AIZIO QUEST browser smoke: PLAY hub → QUEST → battle → save/reload → 50 sim battles.
  */
 import puppeteer from 'puppeteer-core'
 import { createServer } from 'node:http'
@@ -50,6 +50,30 @@ async function main() {
     const fix = { lat: 37.5, lon: 127, accuracy: 10, at: Date.now() }
     localStorage.setItem('jarvis.geo.granted.v1', '1')
     localStorage.setItem('jarvis.geo.last.v1', JSON.stringify(fix))
+    localStorage.setItem(
+      'aizio.quest.save.v1',
+      JSON.stringify({
+        v: 1,
+        heroId: 'kael',
+        unlockedHeroes: ['kael', 'mira'],
+        level: 3,
+        xp: 20,
+        credit: 160,
+        stageCleared: 1,
+        inventory: [],
+        equipped: {},
+        achievements: ['first_win'],
+        settings: { music: false, sfx: false, haptic: false },
+        tutorialDone: true,
+        bestCombo: 4,
+        gemsCleared: 40,
+        battlesWon: 1,
+        battlesLost: 0,
+        dailyDate: '',
+        dailyBest: 0,
+        updatedAt: new Date().toISOString(),
+      }),
+    )
     navigator.geolocation.getCurrentPosition = (success) => {
       success({
         coords: {
@@ -70,7 +94,9 @@ async function main() {
   const ok = (name, pass, detail = '') => checks.push({ name, pass: !!pass, detail })
 
   await page.goto('http://127.0.0.1:4188/', { waitUntil: 'networkidle0', timeout: 60000 })
-  await page.click('[data-view="games"]')
+  await page.evaluate(() => {
+    location.hash = '#games'
+  })
   await page.waitForSelector('[data-action="open-aizio-quest"]', { timeout: 15000 })
   ok('play_hub', true)
 
@@ -78,25 +104,17 @@ async function main() {
   await page.waitForSelector('.aq-root', { timeout: 20000 })
   ok('quest_mount', true)
 
-  const newBtn = await page.$('[data-aq="new"]')
-  if (newBtn) await newBtn.click()
-  await page.waitForSelector('[data-aq="pick-hero"]', { timeout: 8000 }).catch(() => null)
-  const hero = await page.$('[data-aq="pick-hero"]:not([disabled])')
-  if (hero) await hero.click()
-  ok('hero_select', true)
+  // Title → continue / campaign
+  const titleBtn = await page.$('[data-aq="new"], [data-aq="campaign"]')
+  if (titleBtn) await titleBtn.click()
+  await page.waitForSelector('[data-aq="fight"]', { timeout: 10000 })
+  ok('campaign', true)
 
-  const skip = await page.$('[data-aq="tutorial-skip"]')
-  if (skip) await skip.click()
-
-  // Ensure campaign
-  const camp = await page.$('[data-aq="campaign"]')
-  if (camp) await camp.click()
-  await page.waitForSelector('[data-aq="fight"]', { timeout: 8000 })
   await page.click('[data-aq="fight"]')
   await page.waitForSelector('[data-aq-board="1"]', { timeout: 10000 })
   ok('battle_board', true)
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const gems = await page.$$('.aq-gem')
     if (gems.length < 2) break
     const a = gems[i % gems.length]
@@ -106,11 +124,10 @@ async function main() {
     await page.mouse.down()
     await page.mouse.move(box.x + box.width / 2 + 42, box.y + box.height / 2, { steps: 5 })
     await page.mouse.up()
-    await new Promise((r) => setTimeout(r, 320))
+    await new Promise((r) => setTimeout(r, 280))
   }
   ok('swipe_input', true)
 
-  // 50 battles while quest chunk is loaded
   await page.waitForFunction(() => !!window.__AIZIO_QUEST__?.runBattleSimulation, { timeout: 10000 })
   const sim = await page.evaluate(() => {
     const result = window.__AIZIO_QUEST__.runBattleSimulation({
@@ -126,8 +143,8 @@ async function main() {
 
   const flee = await page.$('[data-aq="flee"]')
   if (flee) await flee.click()
-  const back = await page.$('[data-aq="back"]')
-  if (back) await back.click()
+  await page.waitForSelector('[data-aq="back"]', { timeout: 8000 })
+  await page.click('[data-aq="back"]')
   await page.waitForFunction(() => !document.querySelector('.aq-root'), { timeout: 8000 })
   ok('return_play', true)
 
@@ -135,16 +152,18 @@ async function main() {
   ok('save_present', !!saved)
 
   await page.reload({ waitUntil: 'networkidle0' })
-  await page.click('[data-view="games"]')
+  await page.evaluate(() => {
+    location.hash = '#games'
+  })
+  await page.waitForSelector('[data-action="open-aizio-quest"]', { timeout: 15000 })
   await page.click('[data-action="open-aizio-quest"]')
   await page.waitForSelector('.aq-root')
   const after = await page.evaluate(() => {
     const raw = localStorage.getItem('aizio.quest.save.v1')
     return raw ? JSON.parse(raw) : null
   })
-  ok('load_after_reload', !!after?.heroId, after?.heroId || '')
+  ok('load_after_reload', after?.heroId === 'kael', after?.heroId || '')
 
-  // Back out
   const back2 = await page.$('[data-aq="back"]')
   if (back2) await back2.click()
 

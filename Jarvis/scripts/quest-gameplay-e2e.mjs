@@ -25,7 +25,14 @@ const MIME = {
 async function dragLegalMove(page) {
   const target = await page.evaluate(() => {
     const gems = [...document.querySelectorAll('.aq-gem')]
-    const kinds = new Map(gems.map((g) => [`${g.dataset.r},${g.dataset.c}`, g.dataset.kind]))
+    const kindAt = (r, c) =>
+      gems.find((g) => Number(g.dataset.r) === r && Number(g.dataset.c) === c)?.dataset.kind
+    const rectOf = (r, c) => {
+      const g = gems.find((x) => Number(x.dataset.r) === r && Number(x.dataset.c) === c)
+      if (!g) return null
+      const b = g.getBoundingClientRect()
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+    }
     // Prefer coach gems during tutorial
     const coach = document.querySelector('.aq-gem.coach')
     const coachT = document.querySelector('.aq-gem.coach-target')
@@ -39,21 +46,34 @@ async function dragLegalMove(page) {
         by: b.top + b.height / 2,
       }
     }
-    // Brute: try horizontal neighbors until kinds differ (engine validates match)
-    for (const g of gems) {
-      const r = Number(g.dataset.r)
-      const c = Number(g.dataset.c)
-      const right = gems.find((x) => Number(x.dataset.r) === r && Number(x.dataset.c) === c + 1)
-      if (!right) continue
-      const a = g.getBoundingClientRect()
-      const b = right.getBoundingClientRect()
-      return {
-        ax: a.left + a.width / 2,
-        ay: a.top + a.height / 2,
-        bx: b.left + b.width / 2,
-        by: b.top + b.height / 2,
-        ka: kinds.get(`${r},${c}`),
-        kb: kinds.get(`${r},${c + 1}`),
+    const wouldMatch = (grid) => {
+      for (let r = 0; r < 8; r++)
+        for (let c = 0; c < 6; c++)
+          if (grid[r][c] && grid[r][c] === grid[r][c + 1] && grid[r][c] === grid[r][c + 2]) return true
+      for (let c = 0; c < 8; c++)
+        for (let r = 0; r < 6; r++)
+          if (grid[r][c] && grid[r][c] === grid[r + 1][c] && grid[r][c] === grid[r + 2][c]) return true
+      return false
+    }
+    const base = Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => kindAt(r, c)))
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        for (const [dr, dc] of [
+          [0, 1],
+          [1, 0],
+        ]) {
+          const r2 = r + dr
+          const c2 = c + dc
+          if (r2 > 7 || c2 > 7) continue
+          const g = base.map((row) => row.slice())
+          const tmp = g[r][c]
+          g[r][c] = g[r2][c2]
+          g[r2][c2] = tmp
+          if (!wouldMatch(g)) continue
+          const a = rectOf(r, c)
+          const b = rectOf(r2, c2)
+          if (a && b) return { ax: a.x, ay: a.y, bx: b.x, by: b.y }
+        }
       }
     }
     return null
@@ -71,16 +91,21 @@ async function dragLegalMove(page) {
   await page.mouse.down()
   await page.mouse.move(target.bx, target.by, { steps: 14 })
   await page.mouse.up()
-  // Cascade chain: swap → match → pop → fall (can take ~1.2s+ per wave)
+  // Cascade + possible enemy turn after
   let sawCascadeFx = false
-  for (let i = 0; i < 24; i++) {
+  let sawEnemyTurn = false
+  for (let i = 0; i < 40; i++) {
     const fx = await page.evaluate(() => {
+      const turn = document.querySelector('.aq-turn')?.textContent || ''
+      const dbg = document.querySelector('[data-aq-debug]')?.textContent || ''
       const matched = !!document.querySelector('.aq-gem.matched, .aq-gem.popping, .aq-gem.falling, .aq-gem.swap-ok')
-      const busy = /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || '')
-      return { matched, busy }
+      const busy = /처리 중|연결 중|행동 중/.test(turn)
+      const enemy = /적 턴/.test(turn) || /turn=enemy/.test(dbg)
+      return { matched, busy, enemy, turn }
     })
     if (fx.matched) sawCascadeFx = true
-    if (!fx.busy && i > 2) break
+    if (fx.enemy) sawEnemyTurn = true
+    if (!fx.busy && i > 4) break
     await new Promise((r) => setTimeout(r, 80))
   }
   await new Promise((r) => setTimeout(r, 200))
@@ -98,6 +123,7 @@ async function dragLegalMove(page) {
     enemyAfter,
     damaged: enemyAfter != null && enemyBefore != null && enemyAfter < enemyBefore,
     sawCascadeFx,
+    sawEnemyTurn,
   }
 }
 
@@ -189,6 +215,11 @@ async function main() {
   }
   await page.waitForSelector('[data-aq-board="1"]', { timeout: 15000 })
   ok('battle_open', true)
+  const gemSizeAtOpen = await page.evaluate(() => {
+    const g = document.querySelector('.aq-gem')
+    return g ? g.getBoundingClientRect().width : 0
+  })
+  ok('gem_touch_size', gemSizeAtOpen >= 28, `w=${gemSizeAtOpen}`)
 
   const turn = await page.evaluate(() => document.querySelector('.aq-turn')?.textContent || '')
   ok('player_turn_banner', /내 턴/.test(turn), turn)
@@ -200,12 +231,14 @@ async function main() {
   let swapped = false
   let damaged = false
   let cascadeFx = false
+  let sawEnemyEarly = false
   for (let i = 0; i < 12; i++) {
     const r = await dragLegalMove(page)
     if (r && r.changed) {
       swapped = true
       if (r.damaged) damaged = true
       if (r.sawCascadeFx) cascadeFx = true
+      if (r.sawEnemyTurn) sawEnemyEarly = true
       break
     }
     // tap-tap fallback on coach
@@ -249,7 +282,7 @@ async function main() {
   ok('damage_applied', damaged, enemyHpText)
 
   // Observe enemy turn then return — cascade FX lengthens each move
-  let sawEnemy = false
+  let sawEnemy = sawEnemyEarly
   let sawPlayerAgain = false
   for (let i = 0; i < 80; i++) {
     const t = await page.evaluate(() => document.querySelector('.aq-turn')?.textContent || '')
@@ -275,10 +308,28 @@ async function main() {
   ok('enemy_turn_seen', sawEnemy)
   ok('player_turn_return', sawPlayerAgain)
 
-  // 20-turn freeze test
+  // 20-turn freeze test — if battle already ended, start next fight from victory CTA
+  const endedEarly = await page.evaluate(() => /VICTORY|DEFEAT/.test(document.body.innerText || ''))
+  if (endedEarly) {
+    const next = await page.$('[data-aq="fight"]')
+    if (next) {
+      await next.click()
+      await page.waitForSelector('[data-aq-board="1"]', { timeout: 10000 }).catch(() => {})
+    }
+  }
   let freeze = false
   let turns = 0
   for (let i = 0; i < 40 && turns < 20; i++) {
+    const hasBoard = await page.evaluate(() => !!document.querySelector('[data-aq-board="1"]'))
+    if (!hasBoard) {
+      // Completed battles without freeze — count as progress
+      if (turns >= 8) break
+      const next = await page.$('[data-aq="fight"]')
+      if (!next) break
+      await next.click()
+      await page.waitForSelector('[data-aq-board="1"]', { timeout: 8000 }).catch(() => {})
+      continue
+    }
     const lockedBusy = await page.evaluate(() => /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
     const end = await page.evaluate(() => !!document.querySelector('h2') && /VICTORY|DEFEAT/.test(document.body.innerText))
     if (end) break
@@ -299,14 +350,6 @@ async function main() {
     void lockedBusy
   }
   ok('twenty_turn_no_freeze', !freeze && turns >= 8, `turns=${turns}`)
-
-  // Mobile viewport gem size
-  const gemSize = await page.evaluate(() => {
-    const g = document.querySelector('.aq-gem')
-    if (!g) return 0
-    return g.getBoundingClientRect().width
-  })
-  ok('gem_touch_size', gemSize >= 28, `w=${gemSize}`)
 
   const criticalErrors = errors.filter((e) => !/CORS policy|ERR_FAILED|beforeinstallprompt|build-meta/.test(e))
   const report = {

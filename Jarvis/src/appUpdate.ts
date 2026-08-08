@@ -17,6 +17,58 @@ export const LEGACY_PREVIEW_HOST = 'light-lab-92m8bq7.shipstatic.com'
 
 export const PENDING_UPDATE_KEY = 'jarvis.app.pendingUpdate'
 export const UPDATE_RETRY_KEY = 'jarvis.updateRetry'
+/** After 「최신 빌드로 업데이트」: warm offline shell + finish home-screen install. */
+export const POST_UPDATE_OFFLINE_HOME_KEY = 'aizio.update.prepareOfflineHome.v1'
+/** iOS share sheet open — wait for user before navigating away. */
+export const UPDATE_AWAIT_HOME_KEY = 'aizio.update.awaitHome.v1'
+
+export function markPostUpdateOfflineHome(): void {
+  try {
+    localStorage.setItem(POST_UPDATE_OFFLINE_HOME_KEY, '1')
+  } catch {
+    /* private mode */
+  }
+}
+
+export function clearPostUpdateOfflineHome(): void {
+  try {
+    localStorage.removeItem(POST_UPDATE_OFFLINE_HOME_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekPostUpdateOfflineHome(): boolean {
+  try {
+    return localStorage.getItem(POST_UPDATE_OFFLINE_HOME_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markUpdateAwaitHome(): void {
+  try {
+    sessionStorage.setItem(UPDATE_AWAIT_HOME_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearUpdateAwaitHome(): void {
+  try {
+    sessionStorage.removeItem(UPDATE_AWAIT_HOME_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekUpdateAwaitHome(): boolean {
+  try {
+    return sessionStorage.getItem(UPDATE_AWAIT_HOME_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export type RemoteBuildInfo = {
   version: string

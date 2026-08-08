@@ -4,10 +4,16 @@ import {
   UPDATE_RETRY_KEY,
   buildUpdateUrl,
   clearPendingUpdate,
+  clearPostUpdateOfflineHome,
+  clearUpdateAwaitHome,
   compareAppVersions,
   fetchRemoteAppVersion,
   fetchRemoteAppVersionFromHtml,
   fetchRemoteBuildMeta,
+  markPostUpdateOfflineHome,
+  markUpdateAwaitHome,
+  peekPostUpdateOfflineHome,
+  peekUpdateAwaitHome,
   readPendingUpdate,
   resolveUpdateBaseUrl,
   updateCrossesOrigin,
@@ -168,11 +174,13 @@ import {
   copyRecommendedInstallUrl,
   getRecommendedInstallUrl,
   hasNativeInstallPrompt,
+  hasPwaInstalledMark,
   detectInstallPlatform,
   installGuideSteps,
   installMethodSummary,
   isFixedPreviewInstallHost,
   isPreviewInstallHost,
+  isRunningAsInstalledPwa,
   markPwaInstalled,
   onPwaInstallChange,
   FIXED_PREVIEW_INSTALL_URL,
@@ -449,7 +457,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.32.0'
+const APP_VERSION = '1.32.1'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -667,6 +675,7 @@ async function hardRefreshApp(opts?: { targetVersion?: string; targetBuildId?: s
  * (production → jarvis-app; fixed Preview → same origin; legacy snapshot → lightlab-92m8bq7).
  */
 async function updateAppToLatest(): Promise<void> {
+  clearUpdateAwaitHome()
   const base = resolveUpdateBaseUrl()
   const crosses = updateCrossesOrigin()
   showFlash(crosses ? '고정 Preview로 이동해 최신판을 받습니다…' : '최신판을 확인하는 중…')
@@ -697,9 +706,9 @@ async function updateAppToLatest(): Promise<void> {
   const targetBid = remote?.buildId || null
 
   if (remoteVer && remoteVer === APP_VERSION && (!targetBid || targetBid === localStorage.getItem(SEEN_BUILD_ID_KEY))) {
-    showFlash(`이미 최신입니다 (v${APP_VERSION}). 그래도 깨끗이 다시 불러옵니다…`)
+    showFlash(`이미 최신입니다 (v${APP_VERSION}). 오프라인·홈화면 준비로 다시 불러옵니다…`)
   } else if (remoteVer) {
-    showFlash(`서버 최신 v${remoteVer}으로 업데이트합니다…`)
+    showFlash(`서버 최신 v${remoteVer} · 오프라인 저장까지 진행합니다…`)
   } else {
     showFlash('서버 확인 실패 · 캐시를 비우고 다시 불러옵니다…')
   }
@@ -707,8 +716,93 @@ async function updateAppToLatest(): Promise<void> {
   // Pending target — do NOT mark SEEN as remote until this bundle actually matches
   writePendingUpdate(targetVer, targetBid)
   sessionStorage.setItem('jarvis.refreshing', '1')
-  paintBootSplash(crosses ? `고정 Preview로 최신판 불러오는 중…` : '최신판을 불러오는 중…')
+  paintBootSplash(crosses ? `고정 Preview로 최신판 불러오는 중…` : '최신판 · 오프라인 셸 준비 중…')
   window.location.replace(buildUpdateUrl({ version: targetVer, buildId: targetBid, step: 1, baseUrl: base }))
+}
+
+/**
+ * 「최신 빌드로 업데이트」— home-screen install (when needed) + offline shell prepare + reload.
+ * iOS cannot auto-add to Home Screen; we open the share sheet, then continue update.
+ */
+async function updateAppToLatestWithHomeAndOffline(): Promise<void> {
+  if (!state.online) {
+    showFlash('인터넷이 필요합니다. 연결 후 다시 눌러 주세요.')
+    return
+  }
+
+  markPostUpdateOfflineHome()
+  clearUpdateAwaitHome()
+
+  const alreadyHome = isRunningAsInstalledPwa() || hasPwaInstalledMark()
+  if (!alreadyHome) {
+    state.showInstall = true
+    state.installGuideOpen = detectInstallPlatform()
+    showFlash('홈 화면 추가를 먼저 진행합니다…')
+    // Keep user gesture: install prompt / iOS share before long awaits
+    const result = await attemptPwaInstall()
+    if (result.kind === 'accepted' || result.kind === 'already-installed') {
+      markPwaInstalled()
+      state.showInstall = false
+      state.installGuideOpen = false
+      showFlash(
+        result.kind === 'accepted'
+          ? '홈 화면에 추가됨 · 최신 빌드·오프라인 저장으로 이어갑니다…'
+          : '홈 화면 앱 확인 · 최신 빌드·오프라인 저장으로 이어갑니다…',
+      )
+    } else if (result.kind === 'shared') {
+      markUpdateAwaitHome()
+      state.installGuideOpen = detectInstallPlatform()
+      showFlash('공유 창에서 「홈 화면에 추가」→「추가」를 누른 뒤, 「업데이트 계속」을 눌러 주세요.')
+      render()
+      return
+    } else {
+      // need-guide / dismissed — show steps, let user continue when ready
+      markUpdateAwaitHome()
+      state.installGuideOpen =
+        result.kind === 'need-guide' ? result.platform : detectInstallPlatform()
+      showFlash('위 안내대로 홈 화면에 추가한 뒤 「업데이트 계속」을 눌러 주세요. (이미 추가했다면 바로 계속)')
+      render()
+      return
+    }
+  } else {
+    showFlash('홈 화면 앱 · 최신 빌드·오프라인 저장을 진행합니다…')
+  }
+
+  await updateAppToLatest()
+}
+
+async function finishPostUpdateOfflineAndHome(): Promise<void> {
+  if (!peekPostUpdateOfflineHome()) return
+  try {
+    if ('serviceWorker' in navigator) {
+      await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 4000))])
+    }
+    await warmAppShell(APP_VERSION)
+    const report = await verifyAppShell(APP_VERSION)
+    state.shellReady = report
+    if (report.ready) markAnywhereOfflineReady(true)
+
+    const onHome = isRunningAsInstalledPwa() || hasPwaInstalledMark()
+    if (!onHome) {
+      state.showInstall = true
+      state.installGuideOpen = detectInstallPlatform()
+      showFlash(
+        report.ready
+          ? '오프라인 사용 준비 완료 · 아직 홈 화면이 없으면 안내에 따라 추가해 주세요'
+          : '앱을 받는 중… 홈 화면 추가 안내를 확인하세요',
+      )
+    } else {
+      showFlash(
+        report.ready
+          ? '최신 빌드 · 오프라인 사용 준비 완료'
+          : '최신 빌드 적용됨 · 오프라인 셸을 다시 받는 중…',
+      )
+      if (report.ready) clearPostUpdateOfflineHome()
+    }
+    if (state.view === 'settings' || state.showInstall) render()
+  } catch {
+    showFlash('오프라인 준비 중 오류 · 설정에서 「앱 셸 다시 받기」를 눌러 주세요')
+  }
 }
 
 /** Settings-only update controls (not shown on chat / games / other tabs). */
@@ -716,6 +810,7 @@ function renderUpdateCard(): string {
   const remote = state.remoteVersion
   const newer = remote && remote !== APP_VERSION
   const updateHost = resolveUpdateBaseUrl().replace(/^https?:\/\//, '')
+  const awaitHome = peekUpdateAwaitHome()
   const status = !state.online
     ? '오프라인 · 연결 후 업데이트하세요'
     : newer
@@ -723,14 +818,18 @@ function renderUpdateCard(): string {
       : remote
         ? `최신 확인됨 · v${escapeHtml(remote)}`
         : `현재 v${APP_VERSION}`
+  const continueBtn = awaitHome
+    ? `<button type="button" class="primary-btn update-btn" data-action="app-update-continue">홈 화면 추가 완료 · 업데이트 계속</button>
+       <p class="hint">iPhone은 「홈 화면에 추가」를 시스템이 직접 눌러야 합니다. 추가했다면 위 버튼으로 최신 빌드·오프라인 저장을 이어 주세요.</p>`
+    : `<button type="button" class="primary-btn update-btn" data-action="app-update">최신 빌드로 업데이트 · 오프라인·홈화면</button>`
   return `
-    <div class="update-card ${newer ? 'has-update' : ''}">
+    <div class="update-card ${newer ? 'has-update' : ''}${awaitHome ? ' await-home' : ''}">
       <div class="update-card-head">
         <strong>앱 업데이트</strong>
         <span class="ver">이 기기 v${APP_VERSION}</span>
       </div>
-      <p class="hint">${status}. 홈 화면 앱도 이 버튼으로 캐시를 지우고 <strong>${escapeHtml(updateHost)}</strong> 에서 다시 받습니다. 그래도 버전이 안 바뀌면 아래 «앱 캐시 새로고침»을 한 번 더 누르세요.</p>
-      <button type="button" class="primary-btn update-btn" data-action="app-update">최신 빌드로 업데이트</button>
+      <p class="hint">${status}. 이 버튼은 <strong>${escapeHtml(updateHost)}</strong> 최신 빌드를 받고, 오프라인 앱 셸을 저장하며, 필요하면 홈 화면 추가까지 안내합니다.</p>
+      ${continueBtn}
       <button type="button" class="ghost-btn tiny" data-action="check-update">최신 버전만 확인</button>
     </div>`
 }
@@ -8155,6 +8254,15 @@ function bind(): void {
   })
   document.querySelectorAll('[data-action="app-update"]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      void updateAppToLatestWithHomeAndOffline()
+    })
+  })
+  document.querySelectorAll('[data-action="app-update-continue"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      clearUpdateAwaitHome()
+      markPostUpdateOfflineHome()
+      if (isRunningAsInstalledPwa()) markPwaInstalled()
+      showFlash('최신 빌드·오프라인 저장을 이어갑니다…')
       void updateAppToLatest()
     })
   })
@@ -8342,7 +8450,10 @@ function boot(): void {
       showFlash('AIZIO Anywhere 오프라인 준비 완료')
       void warmAppShell(APP_VERSION).then(() => verifyAppShell(APP_VERSION)).then((report) => {
         state.shellReady = report
-        if (report.ready) markAnywhereOfflineReady(true)
+        if (report.ready) {
+          markAnywhereOfflineReady(true)
+          if (peekPostUpdateOfflineHome()) void finishPostUpdateOfflineAndHome()
+        }
       })
     },
     onRegisteredSW(_url, reg) {
@@ -8357,7 +8468,11 @@ function boot(): void {
           state.shellReady = report
           if (report.ready) {
             markAnywhereOfflineReady(true)
-            showFlash('AIZIO Anywhere 오프라인 준비 완료')
+            if (peekPostUpdateOfflineHome()) {
+              void finishPostUpdateOfflineAndHome()
+            } else {
+              showFlash('AIZIO Anywhere 오프라인 준비 완료')
+            }
           }
         })
     },
@@ -8685,12 +8800,14 @@ function bootAppCore(): void {
   })
   void verifyAppShell(APP_VERSION).then((report) => {
     state.shellReady = report
+    if (peekPostUpdateOfflineHome()) void finishPostUpdateOfflineAndHome()
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       scheduleResumeSpaceSync('force')
       void refreshRemoteVersionBadge()
       void probeNetwork({ force: true })
+      if (peekPostUpdateOfflineHome()) void finishPostUpdateOfflineAndHome()
     }
   })
   window.addEventListener('pageshow', (ev) => {

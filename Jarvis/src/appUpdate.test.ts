@@ -6,6 +6,12 @@ import {
   resolveUpdateBaseUrl,
   updateCrossesOrigin,
   isFixedPreviewHost,
+  markPostUpdateOfflineHome,
+  clearPostUpdateOfflineHome,
+  peekPostUpdateOfflineHome,
+  markUpdateAwaitHome,
+  clearUpdateAwaitHome,
+  peekUpdateAwaitHome,
   FIXED_APP_URL,
   FIXED_PREVIEW_URL,
   LEGACY_PREVIEW_HOST,
@@ -71,5 +77,39 @@ describe('appUpdate', () => {
     })
     expect(url.startsWith('https://lightlab-92m8bq7.shipstatic.com/?')).toBe(true)
     expect(url).toContain('_v=1.20.16')
+  })
+
+  it('tracks post-update offline/home flags', () => {
+    const ls = new Map<string, string>()
+    const ss = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => ls.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        ls.set(k, v)
+      },
+      removeItem: (k: string) => {
+        ls.delete(k)
+      },
+    })
+    vi.stubGlobal('sessionStorage', {
+      getItem: (k: string) => ss.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        ss.set(k, v)
+      },
+      removeItem: (k: string) => {
+        ss.delete(k)
+      },
+    })
+    clearPostUpdateOfflineHome()
+    clearUpdateAwaitHome()
+    expect(peekPostUpdateOfflineHome()).toBe(false)
+    markPostUpdateOfflineHome()
+    expect(peekPostUpdateOfflineHome()).toBe(true)
+    clearPostUpdateOfflineHome()
+    expect(peekPostUpdateOfflineHome()).toBe(false)
+    markUpdateAwaitHome()
+    expect(peekUpdateAwaitHome()).toBe(true)
+    clearUpdateAwaitHome()
+    expect(peekUpdateAwaitHome()).toBe(false)
   })
 })

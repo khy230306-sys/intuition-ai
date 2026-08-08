@@ -1313,6 +1313,9 @@ body[data-jarvis-view='friends'] .orb::after {
   background: linear-gradient(145deg, rgba(0, 210, 190, 0.12), rgba(90, 200, 255, 0.06));
 }
 
+.update-card.await-home {
+  border-color: color-mix(in srgb, var(--accent, #2dd4bf) 55%, transparent);
+}
 .update-card.has-update {
   border-color: rgba(251, 191, 36, 0.5);
   background: linear-gradient(145deg, rgba(251, 191, 36, 0.14), rgba(0, 210, 190, 0.08));

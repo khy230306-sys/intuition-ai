@@ -14,7 +14,8 @@ export function extractEngineCity(text: string): string {
 
 export function extractWeatherDay(text: string): '오늘' | '내일' | '모레' | '지금' {
   if (/모레/.test(text)) return '모레'
-  if (/내일/.test(text)) return '내일'
+  // Colloquial typo: 「낼 비옴?」
+  if (/내일|(^|\s)낼(\s|$)|낼\s*비/.test(text)) return '내일'
   if (/지금/.test(text)) return '지금'
   return '오늘'
 }

@@ -12,6 +12,11 @@ import {
   updateProviderSlot,
 } from './providerConfig'
 import {
+  clearProviderCooldown,
+  isProviderInCooldown,
+  markProviderCooldown,
+} from './providerCooldown'
+import {
   isFallbackableError,
   mapAiErrorToHybrid,
   userFacingHybridError,
@@ -30,26 +35,35 @@ function buildCandidateOrder(): HybridProviderId[] {
     if (!isProviderConfigured(id)) return false
     if (p.getSlot().enabled === false) return false
     if (p.category === 'paid' && !allowPaid) return false
+    if (isProviderInCooldown(p.getSlot())) return false
     return true
   }
 
-  // Fixed primary first, then free fallbacks (OpenAI quota → Gemini), then other paid if allowed
-  if (cfg.mode === 'fixed' && cfg.fixedProvider) {
-    const primary = cfg.fixedProvider
-    const freeRest = AUTO_PROVIDER_ORDER.filter((id) => {
-      if (id === primary) return false
-      const p = getHybridProvider(id)
-      return Boolean(
-        p && isProviderConfigured(id) && p.category === 'free' && p.getSlot().enabled !== false,
-      )
-    })
-    const paidRest = cfg.allowPaidFallback
-      ? AUTO_PROVIDER_ORDER.filter((id) => id !== primary && usable(id, true) && getHybridProvider(id)?.category === 'paid')
+  const allowPaid = Boolean(cfg.allowPaidFallback)
+  const prefer = cfg.fixedProvider
+
+  if (cfg.mode === 'fixed' && prefer) {
+    const freeRest = AUTO_PROVIDER_ORDER.filter((id) => id !== prefer && usable(id, false))
+    const paidRest = allowPaid
+      ? AUTO_PROVIDER_ORDER.filter(
+          (id) =>
+            id !== prefer &&
+            usable(id, true) &&
+            getHybridProvider(id)?.category === 'paid',
+        )
       : []
-    return [...new Set([primary, ...freeRest, ...paidRest])].filter((id) => isProviderConfigured(id))
+    return [...new Set([prefer, ...freeRest, ...paidRest])].filter((id) =>
+      usable(id, allowPaid || getHybridProvider(id)?.category === 'free'),
+    )
   }
 
-  return AUTO_PROVIDER_ORDER.filter((id) => usable(id, Boolean(cfg.allowPaidFallback)))
+  // Auto mode: still honor preferred seed (e.g. Gemini-first when both keys exist)
+  // so we do not burn latency on dead OpenAI before a healthy free provider.
+  const base = AUTO_PROVIDER_ORDER.filter((id) => usable(id, allowPaid))
+  if (prefer && base.includes(prefer)) {
+    return [prefer, ...base.filter((id) => id !== prefer)]
+  }
+  return base
 }
 
 /**
@@ -115,7 +129,7 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
           if (!validated.ok) {
             throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
           }
-          updateProviderSlot(id, { status: 'ok', lastError: '' })
+          clearProviderCooldown(id)
           recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
           return {
             text: validated.text,
@@ -131,6 +145,21 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
       } catch (err) {
         lastErr = err
         fallbackUsed = true
+        const code = mapAiErrorToHybrid(err)
+        const status =
+          code === 'quota'
+            ? 'quota'
+            : code === 'rate_limit'
+              ? 'rate_limit'
+              : code === 'invalid_key' || code === 'payment_required'
+                ? 'auth'
+                : 'error'
+        markProviderCooldown(
+          id,
+          code,
+          status,
+          err instanceof Error ? err.message : String(err),
+        )
         if (!isFallbackableError(err)) break
         continue
       }
@@ -161,10 +190,11 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
           throw new AiError('bad_response', `응답 검증 실패: ${validated.reason}`, { retryable: true })
         }
         if (model !== currentModel) {
-          updateProviderSlot(id, { model, status: 'ok', lastError: '' })
+          clearProviderCooldown(id)
+          updateProviderSlot(id, { model })
           fallbackUsed = true
         } else {
-          updateProviderSlot(id, { status: 'ok', lastError: '' })
+          clearProviderCooldown(id)
         }
         recordUsage({ provider: id, ok: true, fallback: fallbackUsed })
         return {
@@ -177,17 +207,20 @@ export async function runHybridChat(input: HybridChatInput): Promise<HybridChatO
       } catch (err) {
         lastErr = err
         const code = mapAiErrorToHybrid(err)
-        updateProviderSlot(id, {
-          status:
-            code === 'quota'
-              ? 'quota'
-              : code === 'rate_limit'
-                ? 'rate_limit'
-                : code === 'invalid_key' || code === 'payment_required'
-                  ? 'auth'
-                  : 'error',
-          lastError: err instanceof Error ? err.message : String(err),
-        })
+        const status =
+          code === 'quota'
+            ? 'quota'
+            : code === 'rate_limit'
+              ? 'rate_limit'
+              : code === 'invalid_key' || code === 'payment_required'
+                ? 'auth'
+                : 'error'
+        markProviderCooldown(
+          id,
+          code,
+          status,
+          err instanceof Error ? err.message : String(err),
+        )
         recordUsage({ provider: id, ok: false, fallback: fallbackUsed })
         // Dead model → try next recommended model on same provider
         if (code === 'model_unavailable' && mi < modelOrder.length - 1) {

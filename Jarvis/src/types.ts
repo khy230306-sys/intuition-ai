@@ -204,4 +204,6 @@ export interface BrainReply {
   musicShowMiniPlayer?: boolean
   /** Life OS 2.0 structured assistant cards. */
   lifeCards?: import('./life-os-2/ui/cardTypes').LifeOs2UiCard[]
+  /** Non-user-facing orchestration / QA diagnostics. */
+  debug?: Record<string, unknown>
 }

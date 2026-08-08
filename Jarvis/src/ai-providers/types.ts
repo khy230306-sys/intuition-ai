@@ -37,6 +37,8 @@ export interface ProviderSlotConfig {
   lastSuccessAt?: string
   lastError?: string
   status?: ProviderHealthStatus
+  /** Epoch ms — skip this provider in routing until then (billing/quota/rate). */
+  cooldownUntil?: number
 }
 
 export interface HybridAiConfig {

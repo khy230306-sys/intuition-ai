@@ -40,5 +40,10 @@ export function isClearWeatherQuery(text: string): boolean {
   if (/울산\s*오늘\s*기온|오늘\s*우산\s*필요|우산\s*(필요해|챙길까)|이번\s*주\s*날씨/i.test(t)) return true
   if (/(오늘|내일|모레|지금)?\s*비\s*(와\s*\?|와\?|와$|올까|오나)/i.test(t)) return true
   if (/(모레|내일|오늘)\s*(비|우산)/i.test(t) && /(오|와|올|필요|챙)/i.test(t)) return true
+  // Colloquial typos: 「낼 비옴?」 「비옴」 「내일비옴」
+  if (/(낼|내일|오늘|모레)\s*비\s*옴/.test(t)) return true
+  if (/비\s*옴\s*[?？!]?\s*$/.test(t) && /(낼|내일|오늘|모레|울산|서울|부산|대구|인천|광주|대전|제주)/.test(t))
+    return true
+  if (/^(낼|내일)\s*(비|우산)/.test(t)) return true
   return false
 }

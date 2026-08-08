@@ -65,8 +65,8 @@ function seedGemini(): boolean {
 }
 
 /**
- * Install app-owned providers. OpenAI is the default chat brain when present;
- * Gemini remains a fallback. Call at boot.
+ * Install app-owned providers. When both keys exist, prefer Gemini (free) first
+ * with OpenAI as paid fallback + cooldown. Call at boot.
  */
 export function seedAppOwnedProvidersFromBuild(): { openai: boolean; gemini: boolean } {
   const openai = seedOpenAI()

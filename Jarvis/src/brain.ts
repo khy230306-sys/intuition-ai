@@ -796,15 +796,43 @@ export async function think(
     }
   }
 
+  // —— Conversation Orchestrator (NLU plan) ——
+  // Plans domain/tool vs LLM reply. Does not invent weather/places/prices.
+  // Tools below remain authoritative for REAL data.
+  const strippedForPlan = stripWakeWord(raw).text || raw
+  let orchPlan: { domain: string; requiresTool: boolean; useLlmReply: boolean; reason: string } | null =
+    null
+  try {
+    const { planConversationTurn } = await import('./conversationOrchestrator')
+    orchPlan = planConversationTurn(strippedForPlan)
+  } catch {
+    orchPlan = null
+  }
+
+  // Active translation mode MUST beat weather/places/engine tools.
+  // 「울산 날씨 알려줘」 while translating → translate the sentence, do not run weather.
+  {
+    const lockedEarly = loadInterpretMode().active
+    if (lockedEarly && strippedForPlan && !isTranslateEscapeCommand(strippedForPlan)) {
+      const tr = await handleTranslate(strippedForPlan)
+      if (tr) {
+        if (orchPlan) tr.debug = { ...(tr.debug || {}), orch: orchPlan }
+        return tr
+      }
+    }
+  }
+
   // —— AIZIO Core Engine V1 (REAL tools + session memory) ——
   // Owns weather → family places → ordinal select → calendar when classified.
   // Runs before Action Agent / restaurant DEMO fallthrough so FAKE catalogs
   // cannot steal the V1 success conversation.
   {
-    const strippedEarly = stripWakeWord(raw).text || raw
     try {
-      const engine = await tryHandleAizioEngine(strippedEarly)
-      if (engine) return engine
+      const engine = await tryHandleAizioEngine(strippedForPlan)
+      if (engine) {
+        if (orchPlan) engine.debug = { ...(engine.debug || {}), orch: orchPlan }
+        return engine
+      }
     } catch {
       /* engine must never block legacy */
     }
@@ -815,31 +843,17 @@ export async function think(
   // When providers are configured, general.chat / requiresAI uses Hybrid AI here
   // (with conversation history) instead of falling through to canned templates.
   {
-    const strippedEarly = stripWakeWord(raw).text || raw
     try {
-      const owned = await tryHandleRoutedCommand(strippedEarly, {
+      const owned = await tryHandleRoutedCommand(strippedForPlan, {
         source: opts?.source,
         history,
       })
-      if (owned) return owned
+      if (owned) {
+        if (orchPlan) owned.debug = { ...(owned.debug || {}), orch: orchPlan }
+        return owned
+      }
     } catch {
       /* router must never block legacy */
-    }
-  }
-
-  // Continuous translate lock owns the turn before AIE / Core Brain.
-  // Prevents Core translation skill + legacy handleTranslate both answering
-  // (online bubble + cached offline bubble) for the same utterance.
-  {
-    const strippedEarly = stripWakeWord(raw).text || raw
-    const lockedEarly = loadInterpretMode().active
-    if (
-      lockedEarly &&
-      strippedEarly &&
-      !isTranslateEscapeCommand(strippedEarly)
-    ) {
-      const tr = await handleTranslate(strippedEarly)
-      if (tr) return tr
     }
   }
 

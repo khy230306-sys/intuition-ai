@@ -110,6 +110,14 @@ export function classifyEngineTurn(text: string, session: EngineSession | null):
 
   if (isPlaceSeekUtterance(t, session)) return 'place_seek'
 
+  // 「몇 시까지 해?」 with a selected place → hours ask (do not answer wall-clock)
+  if (
+    (selected || ctx?.selected) &&
+    /몇\s*시\s*까지|몇시까지|영업\s*시간|몇\s*시(?:에)?\s*닫|몇\s*시(?:에)?\s*열/.test(t)
+  ) {
+    return 'place_hours'
+  }
+
   if (isCalendarWriteUtterance(t) && (selected || hasPlaces || ctx?.selected)) {
     return 'calendar_write'
   }

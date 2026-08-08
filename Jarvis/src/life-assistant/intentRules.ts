@@ -239,14 +239,16 @@ export function classifyLifeAssistantRules(text: string): LifeAssistantIntentRes
     })
   }
 
-  // Calendar delete/update
-  if (/일정\s*(삭제|지워|취소)/.test(t)) {
+  // Calendar delete/update (「그 일정 취소해」 / 「일정 취소」)
+  if (/(그\s*)?일정\s*(삭제|지워|취소)|일정\s*취소해/.test(t)) {
+    const title = extractTitle(t, /그|일정|삭제|지워|취소|해줘|해/g)
+    const hasTitle = Boolean(title && title.length >= 2 && !/^(그거|그것|이거)$/.test(title))
     return base(t, {
       intent: 'calendar.delete',
-      confidence: 0.88,
-      title: extractTitle(t, /일정|삭제|지워|취소|해줘/g),
-      requiresConfirmation: true,
-      missingFields: ['title'],
+      confidence: 0.92,
+      title: hasTitle ? title : undefined,
+      requiresConfirmation: !hasTitle,
+      missingFields: hasTitle ? [] : ['title'],
     })
   }
   if (/일정\s*(수정|변경|옮겨)/.test(t)) {

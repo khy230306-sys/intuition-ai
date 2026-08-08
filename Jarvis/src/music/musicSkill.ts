@@ -142,10 +142,17 @@ async function prepareSearch(intent: MusicIntentResult, locale: AppLocale): Prom
  * Handle a user utterance if it is a music command.
  * Returns null when the message should go to the normal AI engine.
  */
+function localeForUtterance(raw: string, locale: AppLocale): AppLocale {
+  // Korean utterances should never get English chrome-default copy.
+  if (/[가-힣]/.test(raw || '')) return 'ko'
+  return locale || getAppLocale()
+}
+
 export async function tryHandleMusicSkill(
   raw: string,
   locale: AppLocale = getAppLocale(),
 ): Promise<MusicSkillReply | null> {
+  locale = localeForUtterance(raw, locale)
   let intent = classifyMusicIntent(raw, locale)
   // Short controls while a music session is active (avoid hijacking general chat otherwise)
   if (!intent) {

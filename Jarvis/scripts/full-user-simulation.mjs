@@ -95,7 +95,7 @@ const SCENARIOS = [
     forbid: /존재하지\s*않는\s*병원\s*예약을\s*완료/,
   },
   { name: 'calendar_change', turns: ['아까 일정 3시로 바꿔줘'], expect: /일정|3\s*시|변경|수정|없|어떤|알려/, tag: 'calendar' },
-  { name: 'calendar_cancel', turns: ['그 일정 취소해'], expect: /취소|일정|없|어떤|삭제|확인/, tag: 'calendar' },
+  { name: 'calendar_cancel', turns: ['그 일정 취소해'], expect: /취소|일정|없|어떤|삭제|확인|제목|날짜/, forbid: /필요한 정보:\s*title/, tag: 'calendar' },
   { name: 'calendar_typo', turns: ['엄마병원 2시'], expect: /병원|2\s*시|일정|알림|기억|저장|월요일|언제|날짜/, tag: 'calendar' },
   { name: 'calendar_reschedule_short', turns: ['그거 3시로'], expect: /3\s*시|일정|변경|어떤|알려|없/, tag: 'calendar' },
 
@@ -105,8 +105,14 @@ const SCENARIOS = [
     multi: true,
     tag: 'translation',
     turns: ['지금부터 영어로 번역해줘', '오늘 날씨가 정말 좋다', '울산 날씨 알려줘', '번역 그만', '울산 날씨 알려줘'],
-    expectAll: [/영어|번역|English|모드/, /./, /./, /종료|꺼|해제|일반|번역/, /울산|날씨|기온|℃|도|맑|흐|비/],
-    forbidAll: [/기온\s*\d|℃/, /기온\s*\d|℃/, /기온\s*\d|℃/, null, /영어로\s*번역하면/],
+    expectAll: [
+      /영어|번역|English|모드/,
+      /weather|Weather|nice|【영어】|The /,
+      /weather|Weather|Ulsan|【영어】|Tell me|weather in/i,
+      /종료|꺼|해제|일반|번역/,
+      /울산|날씨|기온|℃|도|맑|흐|비/,
+    ],
+    forbidAll: [null, /open-meteo|기온\s*\d|℃/, /open-meteo|기온\s*\d|℃/, null, /【영어】/],
   },
   {
     name: 'translate_force_retry',
@@ -138,7 +144,7 @@ const SCENARIOS = [
   },
 
   // —— Music ——
-  { name: 'music_quiet', turns: ['조용한 음악 틀어줘'], expect: /음악|재생|플레이|제스처|탭|유튜브|곡|듣기|연결|권한/, forbid: /재생을\s*완료했습니다\s*\(가짜\)/, tag: 'music' },
+  { name: 'music_quiet', turns: ['조용한 음악 틀어줘'], expect: /음악|재생|플레이|제스처|탭|유튜브|곡|듣기|연결|권한|잔잔/, forbid: /Found calm music/, tag: 'music' },
   { name: 'music_drive', turns: ['운전하면서 듣기 좋은 걸로'], expect: /음악|재생|운전|플레이|곡|듣기|추천/, tag: 'music' },
 
   // —— Ambiguous ——
@@ -311,6 +317,15 @@ async function resetSessions(page) {
 
 async function sendChat(page, text) {
   await ensureChatComposer(page)
+  // Settings / other views remove #draft — always return to chat before typing
+  const onChat = await page.evaluate(() => Boolean(document.querySelector('#draft')))
+  if (!onChat) {
+    await page.evaluate(() => {
+      location.hash = '#chat'
+    })
+    await page.waitForSelector('#draft', { timeout: 20000 })
+    await dismissOverlays(page)
+  }
   const stuck = await page.evaluate(() => Boolean(document.querySelector('#draft')?.disabled))
   if (stuck) {
     await page.evaluate(() => {

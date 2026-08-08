@@ -15,7 +15,7 @@ type Rule = { intent: CoreIntent; re: RegExp; confidence: number }
 const RULES: Rule[] = [
   {
     intent: 'help',
-    re: /사용\s*설명서|시작\s*가이드|도움말|헬프|^help$|뭐\s*할\s*수|사용법|명령어|이\s*앱(?:이|은)?\s*뭐/i,
+    re: /사용\s*설명서|사용\s*방법|시작\s*가이드|도움말|헬프|^help$|뭐\s*할\s*수|사용법|명령어|이\s*앱(?:이|은)?\s*뭐/i,
     confidence: 0.92,
   },
   { intent: 'change_setting', re: /설정\s*(열어|보여|가|켜)|settings?\s*open|언어\s*바꿔|tts\s*설정/i, confidence: 0.9 },

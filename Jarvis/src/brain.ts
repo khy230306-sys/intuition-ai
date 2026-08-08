@@ -529,7 +529,7 @@ async function handleLife(text: string): Promise<BrainReply | null> {
     }
   }
 
-  if (/몇\s*시|지금\s*시간|현재\s*시간/.test(text)) {
+  if (!/몇\s*시\s*까지/.test(text) && /몇\s*시|지금\s*시간|현재\s*시간/.test(text)) {
     return { text: `지금은 ${nowText()}입니다.`, speak: true }
   }
 

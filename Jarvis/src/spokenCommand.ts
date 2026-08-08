@@ -171,7 +171,10 @@ export function detectEverydayIntent(raw: string): EverydayIntent {
     return { kind: 'weather', city: extractWeatherCity(text) }
   }
 
-  if (
+  // 「몇 시까지 해?」 after place select is hours-of-operation, not wall-clock
+  if (/몇\s*시\s*까지/.test(text)) {
+    /* fall through */
+  } else if (
     /^(지금\s*)?몇\s*시|시간\s*알려|현재\s*시간/.test(text) ||
     bestSeedScore(c, TIME_SEEDS) >= 0.6
   ) {

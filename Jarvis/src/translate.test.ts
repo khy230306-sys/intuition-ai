@@ -186,6 +186,9 @@ describe('lock-until-stop translate mode', () => {
   it('escape command helper recognizes navigation', () => {
     expect(isTranslateEscapeCommand('울산역으로 안내해줘')).toBe(true)
     expect(isTranslateEscapeCommand('안녕하세요')).toBe(false)
+    // Weather queries stay inside translation mode (must not escape to weather tool)
+    expect(isTranslateEscapeCommand('울산 날씨 알려줘')).toBe(false)
+    expect(isTranslateEscapeCommand('오늘 날씨 어때')).toBe(false)
   })
 
   it('persists lock across reload of storage', async () => {

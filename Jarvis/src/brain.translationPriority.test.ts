@@ -39,6 +39,8 @@ describe('translation mode beats weather engine', () => {
     })
     const r = await think('울산 날씨 알려줘')
     const t = r.text || ''
-    expect(/기온\s*\d|℃|습도\s*\d/.test(t)).toBe(false)
+    expect(/open-meteo|기온\s*\d|℃|습도\s*\d/.test(t)).toBe(false)
+    expect(/【영어】|weather|Weather|Ulsan|번역/i.test(t)).toBe(true)
   })
 })
+

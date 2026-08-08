@@ -7,15 +7,16 @@ import type { HybridErrorCode } from './providerErrors'
 import { getProviderSlot, updateProviderSlot } from './providerConfig'
 import type { HybridProviderId, ProviderHealthStatus, ProviderSlotConfig } from './types'
 
-const COOLDOWN_MS: Partial<Record<HybridErrorCode | 'unknown', number>> = {
+const COOLDOWN_MS: Partial<Record<HybridErrorCode, number>> = {
   payment_required: 30 * 60_000,
   invalid_key: 30 * 60_000,
   quota: 15 * 60_000,
   rate_limit: 45_000,
   server: 30_000,
   network: 20_000,
-  timeout: 20_000,
+  offline: 15_000,
   model_unavailable: 10 * 60_000,
+  all_failed: 30_000,
   unknown: 30_000,
 }
 

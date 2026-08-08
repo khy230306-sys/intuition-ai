@@ -9,6 +9,7 @@ export type EngineTurnKind =
   | 'weather'
   | 'place_seek'
   | 'select'
+  | 'place_hours'
   | 'calendar_write'
   | 'cancel'
   | 'none'

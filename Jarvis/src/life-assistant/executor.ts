@@ -29,11 +29,31 @@ function mergeMissing(r: LifeAssistantIntentResult): string[] {
   return missing
 }
 
+function missingFieldsUserPrompt(r: LifeAssistantIntentResult, missing: string[]): string {
+  if (r.intent === 'calendar.delete' || r.intent === 'calendar.update') {
+    return [
+      r.intent === 'calendar.delete'
+        ? '어떤 일정을 취소할까요? 제목이나 날짜를 알려 주세요.'
+        : '어떤 일정을 바꿀까요? 제목이나 날짜를 알려 주세요.',
+      '예: 「월요일 엄마 병원 일정 취소해줘」',
+    ].join('\n')
+  }
+  const labels: Record<string, string> = {
+    title: '제목',
+    date: '날짜',
+    time: '시간',
+    person: '누구',
+    location: '장소',
+  }
+  const nice = missing.map((m) => labels[m] || m).join(', ')
+  return `조금 더 알려주세요. 필요한 정보: ${nice}\n예: 「내일 오후 3시 병원 예약 추가해줘」`
+}
+
 async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply | null> {
   const missing = mergeMissing(r)
   if (missing.length && r.requiresConfirmation) {
     return {
-      text: `조금 더 알려주세요. 필요한 정보: ${missing.join(', ')}\n예: 「내일 오후 3시 병원 예약 추가해줘」`,
+      text: missingFieldsUserPrompt(r, missing),
       speak: true,
     }
   }

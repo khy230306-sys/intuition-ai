@@ -3487,7 +3487,7 @@ function renderLocationGate(): string {
         <button type="button" class="ghost-btn loc-skip" data-action="skip-location" ${
           state.locationBusy ? 'disabled' : ''
         }>
-          오프라인으로 계속 (대화·투자·생활·가족·친구·게임)
+          오프라인으로 계속 (대화·투자·생활·멤버·게임)
         </button>
         ${
           state.showInstall
@@ -5387,7 +5387,7 @@ function renderSettings(): string {
         <button type="button" class="ghost-btn" data-action="export">파일 저장</button>
         <button type="button" class="ghost-btn" data-action="import">복원</button>
       </div>
-      <p class="hint">백업 v8: 대화·생활·투자·가족/친구·관계기억·스마트알림·Life OS·Life OS 2.0·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
+      <p class="hint">백업 v8: 대화·생활·투자·멤버·관계기억·스마트알림·Life OS·Life OS 2.0·아케이드 포함. API 키는 제외됩니다. 클라우드 자동 복구는 없습니다. 전체 JSON이 크면 QR은 앱 링크·요약으로 대체됩니다.</p>
       <button type="button" class="ghost-btn" data-action="voice-test">음성 시스템 테스트</button>
       <button type="button" class="ghost-btn danger-btn" data-action="clear-chat">지난 대화 삭제 · 대화 초기화</button>
       <button type="button" class="ghost-btn" data-action="hard-refresh">앱 캐시 새로고침 (v${APP_VERSION})</button>

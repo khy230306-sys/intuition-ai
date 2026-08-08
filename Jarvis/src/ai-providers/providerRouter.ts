@@ -13,7 +13,6 @@ import {
 } from './providerConfig'
 import {
   clearProviderCooldown,
-  isProviderInCooldown,
   isProviderRoutable,
   markProviderCooldown,
 } from './providerCooldown'

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   BOARD_SIZE,
+  createCell,
+  emptyBoard,
   findAllMoves,
   findMatches,
   generateBoard,
   resolveBoard,
+  resolveBoardSteps,
   swapCells,
   trySwap,
 } from './board'
 import { hashSeed } from './rng'
+import type { GemKind } from '../types'
 
 describe('aizioQuest match3', () => {
   it('generates 8x8 board without immediate soft-lock', () => {
@@ -85,5 +89,73 @@ describe('aizioQuest match3', () => {
     b[1]![5]!.kind = 'guard'
     b[2]![5]!.kind = 'guard'
     expect(findMatches(b).some((g) => g.shape === 'T' || g.shape === 'L')).toBe(true)
+  })
+
+  it('resolveBoardSteps chains clear → gravity → next match waves', () => {
+    // Checkerboard base (no matches), then force a cascading double clear.
+    const kinds: GemKind[] = ['fire', 'water', 'nature', 'light', 'dark', 'guard']
+    const b = emptyBoard()
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        b[r]![c] = createCell(kinds[(r + c) % kinds.length]!)
+      }
+    }
+    // Wave 1: three fires on bottom row
+    b[7]![0] = createCell('fire')
+    b[7]![1] = createCell('fire')
+    b[7]![2] = createCell('fire')
+    // After they clear, three waters stacked above col0–2 fall onto row7 and match
+    b[6]![0] = createCell('water')
+    b[6]![1] = createCell('water')
+    b[6]![2] = createCell('water')
+    // Keep row5 non-matching with waters so only one cascade of waters
+    b[5]![0] = createCell('nature')
+    b[5]![1] = createCell('light')
+    b[5]![2] = createCell('dark')
+
+    expect(findMatches(b).length).toBeGreaterThan(0)
+    const stepped = resolveBoardSteps(b, 11)
+    expect(stepped.steps.length).toBeGreaterThanOrEqual(2)
+    expect(stepped.combos).toBeGreaterThanOrEqual(2)
+    // Each wave exposes matchedBoard before afterBoard
+    for (const step of stepped.steps) {
+      expect(step.matchedBoard).toBeTruthy()
+      expect(step.afterBoard).toBeTruthy()
+      expect(step.groups.length).toBeGreaterThan(0)
+      expect(step.cleared.length).toBeGreaterThanOrEqual(3)
+      expect(findMatches(step.matchedBoard).length).toBeGreaterThan(0)
+    }
+    expect(findMatches(stepped.board).length).toBe(0)
+
+    const viaTry = trySwap(
+      (() => {
+        // Legal swap that creates the fire match
+        const start = emptyBoard()
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            start[r]![c] = createCell(kinds[(r + c) % kinds.length]!)
+          }
+        }
+        start[7]![0] = createCell('fire')
+        start[7]![1] = createCell('fire')
+        start[7]![2] = createCell('water')
+        start[6]![2] = createCell('fire')
+        start[6]![0] = createCell('water')
+        start[6]![1] = createCell('water')
+        start[5]![0] = createCell('nature')
+        start[5]![1] = createCell('light')
+        start[5]![2] = createCell('dark')
+        return start
+      })(),
+      { r: 7, c: 2 },
+      { r: 6, c: 2 },
+      21,
+    )
+    expect(viaTry.ok).toBe(true)
+    if (viaTry.ok) {
+      expect(viaTry.swapped).toBeTruthy()
+      expect(viaTry.steps.length).toBeGreaterThanOrEqual(1)
+      expect(viaTry.steps[0]!.matchedBoard).toBeTruthy()
+    }
   })
 })

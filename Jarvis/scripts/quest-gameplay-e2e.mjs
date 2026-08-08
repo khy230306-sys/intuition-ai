@@ -71,7 +71,19 @@ async function dragLegalMove(page) {
   await page.mouse.down()
   await page.mouse.move(target.bx, target.by, { steps: 14 })
   await page.mouse.up()
-  await new Promise((r) => setTimeout(r, 700))
+  // Cascade chain: swap → match → pop → fall (can take ~1.2s+ per wave)
+  let sawCascadeFx = false
+  for (let i = 0; i < 24; i++) {
+    const fx = await page.evaluate(() => {
+      const matched = !!document.querySelector('.aq-gem.matched, .aq-gem.popping, .aq-gem.falling, .aq-gem.swap-ok')
+      const busy = /처리 중/.test(document.querySelector('.aq-turn')?.textContent || '')
+      return { matched, busy }
+    })
+    if (fx.matched) sawCascadeFx = true
+    if (!fx.busy && i > 2) break
+    await new Promise((r) => setTimeout(r, 80))
+  }
+  await new Promise((r) => setTimeout(r, 200))
   const after = await page.evaluate(() =>
     [...document.querySelectorAll('.aq-gem')].map((g) => g.dataset.kind).join(''),
   )
@@ -80,7 +92,13 @@ async function dragLegalMove(page) {
     const m = t.match(/HP\s+(\d+)/)
     return m ? Number(m[1]) : null
   })
-  return { changed: before !== after, enemyBefore, enemyAfter, damaged: enemyAfter != null && enemyBefore != null && enemyAfter < enemyBefore }
+  return {
+    changed: before !== after,
+    enemyBefore,
+    enemyAfter,
+    damaged: enemyAfter != null && enemyBefore != null && enemyAfter < enemyBefore,
+    sawCascadeFx,
+  }
 }
 
 async function main() {
@@ -181,11 +199,13 @@ async function main() {
   // Drag until board changes (legal match) — up to 12 attempts
   let swapped = false
   let damaged = false
+  let cascadeFx = false
   for (let i = 0; i < 12; i++) {
     const r = await dragLegalMove(page)
     if (r && r.changed) {
       swapped = true
       if (r.damaged) damaged = true
+      if (r.sawCascadeFx) cascadeFx = true
       break
     }
     // tap-tap fallback on coach
@@ -199,16 +219,24 @@ async function main() {
       await new Promise((r) => setTimeout(r, 40))
       b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 2, clientY: 2, pointerId: 8, pointerType: 'touch' }))
       b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 2, clientY: 2, pointerId: 8, pointerType: 'touch' }))
-      await new Promise((r) => setTimeout(r, 700))
+      let saw = false
+      for (let w = 0; w < 24; w++) {
+        if (document.querySelector('.aq-gem.matched, .aq-gem.popping, .aq-gem.falling, .aq-gem.swap-ok')) saw = true
+        const busy = /처리 중/.test(document.querySelector('.aq-turn')?.textContent || '')
+        if (!busy && w > 2) break
+        await new Promise((r) => setTimeout(r, 80))
+      }
       const after = [...document.querySelectorAll('.aq-gem')].map((g) => g.dataset.kind).join('')
-      return before !== after
+      return { changed: before !== after, saw }
     })
-    if (tapped) {
+    if (tapped && tapped.changed) {
       swapped = true
+      if (tapped.saw) cascadeFx = true
       break
     }
   }
   ok('gem_swap_visual', swapped)
+  ok('cascade_connect_fx', cascadeFx)
 
   // Wait for damage float or HP drop
   await new Promise((r) => setTimeout(r, 400))
@@ -255,13 +283,13 @@ async function main() {
     const t0 = Date.now()
     await dragLegalMove(page)
     // wait unlock
-    for (let w = 0; w < 30; w++) {
+    for (let w = 0; w < 60; w++) {
       const busy = await page.evaluate(() => /처리 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
       if (!busy) break
       await new Promise((r) => setTimeout(r, 100))
     }
     const stillBusy = await page.evaluate(() => /처리 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
-    if (stillBusy && Date.now() - t0 > 4000) {
+    if (stillBusy && Date.now() - t0 > 8000) {
       freeze = true
       break
     }

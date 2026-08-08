@@ -277,6 +277,54 @@ export function applyGravity(board: Board, seed: number, kinds: GemKind[] = GEM_
   return next
 }
 
+export type CascadeStep = {
+  /** Board with matches still present (for highlight) */
+  matchedBoard: Board
+  groups: MatchGroup[]
+  cleared: ClearResult['cleared']
+  /** Board after gravity + refill for this cascade wave */
+  afterBoard: Board
+  wave: number
+}
+
+/** Stepwise cascade resolution — UI can animate each wave. */
+export function resolveBoardSteps(
+  board: Board,
+  seed: number,
+): {
+  steps: CascadeStep[]
+  board: Board
+  totalCleared: ClearResult['cleared']
+  combos: number
+  groupsAll: MatchGroup[]
+} {
+  let cur = cloneBoard(board)
+  let totalCleared: ClearResult['cleared'] = []
+  let combos = 0
+  const groupsAll: MatchGroup[] = []
+  const steps: CascadeStep[] = []
+  let s = seed
+  for (let guard = 0; guard < 40; guard++) {
+    const groups = findMatches(cur)
+    if (!groups.length) break
+    combos += 1
+    groupsAll.push(...groups)
+    const matchedBoard = cloneBoard(cur)
+    const cleared = clearMatches(cur, groups)
+    totalCleared = totalCleared.concat(cleared.cleared)
+    const afterBoard = applyGravity(cleared.board, s++)
+    steps.push({
+      matchedBoard,
+      groups,
+      cleared: cleared.cleared,
+      afterBoard,
+      wave: combos,
+    })
+    cur = afterBoard
+  }
+  return { steps, board: cur, totalCleared, combos, groupsAll }
+}
+
 /** Resolve cascades until stable. */
 export function resolveBoard(
   board: Board,
@@ -287,21 +335,13 @@ export function resolveBoard(
   combos: number
   groupsAll: MatchGroup[]
 } {
-  let cur = cloneBoard(board)
-  let totalCleared: ClearResult['cleared'] = []
-  let combos = 0
-  const groupsAll: MatchGroup[] = []
-  let s = seed
-  for (let guard = 0; guard < 40; guard++) {
-    const groups = findMatches(cur)
-    if (!groups.length) break
-    combos += 1
-    groupsAll.push(...groups)
-    const cleared = clearMatches(cur, groups)
-    totalCleared = totalCleared.concat(cleared.cleared)
-    cur = applyGravity(cleared.board, s++)
+  const r = resolveBoardSteps(board, seed)
+  return {
+    board: r.board,
+    totalCleared: r.totalCleared,
+    combos: r.combos,
+    groupsAll: r.groupsAll,
   }
-  return { board: cur, totalCleared, combos, groupsAll }
 }
 
 export type Move = { a: { r: number; c: number }; b: { r: number; c: number } }
@@ -329,18 +369,30 @@ export function trySwap(
   a: { r: number; c: number },
   b: { r: number; c: number },
   seed: number,
-): { ok: false } | { ok: true; board: Board; cleared: ClearResult['cleared']; combos: number; groups: MatchGroup[] } {
+):
+  | { ok: false }
+  | {
+      ok: true
+      board: Board
+      swapped: Board
+      cleared: ClearResult['cleared']
+      combos: number
+      groups: MatchGroup[]
+      steps: CascadeStep[]
+    } {
   if (!areAdjacent(a, b)) return { ok: false }
   const swapped = swapCells(board, a, b)
   const matches = findMatches(swapped)
   if (!matches.length) return { ok: false }
-  const resolved = resolveBoard(swapped, seed)
+  const resolved = resolveBoardSteps(swapped, seed)
   return {
     ok: true,
     board: resolved.board,
+    swapped,
     cleared: resolved.totalCleared,
     combos: resolved.combos,
     groups: resolved.groupsAll,
+    steps: resolved.steps,
   }
 }
 

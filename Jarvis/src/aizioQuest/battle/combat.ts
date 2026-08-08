@@ -148,6 +148,11 @@ export type TurnFx = {
   hadFive: boolean
   extraTurn: boolean
   log: string[]
+  /** Cascade waves for UI animation (player swaps only) */
+  steps?: import('../match3/board').CascadeStep[]
+  swapped?: import('../match3/board').Board
+  from?: { r: number; c: number }
+  to?: { r: number; c: number }
 }
 
 export function applyPlayerSwap(
@@ -218,6 +223,10 @@ export function applyPlayerSwap(
       hadFive,
       extraTurn,
       log: next.log.slice(-2),
+      steps: result.steps,
+      swapped: result.swapped,
+      from: a,
+      to: b,
     },
     ok: true,
   }

@@ -4,7 +4,7 @@
  */
 
 import './quest.css'
-import type { BattleRuntime, GemKind, QuestSave, QuestScreen, SkillDef } from '../types'
+import type { BattleRuntime, Board, GemKind, QuestSave, QuestScreen, SkillDef } from '../types'
 import { HEROES, heroById } from '../content/heroes'
 import { CHAPTER1_STAGES, nextStageAfter, stageById } from '../content/stages'
 import { rollLoot } from '../content/equipment'
@@ -24,8 +24,9 @@ import {
   isVictory,
   runEnemyTurn,
   startBattle,
+  type TurnFx,
 } from '../battle/combat'
-import { findAllMoves, type Move } from '../match3/board'
+import { BOARD_SIZE, findAllMoves, type Move } from '../match3/board'
 import { hashSeed } from '../match3/rng'
 import { haptic, playQuestSfx } from '../audio/questAudio'
 import { attachBoardInput, dirLabel, pickTutorialMove, type CellPos } from './boardInput'
@@ -379,7 +380,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
                     const sel = selected && selected.r === r && selected.c === c ? ' selected' : ''
                     const isCoach = coach && coach.a.r === r && coach.a.c === c ? ' coach' : ''
                     const isTarget = coach && coach.b.r === r && coach.b.c === c ? ' coach-target' : ''
-                    return `<button type="button" class="aq-gem${sel}${isCoach}${isTarget}" data-kind="${cell.kind}" data-special="${cell.special || 'none'}" data-r="${r}" data-c="${c}" aria-label="${cell.kind}"><span class="aq-sym">${GEM_SYM[cell.kind]}</span></button>`
+                    return `<button type="button" class="aq-gem${sel}${isCoach}${isTarget}" data-kind="${cell.kind}" data-special="${cell.special || 'none'}" data-id="${cell.id}" data-r="${r}" data-c="${c}" aria-label="${cell.kind}"><span class="aq-sym">${GEM_SYM[cell.kind]}</span></button>`
                   })
                   .join(''),
               )
@@ -612,10 +613,85 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     gb?.classList.remove('swap-fail')
   }
 
+  /** In-place board paint — keeps DOM nodes so clear → fall → cascade feels continuous. */
+  function syncBoardDom(
+    board: Board,
+    opts?: { matched?: Set<string>; falling?: boolean; swapCells?: CellPos[] },
+  ): void {
+    const boardEl = root.querySelector('[data-aq-board="1"]')
+    if (!boardEl) return
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const cell = board[r]![c]!
+        const el = boardEl.querySelector(`.aq-gem[data-r="${r}"][data-c="${c}"]`) as HTMLElement | null
+        if (!el) continue
+        const prevKind = el.dataset.kind
+        const prevId = el.dataset.id
+        el.dataset.kind = cell.kind
+        el.dataset.special = cell.special || 'none'
+        el.dataset.id = cell.id
+        const sym = el.querySelector('.aq-sym')
+        if (sym) sym.textContent = GEM_SYM[cell.kind]
+        el.classList.remove(
+          'matched',
+          'popping',
+          'falling',
+          'swap-ok',
+          'selected',
+          'hint',
+          'coach',
+          'coach-target',
+        )
+        if (opts?.matched?.has(`${r},${c}`)) el.classList.add('matched')
+        if (opts?.falling && (prevKind !== cell.kind || prevId !== cell.id)) el.classList.add('falling')
+        if (opts?.swapCells?.some((p) => p.r === r && p.c === c)) el.classList.add('swap-ok')
+      }
+    }
+  }
+
+  /** Animate match waves: swap → highlight → pop → gravity/refill → next wave. */
+  async function playCascadeFx(fx: TurnFx): Promise<void> {
+    const steps = fx.steps || []
+    if (fx.swapped) {
+      const swapCells: CellPos[] = []
+      if (fx.from) swapCells.push(fx.from)
+      if (fx.to) swapCells.push(fx.to)
+      syncBoardDom(fx.swapped, { swapCells })
+      await wait(130)
+    }
+    if (!steps.length) return
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]!
+      const matched = new Set<string>()
+      for (const g of step.groups) {
+        for (const p of g.cells) matched.add(`${p.r},${p.c}`)
+      }
+      for (const c of step.cleared) matched.add(`${c.r},${c.c}`)
+
+      syncBoardDom(step.matchedBoard, { matched })
+      playQuestSfx(i === 0 ? 'match' : 'cascade', save.settings.sfx)
+      await wait(210)
+
+      const boardEl = root.querySelector('[data-aq-board="1"]')
+      for (const key of matched) {
+        const [rs, cs] = key.split(',')
+        boardEl
+          ?.querySelector(`.aq-gem[data-r="${rs}"][data-c="${cs}"]`)
+          ?.classList.add('popping')
+      }
+      await wait(170)
+
+      syncBoardDom(step.afterBoard, { falling: true })
+      await wait(260)
+    }
+  }
+
   async function playerMove(a: CellPos, b: CellPos): Promise<void> {
     if (!battle || battle.animLock || battle.turn !== 'player') return
     clearHintTimer()
     hintMove = null
+    selected = null
     lastSwap = `${a.r},${a.c}->${b.r},${b.c}`
     // Resolve swap BEFORE locking UI state into the engine call.
     const res = applyPlayerSwap(battle, save, a, b)
@@ -624,7 +700,6 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       paintBoardClasses()
       await flashInvalidSwap(a, b)
       battle = { ...battle, animLock: false }
-      selected = null
       const moves = findAllMoves(battle.board)
       if (!moves.length) {
         showToast('움직일 수 있는 보석이 없어 섞습니다')
@@ -647,7 +722,9 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     paintBoardClasses()
 
     statusLine = `dmg=${res.fx.damageToEnemy} heal=${res.fx.heal} en=${res.fx.energyGain} combo=${res.fx.combo}`
-    playQuestSfx(res.fx.combo > 1 ? 'cascade' : 'match', save.settings.sfx)
+    // Cascade animation first — do not remount board mid-chain
+    await playCascadeFx(res.fx)
+
     if (res.fx.hadFive) {
       playQuestSfx('critical', save.settings.sfx)
       haptic([20, 30, 20], save.settings.haptic)
@@ -670,7 +747,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       }
     }
 
-    paint() // remount after resolved board — gesture already finished
+    paint() // remount chrome + final board after cascade chain finishes
     await wait(320)
     floatText = ''
     const floatEl = root.querySelector('[data-aq-float]') as HTMLElement | null

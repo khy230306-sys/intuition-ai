@@ -1,0 +1,6 @@
+apple.webp
+banana.webp
+strawberry.webp
+carrot.webp
+bread.webp
+milk.webp

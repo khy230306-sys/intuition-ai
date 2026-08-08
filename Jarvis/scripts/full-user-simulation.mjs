@@ -361,9 +361,10 @@ async function sendChat(page, text) {
           (m.textContent || '').includes(msg),
         )
         const leftChat = !document.getElementById('draft')
-        return bubbled || leftChat
+        const flash = (document.querySelector('.flash, .toast, [data-flash]')?.textContent || '').length > 0
+        return bubbled || leftChat || flash
       },
-      { timeout: 15000 },
+      { timeout: 8000 },
       text,
     )
   } catch {
@@ -371,9 +372,16 @@ async function sendChat(page, text) {
   }
   const firstUiMs = Date.now() - t0
 
+  // Done when: new assistant bubble, composer unlocked, left chat (settings/etc), or flash.
   try {
     await page.waitForFunction(
-      (n) => document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length > n,
+      (n) => {
+        const count = document.querySelectorAll('.msg-bubble.assistant, .msg.assistant').length
+        const unlocked = document.getElementById('draft') && !document.querySelector('#draft')?.disabled
+        const leftChat = !document.getElementById('draft')
+        const flash = (document.querySelector('.flash, .toast, [data-flash]')?.textContent || '').length > 0
+        return count > n || unlocked || leftChat || flash
+      },
       { timeout: 18000 },
       beforeCount,
     )
@@ -383,7 +391,7 @@ async function sendChat(page, text) {
   // Recover chat if a skill navigated away (composer timeout root cause)
   await ensureChatComposer(page)
   try {
-    await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 18000 })
+    await page.waitForFunction(() => !document.querySelector('#draft')?.disabled, { timeout: 8000 })
   } catch {
     // App should unlock by 18s; if harness still sees disabled, soft-recover for next turn
     await page.evaluate(() => {
@@ -392,12 +400,14 @@ async function sendChat(page, text) {
       if (d) d.disabled = false
     })
   }
-  await new Promise((r) => setTimeout(r, 350))
+  await new Promise((r) => setTimeout(r, 250))
   const totalMs = Date.now() - t0
   const reply = await page.evaluate(() => {
     const msgs = [...document.querySelectorAll('.msg-bubble.assistant, .msg.assistant')]
     const last = msgs[msgs.length - 1]
-    return last ? (last.textContent || '').trim() : ''
+    const bubble = last ? (last.textContent || '').trim() : ''
+    if (bubble) return bubble
+    return (document.querySelector('.flash, .toast, [data-flash]')?.textContent || '').trim()
   })
   return { reply, firstUiMs, totalMs }
 }

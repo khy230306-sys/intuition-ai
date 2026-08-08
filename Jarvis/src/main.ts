@@ -443,7 +443,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.30.16'
+const APP_VERSION = '1.30.17'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2309,9 +2309,13 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       state.chatPlusOpen = false
       dismissMusicMiniPlayer()
       if (gen === thinkGen) {
-        showFlash(reply.text || '대화 초기화 완료')
+        const confirm = reply.text || '대화 초기화 완료'
+        // Keep one confirmation bubble so the thread is never a blank void after reset.
+        pushMsg('assistant', confirm)
+        saveChat(state.messages)
+        showFlash(confirm)
         if (reply.speak !== false && state.settings.speakReplies) {
-          void speakAsync(reply.text, reply.speakLang || 'ko-KR')
+          void speakAsync(confirm, reply.speakLang || 'ko-KR')
         }
         render()
         scrollChat()

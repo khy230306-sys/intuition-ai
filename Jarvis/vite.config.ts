@@ -38,6 +38,26 @@ export default defineConfig({
         return html.replaceAll('%APP_VERSION%', APP_VERSION)
       },
     },
+    {
+      // ShipStatic free plan rejects files > 20MB. ORT asyncify wasm is ~23MB.
+      // Local AI loads ORT from jsDelivr (see transformersEnv.ts) + SW runtime cache.
+      name: 'aizio-strip-ort-wasm',
+      generateBundle(_opts, bundle) {
+        for (const fileName of Object.keys(bundle)) {
+          if (!/\.wasm$/i.test(fileName)) continue
+          const item = bundle[fileName]
+          const size =
+            item.type === 'asset'
+              ? typeof item.source === 'string'
+                ? item.source.length
+                : item.source.byteLength
+              : 0
+          if (size > 15 * 1024 * 1024 || /ort-wasm/i.test(fileName)) {
+            delete bundle[fileName]
+          }
+        }
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       // Do NOT precache build-meta / quote-snapshot — stale SW made "업데이트" think it was already latest.
@@ -157,6 +177,29 @@ export default defineConfig({
             options: {
               cacheName: 'gstatic-fonts-cache',
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+          {
+            // ORT WASM/runtime for Local AI — cached after first online install
+            urlPattern: ({ url }) =>
+              /cdn\.jsdelivr\.net$/i.test(url.hostname) && /onnxruntime-web/i.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'aizio-ort-runtime',
+              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Hugging Face model weights (Local AI / MT / STT packs)
+            urlPattern: ({ url }) =>
+              /(huggingface\.co|hf\.co)$/i.test(url.hostname) ||
+              /cdn-lfs\.huggingface\.co$/i.test(url.hostname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'aizio-hf-models',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],

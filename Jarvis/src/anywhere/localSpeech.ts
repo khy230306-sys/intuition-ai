@@ -6,6 +6,7 @@
 
 import { getPackState, setPackState } from './packState'
 import { probeDeviceCapability } from './deviceCapability'
+import { configureTransformersEnv } from './transformersEnv'
 
 export async function localSpeak(text: string, lang = 'ko-KR'): Promise<{ ok: boolean; reason?: string }> {
   if (typeof speechSynthesis === 'undefined') {
@@ -44,7 +45,7 @@ export async function localSttFromAudioBuffer(
   try {
     const cap = await probeDeviceCapability()
     const { pipeline, env } = await import('@huggingface/transformers')
-    env.useBrowserCache = true
+    configureTransformersEnv(env)
     const device = cap.platform === 'ios' || !cap.hasWebGpu ? 'wasm' : 'webgpu'
     const pipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
       device,

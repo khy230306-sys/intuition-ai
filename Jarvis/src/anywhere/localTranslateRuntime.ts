@@ -3,6 +3,7 @@
 import { packById } from './modelRegistry'
 import { getPackState, installedTranslatePackIds, setPackState } from './packState'
 import { probeDeviceCapability } from './deviceCapability'
+import { configureTransformersEnv } from './transformersEnv'
 
 const pipeCache = new Map<string, unknown>()
 
@@ -30,8 +31,7 @@ async function getPipe(packId: string): Promise<unknown> {
   }
   const cap = await probeDeviceCapability()
   const { pipeline, env } = await loadTransformers()
-  env.useBrowserCache = true
-  env.allowLocalModels = false
+  configureTransformersEnv(env)
   const device = cap.platform === 'ios' || !cap.hasWebGpu ? 'wasm' : 'webgpu'
   const pipe = await pipeline(def.task, def.hfId, { device, dtype: def.dtype })
   pipeCache.set(packId, pipe)

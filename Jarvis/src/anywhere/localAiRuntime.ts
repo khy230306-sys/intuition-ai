@@ -7,6 +7,7 @@ import { packById, recommendChatPack, type ModelPackDef } from './modelRegistry'
 import { getPackState, setPackState, loadPackStore, savePackStore, isChatModelInstalled } from './packState'
 import { probeDeviceCapability } from './deviceCapability'
 import { offlineNetworkRefusal } from './hallucinationGuard'
+import { configureTransformersEnv, prefetchOrtRuntime } from './transformersEnv'
 
 export type LocalAiChatResult = {
   text: string
@@ -43,8 +44,8 @@ export async function downloadPack(packId: string, onProgress?: ProgressCb): Pro
       return false
     }
     const { pipeline, env } = await loadTransformers()
-    env.allowLocalModels = false
-    env.useBrowserCache = true
+    configureTransformersEnv(env)
+    await prefetchOrtRuntime()
     const device = pickDevice(cap.hasWebGpu, cap.platform)
     const dtype = def.dtype
     const pipe = await pipeline(def.task, def.hfId, {
@@ -125,8 +126,7 @@ async function ensureChatPipeline(def: ModelPackDef): Promise<unknown> {
   if (loading) return loading
   loading = (async () => {
     const { pipeline, env } = await loadTransformers()
-    env.allowLocalModels = false
-    env.useBrowserCache = true
+    configureTransformersEnv(env)
     const pipe = await pipeline(def.task, def.hfId, {
       device,
       dtype: def.dtype,

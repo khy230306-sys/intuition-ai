@@ -1,6 +1,7 @@
 export * from './deviceCapability'
 export * from './modelRegistry'
 export * from './packState'
+export * from './transformersEnv'
 export * from './localAiRuntime'
 export * from './localTranslateRuntime'
 export * from './localSpeech'

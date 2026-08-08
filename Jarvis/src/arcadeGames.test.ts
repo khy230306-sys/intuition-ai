@@ -23,8 +23,12 @@ import {
   GYEOKPA_MAX_ALLIES,
   GYEOKPA_WEAPONS,
   gyeokpaAllySlotOffsets,
+  gyeokpaFirePattern,
   gyeokpaNextWeapon,
   gyeokpaWeaponLabel,
+  gyeokpaWeaponOnHit,
+  GYEOKPA_MAX_WEAPON,
+  GYEOKPA_WEAPON_TIER,
   unitsPerLevel,
 } from './arcadeGames'
 
@@ -79,16 +83,29 @@ describe('arcade helpers', () => {
     expect(ARCADE_META.dash.blurb).toMatch(/점프/)
   })
 
-  it('configures 스페이스2 weapon cycle without laser', () => {
+  it('configures 스페이스2 weapon tiers 1–4 without wrap-to-1 on pickup', () => {
     expect(ARCADE_META.gyeokpa.title).toBe('스페이스2')
     expect(GYEOKPA_MAX_ALLIES).toBe(0)
     expect(gyeokpaAllySlotOffsets()).toHaveLength(0)
-    expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread'])
+    expect(GYEOKPA_WEAPONS).toEqual(['pulse', 'twin', 'spread', 'quad'])
+    expect(GYEOKPA_MAX_WEAPON).toBe('quad')
     expect(GYEOKPA_LASER_BEAM_LEN).toBe(0)
     expect(gyeokpaNextWeapon('pulse')).toBe('twin')
     expect(gyeokpaNextWeapon('twin')).toBe('spread')
-    expect(gyeokpaNextWeapon('spread')).toBe('pulse')
-    expect(gyeokpaWeaponLabel('spread')).toBe('스프레드')
+    expect(gyeokpaNextWeapon('spread')).toBe('quad')
+    expect(gyeokpaNextWeapon('quad')).toBe('quad')
+    expect(GYEOKPA_WEAPON_TIER.quad).toBe(4)
+    expect(gyeokpaWeaponOnHit('quad')).toBe('pulse')
+    expect(gyeokpaWeaponOnHit('spread')).toBe('pulse')
+    expect(gyeokpaWeaponLabel('quad')).toContain('4단')
+    expect(gyeokpaFirePattern('pulse')).toHaveLength(1)
+    expect(gyeokpaFirePattern('twin')).toHaveLength(2)
+    expect(gyeokpaFirePattern('spread')).toHaveLength(3)
+    const quad = gyeokpaFirePattern('quad')
+    expect(quad).toHaveLength(4)
+    expect(quad.filter((b) => b.vx === 0).length).toBe(2)
+    expect(quad.some((b) => b.vx < 0)).toBe(true)
+    expect(quad.some((b) => b.vx > 0)).toBe(true)
   })
 
   it('builds solvable sliding puzzles and grows grid with level', () => {

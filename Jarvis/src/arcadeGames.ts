@@ -1265,24 +1265,72 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 
 
 /** —— 스페이스2 (id: gyeokpa — waves/boss/power-ups, no laser / no wingmen) —— */
-export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread'
+/** Weapon tiers 1–4: pulse → twin → spread → quad (no wrap back to 1 on pickup). */
+export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'quad'
 
-export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread']
+export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'quad']
+export const GYEOKPA_MAX_WEAPON: GyeokpaWeapon = 'quad'
+export const GYEOKPA_WEAPON_TIER: Record<GyeokpaWeapon, number> = {
+  pulse: 1,
+  twin: 2,
+  spread: 3,
+  quad: 4,
+}
 
 /** @deprecated laser weapon removed from 스페이스2 */
 export const GYEOKPA_LASER_BEAM_LEN = 0
 
 export function gyeokpaWeaponLabel(w: GyeokpaWeapon): string {
-  if (w === 'pulse') return '펄스'
-  if (w === 'twin') return '트윈'
-  return '스프레드'
+  if (w === 'pulse') return '1단 펄스'
+  if (w === 'twin') return '2단 트윈'
+  if (w === 'spread') return '3단 스프레드'
+  return '4단 쿼드'
 }
 
-/** Upgrade cycle: pulse → twin → spread → pulse (no laser). */
+/** One-step upgrade; stays at max (4) — never wraps to pulse. */
 export function gyeokpaNextWeapon(w: GyeokpaWeapon): GyeokpaWeapon {
   const i = GYEOKPA_WEAPONS.indexOf(w)
-  const idx = i < 0 ? 0 : (i + 1) % GYEOKPA_WEAPONS.length
-  return GYEOKPA_WEAPONS[idx]!
+  if (i < 0) return 'pulse'
+  return GYEOKPA_WEAPONS[Math.min(GYEOKPA_WEAPONS.length - 1, i + 1)]!
+}
+
+/** Hit by enemy fire → back to tier 1. */
+export function gyeokpaWeaponOnHit(_w: GyeokpaWeapon): GyeokpaWeapon {
+  return 'pulse'
+}
+
+/** Fire offsets for each weapon tier (ox, oy, vx, vy, dmg). */
+export function gyeokpaFirePattern(w: GyeokpaWeapon): Array<{
+  ox: number
+  oy: number
+  vx: number
+  vy: number
+  dmg: number
+  r?: number
+}> {
+  if (w === 'pulse') {
+    return [{ ox: 0, oy: -12, vx: 0, vy: -620, dmg: 1 }]
+  }
+  if (w === 'twin') {
+    return [
+      { ox: -8, oy: -8, vx: 0, vy: -640, dmg: 1 },
+      { ox: 8, oy: -8, vx: 0, vy: -640, dmg: 1 },
+    ]
+  }
+  if (w === 'spread') {
+    return [
+      { ox: 0, oy: -10, vx: 0, vy: -600, dmg: 1 },
+      { ox: -4, oy: -8, vx: -160, vy: -560, dmg: 1 },
+      { ox: 4, oy: -8, vx: 160, vy: -560, dmg: 1 },
+    ]
+  }
+  // quad (4): two forward + both side diagonals
+  return [
+    { ox: -8, oy: -8, vx: 0, vy: -660, dmg: 1.15 },
+    { ox: 8, oy: -8, vx: 0, vy: -660, dmg: 1.15 },
+    { ox: -6, oy: -6, vx: -200, vy: -560, dmg: 1 },
+    { ox: 6, oy: -6, vx: 200, vy: -560, dmg: 1 },
+  ]
 }
 
 /** @deprecated laser removed */
@@ -1545,10 +1593,13 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
   function hurt(): void {
     if (inv > 0) return
+    // Enemy missile / contact hit → weapon drops to tier 1
+    const dropped = weapon !== 'pulse'
+    if (dropped) weapon = gyeokpaWeaponOnHit(weapon)
     if (shield > 0) {
       shield = 0
       inv = 1
-      toast('실드 파괴!')
+      toast(dropped ? '실드 파괴 · 무기 1단' : '실드 파괴!')
       return
     }
     lives -= 1
@@ -1556,6 +1607,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     inv = 1.6
     shake = 10
     screenFlash = 0.25
+    if (dropped) toast('피격 · 무기 1단')
     if (lives <= 0) finish(false)
   }
 
@@ -1602,19 +1654,16 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
   }
 
   function fire(): void {
-    const mk = (ox: number, oy: number, vx: number, vy: number, dmg: number, r = 3.5) => {
-      bullets.push({ x: shipX + ox, y: shipY + oy, vx, vy, r, dmg, friendly: true })
-    }
-    if (weapon === 'pulse') {
-      mk(0, -12, 0, -620, 1)
-    } else if (weapon === 'twin') {
-      mk(-8, -8, 0, -640, 1)
-      mk(8, -8, 0, -640, 1)
-    } else {
-      // spread (max weapon — no laser)
-      mk(0, -10, 0, -600, 1)
-      mk(-4, -8, -160, -560, 1)
-      mk(4, -8, 160, -560, 1)
+    for (const s of gyeokpaFirePattern(weapon)) {
+      bullets.push({
+        x: shipX + s.ox,
+        y: shipY + s.oy,
+        vx: s.vx,
+        vy: s.vy,
+        r: s.r ?? 3.5,
+        dmg: s.dmg,
+        friendly: true,
+      })
     }
   }
 
@@ -1631,7 +1680,8 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     shipY += (targetY - shipY) * Math.min(1, dt * 14)
 
     fireCd -= dt
-    const rate = weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
+    const rate =
+      weapon === 'quad' ? 0.15 : weapon === 'spread' ? 0.16 : weapon === 'twin' ? 0.12 : 0.14
     if (fireCd <= 0) {
       fire()
       fireCd = rate
@@ -1795,8 +1845,13 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       }
       if (Math.hypot(p.x - shipX, p.y - shipY) < 26) {
         if (p.kind === 'weapon') {
+          const prev = weapon
           weapon = gyeokpaNextWeapon(weapon)
-          toast(`무기: ${gyeokpaWeaponLabel(weapon)}`)
+          toast(
+            weapon === prev && weapon === GYEOKPA_MAX_WEAPON
+              ? '무기 최대 4단'
+              : `무기: ${gyeokpaWeaponLabel(weapon)}`,
+          )
         } else if (p.kind === 'life') {
           lives = Math.min(5, lives + 1)
           toast(`라이프 ${lives}`)

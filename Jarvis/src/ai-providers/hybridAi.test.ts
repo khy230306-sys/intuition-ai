@@ -108,6 +108,10 @@ describe('hybrid AI errors', () => {
     expect(isFallbackableError(new AiError('rate_limit', 'x'))).toBe(true)
     expect(isFallbackableError(new AiError('offline', 'x'))).toBe(false)
     expect(isFallbackableError(new AiError('cancelled', 'x'))).toBe(false)
+    // OpenAI billing must fall through to Gemini / other configured providers
+    expect(isFallbackableError(new AiError('auth', '결제 또는 크레딧이 필요합니다 (429)'))).toBe(
+      true,
+    )
   })
 })
 

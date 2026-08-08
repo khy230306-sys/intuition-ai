@@ -22,7 +22,7 @@ describe('AIZIO built-in conversation', () => {
   it('explains identity as AIZIO without requiring API keys', async () => {
     const r = await aizioLocalChat({ text: '너 누구야', displayName: '주인님' })
     expect(r.text).toMatch(/AIZIO|아이지오|비서/)
-    expect(r.text).toMatch(/API\s*키|키를 넣지/)
+    expect(r.text).toMatch(/API\s*키|키를 넣지|연결하면|연결된 AI/)
   })
 
   it('tells a joke on request', async () => {

@@ -73,11 +73,13 @@ export function seedAppOwnedProvidersFromBuild(): { openai: boolean; gemini: boo
   const gemini = seedGemini()
 
   const cfg = loadHybridAiConfig()
-  if (openai) {
+  // Prefer free Gemini when both keys exist — OpenAI often needs billing.
+  // keep allowPaidFallback so OpenAI can still be tried after free providers.
+  if (gemini && openai) {
     saveHybridAiConfig({
       ...cfg,
-      mode: 'fixed',
-      fixedProvider: 'openai',
+      mode: 'auto',
+      fixedProvider: 'gemini',
       allowPaidFallback: true,
     })
   } else if (gemini) {
@@ -85,6 +87,14 @@ export function seedAppOwnedProvidersFromBuild(): { openai: boolean; gemini: boo
       ...cfg,
       mode: 'fixed',
       fixedProvider: 'gemini',
+      allowPaidFallback: true,
+    })
+  } else if (openai) {
+    saveHybridAiConfig({
+      ...cfg,
+      mode: 'fixed',
+      fixedProvider: 'openai',
+      allowPaidFallback: true,
     })
   }
 

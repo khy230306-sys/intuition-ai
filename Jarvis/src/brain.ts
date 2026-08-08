@@ -811,12 +811,16 @@ export async function think(
   }
 
   // —— Central Command Router + Action Agent Task Context ——
-  // After Global Commands: Active Task + Pending Question beat standalone intents
-  // when the Intent Router labels the utterance as general.chat.
+  // After Global Commands: Active Task + Pending Question beat standalone intents.
+  // When providers are configured, general.chat / requiresAI uses Hybrid AI here
+  // (with conversation history) instead of falling through to canned templates.
   {
     const strippedEarly = stripWakeWord(raw).text || raw
     try {
-      const owned = await tryHandleRoutedCommand(strippedEarly, { source: opts?.source })
+      const owned = await tryHandleRoutedCommand(strippedEarly, {
+        source: opts?.source,
+        history,
+      })
       if (owned) return owned
     } catch {
       /* router must never block legacy */
@@ -960,13 +964,21 @@ export async function think(
     if (fun) return enrich({ text: fun, speak: true })
   }
 
-  // Encyclopedia / dictionary (Wikipedia) — answers even when cloud model is down
+  // Encyclopedia / dictionary (Wikipedia).
+  // How-to / advice / opinion prefer Hybrid AI when configured — Wiki alone is thin.
   if (isKnowledgeQuestion(text)) {
-    try {
-      const wiki = await answerEncyclopedia(text)
-      if (wiki) return enrich({ text: wiki, speak: true })
-    } catch {
-      /* fall through to cloud */
+    const prefersLlm =
+      hasAnyConfiguredProvider() &&
+      /만드는\s*법|조리법|레시피|어떻게\s*하|방법|조언|팁|추천|좋을까|할까|스트레스|고민|설명\s*해|왜\s*그/.test(
+        text,
+      )
+    if (!prefersLlm) {
+      try {
+        const wiki = await answerEncyclopedia(text)
+        if (wiki) return enrich({ text: wiki, speak: true })
+      } catch {
+        /* fall through to cloud */
+      }
     }
   }
 
@@ -1351,24 +1363,36 @@ export async function think(
   const stats = await handleStats(text)
   if (stats) return stats
 
-  // Lifestyle recommends (food / travel / movies / …) before stock screening
+  // Lifestyle recommends (food / travel / movies / …) before stock screening.
+  // When cloud AI is connected, ask the model first — templates are fallback only.
   const lifestyleKind = detectLifestyleRecommend(text)
   if (lifestyleKind) {
     const life = buildLifestyleReply(text, lifestyleKind)
+    const lifestyleAction = () => {
+      if (life.youtubeQuery) {
+        return openUrl(
+          `https://www.youtube.com/results?search_query=${encodeURIComponent(life.youtubeQuery)}`,
+          'YouTube',
+        )
+      }
+      if (life.mapsQuery) return openMaps(life.mapsQuery)
+      if (life.searchQuery) return openSearch(life.searchQuery)
+      return { ok: true, message: '추천' }
+    }
+    if (hasAnyConfiguredProvider()) {
+      try {
+        const cloud = await callCloudLLM(text, settings, history)
+        if (cloud) {
+          return enrich({ text: cloud, speak: true, action: lifestyleAction })
+        }
+      } catch {
+        /* template fallback below */
+      }
+    }
     return {
       text: life.text,
       speak: true,
-      action: () => {
-        if (life.youtubeQuery) {
-          return openUrl(
-            `https://www.youtube.com/results?search_query=${encodeURIComponent(life.youtubeQuery)}`,
-            'YouTube',
-          )
-        }
-        if (life.mapsQuery) return openMaps(life.mapsQuery)
-        if (life.searchQuery) return openSearch(life.searchQuery)
-        return { ok: true, message: '추천' }
-      },
+      action: lifestyleAction,
     }
   }
 

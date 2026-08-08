@@ -3,6 +3,7 @@
  * Cloud Hybrid AI remains an optional upgrade when a backend/provider exists.
  */
 
+import { hasAnyConfiguredProvider } from '../ai-providers'
 import { answerEncyclopedia } from '../encyclopedia/encyclopediaEngine'
 import { isKnowledgeQuestion } from '../encyclopedia/queryParse'
 
@@ -90,10 +91,13 @@ export async function aizioLocalChat(input: {
   }
 
   if (wantsIdentity(text)) {
+    const aiLine = hasAnyConfiguredProvider()
+      ? '지금은 연결된 AI로 질문·조언·아이디어까지 더 자유롭게 도와드릴 수 있어요.'
+      : '별도로 API 키를 넣지 않아도 기본 대화는 가능해요. 설정에서 AI를 연결하면 더 깊게 도와드릴 수 있어요.'
     return {
       text: [
         `저는 ${name}의 생활 비서 AIZIO예요.`,
-        '별도로 API 키를 넣지 않아도 저와 대화할 수 있어요.',
+        aiLine,
         '날씨·일정·번역·할 일 같은 일도 말로 부탁해 주세요. 궁금한 것부터 편하게 물어봐요.',
       ].join(' '),
       speak: true,

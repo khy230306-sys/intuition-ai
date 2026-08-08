@@ -28,6 +28,7 @@ import {
   loadEngineSession,
 } from './session'
 import { formatCalendarReply, runCalendarWriteTool } from './tools/calendarTool'
+import { enrichPlacesIntro, enrichWeatherTip } from './aiEnrich'
 import {
   formatPlacesDegradedNote,
   formatPlacesReply,
@@ -127,8 +128,12 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     const rainHint = w.rainingLikely
       ? '\n비 소식이 있으면 실내 위주로 찾아볼까요?'
       : '\n비 걱정이 적으면 야외도 괜찮아요. 아이와 갈 곳을 찾아볼까요?'
+    const tip = await enrichWeatherTip(w)
     return {
-      text: formatWeatherReply(w, verified.result.isRealData) + rainHint,
+      text:
+        formatWeatherReply(w, verified.result.isRealData) +
+        rainHint +
+        (tip ? `\n\n💡 ${tip}` : ''),
       speak: true,
     }
   }
@@ -208,8 +213,10 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     })
 
     const mapsQ = candidates[0]?.mapsQuery || verified.result.data.query
+    const aiIntro = await enrichPlacesIntro(city, candidates, weatherNote)
+    const body = formatPlacesReply(city, candidates, weatherNote, sourceNote)
     return {
-      text: formatPlacesReply(city, candidates, weatherNote, sourceNote),
+      text: aiIntro ? `${aiIntro}\n\n${body}` : body,
       speak: true,
       action: () => {
         void openMaps(mapsQ)

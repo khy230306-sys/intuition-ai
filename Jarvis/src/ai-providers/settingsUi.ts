@@ -163,7 +163,7 @@ export function renderAiWizardHtml(): string {
   return `
     <div class="ai-wizard-card" id="ai-wizard">
       <strong>AIZIO와 대화하기</strong>
-      <p class="hint">키 없이도 바로 대화할 수 있어요. 클라우드 두뇌는 더 똑똑한 답이 필요할 때만 연결하면 됩니다.</p>
+      <p class="hint">키가 연결되면 대화·조언·레시피·추천을 AI가 우선 답합니다. 키 없이도 날씨·일정 등 기본 기능은 계속 쓸 수 있어요.</p>
       <div class="row-btns">
         <button type="button" class="primary-btn" data-action="ai-wizard-local">AIZIO로 시작</button>
         <button type="button" class="ghost-btn" data-action="ai-wizard-free">클라우드 두뇌 연결</button>

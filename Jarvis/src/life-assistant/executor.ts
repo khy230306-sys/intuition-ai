@@ -1,4 +1,5 @@
 import type { BrainReply } from '../types'
+import { hasAnyConfiguredProvider } from '../ai-providers'
 import { addReminder, loadReminders } from '../storage'
 import { upcomingFamilyEvents, addFamilyEvent, loadFamilyRoom } from '../familyStore'
 import { broadcastFamilyPacket } from '../familySyncLazy'
@@ -347,7 +348,10 @@ async function executeIntent(r: LifeAssistantIntentResult): Promise<BrainReply |
  */
 export async function tryHandleLifeAssistant(text: string): Promise<BrainReply | null> {
   if (!looksLikeLifeAssistantCommand(text)) return null
-  const routed = await routeLifeAssistantIntent(text, { allowAi: false })
+  // Use Hybrid AI classify when providers are configured (ambiguous schedule/todo phrasing).
+  const routed = await routeLifeAssistantIntent(text, {
+    allowAi: hasAnyConfiguredProvider(),
+  })
   if (routed.intent === 'unknown' || routed.intent === 'general.chat') return null
   if (routed.confidence < 0.8) return null
   return executeIntent(routed)

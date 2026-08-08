@@ -6,11 +6,13 @@
 
 import type { BrainReply } from '../types'
 import { processActionAgentTurn } from '../actionAgent/pipeline'
+import { hasAnyConfiguredProvider, runHybridChat } from '../ai-providers'
 import { handleRestaurantAgent } from '../restaurantAgent'
 import { handleTravelAgent } from '../travelAgent'
 import { isolateFeature } from '../reliability/crashIsolation'
 import { makeExecutionResult } from '../reliability/execution'
 import { providerFailurePolicy } from '../reliability/providerPolicy'
+import { loadSettings } from '../storage'
 import { bcp47, translateText } from '../translate'
 import { routeCommand } from './router'
 import {
@@ -22,6 +24,29 @@ import {
 } from './session'
 import { describeTarget } from './router'
 import type { CommandRouterResult } from './types'
+
+type ChatHistoryTurn = { role: string; text: string }
+
+async function tryHybridGeneralChat(
+  utterance: string,
+  history: ChatHistoryTurn[] = [],
+): Promise<BrainReply | null> {
+  if (!hasAnyConfiguredProvider()) return null
+  try {
+    const settings = loadSettings()
+    const result = await runHybridChat({
+      message: utterance,
+      history,
+      displayName: settings.displayName,
+      locale: 'ko-KR',
+    })
+    const text = (result.text || '').trim()
+    if (!text) return null
+    return { text, speak: true }
+  } catch {
+    return null
+  }
+}
 
 /** Vitest / local harness may set this for fixture search results. */
 export let actionAgentAllowFixtures = false
@@ -35,16 +60,16 @@ function replyFromExec(text: string, extra?: Partial<BrainReply>): BrainReply {
 
 export async function tryHandleRoutedCommand(
   text: string,
-  opts?: { source?: string },
+  opts?: { source?: string; history?: ChatHistoryTurn[] },
 ): Promise<BrainReply | null> {
-  void opts
   const routed = routeCommand({ text, activeMode: getActiveMode() })
-  return executeRoutedCommand(routed, text)
+  return executeRoutedCommand(routed, text, { history: opts?.history })
 }
 
 export async function executeRoutedCommand(
   routed: CommandRouterResult,
   originalText?: string,
+  opts?: { history?: ChatHistoryTurn[] },
 ): Promise<BrainReply | null> {
   const utterance = originalText || routed.normalized || ''
   const t0 = performance.now()
@@ -267,8 +292,16 @@ export async function executeRoutedCommand(
     case 'music.play':
     case 'vision.open':
     case 'app.control':
-    case 'general.chat':
       return null
+    case 'general.chat': {
+      // When cloud providers are configured, honor requiresAI — do not fall through
+      // to canned local templates for advice / howto / open chat.
+      if (routed.requiresAI) {
+        const ai = await tryHybridGeneralChat(utterance, opts?.history || [])
+        if (ai) return finish(ai, { provider: 'hybrid-ai', success: true })
+      }
+      return null
+    }
     default:
       return null
   }

@@ -27,10 +27,14 @@ export function isPlaceSeekUtterance(text: string, session?: EngineSession | nul
   }
   if (isClearWeatherQuery(t) && !/갈\s*만|아이|어린이/.test(t)) return false
 
+  // Soft lifestyle ("아이랑 주말에 뭐하면 좋을까?") must NOT steal Hybrid AI chat.
+  // Require an actual place-seeking ask (갈 만한 곳 / 찾아줘 / 어디 갈까 …).
+  if (/뭐\s*하면\s*좋|어떻게\s*지내|심심|조언|고민/.test(t) && !/갈\s*만|찾아|어디\s*가|나들이|체험/.test(t)) {
+    return false
+  }
   const familyPlace =
-    /갈\s*만\s*한\s*곳|갈만한\s*곳|아이랑|아이들이랑|어린이\s*갈|키즈\s*체험|가족\s*나들이|놀\s*만\s*한\s*곳/.test(
-      t,
-    )
+    /갈\s*만\s*한\s*곳|갈만한\s*곳|어린이\s*갈|키즈\s*체험|가족\s*나들이|놀\s*만\s*한\s*곳/.test(t) ||
+    (/(아이|아이들|어린이)랑/.test(t) && /갈\s*만|찾아|추천|어디\s*가|나들이|체험/.test(t))
   const weatherCont =
     Boolean(session?.weather || session?.context?.weather) &&
     /비\s*안\s*오|비\s*없으면|맑으면|갈\s*만|아이|어린이|찾아\s*줘|찾아줘/.test(t)

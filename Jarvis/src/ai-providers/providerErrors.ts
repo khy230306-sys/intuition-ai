@@ -110,14 +110,13 @@ export function safeErrorLog(err: unknown): string {
   return redactSecrets(String(err))
 }
 
-/** Errors safe to try the next free provider. */
+/** Errors safe to try the next configured provider (e.g. OpenAI billing → Gemini). */
 export function isFallbackableError(err: unknown): boolean {
   if (!(err instanceof AiError)) return false
   if (err.kind === 'cancelled' || err.kind === 'config') return false
-  if (err.kind === 'auth' && /결제|payment|billing/i.test(err.message)) return false
-  // Invalid key on one provider — try next configured free provider
-  if (err.kind === 'auth') return true
   if (err.kind === 'offline') return false
+  // Payment / invalid key on one vendor must not block other configured providers
+  if (err.kind === 'auth') return true
   return (
     err.kind === 'network' ||
     err.kind === 'rate_limit' ||

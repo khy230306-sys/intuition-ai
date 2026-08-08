@@ -13,11 +13,14 @@
 
 세션 데이터는 브라우저 localStorage에 날짜별로 저장됩니다.
 
-## 접속 주소
+## 접속 주소 (영구화 가능)
 
-**https://holdem-edge.tiiny.site**
+**https://arcane-bloom-2qgo9x3.shipstatic.com**
 
-(백업 터널) https://realty-collected-wiki-shaped.trycloudflare.com
+영구 사용: 아래 링크에서 **한 번 Claim**  
+https://my.shipstatic.com/claim/613f099f44759dc1ef2781a856ace3b6874328a7df3b7c67e95ab0fc1fae0303
+
+자세한 안내: [PERMANENT_HOSTING.md](./PERMANENT_HOSTING.md)
 
 ## 실행
 

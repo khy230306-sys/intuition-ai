@@ -14,22 +14,35 @@ export type NetStatusListener = (status: NetStatus, detail?: { reason?: string }
 const HEALTH_PATH = './build-meta.json'
 const HEALTH_TIMEOUT_MS = 3500
 
-let current: NetStatus = typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline'
+// Node/SSR (no navigator): treat as online so unit tests / server paths are not
+// forced into Flight Mode. Browsers still seed from navigator.onLine.
+let current: NetStatus =
+  typeof navigator === 'undefined' ? 'online' : navigator.onLine ? 'online' : 'offline'
 let connectionKind: ConnectionKind =
-  typeof navigator !== 'undefined' && navigator.onLine ? 'ONLINE' : 'OFFLINE'
+  typeof navigator === 'undefined' ? 'ONLINE' : navigator.onLine ? 'ONLINE' : 'OFFLINE'
 let listeners: NetStatusListener[] = []
 let probeTimer: ReturnType<typeof setInterval> | null = null
 let probing = false
 
 export function getNetStatus(): NetStatus {
+  // Honor live navigator.onLine — tests may stub navigator after module init,
+  // and Flight Mode toggles must not wait for the next probe tick.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
+  if (typeof navigator !== 'undefined' && navigator.onLine === true && current === 'offline') {
+    return 'online'
+  }
   return current
 }
 
 export function getConnectionKind(): ConnectionKind {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'OFFLINE'
+  if (typeof navigator !== 'undefined' && navigator.onLine === true && connectionKind === 'OFFLINE') {
+    return 'ONLINE'
+  }
   return connectionKind
 }
 
-export function isEffectivelyOffline(status: NetStatus = current): boolean {
+export function isEffectivelyOffline(status: NetStatus = getNetStatus()): boolean {
   return status === 'offline' || status === 'captive'
 }
 

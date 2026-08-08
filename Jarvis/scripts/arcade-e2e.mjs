@@ -66,6 +66,8 @@ async function main() {
 
   await page.goto('http://127.0.0.1:4182/', { waitUntil: 'networkidle0' })
   await page.click('[data-view="games"]')
+  await page.waitForSelector('[data-action="open-classic-arcade"]')
+  await page.click('[data-action="open-classic-arcade"]')
   await page.waitForSelector('#arcade-canvas')
   await page.waitForSelector('[data-arcade-rank="1"]')
   await page.waitForSelector('[data-action="share-arcade-score"]')

@@ -173,11 +173,11 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
   },
   {
     id: 'games',
-    title: '게임',
-    description: '오프라인 아케이드',
+    title: 'AIZIO PLAY',
+    description: 'AIZIO QUEST · 클래식 아케이드',
     group: 'leisure',
     view: 'games',
-    keywords: ['게임', '아케이드'],
+    keywords: ['게임', '아케이드', '퀘스트', 'PLAY', '퍼즐'],
   },
   {
     id: 'global',

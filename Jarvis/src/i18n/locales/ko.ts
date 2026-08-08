@@ -6,7 +6,7 @@ const ko: Dictionary = {
   'nav.life': '생활',
   'nav.family': '가족',
   'nav.friends': '친구',
-  'nav.games': '게임',
+  'nav.games': 'PLAY',
   'nav.actions': '실행',
   'nav.settings': '설정',
   'nav.global': '번역',

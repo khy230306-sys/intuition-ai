@@ -1298,9 +1298,20 @@ export async function think(
       action: async () => ({ ok: true, message: await openShareUi('arcade') }),
     }
   }
-  if (/^(게임|미니게임|오프라인\s*게임|아케이드)/i.test(text) || /게임\s*(할래|하자|열어)/.test(text)) {
+  if (/AIZIO\s*QUEST|에이치오\s*퀘스트|퀘스트\s*열어|퍼즐\s*(게임|알피지|RPG)|매치\s*3/i.test(text)) {
     return {
-      text: '아케이드 게임 탭으로 이동합니다.\n· 벽돌깨기 · 스페이스(미사일 진화) · 스페이스2\n· 플래피 · 지오대시 · 스윽(슬라이딩)\n기록 공유로 친구 순위도 만들 수 있습니다.',
+      text: 'AIZIO QUEST를 엽니다. 퍼즐×RPG 전투 — 완전 오프라인으로 플레이할 수 있어요.',
+      speak: true,
+      view: 'games',
+      action: async () => {
+        window.dispatchEvent(new CustomEvent('aizio-open-quest'))
+        return { ok: true, message: 'QUEST' }
+      },
+    }
+  }
+  if (/^(게임|미니게임|오프라인\s*게임|아케이드|플레이)/i.test(text) || /게임\s*(할래|하자|열어)/.test(text)) {
+    return {
+      text: 'AIZIO PLAY로 이동합니다.\n· AIZIO QUEST (퍼즐×RPG)\n· 클래식 아케이드 (스페이스·플래피·벽돌깨기·스윽·스페이스2·지오대시)',
       speak: true,
       view: 'games',
     }

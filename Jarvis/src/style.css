@@ -1263,6 +1263,55 @@ body[data-jarvis-view='friends'] .orb::after {
 }
 
 
+/* —— AIZIO PLAY hub —— */
+.play-hub {
+  padding-bottom: 24px;
+}
+.play-feature-card {
+  position: relative;
+  margin: 14px 0;
+  padding: 18px 16px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(90, 255, 232, 0.22);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(90, 255, 232, 0.16), transparent 55%),
+    radial-gradient(100% 80% at 100% 100%, rgba(77, 183, 255, 0.12), transparent 50%),
+    linear-gradient(165deg, rgba(16, 28, 48, 0.95), rgba(10, 16, 28, 0.92));
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+}
+.play-feature-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  letter-spacing: 0.03em;
+  font-weight: 800;
+}
+.play-feature-card .primary-btn,
+.play-feature-card .ghost-btn {
+  margin-top: 12px;
+  width: 100%;
+}
+.play-feature-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #5affe8;
+  border: 1px solid rgba(90, 255, 232, 0.35);
+  border-radius: 8px;
+  padding: 3px 8px;
+  margin-bottom: 8px;
+}
+.play-feature-secondary {
+  border-color: rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  box-shadow: none;
+}
+.play-feature-secondary h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 /* —— Arcade —— */
 .games-panel .game-tabs {
   display: flex;

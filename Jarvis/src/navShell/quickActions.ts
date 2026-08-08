@@ -51,7 +51,7 @@ export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
   { id: 'family', title: '가족', sub: '가족 도우미', ico: 'H', kind: 'view', payload: 'family-helper' },
   { id: 'weather', title: '날씨', sub: '지금 기온', ico: 'W', kind: 'cmd', payload: '오늘 날씨 알려줘' },
   { id: 'friends', title: '친구', sub: '친구 공간', ico: 'P', kind: 'view', payload: 'friends' },
-  { id: 'games', title: '게임', sub: '아케이드', ico: 'G', kind: 'view', payload: 'games' },
+  { id: 'games', title: 'PLAY', sub: 'QUEST · 아케이드', ico: 'G', kind: 'view', payload: 'games' },
   { id: 'customers', title: '손님관리', sub: 'CRM', ico: 'R', kind: 'view', payload: 'customers' },
   { id: 'settings', title: '설정', sub: 'AI · 업데이트', ico: 'X', kind: 'view', payload: 'settings' },
   { id: 'life', title: '생활', sub: '할 일 · 알림', ico: 'L', kind: 'view', payload: 'life' },

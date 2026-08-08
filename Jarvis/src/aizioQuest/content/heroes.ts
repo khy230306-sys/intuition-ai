@@ -1,0 +1,133 @@
+import type { HeroDef } from '../types'
+
+/** Three original heroes — Resonance explorers of the CORE frontier. */
+
+export const HEROES: HeroDef[] = [
+  {
+    id: 'kael',
+    name: '카엘 리븐',
+    title: '잔광의 탐험가',
+    role: 'ATTACKER',
+    element: 'fire',
+    blurb: 'CORE의 불꽃 공명을 다루는 전선 돌파수. 짧은 말, 긴 궤적.',
+    baseHp: 920,
+    baseAtk: 118,
+    baseDef: 42,
+    passive: 'FIRE GEM 매치 시 추가 8% 피해',
+    accent: '#ff6b4a',
+    unlockStage: 0,
+    skills: [
+      {
+        id: 'kael-flare',
+        name: '섬광 절단',
+        desc: 'FIRE GEM을 공격력으로 변환해 피해',
+        energyCost: 3,
+        kind: 'damage',
+        power: 1.35,
+      },
+      {
+        id: 'kael-ignite',
+        name: '점화 연쇄',
+        desc: '랜덤 열의 FIRE가 아닌 GEM을 FIRE로 변환',
+        energyCost: 4,
+        kind: 'convert',
+        power: 1,
+        convertTo: 'fire',
+      },
+    ],
+    ultimate: {
+      id: 'kael-nova',
+      name: '코어 노바',
+      desc: '보드의 FIRE GEM 전부 제거하고 강력한 피해 + 추가 턴',
+      energyCost: 7,
+      kind: 'clear',
+      power: 2.1,
+      clearKind: 'fire',
+    },
+  },
+  {
+    id: 'mira',
+    name: '미라 솔렌',
+    title: '수호의 공명자',
+    role: 'GUARDIAN',
+    element: 'nature',
+    blurb: '상처 난 기억을 봉합하는 수호 공명. 전장을 버티게 만든다.',
+    baseHp: 1180,
+    baseAtk: 78,
+    baseDef: 78,
+    passive: 'NATURE/GUARD 매치 시 보호막 +에너지',
+    accent: '#3dd68c',
+    unlockStage: 3,
+    skills: [
+      {
+        id: 'mira-ward',
+        name: '이끼 방벽',
+        desc: '보호막 생성',
+        energyCost: 3,
+        kind: 'shield',
+        power: 0.9,
+      },
+      {
+        id: 'mira-bloom',
+        name: '재생 개화',
+        desc: 'HP 회복',
+        energyCost: 4,
+        kind: 'heal',
+        power: 1.2,
+      },
+    ],
+    ultimate: {
+      id: 'mira-aegis',
+      name: '영면 아이기스',
+      desc: '큰 회복 + 보호막 + GUARD GEM 생성',
+      energyCost: 7,
+      kind: 'heal',
+      power: 1.8,
+    },
+  },
+  {
+    id: 'nyx',
+    name: '닉스 베일',
+    title: '심연 전술가',
+    role: 'TACTICIAN',
+    element: 'dark',
+    blurb: '적의 리듬을 읽고 보드를 비트는 전술가. 침묵이 무기.',
+    baseHp: 1000,
+    baseAtk: 96,
+    baseDef: 58,
+    passive: 'DARK/LIGHT 매치 시 스킬 에너지 +1',
+    accent: '#a78bfa',
+    unlockStage: 7,
+    skills: [
+      {
+        id: 'nyx-siphon',
+        name: '공명 흡수',
+        desc: '적 에너지 감소 + 피해',
+        energyCost: 3,
+        kind: 'drain',
+        power: 1.1,
+      },
+      {
+        id: 'nyx-twist',
+        name: '위상 왜곡',
+        desc: 'DARK가 아닌 GEM 일부를 DARK로 변환',
+        energyCost: 4,
+        kind: 'convert',
+        power: 1,
+        convertTo: 'dark',
+      },
+    ],
+    ultimate: {
+      id: 'nyx-eclipse',
+      name: '이클립스 프로토콜',
+      desc: '폭발 GEM 생성 + 추가 턴',
+      energyCost: 7,
+      kind: 'blast',
+      power: 1.6,
+    },
+  },
+]
+
+export function heroById(id: string): HeroDef | undefined {
+  return HEROES.find((h) => h.id === id)
+}

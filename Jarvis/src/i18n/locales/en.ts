@@ -6,7 +6,7 @@ const en: Dictionary = {
   'nav.life': 'Life',
   'nav.family': 'Family',
   'nav.friends': 'Friends',
-  'nav.games': 'Games',
+  'nav.games': 'PLAY',
   'nav.actions': 'Run',
   'nav.settings': 'Settings',
   'nav.global': 'Translate',

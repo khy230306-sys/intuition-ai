@@ -271,6 +271,7 @@ import {
   type GeoFix,
 } from './location'
 
+import { renderPlayHub } from './play/playHub'
 import {
   ARCADE_META,
   loadArcadeBest,
@@ -457,7 +458,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.32.3'
+const APP_VERSION = '1.33.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -938,6 +939,8 @@ const state = {
   arcadeId: 'shooter' as ArcadeId,
   arcadeScore: 0,
   arcadeLevel: 1,
+  /** AIZIO PLAY surface inside games view */
+  gamesPanel: 'hub' as 'hub' | 'arcade',
   weather: null as WeatherSnap | null,
   shareModal: null as null | 'app' | 'backup' | 'arcade' | 'invite',
   /** AIZIO Music Skill mini player visibility */
@@ -2473,6 +2476,7 @@ async function handleUserText(raw: string, opts?: { source?: 'text' | 'voice' })
       }
     }
     if (reply.view) state.view = reply.view
+    if (reply.view === 'games') state.gamesPanel = 'hub'
     // Leaving chat for another screen — keep a short confirmation visible.
     if (reply.view && reply.view !== 'chat' && reply.text) {
       showFlash(reply.text.split('\n')[0].slice(0, 120))
@@ -3556,7 +3560,48 @@ function renderArcadeRank(): string {
   `
 }
 
+let questHandle: { destroy: () => void } | null = null
+
+async function openAizioQuest(): Promise<void> {
+  stopArcade()
+  if (questHandle) {
+    questHandle.destroy()
+    questHandle = null
+  }
+  let root = document.getElementById('aizio-quest-root')
+  if (!root) {
+    root = document.createElement('div')
+    root.id = 'aizio-quest-root'
+    root.className = 'aq-root'
+    document.body.appendChild(root)
+  }
+  const mod = await import('./aizioQuest')
+  questHandle = mod.mountAizioQuest(root, {
+    onExit: () => {
+      questHandle?.destroy()
+      questHandle = null
+      root?.remove()
+      state.gamesPanel = 'hub'
+      state.view = 'games'
+      render()
+    },
+  })
+}
+
 function renderGames(): string {
+  if (state.gamesPanel === 'hub') {
+    let cleared = 0
+    try {
+      const raw = localStorage.getItem('aizio.quest.save.v1')
+      if (raw) cleared = (JSON.parse(raw) as { stageCleared?: number }).stageCleared || 0
+    } catch {
+      cleared = 0
+    }
+    return (
+      renderPlayHub({ appVersion: APP_VERSION, questCleared: cleared }) +
+      `<p class="hint" style="text-align:center;margin-top:8px"><button type="button" class="ghost-btn tiny" data-action="open-classic-arcade">클래식 아케이드만 보기</button></p>`
+    )
+  }
   const best = loadArcadeBest()
   const meta = ARCADE_META[state.arcadeId]
   // Guard removed games (과일받기/두더지/차피하기) from older sessions
@@ -3582,6 +3627,9 @@ function renderGames(): string {
 
   return `
     <section class="panel view-scroll games-panel">
+      <div class="row-btns" style="margin-bottom:8px">
+        <button type="button" class="ghost-btn tiny" data-action="play-hub-back">← AIZIO PLAY</button>
+      </div>
       <h2 class="section-title">ARCADE</h2>
       <p class="hint">오프라인 아케이드 · 6종 · v${APP_VERSION}</p>
       <p class="hint arcade-new-hint">새 게임 · 지오대시 (탭 점프 · 효과음)</p>
@@ -5401,11 +5449,13 @@ function goToView(next: View, ev?: MouseEvent): void {
   state.view = next
   if (next === 'family') state.familyTab = 'chat'
   if (next === 'friends') state.friendsTab = 'chat'
+  if (next === 'games') state.gamesPanel = 'hub'
   if (next === 'family-helper') recordRecentFeature('family-helper')
   else if (next === 'ai-camera') recordRecentFeature('ai-camera')
   else if (next === 'chat') recordRecentFeature('chat')
   else if (next === 'schedule') recordRecentFeature('schedule')
   else if (next === 'life') recordRecentFeature('life')
+  else if (next === 'games') recordRecentFeature('games')
   syncHashFromApp({ view: next, replace: false })
   // Reset scroll on menu change
   try {
@@ -5658,7 +5708,7 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
       )
     }
   }
-  if (state.view === 'games') {
+  if (state.view === 'games' && state.gamesPanel === 'arcade') {
     // remount after DOM ready
     requestAnimationFrame(() => mountActiveArcade())
   } else {
@@ -8106,6 +8156,31 @@ function bind(): void {
     void openShareModal('arcade')
   })
 
+  document.querySelector('[data-action="open-aizio-quest"]')?.addEventListener('click', () => {
+    void openAizioQuest()
+  })
+  document.querySelector('[data-action="prep-quest-offline"]')?.addEventListener('click', () => {
+    void (async () => {
+      try {
+        showFlash('AIZIO QUEST 오프라인 준비 중…')
+        await import('./aizioQuest')
+        await warmAppShell(APP_VERSION)
+        showFlash('오프라인 게임 준비 완료 · 비행기 모드에서도 플레이 가능')
+      } catch (err) {
+        showFlash(err instanceof Error ? err.message : '오프라인 준비 실패')
+      }
+    })()
+  })
+  document.querySelector('[data-action="open-classic-arcade"]')?.addEventListener('click', () => {
+    state.gamesPanel = 'arcade'
+    render()
+  })
+  document.querySelector('[data-action="play-hub-back"]')?.addEventListener('click', () => {
+    stopArcade()
+    state.gamesPanel = 'hub'
+    render()
+  })
+
   document.querySelector('[data-action="open-arcade-import"]')?.addEventListener('click', () => {
     state.arcadeImportOpen = true
     render()
@@ -8675,6 +8750,13 @@ function bootAppCore(): void {
     if (state.locationReady || document.querySelector('.location-gate')) render()
   })
   refreshInstallHint()
+  window.addEventListener('aizio-open-quest', () => {
+    state.view = 'games'
+    state.gamesPanel = 'hub'
+    syncHashFromApp({ view: 'games', replace: false })
+    render()
+    void openAizioQuest()
+  })
   window.addEventListener('aizio-app-update', () => {
     void updateAppToLatest()
   })

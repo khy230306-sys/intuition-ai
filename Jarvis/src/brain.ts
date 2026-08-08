@@ -839,6 +839,14 @@ export async function think(
         }
       }
 
+      // Offline weather must never open external weather search (geo/actions)
+      if (offline && (isClearWeatherQuery(anywhereText) || wantsWeatherCommand(anywhereText))) {
+        return {
+          text: '현재 오프라인이라 최신 날씨를 확인할 수 없어요. 연결되면 바로 확인할 수 있습니다.',
+          speak: true,
+        }
+      }
+
       if (
         /호치민\s*일정|호텔\s*주소|숙소\s*주소|저장된\s*(호텔|항공|여행)|여행\s*(오프라인\s*)?(정보|팩)/i.test(
           anywhereText,

@@ -10,6 +10,7 @@ import {
   formatCountry,
   type CountryInfo,
 } from './geoData'
+import { getNetStatus } from './offline/networkStatus'
 import type { BrainReply } from './types'
 
 interface WikiSummary {
@@ -184,6 +185,13 @@ export async function handleGeo(text: string): Promise<BrainReply | null> {
   }
 
   if (/날씨/.test(t) && (city || country)) {
+    const net = getNetStatus()
+    if (net === 'offline' || net === 'captive') {
+      return {
+        text: '현재 오프라인이라 최신 날씨를 확인할 수 없어요. 연결되면 바로 확인할 수 있습니다.',
+        speak: true,
+      }
+    }
     const label = city?.name || country?.capital || country?.name || place
     return {
       text: `${label} 날씨 검색을 엽니다.`,

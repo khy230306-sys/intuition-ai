@@ -23,6 +23,15 @@ export function isClearWeatherQuery(text: string): boolean {
   // "날씨 알려줘" · "날씨를알려줘" · "날씨좀 알려줘" · "곳의 날씨를알려줘"
   if (/날씨/.test(t) && WEATHER_ASK.test(t)) return true
 
+  // 「호치민 날씨는?」·「울산 날씨?」— place + weather + optional 는/? without ask verb
+  if (
+    /날씨\s*는?\s*[?？!]?\s*$/i.test(t) &&
+    t.length < 40 &&
+    !/(좋|나쁘|추|덥|같)/.test(t)
+  ) {
+    return true
+  }
+
   // Explicit ask / forecast forms
   if (/기온\s*(알려|어때|은|이\s*몇)|미세먼지\s*(어때|알려)/i.test(t)) return true
   if (/^(오늘|내일|모레|지금|이번\s*주)\s*(날씨|기온|미세먼지)\s*[?？]?$/i.test(t)) return true

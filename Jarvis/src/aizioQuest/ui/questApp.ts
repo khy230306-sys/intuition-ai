@@ -110,6 +110,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     bindChrome()
     if (screen === 'battle' && battle) {
       bindBoard()
+      positionTutorialArrow()
       scheduleHint()
     }
   }
@@ -157,6 +158,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     if (coachEl) coachEl.innerHTML = coachHtml()
     const dbg = root.querySelector('[data-aq-debug]')
     if (dbg) dbg.innerHTML = debugHtml()
+    positionTutorialArrow()
   }
 
   function turnBannerHtml(): string {
@@ -167,8 +169,31 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
         ? `<span class="aq-turn-enemy">적 턴 · 행동 중…</span>`
         : `<span class="aq-turn-enemy">적 턴</span>`
     }
-    if (battle.animLock) return `<span class="aq-turn-busy">내 턴 · 연결 처리 중…</span>`
+    if (battle.animLock) return `<span class="aq-turn-busy">내 턴 · GEM 연결 중…</span>`
     return `<span class="aq-turn-me">내 턴 · GEM을 밀어 맞추세요</span>`
+  }
+
+  function positionTutorialArrow(): void {
+    const arrow = root.querySelector('.aq-arrow') as HTMLElement | null
+    const coachEl = root.querySelector('.aq-gem.coach') as HTMLElement | null
+    const wrap = root.querySelector('.aq-board-wrap') as HTMLElement | null
+    if (!arrow || !coachEl || !wrap) return
+    const wr = wrap.getBoundingClientRect()
+    const cr = coachEl.getBoundingClientRect()
+    const dir = arrow.getAttribute('data-dir') || '오른쪽'
+    const rot = dir === '왼쪽' ? '180deg' : dir === '아래' ? '90deg' : dir === '위' ? '-90deg' : '0deg'
+    arrow.style.left = `${cr.left + cr.width / 2 - wr.left}px`
+    arrow.style.top = `${cr.top - wr.top - 6}px`
+    arrow.style.transform = `translate(-50%, -100%) rotate(${rot})`
+  }
+
+  function clearTutorialOverlay(): void {
+    root.querySelector('.aq-arrow')?.remove()
+    root.querySelectorAll('.aq-gem.coach, .aq-gem.coach-target').forEach((g) => {
+      g.classList.remove('coach', 'coach-target')
+    })
+    const coachEl = root.querySelector('[data-aq-coach]')
+    if (coachEl) coachEl.textContent = 'GEM이 연결되고 있습니다…'
   }
 
   function coachHtml(): string {
@@ -257,6 +282,7 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     if (screen === 'battle' && battle) return renderBattle()
 
     if (screen === 'victory' && lastReward) {
+      const next = nextStageAfter(save.stageCleared)
       return `${top}
         <div class="aq-card">
           <h2>VICTORY</h2>
@@ -264,7 +290,12 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
           ${lastReward.itemName ? `<p class="aq-muted">획득: ${esc(lastReward.itemName)}</p>` : ''}
           ${lastReward.ach.length ? `<p class="aq-muted">업적: ${lastReward.ach.map((id) => ACHIEVEMENTS.find((a) => a.id === id)?.title || id).join(', ')}</p>` : ''}
           <div style="display:grid;gap:8px;margin-top:12px">
-            <button type="button" class="aq-btn primary" data-aq="campaign">캠페인</button>
+            ${
+              next
+                ? `<button type="button" class="aq-btn primary" data-aq="fight" data-stage="${next.id}">다음 전투 · ${esc(next.name)}</button>
+                   <button type="button" class="aq-btn" data-aq="campaign">캠페인</button>`
+                : `<button type="button" class="aq-btn primary" data-aq="campaign">캠페인</button>`
+            }
             <button type="button" class="aq-btn" data-aq="inventory">장비 확인</button>
           </div>
         </div>${toastHtml()}`
@@ -723,7 +754,11 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
       scheduleHint()
       return
     }
-    battle = { ...res.battle, animLock: true }
+    // Hold player turn during cascade FX — engine may already have flipped to enemy.
+    const pendingTurn = res.battle.turn
+    battle = { ...res.battle, animLock: true, turn: 'player' }
+    tutorialCoach = null
+    clearTutorialOverlay()
     paintBoardClasses()
 
     statusLine = `dmg=${res.fx.damageToEnemy} heal=${res.fx.heal} en=${res.fx.energyGain} combo=${res.fx.combo}`
@@ -746,12 +781,13 @@ export function mountAizioQuest(root: HTMLElement, opts?: { onExit?: () => void 
     if (battle.tutorialStep != null) {
       if (battle.tutorialStep === 0) {
         battle = { ...battle, tutorialStep: 1 }
-        tutorialCoach = null
       } else if (battle.tutorialStep === 1) {
         battle = { ...battle, tutorialStep: 2 }
       }
     }
 
+    // Restore real turn only after cascade visuals finish
+    battle = { ...battle, turn: pendingTurn }
     paint() // remount chrome + final board after cascade chain finishes
     await wait(320)
     floatText = ''

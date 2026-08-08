@@ -57,7 +57,7 @@ async function playUntil(page, { maxMoves = 60, want = 'any' } = {}) {
       if (/VICTORY/.test(text)) return 'victory'
       if (/DEFEAT/.test(text)) return 'defeat'
       const turn = document.querySelector('.aq-turn')?.textContent || ''
-      return /내 턴/.test(turn) && !/처리 중/.test(turn) ? 'player' : 'busy'
+      return /내 턴/.test(turn) && !/처리 중|연결 중|행동 중/.test(turn) ? 'player' : 'busy'
     })
     if (state === 'victory' || state === 'defeat') return { result: state, moves }
     if (state === 'player') {

@@ -76,7 +76,7 @@ async function dragLegalMove(page) {
   for (let i = 0; i < 24; i++) {
     const fx = await page.evaluate(() => {
       const matched = !!document.querySelector('.aq-gem.matched, .aq-gem.popping, .aq-gem.falling, .aq-gem.swap-ok')
-      const busy = /처리 중/.test(document.querySelector('.aq-turn')?.textContent || '')
+      const busy = /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || '')
       return { matched, busy }
     })
     if (fx.matched) sawCascadeFx = true
@@ -222,7 +222,7 @@ async function main() {
       let saw = false
       for (let w = 0; w < 24; w++) {
         if (document.querySelector('.aq-gem.matched, .aq-gem.popping, .aq-gem.falling, .aq-gem.swap-ok')) saw = true
-        const busy = /처리 중/.test(document.querySelector('.aq-turn')?.textContent || '')
+        const busy = /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || '')
         if (!busy && w > 2) break
         await new Promise((r) => setTimeout(r, 80))
       }
@@ -258,7 +258,7 @@ async function main() {
     if (/적 턴|ENEMY MOVE/.test(t) || /ENEMY MOVE/.test(body) || /turn=enemy/.test(dbg)) {
       sawEnemy = true
     }
-    if (sawEnemy && (/내 턴/.test(t) || /turn=player/.test(dbg)) && !/처리 중|행동 중|연결 처리/.test(t)) {
+    if (sawEnemy && (/내 턴/.test(t) || /turn=player/.test(dbg)) && !/처리 중|행동 중|연결 중/.test(t)) {
       sawPlayerAgain = true
       break
     }
@@ -267,7 +267,7 @@ async function main() {
       sawPlayerAgain = true
       break
     }
-    if (/내 턴/.test(t) && !/처리 중/.test(t)) {
+    if (/내 턴/.test(t) && !/처리 중|연결 중|행동 중/.test(t)) {
       await dragLegalMove(page)
     }
     await new Promise((r) => setTimeout(r, 250))
@@ -279,18 +279,18 @@ async function main() {
   let freeze = false
   let turns = 0
   for (let i = 0; i < 40 && turns < 20; i++) {
-    const lockedBusy = await page.evaluate(() => /처리 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
+    const lockedBusy = await page.evaluate(() => /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
     const end = await page.evaluate(() => !!document.querySelector('h2') && /VICTORY|DEFEAT/.test(document.body.innerText))
     if (end) break
     const t0 = Date.now()
     await dragLegalMove(page)
     // wait unlock
     for (let w = 0; w < 60; w++) {
-      const busy = await page.evaluate(() => /처리 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
+      const busy = await page.evaluate(() => /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
       if (!busy) break
       await new Promise((r) => setTimeout(r, 100))
     }
-    const stillBusy = await page.evaluate(() => /처리 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
+    const stillBusy = await page.evaluate(() => /처리 중|연결 중|행동 중/.test(document.querySelector('.aq-turn')?.textContent || ''))
     if (stillBusy && Date.now() - t0 > 8000) {
       freeze = true
       break

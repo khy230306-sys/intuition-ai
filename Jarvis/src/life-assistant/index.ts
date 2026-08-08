@@ -10,6 +10,14 @@ export { classifyLifeAssistantRules } from './intentRules'
 export { tryHandleLifeAssistant, executeLifeAssistantIntent } from './executor'
 export { buildLifeBriefing, formatBriefingText, renderBriefingStripHtml } from './briefing'
 export {
+  refreshBriefingLive,
+  ensureBriefingLiveFresh,
+  loadBriefingLiveCache,
+  briefingLiveNeedsRefresh,
+  parseGoogleNewsRss,
+  formatMarketLine,
+} from './briefingLive'
+export {
   ensureLifeAssistantSchema,
   loadParkingMemory,
   saveParkingMemory,

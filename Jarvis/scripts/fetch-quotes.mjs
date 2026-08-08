@@ -73,6 +73,9 @@ const SYMBOLS = [
   '069500.KS',
   '229200.KS',
   '102110.KS',
+  // Korea market indexes for home briefing
+  '^KS11',
+  '^KQ11',
   'AAPL',
   'MSFT',
   'GOOGL',

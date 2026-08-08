@@ -76,6 +76,7 @@ import {
 import {
   copyTextNow,
   navigateHref,
+  openSearch,
   openUrl,
   quickActions,
   selectVisibleInviteText,
@@ -100,6 +101,8 @@ import {
 import {
   buildLifeBriefing,
   ensureLifeAssistantSchema,
+  loadBriefingLiveCache,
+  refreshBriefingLive,
   renderBriefingStripHtml,
 } from './life-assistant'
 import {
@@ -458,7 +461,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.3'
+const APP_VERSION = '1.33.4'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -2261,6 +2264,42 @@ async function refreshWeather(): Promise<void> {
       }
     }
   }
+}
+
+let briefingLiveTimer: number | null = null
+let briefingLiveBusy = false
+
+/** Fetch KOSPI/KOSDAQ + news when stale; repaint home/chat briefing strip. */
+function scheduleBriefingLiveRefresh(force = false): void {
+  if (briefingLiveBusy) return
+  briefingLiveBusy = true
+  void (async () => {
+    try {
+      const before = loadBriefingLiveCache()?.fetchedAt || 0
+      await refreshBriefingLive({ force })
+      const after = loadBriefingLiveCache()?.fetchedAt || 0
+      if (
+        after > before &&
+        (state.view === 'home' || state.view === 'chat') &&
+        document.querySelector('[data-life-brief="1"]')
+      ) {
+        render({ guardNav: false })
+      }
+    } catch {
+      /* keep cache */
+    } finally {
+      briefingLiveBusy = false
+    }
+  })()
+}
+
+function startBriefingLiveTicker(): void {
+  if (briefingLiveTimer != null) return
+  briefingLiveTimer = window.setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    if (state.view !== 'home' && state.view !== 'chat') return
+    scheduleBriefingLiveRefresh(false)
+  }, 3 * 60_000)
 }
 
 function pushMsg(
@@ -4115,6 +4154,8 @@ function renderNavHomeView(): string {
       state.remoteVersion && state.remoteVersion !== APP_VERSION
         ? `새 버전 v${state.remoteVersion} 사용 가능 · 더보기 → 설정에서 업데이트`
         : ''
+    // Warm weather/market/news in background; strip paints from cache first.
+    scheduleBriefingLiveRefresh()
     return renderHomeDashboard({
       model,
       briefingHtml: renderBriefingStripHtml(buildLifeBriefing()),
@@ -4144,6 +4185,7 @@ function renderNavChatView(): string {
       : `<div id="voice-caption" class="voice-caption ${state.listening ? 'live' : ''}" data-voice-caption="1" ${
           state.listening || state.voiceHint ? '' : 'hidden'
         }>${escapeHtml(state.listening ? state.voiceHint || '듣고 있습니다… 말씀해 주세요' : state.voiceHint)}</div>`
+  scheduleBriefingLiveRefresh()
   return renderChatShell({
     threadHtml: renderChatMessagesHtml(),
     draft: state.draft,
@@ -6498,14 +6540,45 @@ function bind(): void {
     void handleUserText('오늘 하루 요약해줘')
   })
   document.querySelector('[data-action="life-brief-refresh"]')?.addEventListener('click', () => {
-    render({ guardNav: false })
+    const btn = document.querySelector<HTMLButtonElement>('[data-action="life-brief-refresh"]')
+    if (btn) {
+      btn.disabled = true
+      btn.textContent = '갱신 중…'
+    }
+    void (async () => {
+      try {
+        if (state.locationReady) await refreshWeather()
+        await refreshBriefingLive({ force: true })
+        showFlash('브리핑을 새로고침했습니다.')
+      } catch {
+        showFlash('일부 정보를 가져오지 못했어요. 캐시로 표시합니다.')
+      } finally {
+        render({ guardNav: false })
+      }
+    })()
   })
   document.querySelectorAll<HTMLButtonElement>('[data-action="life-brief-item"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const view = btn.dataset.briefView as View | undefined
       const hint = btn.dataset.briefHint || ''
-      if (view === 'ai-camera' || view === 'family-helper' || view === 'life' || view === 'family' || view === 'navigation') {
+      const href = btn.dataset.briefHref || ''
+      if (href && /^https?:\/\//i.test(href)) {
+        openUrl(href, '뉴스')
+        return
+      }
+      if (
+        view === 'ai-camera' ||
+        view === 'family-helper' ||
+        view === 'life' ||
+        view === 'family' ||
+        view === 'navigation' ||
+        view === 'invest'
+      ) {
         goToView(view)
+        return
+      }
+      if (hint.startsWith('뉴스 ')) {
+        openSearch(hint.replace(/^뉴스\s+/, '') || '오늘 주요 뉴스')
         return
       }
       if (hint) {
@@ -8889,6 +8962,8 @@ function bootAppCore(): void {
     state.shellReady = report
     if (peekPostUpdateOfflineHome()) void finishPostUpdateOfflineAndHome()
   })
+  startBriefingLiveTicker()
+  scheduleBriefingLiveRefresh(true)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       // Home-screen icon launch → mark installed (iOS has no install event)
@@ -8907,6 +8982,7 @@ function bootAppCore(): void {
       void refreshRemoteVersionBadge()
       void probeNetwork({ force: true })
       if (peekPostUpdateOfflineHome()) void finishPostUpdateOfflineAndHome()
+      if (state.view === 'home' || state.view === 'chat') scheduleBriefingLiveRefresh(false)
     }
   })
   window.addEventListener('pageshow', (ev) => {

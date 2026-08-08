@@ -9,6 +9,11 @@ import {
   listVaccinations,
 } from '../family-helper/store'
 import { loadLifeAssistantPrefs, loadParkingMemory } from './storage'
+import {
+  formatMarketLine,
+  loadBriefingLiveCache,
+  marketTone,
+} from './briefingLive'
 import type { LifeBriefing, LifeBriefingItem } from './types'
 
 export function buildLifeBriefing(now = new Date()): LifeBriefing {
@@ -28,6 +33,7 @@ export function buildLifeBriefing(now = new Date()): LifeBriefing {
   const meds = listMedications(true).slice(0, 3)
   const vax = listVaccinations().filter((v) => !v.done && v.date >= today).slice(0, 2)
   const members = listFamilyMembers()
+  const live = loadBriefingLiveCache()
 
   // Missed (yesterday and earlier unfinished helper schedules)
   const missed = listFamilyHelperSchedules({ days: 0, includeDone: false }).filter(
@@ -42,6 +48,61 @@ export function buildLifeBriefing(now = new Date()): LifeBriefing {
       label: weather.place || '날씨',
       detail: formatWeatherLine(weather),
       chatHint: '오늘 날씨 알려줘',
+    })
+  } else {
+    items.push({
+      id: 'wx-pending',
+      kind: 'weather',
+      label: '날씨',
+      detail: '위치 허용 후 자동 갱신',
+      chatHint: '오늘 날씨 알려줘',
+    })
+  }
+
+  // KOSPI / KOSDAQ — live or placeholder
+  if (live?.markets?.length) {
+    for (const m of live.markets) {
+      items.push({
+        id: `mkt-${m.symbol}`,
+        kind: 'market',
+        label: m.name,
+        detail: formatMarketLine(m),
+        tone: marketTone(m),
+        targetView: 'invest',
+        chatHint: `${m.name} 시세`,
+      })
+    }
+  } else {
+    items.push({
+      id: 'mkt-pending',
+      kind: 'market',
+      label: '코스피 · 코스닥',
+      detail: '시세 불러오는 중…',
+      tone: 'flat',
+      targetView: 'invest',
+      chatHint: '코스피 시세',
+    })
+  }
+
+  // Breaking news headlines
+  if (live?.news?.length) {
+    for (const n of live.news.slice(0, 3)) {
+      items.push({
+        id: n.id,
+        kind: 'news',
+        label: '속보',
+        detail: n.title,
+        href: n.link,
+        chatHint: `뉴스 ${n.title}`,
+      })
+    }
+  } else {
+    items.push({
+      id: 'news-pending',
+      kind: 'news',
+      label: '뉴스 속보',
+      detail: '헤드라인 불러오는 중…',
+      chatHint: '오늘 뉴스',
     })
   }
 
@@ -174,6 +235,18 @@ export function formatBriefingText(brief: LifeBriefing): string {
   return lines.join('\n')
 }
 
+function chipClass(it: LifeBriefingItem): string {
+  const parts = ['life-brief-chip']
+  if (it.kind === 'weather') parts.push('life-brief-chip-weather')
+  if (it.kind === 'market') {
+    parts.push('life-brief-chip-market')
+    if (it.tone === 'up') parts.push('up')
+    else if (it.tone === 'down') parts.push('down')
+  }
+  if (it.kind === 'news') parts.push('life-brief-chip-news')
+  return parts.join(' ')
+}
+
 export function renderBriefingStripHtml(brief: LifeBriefing): string {
   if (!brief.items.length) return ''
   const esc = (s: string) =>
@@ -182,20 +255,26 @@ export function renderBriefingStripHtml(brief: LifeBriefing): string {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
+  const live = loadBriefingLiveCache()
+  const ageMin = live?.fetchedAt ? Math.max(0, Math.floor((Date.now() - live.fetchedAt) / 60_000)) : null
+  const liveNote =
+    ageMin == null ? '실시간 갱신' : ageMin < 1 ? '방금 갱신' : `${ageMin}분 전 갱신`
   return `
     <section class="life-brief-strip" data-life-brief="1" aria-label="오늘의 AIZIO 브리핑">
       <div class="life-brief-head">
         <strong>${esc(brief.title)}</strong>
+        <span class="life-brief-live" data-brief-live-age="1">${esc(liveNote)}</span>
         <button type="button" class="ghost-btn tiny" data-action="life-brief-refresh">새로고침</button>
       </div>
       <div class="life-brief-items">
         ${brief.items
           .map(
             (it) => `
-          <button type="button" class="life-brief-chip${it.kind === 'weather' ? ' life-brief-chip-weather' : ''}" data-action="life-brief-item"
+          <button type="button" class="${chipClass(it)}" data-action="life-brief-item"
             data-brief-id="${esc(it.id)}"
             data-brief-view="${esc(it.targetView || '')}"
-            data-brief-hint="${esc(it.chatHint || '')}">
+            data-brief-hint="${esc(it.chatHint || '')}"
+            data-brief-href="${esc(it.href || '')}">
             <span class="life-brief-chip-l">${esc(it.label)}</span>
             ${it.detail ? `<span class="life-brief-chip-d">${esc(it.detail)}</span>` : ''}
           </button>`,

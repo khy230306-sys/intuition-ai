@@ -3914,6 +3914,13 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.life-brief-live {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: rgba(148, 180, 200, 0.9);
+  letter-spacing: 0.02em;
 }
 .life-brief-items {
   display: flex;
@@ -3935,12 +3942,32 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   max-width: 100%;
 }
 .life-brief-chip-l { font-weight: 600; font-size: 0.9rem; }
-.life-brief-chip-d { font-size: 0.78rem; opacity: 0.75; }
+.life-brief-chip-d { font-size: 0.78rem; opacity: 0.75; line-height: 1.35; }
 .life-brief-chip-weather {
-  order: -1;
+  order: -3;
   min-width: min(100%, 220px);
   border-color: rgba(13, 148, 136, 0.45);
   background: rgba(13, 148, 136, 0.16);
+}
+.life-brief-chip-market {
+  order: -2;
+  min-width: min(46%, 140px);
+  border-color: rgba(120, 160, 255, 0.35);
+  background: rgba(40, 70, 120, 0.28);
+}
+.life-brief-chip-market.up .life-brief-chip-d { color: #ff6b7a; opacity: 1; }
+.life-brief-chip-market.down .life-brief-chip-d { color: #5eb0ff; opacity: 1; }
+.life-brief-chip-news {
+  order: -1;
+  flex: 1 1 100%;
+  border-color: rgba(245, 180, 90, 0.35);
+  background: rgba(80, 55, 20, 0.28);
+}
+.life-brief-chip-news .life-brief-chip-d {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .aicam-panel, .fh-panel { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 .aicam-modes, .fh-tabs {

@@ -75,11 +75,17 @@ export type LifeBriefingItem = {
     | 'missed'
     | 'weather'
     | 'parking'
+    | 'market'
+    | 'news'
   label: string
   detail?: string
   /** View or action target */
-  targetView?: 'life' | 'family' | 'family-helper' | 'chat' | 'ai-camera' | 'navigation'
+  targetView?: 'life' | 'family' | 'family-helper' | 'chat' | 'ai-camera' | 'navigation' | 'invest'
   chatHint?: string
+  /** External article URL (news) */
+  href?: string
+  /** market: up | down | flat */
+  tone?: 'up' | 'down' | 'flat'
 }
 
 export type LifeBriefing = {

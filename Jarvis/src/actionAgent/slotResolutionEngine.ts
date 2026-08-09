@@ -530,7 +530,7 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
       proposals.push({
         key: 'checkIn',
         value: d.resolved,
-        source: 'contextual_followup',
+        source: 'multi_slot',
         confidence: 0.7,
       })
       continue

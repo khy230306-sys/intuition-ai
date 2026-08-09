@@ -462,7 +462,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.15'
+const APP_VERSION = '1.33.16'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -895,11 +895,11 @@ function resetChatHistory(opts?: { confirm?: boolean }): boolean {
 }
 
 const TRANSLATE_LANGS: Array<{ code: string; label: string; cmd: string }> = [
-  { code: 'vi', label: '베트남어', cmd: '지금부터 스톱할 때까지 베트남어로 번역해줘' },
-  { code: 'en', label: '영어', cmd: '지금부터 스톱할 때까지 영어로 번역해줘' },
-  { code: 'ja', label: '일본어', cmd: '지금부터 스톱할 때까지 일본어로 번역해줘' },
-  { code: 'zh-CN', label: '중국어', cmd: '지금부터 스톱할 때까지 중국어로 번역해줘' },
-  { code: 'es', label: '스페인어', cmd: '지금부터 스톱할 때까지 스페인어로 번역해줘' },
+  { code: 'vi', label: '베트남어', cmd: '지금부터 베트남어로 번역해줘' },
+  { code: 'en', label: '영어', cmd: '지금부터 영어로 번역해줘' },
+  { code: 'ja', label: '일본어', cmd: '지금부터 일본어로 번역해줘' },
+  { code: 'zh-CN', label: '중국어', cmd: '지금부터 중국어로 번역해줘' },
+  { code: 'es', label: '스페인어', cmd: '지금부터 스페인어로 번역해줘' },
 ]
 
 const state = {
@@ -4355,9 +4355,9 @@ function renderChat(): string {
         .join('')
 
   const lockBar = `
-    <details class="translate-bar ${mode.active ? 'on' : ''}" ${mode.active ? 'open' : ''}>
+    <details class="translate-bar ${mode.active ? 'on' : ''}" open>
       <summary class="translate-bar-head">
-        <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '번역 잠금'}</strong>
+        <strong>${mode.active ? `번역 중 → ${escapeHtml(mode.langB.toUpperCase())}` : '연속 번역'}</strong>
         <span class="ver">v${APP_VERSION}</span>
       </summary>
       <div class="translate-chips">
@@ -4370,7 +4370,7 @@ function renderChat(): string {
       <p class="translate-hint">${
         mode.active
           ? 'MIC로 한국말만 하세요. 끝내려면 스톱을 누르세요.'
-          : '언어 버튼 → 말한 뒤 스톱 · v' + APP_VERSION
+          : '언어 버튼으로 연속 번역 시작 · 한 문장은 「안녕하세요를 영어로 번역해줘」'
       }</p>
     </details>
   `

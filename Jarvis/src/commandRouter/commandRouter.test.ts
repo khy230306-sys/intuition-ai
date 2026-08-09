@@ -163,6 +163,11 @@ const CASES: Case[] = [
   { input: '오늘 하루 정리해줘', expectedIntent: 'general.chat' },
   { input: '문서 읽어줘', expectedIntent: 'vision.open' },
   { input: '이 사진 번역해줘', expectedIntent: 'vision.translation' },
+  // Chip / continuous lock phrasing (must not oneshot the framing crumbs)
+  { input: '지금부터 스톱할 때까지 베트남어로 번역해줘', expectedIntent: 'translation.session.start', target: 'vi', forbiddenActions: ['weather'] },
+  { input: '지금부터 스톱할 때까지 영어로 번역해줘', expectedIntent: 'translation.session.start', target: 'en' },
+  { input: '지금부터 일본어로 번역해줘', expectedIntent: 'translation.session.start', target: 'ja' },
+  { input: '울산역으로 안내해줘', expectedIntent: 'translation.escape', mode: 'translation' },
 ]
 
 describe('AizioCommandRouter regression (≥100)', () => {
@@ -254,6 +259,42 @@ describe('required think() integration', () => {
     expect(routed.intent).toBe('translation.oneshot')
     const r = await think('"오늘 날씨 어때?"를 영어로 번역해줘')
     expect(r.text).not.toMatch(/날씨를 확인합니다/)
+  })
+})
+
+describe('translate lock fixes (chip / escape / thin payload)', () => {
+  beforeEach(() => {
+    store.clear()
+    clearInterpretMode()
+    endTranslationSession()
+  })
+
+  it('chip 스톱할 때까지 phrase starts session, not oneshot', async () => {
+    const routed = routeCommand({ text: '지금부터 스톱할 때까지 베트남어로 번역해줘' })
+    expect(routed.intent).toBe('translation.session.start')
+    expect(routed.targetLanguage).toBe('vi')
+    const r = await think('지금부터 스톱할 때까지 베트남어로 번역해줘')
+    expect(r.text).toMatch(/베트남어 번역/)
+    expect(r.text).not.toMatch(/Từ bây giờ|cho đến khi/)
+    expect(getTranslationSession().enabled).toBe(true)
+    expect(getTranslationSession().targetLanguage).toBe('vi')
+  })
+
+  it('nav escape while locked is not translated', async () => {
+    startTranslationSession('ja', '일본어')
+    const routed = routeCommand({ text: '울산역으로 안내해줘' })
+    expect(routed.intent).toBe('translation.escape')
+    const owned = await tryHandleRoutedCommand('울산역으로 안내해줘')
+    expect(owned).toBeNull()
+    const r = await think('울산역으로 안내해줘')
+    expect(r.text).not.toMatch(/駅まで案内|蔚山/)
+    expect(r.text).toMatch(/울산역|길|안내|지도|장소|검색/)
+  })
+
+  it('rejects thin oneshot payload 나', async () => {
+    const r = await tryHandleRoutedCommand('나를 영어로 번역해줘')
+    expect(r?.text).toMatch(/애매|문장으로/)
+    expect(r?.text).not.toMatch(/I'm smart/i)
   })
 })
 

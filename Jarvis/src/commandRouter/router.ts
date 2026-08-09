@@ -15,6 +15,7 @@ import {
 import { hasActiveRestaurantSession } from '../restaurantAgent/session'
 import { detectTravelIntent, isTravelUtterance } from '../travelAgent/detect'
 import { hasActiveTravelSession } from '../travelAgent/session'
+import { isTranslateEscapeCommand } from '../translateBrain'
 import { findTargetLanguage, langName } from './languages'
 import { normalizeCommandInput } from './normalize'
 import { getActiveMode, getTranslationSession } from './session'
@@ -105,8 +106,9 @@ export function isTranslationStart(text: string): boolean {
   if (isTranslationStop(t)) return false
   if (isVisionTranslation(t)) return false
   // Continuous cues — bare 「계속」 alone is not enough (avoids 「아까 여행 계속」)
+  // 「스톱할 때까지」 is the chat-chip continuous lock phrasing.
   if (
-    /지금부터|이제부터|앞으로|번역\s*모드|통역\s*모드|번역\s*시작|통역\s*시작|번역하기|통역하기|translate\s+to|start\s+translati/i.test(
+    /지금부터|이제부터|앞으로|스톱할\s*때|스탑할\s*때|until\s+(?:i\s+)?stop|번역\s*모드|통역\s*모드|번역\s*시작|통역\s*시작|번역하기|통역하기|translate\s+to|start\s+translati/i.test(
       t,
     ) ||
     (/계속/.test(t) && /번역|통역|영어|일본어|중국어|베트남어|translate|interpre/i.test(t))
@@ -142,12 +144,13 @@ export function isTranslationOneShot(text: string): boolean {
       t,
     )
   if (!/번역|통역|translate/i.test(t) && !speakAsTranslate) return false
-  if (isTranslationStart(t) && !hasTranslatableContent(t) && !speakAsTranslate) return false
+  // Continuous lock / chip phrases are never oneshot
+  if (isTranslationStart(t)) return false
   if (isVisionTranslation(t)) return false
   if (speakAsTranslate) return true
   // Quoted or 「X를 영어로 번역」
   if (/['"「『].+['"」』]\s*(?:을|를)?\s*.*(?:로|으로)\s*(?:번역|통역)/i.test(t)) return true
-  if (/.+(?:을|를|라고|다고)\s*.*(?:로|으로)\s*(?:번역|통역)/i.test(t) && !/지금부터|이제부터|앞으로|계속|모드/i.test(t)) {
+  if (/.+(?:을|를|라고|다고)\s*.*(?:로|으로)\s*(?:번역|통역)/i.test(t) && !/지금부터|이제부터|앞으로|계속|모드|스톱할|스탑할/i.test(t)) {
     return true
   }
   return hasTranslatableContent(t) && /(?:로|으로)\s*(?:번역|통역)|번역해|통역해/i.test(t)
@@ -179,9 +182,23 @@ export function extractTranslateContent(text: string): string {
   if (m) {
     let c = m[1].trim()
     c = c.replace(/^(?:이\s*문장|다음|이거|이것)\s*/i, '').trim()
-    if (c && !/^(지금부터|이제부터|앞으로|계속|내\s*말)$/i.test(c)) return c
+    // Reject continuous-lock framing crumbs mistaken for payload
+    if (
+      c &&
+      !/^(지금부터|이제부터|앞으로|계속|내\s*말)(?:\s|$)/i.test(c) &&
+      !/스톱할\s*때|스탑할\s*때|until\s+(?:i\s+)?stop/i.test(c)
+    ) {
+      return c
+    }
   }
   return ''
+}
+
+/** Pronoun-only / tiny payloads that MT engines invent nonsense for (e.g. 나 → I'm smart!). */
+export function isThinTranslatePayload(content: string): boolean {
+  const c = String(content || '').trim()
+  if (!c || c.length <= 1) return true
+  return /^(나|너|저|우리|그|그녀|이것|저것|그것|I|me|you|we|he|she|my|your)$/i.test(c)
 }
 
 export function isVisionTranslation(text: string): boolean {
@@ -334,6 +351,20 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
       pushRouteDiag(r, mode, false)
       return r
     }
+    // Nav / call escapes — do not swallow; brain handles while lock stays on.
+    if (isTranslateEscapeCommand(normalized)) {
+      const r = result({
+        intent: 'translation.escape',
+        confidence: 0.99,
+        entities: {},
+        action: 'translation.escape',
+        reason: 'active_mode_escape',
+        normalized,
+        forbiddenActions: ['weather'],
+      })
+      pushRouteDiag(r, mode, false)
+      return r
+    }
     // While translation mode is on: NEVER run weather/calendar on narrative text.
     // Only stop / language-switch / vision-translate escape (plus explicit stop phrases).
     const r = result({
@@ -369,6 +400,27 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
   }
 
   // 3) Translation session start / one-shot
+  // Session start MUST win over oneshot — chip phrases like
+  // 「지금부터 스톱할 때까지 베트남어로 번역해줘」 contain framing text that
+  // extractTranslateContent can mistake for payload.
+  if (isTranslationStart(normalized)) {
+    const target = lang?.code || 'en'
+    const r = result({
+      intent: 'translation.session.start',
+      confidence: lang ? 0.99 : 0.9,
+      entities: { targetLanguage: target },
+      action: 'translation.start',
+      reason: lang ? 'session_start_with_lang' : 'session_start_default_en',
+      normalized,
+      targetLanguage: target,
+      sourceLanguage: 'auto',
+      missingFields: lang ? [] : [],
+      forbiddenActions: baseForbiddenWeather.concat(['calendar', 'music', 'general_chat']),
+    })
+    pushRouteDiag(r, mode, false)
+    return r
+  }
+
   if (isTranslationOneShot(normalized)) {
     const content = extractTranslateContent(normalized)
     const target = lang?.code || 'en'
@@ -383,24 +435,6 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
       targetLanguage: target,
       sourceLanguage: 'auto',
       forbiddenActions: baseForbiddenCal,
-    })
-    pushRouteDiag(r, mode, false)
-    return r
-  }
-
-  if (isTranslationStart(normalized)) {
-    const target = lang?.code || 'en'
-    const r = result({
-      intent: 'translation.session.start',
-      confidence: lang ? 0.99 : 0.9,
-      entities: { targetLanguage: target },
-      action: 'translation.start',
-      reason: lang ? 'session_start_with_lang' : 'session_start_default_en',
-      normalized,
-      targetLanguage: target,
-      sourceLanguage: 'auto',
-      missingFields: lang ? [] : [],
-      forbiddenActions: baseForbiddenWeather.concat(['calendar', 'music', 'general_chat']),
     })
     pushRouteDiag(r, mode, false)
     return r

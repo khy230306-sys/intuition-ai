@@ -14,7 +14,7 @@ import { makeExecutionResult } from '../reliability/execution'
 import { providerFailurePolicy } from '../reliability/providerPolicy'
 import { loadSettings } from '../storage'
 import { bcp47, translateText } from '../translate'
-import { routeCommand } from './router'
+import { routeCommand, describeTarget, isThinTranslatePayload } from './router'
 import {
   changeTranslationTarget,
   endTranslationSession,
@@ -22,8 +22,12 @@ import {
   startTranslationSession,
   translationBadgeLabel,
 } from './session'
-import { describeTarget } from './router'
 import type { CommandRouterResult } from './types'
+
+function formatOneshotReply(original: string, translated: string, toCode: string): string {
+  const name = describeTarget(toCode)
+  return ['원문', original, '', name, translated].join('\n')
+}
 
 type ChatHistoryTurn = { role: string; text: string }
 
@@ -143,6 +147,9 @@ export async function executeRoutedCommand(
         }),
       )
     }
+    case 'translation.escape':
+      // Keep lock on; let brain / nav / call handlers own this turn.
+      return null
     case 'translation.oneshot': {
       const content = (routed.content || '').trim()
       const to = routed.targetLanguage || 'en'
@@ -152,6 +159,15 @@ export async function executeRoutedCommand(
           replyFromExec(`${describeTarget(to)} 번역 모드를 시작했어요. 이제 보내는 내용을 번역할게요.`, {
             listenLang: 'ko-KR',
           }),
+        )
+      }
+      if (isThinTranslatePayload(content)) {
+        return finish(
+          replyFromExec(
+            `「${content}」만으로는 번역이 애매해요. 문장으로 말해 주세요.\n예: 「안녕하세요를 ${describeTarget(to)}로 번역해줘」`,
+            { listenLang: 'ko-KR' },
+          ),
+          { status: 'needs_input', success: true },
         )
       }
       const isolated = await isolateFeature('translation', () => translateText(content, 'auto', to))
@@ -172,7 +188,7 @@ export async function executeRoutedCommand(
         )
       }
       return finish(
-        replyFromExec(result.text, {
+        replyFromExec(formatOneshotReply(content, result.text, to), {
           speakLang: bcp47(to),
           listenLang: 'ko-KR',
         }),
@@ -200,8 +216,9 @@ export async function executeRoutedCommand(
           errorCode: 'TRANSLATE-001',
         })
       }
+      // Keep compact 【언어】 form for continuous lock (matches prior UX)
       return finish(
-        replyFromExec(result.text, {
+        replyFromExec([`【${describeTarget(to)}${result.offline ? '·오프라인' : ''}】`, result.text].join('\n'), {
           speakLang: bcp47(to),
           listenLang: 'ko-KR',
         }),

@@ -5,7 +5,15 @@ export type {
   CommandRouterResult,
   RouteDiagEntry,
 } from './types'
-export { routeCommand, isClearWeatherQuery, isTranslationStart, isTranslationOneShot, isVisionTranslation } from './router'
+export {
+  routeCommand,
+  isClearWeatherQuery,
+  isTranslationStart,
+  isTranslationOneShot,
+  isVisionTranslation,
+  isThinTranslatePayload,
+  extractTranslateContent,
+} from './router'
 export {
   tryHandleRoutedCommand,
   executeRoutedCommand,

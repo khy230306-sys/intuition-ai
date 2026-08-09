@@ -182,7 +182,7 @@ export function renderHomeV2Shell(
       ${opts.voiceHintHtml || ''}
 
       <div class="home-v2-composer-wrap composer-dock">
-        <button type="button" class="home-v2-translate-badge ${model.translate.active ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역 잠금">
+        <button type="button" class="home-v2-translate-badge ${model.translate.active ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역하기 열기" title="번역하기 창 열기">
           ${esc(model.translate.label)} <span class="ver">v${esc(opts.appVersion)}</span>
         </button>
         ${opts.composerExtraHtml || ''}

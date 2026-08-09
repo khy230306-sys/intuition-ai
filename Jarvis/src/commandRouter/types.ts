@@ -6,6 +6,7 @@ export type AizioIntent =
   | 'translation.session.change_target'
   | 'translation.oneshot'
   | 'translation.active_utterance'
+  | 'translation.escape'
   | 'vision.translation'
   | 'vision.open'
   | 'calendar.create'

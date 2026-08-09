@@ -412,9 +412,18 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
 
   // One-shot only — do NOT enable continuous lock
   if (parsed.matched && parsed.lang && parsed.payload && (parsed.oneShot || !parsed.sticky)) {
-    const from = detectLangCode(parsed.payload)
+    const payload = parsed.payload.trim()
+    // Pronoun-only crumbs → MT invents nonsense (나 → I'm smart!)
+    if (/^(나|너|저|우리|그|그녀|이것|저것|그것|I|me|you|we|he|she)$/i.test(payload) || payload.length <= 1) {
+      return {
+        text: `「${payload}」만으로는 번역이 애매해요. 문장으로 말해 주세요.\n예: 「안녕하세요를 ${parsed.lang.name}로 번역해줘」`,
+        speak: true,
+        listenLang: 'ko-KR',
+      }
+    }
+    const from = detectLangCode(payload)
     const to = parsed.lang.code
-    const result = await translateText(parsed.payload, from === to ? 'ko' : from, to)
+    const result = await translateText(payload, from === to ? 'ko' : from, to)
     if (!result.ok) {
       return {
         text: result.error || '번역에 실패했습니다. 네트워크를 확인해 주세요.',
@@ -423,7 +432,7 @@ export async function handleTranslate(text: string): Promise<BrainReply | null> 
       }
     }
     return {
-      text: ['원문', parsed.payload, '', parsed.lang.name, result.text].join('\n'),
+      text: ['원문', payload, '', parsed.lang.name, result.text].join('\n'),
       speak: true,
       speakLang: bcp47(to),
       listenLang: 'ko-KR',

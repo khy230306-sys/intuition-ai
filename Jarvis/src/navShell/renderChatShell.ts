@@ -61,7 +61,7 @@ export function renderChatShell(opts: {
         ${opts.voiceHintHtml || ''}
       </section>
       <div class="home-v2-composer-wrap composer-dock nav-chat-composer">
-        <button type="button" class="home-v2-translate-badge ${opts.translateActive ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역 잠금">
+        <button type="button" class="home-v2-translate-badge ${opts.translateActive ? 'on' : ''}" data-action="home-v2-translate" aria-label="번역하기 열기" title="번역하기 창 열기">
           ${esc(opts.translateLabel)}
         </button>
         ${opts.composerExtraHtml || ''}

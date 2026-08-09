@@ -151,6 +151,13 @@ MIC로 말하면 번역 후 해당 언어로 읽어 줍니다. (말씀 끝난 �
 - 설정 → **음성 시스템 테스트**로 지원 여부 점검
 - `npm test` (유닛) · `npm run test:voice` (Chrome E2E)
 
+## 개발·실행 방법서
+
+설계된 비서 기능을 “말로 하면 실제로 된다” 수준까지 올리는 순서는 아래 문서를 따릅니다.
+
+- [`docs/AIZIO_NATURAL_EXECUTION_PLAYBOOK.md`](docs/AIZIO_NATURAL_EXECUTION_PLAYBOOK.md) — 자연 실행 방법서 (Phase 0–7)
+- [`docs/AIZIO_EXECUTION_BACKLOG.md`](docs/AIZIO_EXECUTION_BACKLOG.md) — P0/P1/P2 실행 백로그
+
 ## 로컬 실행
 
 ```bash

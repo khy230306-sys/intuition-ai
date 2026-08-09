@@ -21,6 +21,7 @@ AIZIO stores keys **only on your device**. Do not share keys. Operator keys are 
 | Gemini | Free-start | Google AI Studio key; quota changes over time |
 | Groq | Free-start | Fast OpenAI-compatible API |
 | OpenAI | Paid usage | ChatGPT Plus ≠ API billing |
+| Anthropic Claude | Paid usage | Ideas 「Claude 심장」이 우선 사용 |
 | Custom | Usually paid | Your own base URL |
 
 Free tiers are **not unlimited**. Limits change with provider policy.
@@ -38,12 +39,18 @@ Free tiers are **not unlimited**. Limits change with provider policy.
 - Gemini: https://aistudio.google.com/apikey
 - Groq: https://console.groq.com/keys
 - OpenAI: https://platform.openai.com/api-keys
+- Anthropic Claude: https://console.anthropic.com/settings/keys
 
 ## Modes
 
-- **자동 선택** — free providers in order: OpenRouter → Gemini → Groq
-- **특정 Provider 고정** — only the chosen provider
+- **자동 선택** — free providers in order: OpenRouter → Gemini → Groq (Claude는 유료라 고정/폴백 시에 사용)
+- **특정 Provider 고정** — only the chosen provider (Claude 심장: Anthropic 고정 권장)
 - **유료 자동 폴백** — off by default; must be enabled explicitly
+
+## Ideas · Claude 심장
+
+생활 → **Claude 심장** 칩, 또는 「아이디어 발전시켜줘 …」  
+Anthropic 키가 있으면 Claude가 아이디어를 키우고, 없으면 OpenRouter Claude → 기타 Hybrid → 로컬 틀 순입니다.
 
 ## Without AI
 

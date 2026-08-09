@@ -85,7 +85,14 @@ describe('hybrid AI config', () => {
 
   it('lists free and paid providers', () => {
     const list = listHybridProviders()
-    expect(list.map((p) => p.id)).toEqual(['openrouter', 'gemini', 'groq', 'openai', 'custom'])
+    expect(list.map((p) => p.id)).toEqual([
+      'openrouter',
+      'gemini',
+      'groq',
+      'openai',
+      'anthropic',
+      'custom',
+    ])
     expect(list.filter((p) => p.category === 'free').map((p) => p.id)).toEqual([
       'openrouter',
       'gemini',

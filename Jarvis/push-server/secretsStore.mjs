@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** @typedef {'openrouter'|'openai'|'gemini'|'groq'|'custom'|'duffel'|'amadeus'|'amadeus_secret'|'expedia'} ProviderId */
+/** @typedef {'openrouter'|'openai'|'gemini'|'groq'|'anthropic'|'custom'|'duffel'|'amadeus'|'amadeus_secret'|'expedia'} ProviderId */
 /** @typedef {'user-secret'|'environment'|'none'} KeySource */
 /** @typedef {'untested'|'connected'|'invalid'|'permission_error'|'quota_error'|'network_error'|'provider_error'} ConnectionStatus */
 
@@ -16,6 +16,7 @@ const PROVIDERS = [
   'openai',
   'gemini',
   'groq',
+  'anthropic',
   'custom',
   'duffel',
   'amadeus',
@@ -28,6 +29,7 @@ const ENV_MAP = {
   openai: ['OPENAI_API_KEY', 'AIZIO_OPENAI_API_KEY'],
   gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'AIZIO_GEMINI_API_KEY'],
   groq: ['GROQ_API_KEY', 'AIZIO_GROQ_API_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'AIZIO_ANTHROPIC_API_KEY'],
   custom: ['AIZIO_CUSTOM_API_KEY'],
   duffel: ['DUFFEL_API_KEY', 'AIZIO_DUFFEL_API_KEY'],
   amadeus: ['AMADEUS_API_KEY', 'AIZIO_AMADEUS_API_KEY'],

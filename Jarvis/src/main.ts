@@ -4541,6 +4541,7 @@ function renderLife(): string {
           <button type="button" data-suggest="내가 무엇을 좋아한다고 기억하고 있어?">DNA</button>
           <button type="button" data-suggest="목표 목록 보여줘">목표</button>
           <button type="button" data-suggest="아이디어 목록">아이디어</button>
+          <button type="button" data-suggest="아이디어 발전시켜줘">Claude 심장</button>
           <button type="button" data-suggest="AIZIO 프로젝트 어디까지 됐어?">프로젝트</button>
           <button type="button" data-suggest="오늘 뭐 해야 해?">오늘</button>
           <button type="button" data-suggest="스킬 목록">Skill</button>
@@ -7698,7 +7699,7 @@ function bind(): void {
     e.preventDefault()
     const fd = new FormData(settingsForm)
     const appLocale = String(fd.get('appLocale') || getAppLocale()) as AppLocale
-    const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
+    const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'anthropic', 'custom']
 
     void (async () => {
       const keyMessages: string[] = []

@@ -35,6 +35,7 @@ import {
   rememberDnaFromText,
   runAiMeeting,
   runRoutine,
+  runIdeaBrain,
   saveIdea,
   setSkillEnabled,
   updateGoalStatus,
@@ -63,6 +64,7 @@ export function canHandle(ctx: SkillContext): boolean {
     'project_planning',
     'save_idea',
     'search_ideas',
+    'grow_idea',
     'run_ai_meeting',
     'create_routine',
     'run_routine',
@@ -186,6 +188,17 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     const content = parsed && parsed.intent === 'save_idea' ? parsed.content : text
     const idea = saveIdea(content)
     return ok(`아이디어를 저장했어요: ${idea.title}\n원문 보존됨.`)
+  }
+  if (ctx.intent === 'grow_idea' || parsed?.intent === 'grow_idea') {
+    if (!isLifeFeatureEnabled('ideasEnabled')) return fail('아이디어 은행이 꺼져 있습니다.')
+    const mode = parsed && parsed.intent === 'grow_idea' ? parsed.mode : 'expand'
+    const seed = parsed && parsed.intent === 'grow_idea' ? parsed.seed : text
+    try {
+      const r = await runIdeaBrain(seed, mode)
+      return ok(r.text)
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : '아이디어 발전에 실패했습니다.')
+    }
   }
   if (ctx.intent === 'search_ideas' || parsed?.intent === 'search_ideas') {
     const q = parsed && parsed.intent === 'search_ideas' ? parsed.query : ''

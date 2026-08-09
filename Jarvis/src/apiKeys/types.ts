@@ -5,6 +5,7 @@ export type ProviderKeyId =
   | 'openai'
   | 'gemini'
   | 'groq'
+  | 'anthropic'
   | 'custom'
   | 'duffel'
   | 'amadeus'

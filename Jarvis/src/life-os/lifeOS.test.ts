@@ -83,6 +83,16 @@ describe('Ideas & Projects', () => {
     expect(searchIdeas('음악').length).toBeGreaterThan(0)
   })
 
+  it('Claude heart grow_idea works offline with local scaffold', async () => {
+    const { runIdeaBrain } = await import('./ideas/ideaBrain')
+    const { parseLifeOsIntent } = await import('./intentParse')
+    expect(parseLifeOsIntent('아이디어 발전시켜줘: 음성 UI를 더 따뜻하게')?.intent).toBe('grow_idea')
+    const r = await runIdeaBrain('음성 UI를 더 따뜻하게', 'expand')
+    expect(r.text).toMatch(/아이디어|한 줄 핵심|다음 행동/)
+    expect(r.idea.content).toContain('음성 UI')
+    expect(r.providerId).toBe('local')
+  })
+
   it('tracks project bugs and health from data', () => {
     upsertProject('AIZIO')
     const updated = addProjectBug('AIZIO', '흰 화면')!

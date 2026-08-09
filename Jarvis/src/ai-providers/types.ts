@@ -5,6 +5,7 @@ export type HybridProviderId =
   | 'gemini'
   | 'groq'
   | 'openai'
+  | 'anthropic'
   | 'custom'
 
 export type ProviderCategory = 'free' | 'paid' | 'local'

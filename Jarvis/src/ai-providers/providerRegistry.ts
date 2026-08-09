@@ -1,3 +1,4 @@
+import { anthropicProvider } from './providers/anthropicProvider'
 import { customOpenAICompatibleProvider } from './providers/customOpenAICompatibleProvider'
 import { geminiProvider } from './providers/geminiProvider'
 import { groqProvider } from './providers/groqProvider'
@@ -11,6 +12,7 @@ export const AUTO_PROVIDER_ORDER: HybridProviderId[] = [
   'gemini',
   'groq',
   'openai',
+  'anthropic',
   'custom',
 ]
 
@@ -19,6 +21,7 @@ const registry: HybridProvider[] = [
   geminiProvider,
   groqProvider,
   openAIProvider,
+  anthropicProvider,
   customOpenAICompatibleProvider,
 ]
 

@@ -257,6 +257,7 @@ export function classifyIntent(text: string, locale: AppLocale = 'ko'): IntentCl
       goal_next: 'update_goal',
       save_idea: 'save_idea',
       search_ideas: 'search_ideas',
+      grow_idea: 'grow_idea',
       project_status: 'project_status',
       project_bug: 'create_project_item',
       project_done: 'create_project_item',

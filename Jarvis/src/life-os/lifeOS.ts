@@ -17,6 +17,7 @@ export {
   computeGoalProgress,
 } from './goals/goalService'
 export { saveIdea, searchIdeas, formatIdeas, linkIdeaToProject } from './ideas/ideaService'
+export { runIdeaBrain } from './ideas/ideaBrain'
 export {
   upsertProject,
   findProject,

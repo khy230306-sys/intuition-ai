@@ -170,7 +170,7 @@ export function isProviderConfigured(id: HybridProviderId): boolean {
 }
 
 export function hasAnyConfiguredProvider(): boolean {
-  const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
+  const ids: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'anthropic', 'custom']
   return ids.some((id) => isProviderConfigured(id))
 }
 

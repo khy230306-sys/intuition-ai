@@ -7,11 +7,15 @@ export const OPENROUTER_DEFAULT_MODEL = 'openrouter/free'
 export const GEMINI_DEFAULT_MODEL = 'gemini-flash-latest'
 export const GROQ_DEFAULT_MODEL = 'llama-3.1-8b-instant'
 export const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini'
+/** Claude — Ideas “heart” default when Anthropic key is set. */
+export const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-20250514'
+export const OPENROUTER_CLAUDE_MODEL = 'anthropic/claude-sonnet-4'
 
 export const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1'
 export const GROQ_API_BASE = 'https://api.groq.com/openai/v1'
 export const OPENAI_API_BASE = 'https://api.openai.com/v1'
 export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
+export const ANTHROPIC_API_BASE = 'https://api.anthropic.com'
 
 export const RECOMMENDED_MODELS: Record<HybridProviderId, ModelInfo[]> = {
   openrouter: [
@@ -28,6 +32,11 @@ export const RECOMMENDED_MODELS: Record<HybridProviderId, ModelInfo[]> = {
       category: 'fast',
       freeHint: true,
     },
+    {
+      id: OPENROUTER_CLAUDE_MODEL,
+      label: 'Claude Sonnet 4 (via OpenRouter)',
+      category: 'analysis',
+    },
   ],
   gemini: [
     { id: 'gemini-flash-latest', label: 'Gemini Flash (latest)', category: 'fast', freeHint: true },
@@ -43,6 +52,11 @@ export const RECOMMENDED_MODELS: Record<HybridProviderId, ModelInfo[]> = {
     { id: 'gpt-4o-mini', label: 'GPT-4o mini', category: 'chat' },
     { id: 'gpt-4o', label: 'GPT-4o', category: 'analysis' },
   ],
+  anthropic: [
+    { id: ANTHROPIC_DEFAULT_MODEL, label: 'Claude Sonnet 4', category: 'analysis' },
+    { id: 'claude-opus-4-20250514', label: 'Claude Opus 4', category: 'analysis' },
+    { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', category: 'fast' },
+  ],
   custom: [{ id: 'gpt-4o-mini', label: 'Custom model', category: 'chat' }],
 }
 
@@ -56,6 +70,8 @@ export function defaultModelFor(id: HybridProviderId): string {
       return GROQ_DEFAULT_MODEL
     case 'openai':
       return OPENAI_DEFAULT_MODEL
+    case 'anthropic':
+      return ANTHROPIC_DEFAULT_MODEL
     case 'custom':
       return OPENAI_DEFAULT_MODEL
   }

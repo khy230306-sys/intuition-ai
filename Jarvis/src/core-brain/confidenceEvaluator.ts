@@ -38,6 +38,7 @@ const SKILL_OWNED: CoreIntent[] = [
   'create_project_item',
   'save_idea',
   'search_ideas',
+  'grow_idea',
   'run_ai_meeting',
   'create_routine',
   'run_routine',

@@ -30,7 +30,7 @@ describe('API key E2E (device + flags)', () => {
   beforeEach(() => {
     store.clear()
     invalidateProviderKeyCache()
-    for (const id of ['openrouter', 'openai', 'gemini', 'groq', 'custom'] as const) {
+    for (const id of ['openrouter', 'openai', 'gemini', 'groq', 'anthropic', 'custom'] as const) {
       clearProviderKey(id)
       clearServerConfigured(id)
     }

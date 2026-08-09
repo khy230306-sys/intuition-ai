@@ -15,6 +15,7 @@ export type LifeOsParsedIntent =
   | { intent: 'goal_next' }
   | { intent: 'save_idea'; content: string }
   | { intent: 'search_ideas'; query: string }
+  | { intent: 'grow_idea'; seed: string; mode: 'generate' | 'expand' | 'brainstorm' }
   | { intent: 'project_status'; hint: string }
   | { intent: 'project_bug'; project: string; title: string }
   | { intent: 'project_done'; project: string; title: string }
@@ -78,6 +79,26 @@ export function parseLifeOsIntent(raw: string): LifeOsParsedIntent | null {
   const goalM = text.match(/내\s*목표는\s*(.+)$/i) || text.match(/목표는\s*(.+?)(?:야|이야|입니다)/i)
   if (goalM?.[1]) return { intent: 'create_goal', title: goalM[1].trim() }
 
+  // Claude heart — grow / brainstorm before plain save/search
+  if (
+    /아이디어\s*(발전|키워|확장|구체화)|클로드.*아이디어|아이디어.*클로드|claude.*idea|idea.*claude/i.test(
+      text,
+    ) ||
+    /아이디어\s*(만들어|생성)(줘|주세요|해줘)?/i.test(text) ||
+    /브레인스토밍|아이디어\s*뽑/i.test(text)
+  ) {
+    const mode: 'generate' | 'expand' | 'brainstorm' = /브레인스토밍|뽑/i.test(text)
+      ? 'brainstorm'
+      : /만들어|생성/i.test(text)
+        ? 'generate'
+        : 'expand'
+    const seed = text
+      .replace(/^(아이디어\s*)?(발전|키워|확장|구체화|만들어|생성|브레인스토밍)(시켜)?(줘|주세요|해줘|해\s*줘)?[:\s]*/i, '')
+      .replace(/^클로드(야|에게|로)?[:\s]*/i, '')
+      .replace(/아이디어\s*(발전|키워|확장|구체화|만들어|생성).*/i, '')
+      .trim()
+    return { intent: 'grow_idea', seed: seed || text, mode }
+  }
   if (/아이디어\s*(은행|목록|보여|검색)|예전에\s*.*아이디어|음악\s*관련\s*아이디어/i.test(text)) {
     const q = text.replace(/.*아이디어\s*/i, '').replace(/보여줘|검색|찾아/g, '').trim()
     return { intent: 'search_ideas', query: q || '음악' }

@@ -31,7 +31,7 @@ import type {
   TestKeyResult,
 } from './types'
 
-const HYBRID_IDS: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'custom']
+const HYBRID_IDS: HybridProviderId[] = ['openrouter', 'gemini', 'groq', 'openai', 'anthropic', 'custom']
 
 let statusCache: ProviderKeyStatus[] | null = null
 let cacheAt = 0

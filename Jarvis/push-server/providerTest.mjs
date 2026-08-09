@@ -120,6 +120,33 @@ export async function testProviderConnection(id, resolved) {
       }
     }
 
+    if (id === 'anthropic') {
+      const { res, text } = await fetchJson('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: resolved.model || 'claude-sonnet-4-20250514',
+          max_tokens: 16,
+          messages: [{ role: 'user', content: 'Reply with OK only.' }],
+        }),
+      })
+      if (!res.ok) {
+        const c = classifyHttpError(res.status, text)
+        return { ok: false, ...c, latencyMs: Date.now() - started }
+      }
+      return {
+        ok: true,
+        connectionStatus: 'connected',
+        code: 'OK',
+        message: '연결 성공 (Claude Messages)',
+        latencyMs: Date.now() - started,
+      }
+    }
+
     if (id === 'duffel' || id === 'amadeus' || id === 'amadeus_secret' || id === 'expedia') {
       return {
         ok: false,
@@ -161,7 +188,7 @@ export async function testProviderConnection(id, resolved) {
   }
 }
 
-/** Chat proxy — OpenAI-compatible + Gemini */
+/** Chat proxy — OpenAI-compatible + Gemini + Anthropic */
 export async function proxyChat(id, resolved, messages) {
   const key = resolved.apiKey
   if (!key) {
@@ -177,7 +204,45 @@ export async function proxyChat(id, resolved, messages) {
         ? 'llama-3.1-8b-instant'
         : id === 'gemini'
           ? 'gemini-2.0-flash'
-          : 'gpt-4o-mini')
+          : id === 'anthropic'
+            ? 'claude-sonnet-4-20250514'
+            : 'gpt-4o-mini')
+
+  if (id === 'anthropic') {
+    const system = (messages || []).find((m) => m.role === 'system')?.content
+    const bodyMessages = (messages || [])
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content || ''),
+      }))
+    if (!bodyMessages.length) bodyMessages.push({ role: 'user', content: 'OK' })
+    if (bodyMessages[0].role !== 'user') bodyMessages.unshift({ role: 'user', content: '(continue)' })
+    const { res, text, json } = await fetchJson('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        ...(system ? { system: String(system) } : {}),
+        messages: bodyMessages,
+      }),
+    })
+    if (!res.ok) {
+      const c = classifyHttpError(res.status, text)
+      const e = new Error(c.message)
+      e.code = c.code
+      throw e
+    }
+    const out =
+      json?.content?.filter((p) => p.type === 'text' || p.text).map((p) => p.text || '').join('') ||
+      ''
+    return { text: out, model: json?.model || model, providerId: id }
+  }
 
   if (id === 'gemini') {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`

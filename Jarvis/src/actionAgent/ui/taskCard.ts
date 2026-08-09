@@ -13,11 +13,32 @@ export function renderActiveTaskCard(task?: TaskSession | null): string {
   const t = task === undefined ? getActiveTask() : task
   if (!t || t.status === 'cancelled' || t.status === 'suspended') return ''
   const s = t.slots
+  const hotelPlace = t.type === 'travel.hotel' ? s.destination || s.location : ''
   const route =
-    s.origin || s.destination ? `${esc(String(s.origin || '?'))} → ${esc(String(s.destination || '?'))}` : ''
+    t.type === 'travel.hotel'
+      ? hotelPlace
+        ? esc(String(hotelPlace))
+        : ''
+      : s.origin || s.destination
+        ? `${esc(String(s.origin || '?'))} → ${esc(String(s.destination || '?'))}`
+        : ''
   // Independent departure / return fields — never a single overwritten "date"
-  const dep = s.departureDate ? `출발: ${esc(s.departureDate.resolvedDate)}` : ''
-  const ret = s.returnDate ? `귀국: ${esc(s.returnDate.resolvedDate)}` : ''
+  const dep =
+    t.type === 'travel.hotel'
+      ? s.checkIn || s.departureDate
+        ? `체크인: ${esc((s.checkIn || s.departureDate)!.resolvedDate)}`
+        : ''
+      : s.departureDate
+        ? `출발: ${esc(s.departureDate.resolvedDate)}`
+        : ''
+  const ret =
+    t.type === 'travel.hotel'
+      ? s.checkOut || s.returnDate
+        ? `체크아웃: ${esc((s.checkOut || s.returnDate)!.resolvedDate)}`
+        : ''
+      : s.returnDate
+        ? `귀국: ${esc(s.returnDate.resolvedDate)}`
+        : ''
   const trip =
     s.tripType && s.tripType !== 'unknown'
       ? s.tripType === 'round_trip'
@@ -40,7 +61,7 @@ export function renderActiveTaskCard(task?: TaskSession | null): string {
       ${route ? `<div class="aizio-task-card-line" data-slot="route">${route}</div>` : ''}
       ${dep ? `<div class="aizio-task-card-line" data-slot="departureDate">${dep}</div>` : ''}
       ${ret ? `<div class="aizio-task-card-line" data-slot="returnDate">${ret}</div>` : ''}
-      ${trip ? `<div class="aizio-task-card-line" data-slot="tripType">${esc(trip)}</div>` : ''}
+      ${trip && t.type !== 'travel.hotel' ? `<div class="aizio-task-card-line" data-slot="tripType">${esc(trip)}</div>` : ''}
       ${s.passengers ? `<div class="aizio-task-card-line" data-slot="passengers">${esc(String(s.passengers))}명</div>` : ''}
       <div class="aizio-task-card-status">${esc(statusLabel)}</div>
     </aside>

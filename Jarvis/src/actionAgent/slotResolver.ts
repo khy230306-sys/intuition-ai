@@ -154,11 +154,14 @@ export function mergeExtractedSlots(existing: TaskSlots, extracted: TaskSlots): 
   return safeMergeSlots(existing, undefined, proposals).slots
 }
 
-export function extractInitialTravelSlots(text: string): TaskSlots {
+export function extractInitialTravelSlots(
+  text: string,
+  taskType: TaskSession['type'] = 'travel.flight',
+): TaskSlots {
   // Use engine against empty task for consistent semantics
   const empty = {
     id: 'tmp',
-    type: 'travel.flight' as const,
+    type: taskType,
     status: 'collecting' as const,
     slots: {} as TaskSlots,
     missingSlots: [],
@@ -170,16 +173,21 @@ export function extractInitialTravelSlots(text: string): TaskSlots {
     pendingQuestion: null,
     expectedSlot: null,
   }
-  return resolveSlotTurn(empty as TaskSession, text).slots
+  const slots = resolveSlotTurn(empty as TaskSession, text).slots
+  if (taskType === 'travel.hotel') {
+    if (slots.destination && !slots.location) slots.location = slots.destination
+    if (slots.location && !slots.destination) slots.destination = slots.location
+  }
+  return slots
 }
 
 export function extractRestaurantSlots(text: string): TaskSlots {
   const t = text.trim()
   const slots = extractMultiSlots(t, { taskType: 'restaurant.search', pendingQuestion: 'location' })
-  const places = ['울산', '수원', '지리산', '삼산', '해운대', '강남', '홍대']
+  const places = ['나트랑', '냐짱', '다낭', '호이안', '울산', '수원', '지리산', '삼산', '해운대', '강남', '홍대']
   for (const p of places) {
     if (t.includes(p) && !slots.location) {
-      slots.location = p
+      slots.location = p === '냐짱' ? '나트랑' : p
       break
     }
   }

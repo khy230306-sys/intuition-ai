@@ -1,4 +1,5 @@
-import type { PlannedAction, RiskLevel, TaskSession, TaskType } from './types'
+import { addDays, toIsoDate } from '../travelAgent/dates'
+import type { PlannedAction, RiskLevel, ResolvedDate, TaskSession, TaskType } from './types'
 
 function missingForFlight(task: TaskSession): string[] {
   const s = task.slots
@@ -13,13 +14,42 @@ function missingForFlight(task: TaskSession): string[] {
   return miss
 }
 
+/**
+ * Hotel/resort *search* only needs a place — dates default to today / +1 night.
+ * Booking-style check-in loops were trapping 「나트랑에 리조트」 conversations.
+ */
 function missingForHotel(task: TaskSession): string[] {
   const s = task.slots
   const miss: string[] = []
   if (!s.destination && !s.location) miss.push('destination')
-  if (!s.checkIn && !s.departureDate) miss.push('checkIn')
-  if (!s.checkOut && !s.returnDate) miss.push('checkOut')
   return miss
+}
+
+function isoResolved(originalText: string, iso: string): ResolvedDate {
+  return { originalText, resolvedDate: iso }
+}
+
+/** Fill browse defaults so hotel search can run without a date Q&A loop. */
+export function applyHotelBrowseDefaults(task: TaskSession, now = new Date()): TaskSession {
+  if (task.type !== 'travel.hotel') return task
+  const s = { ...task.slots }
+  if (s.destination && !s.location) s.location = s.destination
+  if (s.location && !s.destination) s.destination = s.location
+  if (!s.destination && !s.location) return task
+
+  if (!s.checkIn && !s.departureDate) {
+    s.checkIn = isoResolved('오늘', toIsoDate(now))
+  }
+  if (!s.checkOut && !s.returnDate) {
+    const inIso = (s.checkIn || s.departureDate)!.resolvedDate
+    const out = addDays(new Date(`${inIso}T12:00:00`), 1)
+    s.checkOut = isoResolved('+1박', toIsoDate(out))
+  }
+  return {
+    ...task,
+    slots: s,
+    label: taskLabel(task.type, s),
+  }
 }
 
 function missingForRestaurant(task: TaskSession): string[] {
@@ -67,7 +97,7 @@ export function nextQuestion(
     tripType: '편도인가요, 왕복인가요?',
     returnDate: '돌아오는 날짜는 언제인가요?',
     passengers: '몇 분이 가시나요?',
-    checkIn: '체크인 날짜가 언제인가요?',
+    checkIn: '체크인 날짜가 언제인가요? (모르면 「오늘」이라고 해도 바로 찾아볼게요)',
     checkOut: '체크아웃 날짜가 언제인가요?',
     location: '어느 지역에서 찾으실까요?',
     partySize: '몇 분이세요?',
@@ -82,7 +112,9 @@ export function clarifyQuestion(expectedSlot: string): string {
     tripType: '편도인지 왕복인지 알려주세요. 예: "편도", "왕복"',
     departureDate: '여행 출발 날짜를 알려주세요. 예: "8월10일"',
     returnDate: '돌아오는 날짜를 알려주세요. 예: "8월14일"',
-    destination: '목적지를 알려주세요. 예: "호치민"',
+    checkIn: '체크인 날짜를 알려주세요. 예: "오늘", "8월10일"',
+    checkOut: '체크아웃 날짜를 알려주세요. 예: "내일", "8월12일"',
+    destination: '목적지를 알려주세요. 예: "나트랑", "호치민"',
     origin: '출발지를 알려주세요. 예: "부산", "인천"',
     passengers: '인원 수를 알려주세요. 예: "2명"',
   }

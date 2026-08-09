@@ -337,8 +337,13 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
     } else if (expected === 'tripType') {
       diag.normalizedInput = earlyTrip.normalizedInput
       parseFailed = true
-    } else if (expected === 'departureDate' || expected === 'returnDate') {
-      const unk = dates.find((d) => d.role === 'unknownDate') || dates[0]
+    } else if (
+      expected === 'departureDate' ||
+      expected === 'returnDate' ||
+      expected === 'checkIn' ||
+      expected === 'checkOut'
+    ) {
+      const unk = dates.find((d) => d.role === 'unknownDate' || d.role === expected) || dates[0]
       const abs = unk?.resolved
       if (!abs) {
         parseFailed = true
@@ -355,13 +360,26 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
           })
           expectedFilled = true
         }
+      } else if (expected === 'checkOut') {
+        const verr = validateReturn(abs, task.slots.checkIn || task.slots.departureDate)
+        if (verr) validationError = verr
+        else {
+          proposals.push({
+            key: 'checkOut',
+            value: abs,
+            source: 'expected_question',
+            confidence: 1,
+            expectedByQuestion: 'checkOut',
+          })
+          expectedFilled = true
+        }
       } else {
         proposals.push({
-          key: 'departureDate',
+          key: expected === 'checkIn' ? 'checkIn' : 'departureDate',
           value: abs,
           source: 'expected_question',
           confidence: 1,
-          expectedByQuestion: 'departureDate',
+          expectedByQuestion: expected,
         })
         expectedFilled = true
       }
@@ -411,7 +429,14 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
     }
   } else if (expected && !alreadyHasExpectedKey && !authoritativeUpdate && !rich && !hasRoleDates) {
     // Medium utterance with a single unknown date — assign via expectedSlot hint
-    if ((expected === 'returnDate' || expected === 'departureDate') && dates.length === 1) {
+    // e.g. 「리조트검색 오늘」 while expected=checkIn
+    if (
+      (expected === 'returnDate' ||
+        expected === 'departureDate' ||
+        expected === 'checkIn' ||
+        expected === 'checkOut') &&
+      dates.length >= 1
+    ) {
       const d = dates[0]
       if (expected === 'returnDate') {
         const verr = validateReturn(d.resolved, task.slots.departureDate)
@@ -426,13 +451,26 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
           })
           expectedFilled = true
         }
+      } else if (expected === 'checkOut') {
+        const verr = validateReturn(d.resolved, task.slots.checkIn || task.slots.departureDate)
+        if (verr) validationError = verr
+        else {
+          proposals.push({
+            key: 'checkOut',
+            value: d.resolved,
+            source: 'expected_question',
+            confidence: 0.8,
+            expectedByQuestion: 'checkOut',
+          })
+          expectedFilled = true
+        }
       } else {
         proposals.push({
-          key: 'departureDate',
+          key: expected === 'checkIn' ? 'checkIn' : 'departureDate',
           value: d.resolved,
           source: 'expected_question',
           confidence: 0.8,
-          expectedByQuestion: 'departureDate',
+          expectedByQuestion: expected,
         })
         expectedFilled = true
       }
@@ -460,12 +498,43 @@ export function resolveSlotTurn(task: TaskSession, text: string, now = new Date(
   // 6–7) Generic unknownDate assignment — NEVER invent departureDate over existing when expected is return
   for (const d of dates) {
     if (d.role !== 'unknownDate') continue
-    if (proposals.some((p) => p.key === 'departureDate' || p.key === 'returnDate')) continue
+    if (
+      proposals.some(
+        (p) =>
+          p.key === 'departureDate' ||
+          p.key === 'returnDate' ||
+          p.key === 'checkIn' ||
+          p.key === 'checkOut',
+      )
+    ) {
+      continue
+    }
     if (expected === 'returnDate' && isShortAmbiguousAnswer(t)) {
       // already handled above
       continue
     }
     if (expected === 'departureDate' && isShortAmbiguousAnswer(t)) continue
+    if (expected === 'checkIn' || expected === 'checkOut') {
+      proposals.push({
+        key: expected,
+        value: d.resolved,
+        source: 'expected_question',
+        confidence: 0.75,
+        expectedByQuestion: expected,
+      })
+      expectedFilled = true
+      continue
+    }
+    // Hotel task with a lone date and no expected — treat as check-in
+    if (task.type === 'travel.hotel' && !task.slots.checkIn && !task.slots.departureDate) {
+      proposals.push({
+        key: 'checkIn',
+        value: d.resolved,
+        source: 'contextual_followup',
+        confidence: 0.7,
+      })
+      continue
+    }
     // Leave unknown — do not generic-merge onto departureDate
     diag.rejectedSlotUpdates.push({
       key: 'unknownDate',

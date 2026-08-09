@@ -30,6 +30,12 @@ export const DESTINATION_PLACES: Record<string, string> = {
   호치민: '호치민',
   하노이: '하노이',
   다낭: '다낭',
+  나트랑: '나트랑',
+  냐짱: '나트랑',
+  냐트랑: '나트랑',
+  호이안: '호이안',
+  푸꾸옥: '푸꾸옥',
+  달랏: '달랏',
   방콕: '방콕',
   싱가포르: '싱가포르',
   오사카: '오사카',
@@ -200,6 +206,17 @@ function extractDestination(text: string, origin?: string): string | undefined {
   const compact = t.replace(/\s+/g, '')
   const normalized = normalizePlaceAnswer(compact)
 
+  // 「나트랑에 리조트」「다낭에 호텔」 — locative + lodging (known or free-text place)
+  const lodgingLoc = t.match(
+    /([가-힣A-Za-z]{2,12})\s*에\s*(리조트|호텔|숙소|펜션|민박|게스트하우스)/,
+  )
+  if (lodgingLoc) {
+    const token = normalizePlaceAnswer(lodgingLoc[1]!)
+    if (token.length >= 2 && token.length <= 12 && !(origin && token === origin)) {
+      return DESTINATION_PLACES[token] || token
+    }
+  }
+
   // Prefer particle-bound destination: X으로 / X로 / X행 / X 갈…
   for (const k of DEST_KEYS) {
     const canon = DESTINATION_PLACES[k]
@@ -276,12 +293,15 @@ export function extractMultiSlots(text: string, ctx: SlotExtractContext = {}, no
   }
 
   // Relative Korean dates when no absolute date assigned yet
-  if (!slots.departureDate && !slots.returnDate) {
+  if (!slots.departureDate && !slots.returnDate && !slots.checkIn && !slots.checkOut) {
     const rel = extractDateFromUtterance(t, now) || resolveKoreanDate(t, now)
     if (rel) {
       if (expected === 'returnDate') slots.returnDate = rel
+      else if (expected === 'checkIn') slots.checkIn = rel
+      else if (expected === 'checkOut') slots.checkOut = rel
       else if (expected === 'departureDate' || !ctx.existing?.departureDate) {
-        slots.departureDate = rel
+        if (ctx.taskType === 'travel.hotel' || expected === 'checkIn') slots.checkIn = rel
+        else slots.departureDate = rel
       } else if (/까지$/.test(t)) {
         slots.returnDate = rel
       }
@@ -393,6 +413,8 @@ export function isActiveTaskFollowUpAction(text: string): boolean {
     /비행기\s*(표|티켓)?\s*(좀\s*)?(알아|찾|검색|봐)/.test(t) ||
     /항공권\s*(좀\s*)?(알아|찾|검색)/.test(t) ||
     /호텔\s*(도\s*)?(알아|찾|검색)/.test(t) ||
+    /리조트\s*(도\s*)?(알아|찾|검색)/.test(t) ||
+    /(호텔|리조트|숙소)\s*검색/.test(t) ||
     /표\s*(좀\s*)?(알아|봐)/.test(t) ||
     /이어서|계속\s*(알아|진행|해)/.test(t)
   )

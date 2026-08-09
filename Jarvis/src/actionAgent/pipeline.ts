@@ -21,6 +21,7 @@ import {
   isExplicitCityInfoQuery,
 } from './multiSlotExtractor'
 import {
+  applyHotelBrowseDefaults,
   clarifyQuestion,
   computeMissingSlots,
   nextQuestion,
@@ -69,7 +70,9 @@ function isCancelUtterance(t: string): boolean {
 }
 
 function wantsHotelAdd(t: string): boolean {
-  return /호텔도|숙소도|호텔\s*(알아|찾|검색)/.test(t)
+  return /호텔도|숙소도|리조트도|호텔\s*(알아|찾|검색)|리조트\s*(알아|찾|검색)|(호텔|리조트|숙소)\s*검색/.test(
+    t,
+  )
 }
 
 function wantsCalendar(t: string): boolean {
@@ -95,10 +98,23 @@ function isTravelDomainIntent(intent: string): boolean {
 function summarizeTask(task: TaskSession): string {
   const s = task.slots
   const lines = [task.label]
-  if (s.origin || s.destination) lines.push(`${s.origin || '?'} → ${s.destination || '?'}`)
+  if (task.type === 'travel.hotel') {
+    const place = s.destination || s.location
+    if (place) lines.push(place)
+    if (s.checkIn || s.departureDate) {
+      lines.push(`체크인: ${(s.checkIn || s.departureDate)!.resolvedDate}`)
+    }
+    if (s.checkOut || s.returnDate) {
+      lines.push(`체크아웃: ${(s.checkOut || s.returnDate)!.resolvedDate}`)
+    }
+  } else if (s.origin || s.destination) {
+    lines.push(`${s.origin || '?'} → ${s.destination || '?'}`)
+  }
   // Always render departure / return as independent fields (never a single overwritten date)
-  if (s.departureDate) lines.push(`출발: ${s.departureDate.resolvedDate}`)
-  if (s.returnDate) lines.push(`귀국: ${s.returnDate.resolvedDate}`)
+  if (task.type !== 'travel.hotel') {
+    if (s.departureDate) lines.push(`출발: ${s.departureDate.resolvedDate}`)
+    if (s.returnDate) lines.push(`귀국: ${s.returnDate.resolvedDate}`)
+  }
   if (s.passengers) lines.push(`${s.passengers}명`)
   if (s.tripType && s.tripType !== 'unknown') lines.push(s.tripType === 'round_trip' ? '왕복' : '편도')
   if (task.status === 'needs_provider') lines.push('제공자 연결 필요')
@@ -185,8 +201,10 @@ async function collectOrSearch(
   opts: PipelineOpts,
   ackPrefix = '',
 ): Promise<ActionAgentTurnResult> {
-  const missing = computeMissingSlots(task)
-  let next = saveTask({ ...task, missingSlots: missing })
+  // Hotel/resort browse: destination is enough — default check-in=today / +1 night
+  const prepared = applyHotelBrowseDefaults(task)
+  const missing = computeMissingSlots(prepared)
+  let next = saveTask({ ...prepared, missingSlots: missing })
   if (missing.length) {
     const q = nextQuestion(next)
     const expected = q?.expectedSlot || null
@@ -583,7 +601,11 @@ export async function processActionAgentTurn(
     const base = getActiveTask()
     const task = base?.type.startsWith('travel')
       ? startHotelFromTravel(base)
-      : createTaskSession('travel.hotel', '호텔 찾기', extractInitialTravelSlots(t))
+      : createTaskSession(
+          'travel.hotel',
+          taskLabel('travel.hotel', extractInitialTravelSlots(t, 'travel.hotel')),
+          extractInitialTravelSlots(t, 'travel.hotel'),
+        )
     return collectOrSearch(task, opts)
   }
   if (routed.intent.startsWith('restaurant.')) {

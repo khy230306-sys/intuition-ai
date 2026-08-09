@@ -133,8 +133,9 @@ describe('Device slot-filling E2E (returnDate + 완복)', () => {
   })
 
   it('CASE D: return before departure — reject, keep departure', async () => {
+    // Use December so month/day year-inference stays in the same year after mid-year "today"
     const task = createTaskSession('travel.flight', '테스트', {
-      departureDate: { originalText: '8월10일', resolvedDate: '2026-08-10' },
+      departureDate: { originalText: '12월10일', resolvedDate: '2026-12-10' },
       destination: '호치민',
       origin: '부산',
       tripType: 'round_trip',
@@ -145,10 +146,10 @@ describe('Device slot-filling E2E (returnDate + 완복)', () => {
       expectedSlot: 'returnDate',
       status: 'collecting',
     })
-    const r = await think('8월8일')
+    const r = await think('12월8일')
     expect(r.text).toMatch(/출발일보다 빠릅니다|다시 알려/)
     const after = getActiveTask()!
-    expect(after.slots.departureDate?.resolvedDate).toBe('2026-08-10')
+    expect(after.slots.departureDate?.resolvedDate).toBe('2026-12-10')
     expect(after.slots.returnDate).toBeFalsy()
     expect(after.expectedSlot).toBe('returnDate')
   })

@@ -71,7 +71,22 @@ describe('Action Agent V1', () => {
     expect(r.handled).toBe(true)
     expect(getActiveTask()?.type).toBe('travel.hotel')
     expect(getActiveTask()?.slots.destination).toBe('제주')
-    expect(r.replyText).toMatch(/호텔|제공자|후보|체크/)
+    expect(r.replyText).toMatch(/호텔|제공자|후보|체크|리조트/)
+  })
+
+  it('B2: 나트랑 리조트 search does not loop on check-in', async () => {
+    const r = await turn('나트랑에 리조트를 찾아보자')
+    expect(r.handled).toBe(true)
+    expect(r.replyText).not.toMatch(/어디로 가시나요/)
+    expect(r.replyText).not.toMatch(/체크인 날짜가 언제/)
+    expect(getActiveTask()?.type).toBe('travel.hotel')
+    expect(getActiveTask()?.slots.destination).toBe('나트랑')
+    expect(getActiveTask()?.slots.checkIn?.resolvedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(r.replyText).toMatch(/나트랑|리조트|호텔|후보|요약/i)
+    expect(getActiveTask()?.status).not.toBe('collecting')
+
+    const r2 = await turn('리조트검색 오늘')
+    expect(r2.replyText).not.toMatch(/체크인 날짜가 언제/)
   })
 
   it('C: selection by 두 번째', async () => {

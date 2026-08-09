@@ -3,6 +3,12 @@
 iPhone Safari에서 앱처럼 쓰는 개인 AI 비서 PWA입니다.  
 **실생활 비서 + 주식 투자 도구**를 한곳에서 사용합니다.
 
+## Claude (둘 다)
+
+- **앱 아이디어 심장** — 설정에서 Anthropic Claude 연결 → 생활 탭 **Claude 심장** / 「아이디어 발전시켜줘」  
+- **PC에서 Claude Code** — Antigravity + Claude Code 확장 → `/init` · Plan Mode  
+  가이드: [`docs/AIZIO_CLAUDE_CODE_ANTIGRAVITY.md`](docs/AIZIO_CLAUDE_CODE_ANTIGRAVITY.md) · 프로젝트 지침: [`CLAUDE.md`](CLAUDE.md)
+
 ## 바로 사용 (iPhone)
 
 **앱 URL (프로덕션 고정):** https://jarvis-app.shipstatic.com  

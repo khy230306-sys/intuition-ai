@@ -130,7 +130,8 @@ export function renderHybridAiSettingsHtml(): string {
     <h3 class="subsection-title">AIZIO 대화</h3>
     <p class="hint"><strong>기본 클라우드:</strong> OpenAI(ChatGPT API) · 부족/오류 시 Gemini로 이어집니다. 키 없이도 내장 대화는 동작합니다.</p>
     <h3 class="subsection-title">클라우드 두뇌 (Hybrid)</h3>
-    <p class="hint"><strong>저장됨 ≠ 연결 성공</strong> — 「키 저장」후 「연결 테스트」. 유료 OpenAI는 사용량 결제가 필요합니다.</p>
+    <p class="hint"><strong>저장됨 ≠ 연결 성공</strong> — 「키 저장」후 「연결 테스트」. 유료 OpenAI·Claude는 사용량 결제가 필요합니다.</p>
+    <p class="hint"><strong>아이디어 · Claude 심장:</strong> 아래 <strong>Anthropic Claude</strong> 키를 연결하면 생활 탭 「Claude 심장」·「아이디어 발전시켜줘」가 Claude로 아이디어를 키웁니다. OpenRouter Claude 모델도 가능합니다.</p>
     ${previewHint}
     <p class="hint">${esc(usageSummaryLine())}</p>
     <label>선택 모드
@@ -169,7 +170,7 @@ export function renderAiWizardHtml(): string {
         <button type="button" class="ghost-btn" data-action="ai-wizard-free">클라우드 두뇌 연결</button>
         <button type="button" class="ghost-btn" data-action="ai-wizard-later">나중에</button>
       </div>
-      <p class="hint">선택: OpenRouter · Gemini · Groq · OpenAI. 필수는 아닙니다.</p>
+      <p class="hint">선택: OpenRouter · Gemini · Groq · OpenAI · Anthropic Claude. 필수는 아닙니다.</p>
     </div>
   `
 }

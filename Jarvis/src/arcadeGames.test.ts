@@ -21,12 +21,17 @@ import {
   slideTimeLimitSec,
   GYEOKPA_LASER_BEAM_LEN,
   GYEOKPA_MAX_ALLIES,
+  GYEOKPA_MAX_STAGE,
   GYEOKPA_WEAPONS,
   gyeokpaAllySlotOffsets,
+  gyeokpaBossHp,
+  gyeokpaEnemyFallSpeed,
   gyeokpaFirePattern,
   gyeokpaNextWeapon,
+  gyeokpaSpawnInterval,
   gyeokpaWeaponLabel,
   gyeokpaWeaponOnHit,
+  gyeokpaWavesPerStage,
   GYEOKPA_MAX_WEAPON,
   GYEOKPA_WEAPON_TIER,
   unitsPerLevel,
@@ -58,13 +63,14 @@ describe('arcade helpers', () => {
 
   it('levels up one step at a time from progress units', () => {
     expect(unitsPerLevel('slide')).toBe(1)
-    expect(unitsPerLevel('gyeokpa')).toBe(6)
+    expect(unitsPerLevel('gyeokpa')).toBe(14)
     expect(unitsPerLevel('dash')).toBe(8)
     expect(levelFromUnits('flappy', 5)).toBe(2)
     expect(levelFromUnits('shooter', 10)).toBe(3)
     expect(levelFromUnits('breakout', 0)).toBe(1)
     expect(levelFromUnits('breakout', 2)).toBe(3)
-    expect(levelFromUnits('gyeokpa', 6)).toBe(2)
+    expect(levelFromUnits('gyeokpa', 13)).toBe(1)
+    expect(levelFromUnits('gyeokpa', 14)).toBe(2)
     expect(levelFromUnits('dash', 8)).toBe(2)
   })
 
@@ -81,6 +87,19 @@ describe('arcade helpers', () => {
   it('configures 지오대시 meta', () => {
     expect(ARCADE_META.dash.title).toBe('지오대시')
     expect(ARCADE_META.dash.blurb).toMatch(/점프/)
+  })
+
+  it('configures 스페이스2 with 25 stages and slower level cadence', () => {
+    expect(GYEOKPA_MAX_STAGE).toBe(25)
+    expect(gyeokpaWavesPerStage(1)).toBe(4)
+    expect(gyeokpaWavesPerStage(6)).toBe(5)
+    expect(gyeokpaWavesPerStage(25)).toBe(7)
+    expect(gyeokpaEnemyFallSpeed(1, 10)).toBeGreaterThan(gyeokpaEnemyFallSpeed(1, 1))
+    expect(gyeokpaBossHp(4, 20)).toBeGreaterThan(gyeokpaBossHp(4, 1))
+    expect(gyeokpaSpawnInterval(3, 20)).toBeLessThan(gyeokpaSpawnInterval(3, 1))
+    expect(gyeokpaSpawnInterval(8, 25)).toBeGreaterThanOrEqual(0.28)
+    expect(unitsPerLevel('gyeokpa')).toBeGreaterThanOrEqual(10)
+    expect(ARCADE_META.gyeokpa.blurb).toMatch(/25/)
   })
 
   it('configures 스페이스2 weapon tiers 1–4 without wrap-to-1 on pickup', () => {

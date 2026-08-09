@@ -17,7 +17,7 @@ export const ARCADE_META: Record<ArcadeId, { title: string; blurb: string }> = {
   slide: { title: '스윽', blurb: '타일을 밀어 숫자 맞추기 · 시간 안에 클리어' },
   gyeokpa: {
     title: '스페이스2',
-    blurb: '세로 슈팅 · 웨이브·보스 · 무기 강화(펄스→트윈→스프레드) · 라이프·실드·폭탄',
+    blurb: '세로 슈팅 · 스테이지 25 · 웨이브·보스 · 무기(펄스→트윈→스프레드→쿼드) · 라이프·실드·폭탄',
   },
   dash: {
     title: '지오대시',
@@ -108,7 +108,8 @@ export function unitsPerLevel(id: ArcadeId): number {
     case 'slide':
       return 1
     case 'gyeokpa':
-      return 6
+      // Stage-based game — level tracks stage; keep units high so kill-based helpers stay slow
+      return 14
     case 'dash':
       return 8
   }
@@ -1264,9 +1265,41 @@ export function mountSlide(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arcade
 }
 
 
-/** —— 스페이스2 (id: gyeokpa — waves/boss/power-ups, no laser / no wingmen) —— */
+/** —— 스페이스2 (id: gyeokpa — stages/waves/boss/power-ups, no laser / no wingmen) —— */
 /** Weapon tiers 1–4: pulse → twin → spread → quad (no wrap back to 1 on pickup). */
 export type GyeokpaWeapon = 'pulse' | 'twin' | 'spread' | 'quad'
+
+/** Clear all 25 stages to beat the campaign. */
+export const GYEOKPA_MAX_STAGE = 25
+
+/**
+ * Waves per stage (last wave = boss).
+ * Early stages shorter; later stages a bit longer — total campaign is long, not a speedrun.
+ */
+export function gyeokpaWavesPerStage(stage: number): number {
+  const s = Math.max(1, Math.min(GYEOKPA_MAX_STAGE, stage))
+  return Math.min(7, 4 + Math.floor((s - 1) / 5))
+}
+
+/** Enemy fall speed — rises with stage, wave adds a little. */
+export function gyeokpaEnemyFallSpeed(wave: number, stage: number): number {
+  const st = Math.max(1, stage)
+  const wv = Math.max(1, wave)
+  return 48 + wv * 5 + st * 9 + Math.floor(st / 5) * 8
+}
+
+/** Spawn gap — higher stages spawn faster, but never absurdly short. */
+export function gyeokpaSpawnInterval(wave: number, stage: number): number {
+  const st = Math.max(1, stage)
+  const wv = Math.max(1, wave)
+  return Math.max(0.28, 0.62 - wv * 0.015 - st * 0.012)
+}
+
+/** Boss HP for stage/wave. */
+export function gyeokpaBossHp(wave: number, stage: number): number {
+  const st = Math.max(1, stage)
+  return 70 + st * 55 + wave * 10 + Math.floor(st / 5) * 40
+}
 
 export const GYEOKPA_WEAPONS: GyeokpaWeapon[] = ['pulse', 'twin', 'spread', 'quad']
 export const GYEOKPA_MAX_WEAPON: GyeokpaWeapon = 'quad'
@@ -1424,96 +1457,109 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
 
   function hudTitle(): string {
     const boss = enemies.find((e) => e.kind === 'boss')
-    if (boss) return `스페이스2 BOSS ${Math.max(0, Math.ceil(boss.hp))}`
-    return `스페이스2 W${wave} · ${gyeokpaWeaponLabel(weapon)}${combo > 1 ? ` · x${combo}` : ''}`
+    if (boss) {
+      return `스페이스2 S${stage}/${GYEOKPA_MAX_STAGE} BOSS ${Math.max(0, Math.ceil(boss.hp))}`
+    }
+    return `스페이스2 S${stage}/${GYEOKPA_MAX_STAGE} W${wave}/${gyeokpaWavesPerStage(stage)} · ${gyeokpaWeaponLabel(weapon)}${
+      combo > 1 ? ` · x${combo}` : ''
+    }`
   }
 
+  /** Level = stage (1–25). Do NOT bump level every wave — that felt too fast. */
   function syncLevel(): void {
-    const next = Math.max(1, wave)
+    const next = Math.max(1, Math.min(GYEOKPA_MAX_STAGE, stage))
     const noted = noteLevel('gyeokpa', level, next, score, onScore)
     level = noted.level
     if (noted.levelUpUntil) levelUpUntil = noted.levelUpUntil
   }
 
   function queueWave(): void {
-    const base = 6 + wave * 2 + stage
+    const maxW = gyeokpaWavesPerStage(stage)
+    const base = 5 + wave * 2 + Math.floor(stage * 1.2)
     spawnLeft = base
-    spawnCd = 0.35
+    spawnCd = 0.4
     betweenWaves = 0
-    if (wave % 5 === 0) {
+    // Last wave of each stage = boss
+    if (wave >= maxW) {
       spawnLeft = 0
       spawnBoss()
     } else {
-      toast(`웨이브 ${wave}`)
+      toast(`스테이지 ${stage} · 웨이브 ${wave}/${maxW}`)
     }
   }
 
   function spawnBoss(): void {
     bossActive = true
-    const hp = 80 + stage * 40 + wave * 12
+    const hp = gyeokpaBossHp(wave, stage)
     enemies.push({
       x: w / 2,
       y: -60,
-      vx: 40 + stage * 6,
-      vy: 40,
+      vx: 36 + stage * 5,
+      vy: 36 + Math.min(24, stage),
       r: 36,
       hp,
       maxHp: hp,
       kind: 'boss',
-      score: 1200 + stage * 200,
-      shootCd: 0.8,
+      score: 1000 + stage * 250,
+      shootCd: Math.max(0.45, 0.95 - stage * 0.015),
       phase: 0,
     })
-    toast('보스 출현!')
+    toast(`스테이지 ${stage} 보스!`)
   }
 
   function spawnEnemy(): void {
     const roll = Math.random()
+    // Higher stages → more tanks / zigzaggers
+    const tankChance = 0.14 + stage * 0.012
+    const zigChance = 0.28 + stage * 0.01
     let kind: Enemy['kind'] = 'scout'
-    if (roll > 0.78) kind = 'tank'
-    else if (roll > 0.52) kind = 'zig'
+    if (roll > 1 - tankChance) kind = 'tank'
+    else if (roll > 1 - tankChance - zigChance) kind = 'zig'
     const x = 28 + Math.random() * (w - 56)
-    const speed = 50 + wave * 8 + stage * 10
+    const speed = gyeokpaEnemyFallSpeed(wave, stage)
+    const scoutHp = 1 + Math.floor((stage - 1) / 3)
+    const zigHp = 2 + Math.floor((stage - 1) / 5)
+    const tankHp = 3 + Math.floor(stage * 0.85)
     if (kind === 'scout') {
       enemies.push({
         x,
         y: -20,
-        vx: (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * (36 + stage * 2),
         vy: speed,
         r: 12,
-        hp: 1 + Math.floor(stage / 2),
-        maxHp: 1 + Math.floor(stage / 2),
+        hp: scoutHp,
+        maxHp: scoutHp,
         kind,
-        score: 100,
-        shootCd: 1.2 + Math.random(),
+        score: 100 + stage * 4,
+        shootCd: Math.max(0.55, 1.35 - stage * 0.02) + Math.random() * 0.4,
         phase: Math.random() * Math.PI * 2,
       })
     } else if (kind === 'zig') {
       enemies.push({
         x,
         y: -24,
-        vx: 90 + stage * 10,
+        vx: 80 + stage * 8,
         vy: speed * 0.75,
         r: 13,
-        hp: 2,
-        maxHp: 2,
+        hp: zigHp,
+        maxHp: zigHp,
         kind,
-        score: 140,
-        shootCd: 1.4,
+        score: 140 + stage * 5,
+        shootCd: Math.max(0.7, 1.5 - stage * 0.02),
         phase: 0,
       })
     } else {
       enemies.push({
         x,
         y: -28,
-        vx: 20,
+        vx: 16 + stage,
         vy: speed * 0.55,
         r: 18,
-        hp: 4 + stage,
-        maxHp: 4 + stage,
+        hp: tankHp,
+        maxHp: tankHp,
         kind,
-        score: 220,
-        shootCd: 1.8,
+        score: 220 + stage * 8,
+        shootCd: Math.max(0.9, 1.9 - stage * 0.025),
         phase: 0,
       })
     }
@@ -1586,9 +1632,31 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
     over = true
     cleared = win
     bumpBest('gyeokpa', score)
-    bumpBestLevel('gyeokpa', Math.max(level, wave))
+    bumpBestLevel('gyeokpa', Math.max(level, stage))
     onScore?.(score, level)
-    toast(win ? '스테이지 클리어!' : 'GAME OVER')
+    toast(win ? `전체 ${GYEOKPA_MAX_STAGE}스테이지 클리어!` : 'GAME OVER')
+  }
+
+  function advanceAfterWaveClear(): void {
+    const maxW = gyeokpaWavesPerStage(stage)
+    if (wave >= maxW) {
+      if (stage >= GYEOKPA_MAX_STAGE) {
+        finish(true)
+        return
+      }
+      stage += 1
+      wave = 1
+      betweenWaves = 1.7
+      score += 400 + stage * 40
+      if (lives < 5 && stage % 3 === 1) lives += 1
+      syncLevel()
+      toast(`스테이지 ${stage} 돌입`)
+      onScore?.(score, level)
+      return
+    }
+    wave += 1
+    betweenWaves = 1.15
+    toast('다음 웨이브 준비')
   }
 
   function hurt(): void {
@@ -1640,7 +1708,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       toast('보스 격파!')
       powers.push({ x: e.x, y: e.y, kind: 'weapon', life: 8 })
       powers.push({ x: e.x + 24, y: e.y + 10, kind: 'life', life: 8 })
-    } else if (Math.random() < 0.12 + stage * 0.02) {
+    } else if (Math.random() < Math.min(0.28, 0.1 + stage * 0.008)) {
       const kinds: Power['kind'][] = ['weapon', 'shield', 'bomb', 'life']
       powers.push({
         x: e.x,
@@ -1649,7 +1717,6 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
         life: 7,
       })
     }
-    syncLevel()
     onScore?.(score, level)
   }
 
@@ -1703,17 +1770,10 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
       if (spawnCd <= 0) {
         spawnEnemy()
         spawnLeft -= 1
-        spawnCd = Math.max(0.22, 0.55 - wave * 0.02 - stage * 0.03)
+        spawnCd = gyeokpaSpawnInterval(wave, stage)
       }
     } else if (!bossActive && spawnLeft <= 0 && enemies.length === 0 && !cleared) {
-      if (wave >= 10 + stage * 2) {
-        finish(true)
-        return
-      }
-      wave += 1
-      betweenWaves = 1.1
-      syncLevel()
-      toast('다음 웨이브 준비')
+      advanceAfterWaveClear()
     }
 
     for (let i = enemies.length - 1; i >= 0; i--) {
@@ -1771,7 +1831,7 @@ export function mountGyeokpa(canvas: HTMLCanvasElement, onScore?: ScoreCb): Arca
               })
             }
           }
-          e.shootCd = 0.85
+          e.shootCd = Math.max(0.42, 0.9 - stage * 0.012)
         }
       } else {
         e.x += e.vx * dt

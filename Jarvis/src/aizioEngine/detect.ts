@@ -1,4 +1,5 @@
 import { isClearWeatherQuery } from '../commandRouter/weatherQuery'
+import { findCity } from '../geoData'
 import { parseSelectionIndex } from '../actionAgent/slotResolver'
 import { resolveContextRef, type SessionContext } from './context'
 import type { EngineSession, EngineTurnKind } from './types'
@@ -6,10 +7,29 @@ import type { EngineSession, EngineTurnKind } from './types'
 const KR_CITIES =
   /(서울|부산|대구|인천|광주|대전|울산|제주|수원|창원|성남|용인|고양|청주|전주|포항|천안|김해)/
 
+/** Overseas cities users commonly ask weather for (also resolved via geoData). */
+const WORLD_CITIES =
+  /(호치민|하노이|도쿄|오사카|오키나와|베이징|상하이|방콕|싱가포르|타이베이|뉴욕|로스앤젤레스|런던|파리|시드니)/
+
 export function extractEngineCity(text: string): string {
   const t = text.trim()
-  const m = t.match(KR_CITIES)
-  return m?.[1] || ''
+  const kr = t.match(KR_CITIES)
+  if (kr?.[1]) return kr[1]
+  const world = t.match(WORLD_CITIES)
+  if (world?.[1]) return world[1]
+  // Strip weather/ask fluff then try geoData city catalog
+  const q = t
+    .replace(
+      /(?:지금|오늘|내일|모레|날씨|기온|비|우산|알려줘|알려|어때|좀|확인|예보)/g,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (q && q.length <= 16) {
+    const hit = findCity(q)
+    if (hit) return hit.name
+  }
+  return ''
 }
 
 export function extractWeatherDay(text: string): '오늘' | '내일' | '모레' | '지금' {

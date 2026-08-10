@@ -6,7 +6,6 @@ import {
   openMaps,
   openSearch,
   openUrl,
-  openWeather,
   resolveAppIntent,
   sendSms,
   shareText,
@@ -735,25 +734,54 @@ async function replyWeather(
   umbrella = false,
 ): Promise<BrainReply> {
   const askCity = city || settings.city || ''
+  const tipFor = (precipProb: number | null | undefined) =>
+    umbrella && precipProb != null
+      ? precipProb >= 30
+        ? '\n우산을 챙기는 편이 좋겠어요.'
+        : '\n우산은 필수는 아니어 보여요.'
+      : ''
+
   const cached = loadCachedWeather()
   if (cached && weatherPlaceMatches(cached.place, askCity)) {
     const line = formatWeatherLine(cached)
-    const tip =
-      umbrella && cached.precipProb != null
-        ? cached.precipProb >= 30
-          ? '\n우산을 챙기는 편이 좋겠어요.'
-          : '\n우산은 필수는 아니어 보여요.'
-        : ''
     return {
-      text: `${cached.place || askCity || '현재 위치'} 날씨예요. ${line}${tip}`,
+      text: `${cached.place || askCity || '현재 위치'} 날씨예요.\n${line}${tipFor(cached.precipProb)}`,
       speak: true,
-      action: () => openWeather(askCity || cached.place),
+    }
+  }
+
+  // Fetch live Open-Meteo and show in chat (do not only open Google).
+  try {
+    const { resolveCityCoords } = await import('./aizioEngine/tools/weatherTool')
+    const { fetchWeather: fetchWx } = await import('./weather')
+    const coords = askCity ? resolveCityCoords(askCity) : null
+    if (coords) {
+      const snap = await fetchWx(coords.lat, coords.lon, coords.place)
+      if (snap) {
+        const line = formatWeatherLine(snap)
+        return {
+          text: `${snap.place} 날씨예요.\n${line}${tipFor(snap.precipProb)}`,
+          speak: true,
+        }
+      }
+      return {
+        text: `${coords.place} 날씨를 지금 가져오지 못했어요. 네트워크 상태를 확인한 뒤 다시 물어봐 주세요.`,
+        speak: true,
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  if (!askCity) {
+    return {
+      text: '어느 지역 날씨를 볼까요?\n예: 「호치민 날씨」「서울 날씨」「울산 날씨」',
+      speak: true,
     }
   }
   return {
-    text: askCity ? `${askCity} 날씨를 확인합니다.` : '오늘 날씨를 확인합니다.',
+    text: `「${askCity}」지역을 찾지 못했어요. 도시 이름을 다시 말해 주세요.\n예: 「호치민 날씨」「도쿄 날씨」`,
     speak: true,
-    action: () => openWeather(askCity),
   }
 }
 

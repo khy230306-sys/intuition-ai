@@ -2,6 +2,8 @@
  * Real weather via Open-Meteo — returns standardized ToolResult.
  */
 
+import { findCity } from '../../geoData'
+import { KOREA_CITY_COORDS } from '../../location'
 import { fetchWeather, weatherLabel, type WeatherSnap } from '../../weather'
 import { makeToolResult, type ToolResult } from '../toolResult'
 import type { EngineWeatherSnapshot } from '../types'
@@ -17,11 +19,27 @@ export const CITY_COORDS: Record<string, { lat: number; lon: number; place: stri
   제주: { lat: 33.4996, lon: 126.5312, place: '제주' },
   수원: { lat: 37.2636, lon: 127.0286, place: '수원' },
   창원: { lat: 35.228, lon: 128.6811, place: '창원' },
+  // Common overseas asks (also covered via geoData.findCity)
+  호치민: { lat: 10.82, lon: 106.63, place: '호치민' },
+  하노이: { lat: 21.03, lon: 105.85, place: '하노이' },
+  도쿄: { lat: 35.68, lon: 139.69, place: '도쿄' },
+  오사카: { lat: 34.69, lon: 135.5, place: '오사카' },
 }
 
 export function resolveCityCoords(city: string): { lat: number; lon: number; place: string } | null {
-  const key = city.trim().replace(/광역시|특별시|시$/g, '')
-  return CITY_COORDS[key] || CITY_COORDS[city] || null
+  const raw = city.trim()
+  if (!raw) return null
+  const key = raw.replace(/광역시|특별시|특별자치시|시$/g, '').trim()
+  if (CITY_COORDS[key]) return CITY_COORDS[key]!
+  if (CITY_COORDS[raw]) return CITY_COORDS[raw]!
+  for (const c of KOREA_CITY_COORDS) {
+    if (c.name === key || raw.includes(c.name)) {
+      return { lat: c.lat, lon: c.lon, place: c.name }
+    }
+  }
+  const world = findCity(key) || findCity(raw)
+  if (world) return { lat: world.lat, lon: world.lon, place: world.name }
+  return null
 }
 
 function dayOffset(day: EngineWeatherSnapshot['dayLabel']): number {

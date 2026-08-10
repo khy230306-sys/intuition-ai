@@ -88,7 +88,7 @@ export async function runAizioEngineTurn(raw: string): Promise<BrainReply | null
     const city = extractEngineCity(text) || ctx.city || ''
     if (!city) {
       session = ensureEngineSession({ context: updateGoal(ctx, 'weather_only') })
-      return { text: '어느 지역 날씨를 볼까요? (예: 울산, 서울)', speak: true }
+      return { text: '어느 지역 날씨를 볼까요?\n예: 「호치민」「울산」「서울」「도쿄」', speak: true }
     }
 
     const day = extractWeatherDay(text)

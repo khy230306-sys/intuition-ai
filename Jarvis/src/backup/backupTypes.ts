@@ -8,6 +8,7 @@ export type BackupCategory =
   | 'relationships'
   | 'smartReminders'
   | 'lifeOs'
+  | 'campus'
   | 'account'
   | 'settings'
   | 'arcade'
@@ -20,6 +21,7 @@ export const ALL_BACKUP_CATEGORIES: BackupCategory[] = [
   'relationships',
   'smartReminders',
   'lifeOs',
+  'campus',
   'account',
   'settings',
   'arcade',

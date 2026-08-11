@@ -161,6 +161,9 @@ export function buildBackupObject(opts: BackupBuildOptions = {}): Record<string,
     body.localAlarms = readRaw(K.localAlarms)
   }
   if (cats.has('lifeOs')) body.lifeOs = collectLifeOs()
+  if (cats.has('campus')) {
+    body.campus = readRaw('aizio_campus_v1')
+  }
   if (cats.has('account')) {
     body.account = {
       identity: { ...identity, linkedAccountId: identity.linkedAccountId ?? null },
@@ -308,6 +311,10 @@ export function importBackupJson(
       }
       imported.push('lifeOs')
     }
+    if (want.has('campus') && data.campus != null) {
+      writeRaw('aizio_campus_v1', stripSecretsFromObject(data.campus))
+      imported.push('campus')
+    } else if (want.has('campus')) skipped.push('campus')
     if (want.has('account') && data.account && typeof data.account === 'object') {
       const acc = data.account as { reminderPush?: unknown }
       if (acc.reminderPush != null) writeRaw(K.reminderPush, acc.reminderPush)

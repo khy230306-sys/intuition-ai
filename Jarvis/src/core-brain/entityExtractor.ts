@@ -92,6 +92,7 @@ export function extractEntities(text: string, intent: CoreIntent): Record<string
     if (/게임|아케이드/.test(t)) entities.view = 'games'
     if (/액션|바로가기/.test(t)) entities.view = 'actions'
     if (/채팅|대화/.test(t)) entities.view = 'chat'
+    if (/캠퍼스|campus/i.test(t)) entities.view = 'campus'
   }
 
   if (intent === 'summarize') {

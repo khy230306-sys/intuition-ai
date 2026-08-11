@@ -57,7 +57,11 @@ export function parseCampusIntent(text: string): CampusIntent | null {
     return { kind: 'campus_today', confidence: 0.93 }
   }
 
-  if (/이번\s*주\s*과제|과제\s*뭐\s*있|남은\s*과제|캠퍼스\s*과제/.test(t)) {
+  if (
+    /이번\s*주\s*과제|과제\s*뭐\s*있|과제\s*있|남은\s*과제|캠퍼스\s*과제|[가-힣A-Za-z0-9_]{2,20}\s*과제/.test(
+      t,
+    )
+  ) {
     const courseHint = t.match(/([가-힣A-Za-z0-9_]{2,20})\s*과제/)?.[1]
     return {
       kind: 'campus_assignments',
@@ -90,12 +94,17 @@ export function parseCampusIntent(text: string): CampusIntent | null {
     }
   }
 
-  if (/지난\s*(수업|강의)\s*요약|강의\s*요약|수업\s*요약/.test(t)) {
-    const courseHint = t.match(/([가-힣A-Za-z0-9_]{2,20})\s*(?:지난|수업|강의)/)?.[1]
+  if (/지난\s*(수업|강의)\s*요약|강의\s*요약|수업\s*요약|요약해\s*줘/.test(t) && /(수업|강의|지난)/.test(t)) {
+    const courseHint =
+      t.match(/([가-힣A-Za-z0-9_]{2,20})\s*(?:지난|수업|강의)/)?.[1] ||
+      t.match(/^([가-힣A-Za-z0-9_]{2,20})\s+/)?.[1]
     return { kind: 'campus_summary', confidence: 0.9, courseHint }
   }
 
-  if (/틀린\s*것|오답|틀린\s*만|다시\s*내/.test(t) && /(문제|퀴즈|풀)/.test(t)) {
+  if (
+    /틀린\s*(?:것|거|문제|것만)|오답|틀린\s*만|다시\s*내/.test(t) &&
+    /(문제|퀴즈|풀|다시\s*내|오답)/.test(t)
+  ) {
     const courseHint = t.match(/([가-힣A-Za-z0-9_]{2,20})\s*(?:문제|퀴즈|오답)/)?.[1]
     return { kind: 'campus_quiz_wrong', confidence: 0.92, courseHint, count: 5 }
   }

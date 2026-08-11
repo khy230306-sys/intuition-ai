@@ -1,7 +1,10 @@
 {
   "app": "AIZIO CAMPUS",
   "version": "1.0.0",
+  "buildId": "production-1786447935879",
+  "commit": "8e50d6e",
   "channel": "production",
+  "builtAt": "2026-08-11T11:32:15.882Z",
   "productionUrl": "https://aizio-campus.shipstatic.com",
-  "note": "Standalone Campus — separate from jarvis-app.shipstatic.com"
+  "note": "Fixed Campus production"
 }

@@ -37,7 +37,7 @@ function loadApiKey() {
 const apiKey = loadApiKey()
 
 function runShip(args) {
-  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--api-key', apiKey, '--json'], {
+  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--token', apiKey, '--json'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
@@ -96,7 +96,7 @@ function pruneOldDeployments() {
   console.log(`Pruning ${remove.length} old snapshot(s)`)
   for (const dep of remove) {
     try {
-      runShip(['deployments', 'remove', dep])
+      runShip(['deployments', 'delete', dep])
       console.log(`  removed ${dep}`)
     } catch (err) {
       console.warn(`  skip remove ${dep}: ${err instanceof Error ? err.message : err}`)
@@ -166,7 +166,7 @@ async function main() {
         const id = normalizeDeployId(d.deployment)
         if (!id || id === live) continue
         try {
-          runShip(['deployments', 'remove', d.deployment])
+          runShip(['deployments', 'delete', d.deployment])
         } catch {
           /* ignore */
         }

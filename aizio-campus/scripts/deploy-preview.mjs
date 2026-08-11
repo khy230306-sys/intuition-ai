@@ -30,7 +30,7 @@ function loadApiKey() {
 }
 
 function runShip(args, apiKey) {
-  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--api-key', apiKey, '--json'], {
+  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--token', apiKey, '--json'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,

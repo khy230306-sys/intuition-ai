@@ -65,7 +65,22 @@ export function gradeAnswer(question: Question, userAnswer: string): boolean {
     if (falsy) return !ansTrue
   }
   if (question.type === 'mcq') {
-    return ua === ans || userAnswer.trim() === question.answer.trim()
+    const choices = question.choices || []
+    const letterToText = (raw: string): string | null => {
+      const m = raw.trim().match(/^([A-Da-d])(?:[.)]|$)/)
+      if (!m || !choices.length) return null
+      const idx = m[1].toUpperCase().charCodeAt(0) - 65
+      return choices[idx] ?? null
+    }
+    const expectedText = letterToText(question.answer) || question.answer.trim()
+    const userText = letterToText(userAnswer) || userAnswer.trim()
+    const expectedNorm = normalizeAnswer(expectedText)
+    const userNorm = normalizeAnswer(userText)
+    if (userNorm === expectedNorm) return true
+    // letter vs text either way
+    if (letterToText(question.answer) && normalizeAnswer(userAnswer) === expectedNorm) return true
+    if (letterToText(userAnswer) && userNorm === ans) return true
+    return ua === ans
   }
   if (question.type === 'essay') {
     // essays: accept if substantial overlap with key phrases

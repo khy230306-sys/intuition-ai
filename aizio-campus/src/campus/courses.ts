@@ -105,6 +105,7 @@ export function updateCourse(
   return out
 }
 
+/** Sync metadata cascade. Prefer `deleteCourseDeep` to also drop IndexedDB blobs. */
 export function deleteCourse(id: string): boolean {
   let ok = false
   updateCampusStore((s) => {
@@ -114,9 +115,42 @@ export function deleteCourse(id: string): boolean {
     s.materials = s.materials.filter((x) => x.courseId !== id)
     s.assignments = s.assignments.filter((x) => x.courseId !== id)
     s.exams = s.exams.filter((x) => x.courseId !== id)
+    s.recordings = s.recordings.filter((x) => x.courseId !== id)
+    s.transcripts = s.transcripts.filter((x) => x.courseId !== id)
+    s.notes = s.notes.filter((x) => x.courseId !== id)
+    s.candidates = s.candidates.filter((x) => x.courseId !== id)
+    s.quizzes = s.quizzes.filter((x) => x.courseId !== id)
+    s.questions = s.questions.filter((x) => x.courseId !== id)
+    s.attempts = s.attempts.filter((x) => x.courseId !== id)
+    s.studyPlans = s.studyPlans.filter((x) => x.courseId !== id)
+    s.studySessions = s.studySessions.filter((x) => x.courseId !== id)
+    s.projects = s.projects.filter((x) => x.courseId !== id)
     ok = s.courses.length < before
   })
   return ok
+}
+
+/** Full cascade including recording/material blobs. */
+export async function deleteCourseDeep(id: string): Promise<boolean> {
+  const store = loadCampusStore()
+  if (!store.courses.some((c) => c.id === id)) return false
+  const { deleteCampusBlob } = await import('./blobStore')
+  for (const m of store.materials.filter((x) => x.courseId === id)) {
+    if (!m.blobKey) continue
+    try {
+      await deleteCampusBlob(m.blobKey)
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const r of store.recordings.filter((x) => x.courseId === id)) {
+    try {
+      await deleteCampusBlob(r.blobKey)
+    } catch {
+      /* ignore */
+    }
+  }
+  return deleteCourse(id)
 }
 
 export function findCourseByName(hint: string): Course | null {

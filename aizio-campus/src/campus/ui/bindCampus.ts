@@ -1,6 +1,7 @@
 import { analyzeMaterialAi, extractDeadlineCandidates, generateQuizFromSources, summarizeLectureFromTranscript } from '../ai/campusAi'
 import { createAssignment, deleteAssignment, setAssignmentStatus } from '../assignments'
-import { createCourse, updateCourse } from '../courses'
+import { getCampusBlob } from '../blobStore'
+import { createCourse, findCourseByName, updateCourse } from '../courses'
 import { createExam, deleteExam } from '../exams'
 import { logStudySession } from '../focus'
 import {
@@ -14,8 +15,14 @@ import {
 } from '../media/recorder'
 import { transcribeRecording } from '../media/stt'
 import { addMaterial, deleteMaterial } from '../materials'
-import { syncCampusNotifications } from '../notifications'
-import { completeOnboarding, updateGraduationRequirements, updateNotifyPrefs } from '../profile'
+import { notifyFlashSummary, syncCampusNotifications } from '../notifications'
+import {
+  completeOnboarding,
+  updateCampusProfileSettings,
+  updateGraduationRequirements,
+  updateNotifyPrefs,
+} from '../profile'
+import { ensureNotificationPermission } from '../../notify'
 import { addProjectTask, createProject, setProjectTaskStatus } from '../projects'
 import { gradeAnswer, submitQuizAttempt } from '../quiz'
 import { loadCampusStore, updateCampusStore } from '../storage'
@@ -31,10 +38,36 @@ type BindOpts = {
 }
 
 let recPaint: number | null = null
+let playbackUrl: string | null = null
+let playbackAudio: HTMLAudioElement | null = null
 
 function flash(opts: BindOpts, msg: string): void {
   campusUi.status = msg
   opts.onFlash?.(msg)
+}
+
+function timeToMinutes(t: string): number {
+  const [hh, mm] = t.split(':').map(Number)
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return NaN
+  return hh * 60 + mm
+}
+
+function resetSessionForm(form: HTMLFormElement): void {
+  form.reset()
+  const sid = form.elements.namedItem('sessionId') as HTMLInputElement | null
+  if (sid) sid.value = ''
+  form.hidden = true
+}
+
+function stopPlayback(): void {
+  if (playbackAudio) {
+    playbackAudio.pause()
+    playbackAudio = null
+  }
+  if (playbackUrl) {
+    URL.revokeObjectURL(playbackUrl)
+    playbackUrl = null
+  }
 }
 
 function repaint(root: HTMLElement): void {
@@ -110,12 +143,17 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         }
         if (action === 'add-session') {
           const form = el.querySelector<HTMLFormElement>('[data-campus-form="session"]')
-          if (form) form.hidden = false
+          if (form) {
+            form.reset()
+            const sid = form.elements.namedItem('sessionId') as HTMLInputElement | null
+            if (sid) sid.value = ''
+            form.hidden = false
+          }
           return
         }
         if (action === 'cancel-session-form') {
           const form = el.querySelector<HTMLFormElement>('[data-campus-form="session"]')
-          if (form) form.hidden = true
+          if (form) resetSessionForm(form)
           return
         }
         if (action === 'delete-session') {
@@ -178,9 +216,30 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           flash(opts, `마커: ${kind}`)
           return
         }
+        if (action === 'rec-play') {
+          const id = btn.getAttribute('data-recording-id') || ''
+          const rec = loadCampusStore().recordings.find((r) => r.id === id)
+          if (!rec) {
+            flash(opts, '녹음을 찾을 수 없습니다.')
+            return
+          }
+          const blob = await getCampusBlob(rec.blobKey)
+          if (!blob) {
+            flash(opts, '녹음 파일이 없습니다.')
+            return
+          }
+          stopPlayback()
+          playbackUrl = URL.createObjectURL(blob)
+          playbackAudio = new Audio(playbackUrl)
+          playbackAudio.onended = () => stopPlayback()
+          await playbackAudio.play()
+          flash(opts, '녹음 재생 중')
+          return
+        }
         if (action === 'delete-recording') {
           const id = btn.getAttribute('data-recording-id') || ''
           if (confirm('녹음 파일을 삭제할까요?')) {
+            stopPlayback()
             await deleteLectureRecording(id)
             flash(opts, '녹음을 삭제했습니다.')
             repaint(el)
@@ -331,7 +390,9 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           const text = el.querySelector<HTMLInputElement>('input[name="quizAnsText"]')
           const userAnswer = checked?.value || text?.value || ''
           const correct = gradeAnswer(question, userAnswer)
-          flash(opts, correct ? `정답 · ${question.explanation || ''}` : `오답 · 정답: ${question.answer}${question.explanation ? ` · ${question.explanation}` : ''}`)
+          const gradeMsg = correct
+            ? `정답 · ${question.explanation || ''}`.trim()
+            : `오답 · 정답: ${question.answer}${question.explanation ? ` · ${question.explanation}` : ''}`
           const quiz = store.quizzes.find((q) => q.id === campusUi.quizId)
           // accumulate in sessionStorage-like memory on campusUi
           const key = `campus_quiz_ans_${campusUi.quizId}`
@@ -343,9 +404,11 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           sessionStorage.setItem(key, JSON.stringify(prev))
           campusUi.quizIndex += 1
           if (quiz && campusUi.quizIndex >= quiz.questionIds.length) {
-            submitQuizAttempt({ quizId: quiz.id, answers: prev })
+            const attempt = submitQuizAttempt({ quizId: quiz.id, answers: prev })
             sessionStorage.removeItem(key)
-            flash(opts, '퀴즈 결과를 저장했습니다.')
+            flash(opts, `${gradeMsg} · 퀴즈 완료 ${attempt.score}/${attempt.total}`)
+          } else {
+            flash(opts, gradeMsg)
           }
           repaint(el)
           return
@@ -379,6 +442,7 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
             return
           }
           if (campusUi.focusRemaining <= 0) campusUi.focusRemaining = campusUi.focusMinutes * 60
+          campusUi.focusSessionStartRemaining = campusUi.focusRemaining
           startFocusTicker(
             () => {
               const t = document.querySelector('.campus-focus-time')
@@ -389,18 +453,24 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
               }
             },
             () => {
+              const elapsedMin = Math.max(
+                1,
+                Math.round(campusUi.focusSessionStartRemaining / 60),
+              )
+              const mode =
+                elapsedMin === 25
+                  ? 'focus25'
+                  : elapsedMin === 50
+                    ? 'focus50'
+                    : 'custom'
               logStudySession({
                 courseId: campusUi.focusCourseId,
-                minutes: campusUi.focusMinutes,
-                mode:
-                  campusUi.focusMinutes === 25
-                    ? 'focus25'
-                    : campusUi.focusMinutes === 50
-                      ? 'focus50'
-                      : 'custom',
+                minutes: elapsedMin,
+                mode,
               })
-              flash(opts, `${campusUi.focusMinutes}분 학습을 저장했습니다.`)
+              flash(opts, `${elapsedMin}분 학습을 저장했습니다.`)
               campusUi.focusRemaining = campusUi.focusMinutes * 60
+              campusUi.focusSessionStartRemaining = campusUi.focusRemaining
               const root = document.querySelector('[data-campus-root]') as HTMLElement | null
               if (root) repaint(root)
             },
@@ -409,7 +479,20 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           return
         }
         if (action === 'focus-stop') {
+          const started = campusUi.focusSessionStartRemaining
+          const left = campusUi.focusRemaining
+          const partial = Math.floor((started - left) / 60)
           stopFocusTicker()
+          if (partial >= 1 && campusUi.focusCourseId) {
+            logStudySession({
+              courseId: campusUi.focusCourseId,
+              minutes: partial,
+              mode: 'custom',
+            })
+            flash(opts, `${partial}분 학습을 저장했습니다. (중단)`)
+          }
+          campusUi.focusRemaining = campusUi.focusMinutes * 60
+          campusUi.focusSessionStartRemaining = campusUi.focusRemaining
           repaint(el)
           return
         }
@@ -448,8 +531,9 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           return
         }
         if (action === 'sync-notify') {
+          await ensureNotificationPermission()
           const r = syncCampusNotifications()
-          flash(opts, `알림 동기화: 등록 ${r.armed} · 스킵 ${r.skipped}`)
+          flash(opts, notifyFlashSummary(r))
           return
         }
         if (action === 'add-project') {
@@ -531,6 +615,12 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         const startTime = String(fd.get('startTime') || '')
         const endTime = String(fd.get('endTime') || '')
         if (!name || !startTime || !endTime) return
+        const startM = timeToMinutes(startTime)
+        const endM = timeToMinutes(endTime)
+        if (!(endM > startM)) {
+          flash(opts, '종료 시간은 시작 시간보다 늦어야 합니다.')
+          return
+        }
         if (sessionId) {
           const store = loadCampusStore()
           const s = store.sessions.find((x) => x.id === sessionId)
@@ -548,7 +638,12 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
             )
           }
         } else {
-          const course = createCourse({ name, professor, room, credits })
+          let course = findCourseByName(name)
+          if (course) {
+            updateCourse(course.id, { professor, room, credits })
+          } else {
+            course = createCourse({ name, professor, room, credits })
+          }
           const { conflicts } = addClassSession({
             courseId: course.id,
             weekday,
@@ -566,7 +661,7 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         repaint(el)
         return
       }
-      if (kind === 'onboard-start' || kind === 'onboard') {
+      if (kind === 'onboard-start') {
         completeOnboarding({
           schoolName: String(fd.get('schoolName') || ''),
           year: 2026,
@@ -575,6 +670,15 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         })
         campusUi.tab = 'timetable'
         flash(opts, '온보딩 완료 · 시간표를 추가하세요.')
+        repaint(el)
+        return
+      }
+      if (kind === 'settings' || kind === 'onboard') {
+        updateCampusProfileSettings({
+          schoolName: String(fd.get('schoolName') || ''),
+          gradeScale: String(fd.get('gradeScale') || '4.5') as '4.5' | '4.3' | '4.0',
+        })
+        flash(opts, '설정을 저장했습니다.')
         repaint(el)
         return
       }
@@ -609,16 +713,19 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         return
       }
       if (kind === 'notify') {
-        updateNotifyPrefs({
-          notifyAssignmentD3: Boolean(fd.get('notifyAssignmentD3')),
-          notifyAssignmentD1: Boolean(fd.get('notifyAssignmentD1')),
-          notifyExamD7: Boolean(fd.get('notifyExamD7')),
-          notifyExamD1: Boolean(fd.get('notifyExamD1')),
-          notifyClassStart: Boolean(fd.get('notifyClassStart')),
-        })
-        const r = syncCampusNotifications()
-        flash(opts, `알림 설정 저장 · 등록 ${r.armed}`)
-        repaint(el)
+        void (async () => {
+          updateNotifyPrefs({
+            notifyAssignmentD3: Boolean(fd.get('notifyAssignmentD3')),
+            notifyAssignmentD1: Boolean(fd.get('notifyAssignmentD1')),
+            notifyExamD7: Boolean(fd.get('notifyExamD7')),
+            notifyExamD1: Boolean(fd.get('notifyExamD1')),
+            notifyClassStart: Boolean(fd.get('notifyClassStart')),
+          })
+          await ensureNotificationPermission()
+          const r = syncCampusNotifications()
+          flash(opts, `알림 설정 저장 · ${notifyFlashSummary(r)}`)
+          repaint(el)
+        })()
         return
       }
       if (kind === 'search') {

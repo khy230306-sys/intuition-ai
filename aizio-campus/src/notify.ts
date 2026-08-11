@@ -24,8 +24,13 @@ function writeAlarms(items: LocalAlarm[]): void {
   localStorage.setItem(KEY, JSON.stringify(items.slice(0, 80)))
 }
 
-async function ensureNotificationPermission(): Promise<void> {
-  if (typeof Notification === 'undefined') return
+export function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof Notification === 'undefined') return 'unsupported'
+  return Notification.permission
+}
+
+export async function ensureNotificationPermission(): Promise<NotificationPermission | 'unsupported'> {
+  if (typeof Notification === 'undefined') return 'unsupported'
   if (Notification.permission === 'default') {
     try {
       await Notification.requestPermission()
@@ -33,6 +38,7 @@ async function ensureNotificationPermission(): Promise<void> {
       /* ignore */
     }
   }
+  return Notification.permission
 }
 
 function fire(alarm: LocalAlarm): void {

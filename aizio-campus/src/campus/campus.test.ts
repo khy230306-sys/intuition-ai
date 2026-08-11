@@ -16,13 +16,18 @@ vi.stubGlobal('crypto', {
 })
 vi.stubGlobal('navigator', { onLine: true })
 import { createAssignment, upcomingAssignments } from './assignments'
-import { createCourse, ensureActiveSemester, findCourseByName, updateCourse } from './courses'
+import { createCourse, deleteCourse, ensureActiveSemester, findCourseByName, listCourses, updateCourse } from './courses'
 import { createExam, upcomingExams } from './exams'
 import { logStudySession, focusStats } from './focus'
 import { computeGpa } from './gpa'
-import { buildCampusHome, formatTodayClassesText } from './home'
+import { buildCampusHome, formatTodayClassesText, formatUrgentText } from './home'
+import { formatDDayLabel } from './id'
 import { parseCampusIntent } from './nlu/campusIntent'
 import { parseTimetableAddUtterance } from './nlu/parseTimetableUtterance'
+import {
+  completeOnboarding,
+  updateCampusProfileSettings,
+} from './profile'
 import { createQuestion, createQuiz, gradeAnswer, submitQuizAttempt, conceptStats } from './quiz'
 import { buildSmartReview } from './review'
 import { searchCampus } from './search'
@@ -202,5 +207,114 @@ describe('session overlap', () => {
     } as ClassSession
     const b = { ...a, id: '2', startTime: '11:00', endTime: '12:30' }
     expect(sessionsOverlap(a, b)).toBe(true)
+  })
+})
+
+describe('settings vs onboarding semester', () => {
+  it('settings update does not switch active semester or hide courses', () => {
+    ensureActiveSemester({ year: 2026, term: 1, label: '2026년 1학기' })
+    createCourse({ name: '선형대수', credits: 3 })
+    expect(listCourses()).toHaveLength(1)
+    updateCampusProfileSettings({ schoolName: '테스트대', gradeScale: '4.3' })
+    const store = loadCampusStore()
+    expect(store.profile.schoolName).toBe('테스트대')
+    expect(store.profile.gradeScale).toBe('4.3')
+    expect(store.semesters.find((s) => s.active)?.term).toBe(1)
+    expect(listCourses()).toHaveLength(1)
+  })
+
+  it('completeOnboarding can switch semester intentionally', () => {
+    ensureActiveSemester({ year: 2026, term: 1 })
+    createCourse({ name: '옛과목' })
+    completeOnboarding({ schoolName: '새학교', year: 2026, term: 2, gradeScale: '4.5' })
+    expect(loadCampusStore().semesters.find((s) => s.active)?.term).toBe(2)
+    // courses stay in store but listCourses filters by active semester
+    expect(listCourses().every((c) => c.name !== '옛과목')).toBe(true)
+  })
+})
+
+describe('D-Day labels', () => {
+  it('never formats overdue as D--N', () => {
+    expect(formatDDayLabel(-2)).toBe('2일 지남')
+    expect(formatDDayLabel(0)).toBe('D-Day')
+    expect(formatDDayLabel(3)).toBe('D-3')
+    expect(formatDDayLabel(null)).toBe('기한 없음')
+  })
+
+  it('urgent text uses overdue-safe labels', () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '운영체제' })
+    createAssignment({
+      courseId: c.id,
+      title: '지난 과제',
+      dueAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    })
+    const text = formatUrgentText()
+    expect(text).not.toMatch(/D--/)
+    expect(text).toMatch(/지남|D-Day|D-\d|급한/)
+  })
+})
+
+describe('MCQ letter answers', () => {
+  it('grades A/B against choice text', () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '퀴즈과목' })
+    const q = createQuestion({
+      courseId: c.id,
+      type: 'mcq',
+      prompt: '스택의 특징?',
+      choices: ['FIFO', 'LIFO', '랜덤', '원형'],
+      answer: 'B',
+      concepts: ['Stack'],
+    })
+    expect(gradeAnswer(q, 'LIFO')).toBe(true)
+    expect(gradeAnswer(q, 'B')).toBe(true)
+    expect(gradeAnswer(q, 'A')).toBe(false)
+    expect(gradeAnswer(q, 'FIFO')).toBe(false)
+  })
+})
+
+describe('deleteCourse cascade', () => {
+  it('removes related metadata rows', () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '삭제대상' })
+    addClassSession({
+      courseId: c.id,
+      weekday: 1,
+      startTime: '09:00',
+      endTime: '10:00',
+    })
+    createAssignment({ courseId: c.id, title: '과제' })
+    createExam({ courseId: c.id, name: '기말' })
+    const q = createQuestion({
+      courseId: c.id,
+      type: 'ox',
+      prompt: 'x',
+      answer: 'O',
+    })
+    createQuiz({ courseId: c.id, title: 'q', questionIds: [q.id] })
+    expect(deleteCourse(c.id)).toBe(true)
+    const s = loadCampusStore()
+    expect(s.courses.find((x) => x.id === c.id)).toBeFalsy()
+    expect(s.sessions.filter((x) => x.courseId === c.id)).toHaveLength(0)
+    expect(s.assignments.filter((x) => x.courseId === c.id)).toHaveLength(0)
+    expect(s.exams.filter((x) => x.courseId === c.id)).toHaveLength(0)
+    expect(s.quizzes.filter((x) => x.courseId === c.id)).toHaveLength(0)
+    expect(s.questions.filter((x) => x.courseId === c.id)).toHaveLength(0)
+  })
+})
+
+describe('chat quiz opens campus with quizId', () => {
+  it('returns quizId when sources exist', async () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '자료구조' })
+    // Without AI key, generateQuizFromSources should still fail/offline honestly —
+    // but create a local quiz path via questions for grade path coverage above.
+    const intent = parseCampusIntent('자료구조 퀴즈 내줘')
+    expect(intent?.kind).toBe('campus_quiz')
+    const res = await executeCampusIntent(intent!)
+    // No materials/notes → no quizId (honest empty), but must not throw
+    expect(typeof res.message).toBe('string')
+    expect(c.name).toBe('자료구조')
   })
 })

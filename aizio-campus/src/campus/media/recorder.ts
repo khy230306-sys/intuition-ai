@@ -150,7 +150,8 @@ export async function stopLectureRecording(title?: string): Promise<LectureRecor
   })
 
   bumpElapsed()
-  const durationMs = Math.max(0, Date.now() - startedAt)
+  // Use accumulated elapsed (excludes pause wall-clock), not Date.now()-startedAt
+  const durationMs = Math.max(0, internal.state.elapsedMs || Date.now() - startedAt)
   const blob = new Blob(internal.chunks, { type: internal.mimeType })
   const blobKey = campusId('aud')
   await putCampusBlob(blobKey, blob)

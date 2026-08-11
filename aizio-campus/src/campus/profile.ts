@@ -31,6 +31,27 @@ export function completeOnboarding(input: {
   return profile
 }
 
+/** Settings-only update — never switches active semester. */
+export function updateCampusProfileSettings(input: {
+  schoolName?: string
+  gradeScale?: GradeScale
+}): CampusProfile {
+  let profile = loadCampusStore().profile
+  updateCampusStore((s) => {
+    s.profile = {
+      ...s.profile,
+      schoolName:
+        input.schoolName !== undefined
+          ? input.schoolName.trim().slice(0, 80)
+          : s.profile.schoolName,
+      gradeScale: input.gradeScale || s.profile.gradeScale || '4.5',
+      updatedAt: nowIso(),
+    }
+    profile = s.profile
+  })
+  return profile
+}
+
 export function updateGraduationRequirements(input: {
   graduationCredits?: number | null
   majorCredits?: number | null

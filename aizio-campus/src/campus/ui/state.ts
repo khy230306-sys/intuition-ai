@@ -7,6 +7,8 @@ export type CampusUiState = {
   quizIndex: number
   focusMinutes: number
   focusRemaining: number
+  /** Seconds remaining when the current focus session started (for accurate log). */
+  focusSessionStartRemaining: number
   focusRunning: boolean
   focusCourseId: string
   recordingCourseId: string
@@ -22,6 +24,7 @@ export const campusUi: CampusUiState = {
   quizIndex: 0,
   focusMinutes: 25,
   focusRemaining: 25 * 60,
+  focusSessionStartRemaining: 25 * 60,
   focusRunning: false,
   focusCourseId: '',
   recordingCourseId: '',

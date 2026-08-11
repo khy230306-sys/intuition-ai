@@ -18,6 +18,7 @@ import type { CampusIntent } from './nlu/campusIntent'
 import { getCampusProfile } from './profile'
 import { buildSmartReview } from './review'
 import { searchCampus } from './search'
+import { formatDDayLabel } from './id'
 import { loadCampusStore } from './storage'
 import { buildDeterministicStudyPlan, formatStudyPlan } from './studyPlan'
 import { addClassSession, weekSessions } from './timetable'
@@ -101,7 +102,7 @@ export async function executeCampusIntent(intent: CampusIntent): Promise<CampusT
             ...all.map(
               (a) =>
                 `• ${a.course?.name || ''} ${a.assignment.title}${
-                  a.dDay === null ? '' : ` · D-${a.dDay}`
+                  a.dDay === null ? '' : ` · ${formatDDayLabel(a.dDay)}`
                 }`,
             ),
           ].join('\n'),
@@ -113,7 +114,7 @@ export async function executeCampusIntent(intent: CampusIntent): Promise<CampusT
           ...rows.map(
             (a) =>
               `• ${a.course?.name || ''} ${a.assignment.title}${
-                a.dDay === null ? '' : ` · D-${a.dDay}`
+                a.dDay === null ? '' : ` · ${formatDDayLabel(a.dDay)}`
               }`,
           ),
         ].join('\n'),
@@ -126,7 +127,8 @@ export async function executeCampusIntent(intent: CampusIntent): Promise<CampusT
         message: [
           '【시험】',
           ...exams.map(
-            (e) => `• ${e.course?.name || ''} ${e.exam.name} · D-${e.dDay ?? '?'}`,
+            (e) =>
+              `• ${e.course?.name || ''} ${e.exam.name} · ${formatDDayLabel(e.dDay, '?')}`,
           ),
         ].join('\n'),
       }
@@ -215,11 +217,16 @@ export async function executeCampusIntent(intent: CampusIntent): Promise<CampusT
     case 'campus_gpa': {
       const store = loadCampusStore()
       const g = computeGpa(store.courses, store.profile.gradeScale)
-      if (g.gpa === null) {
+      if (g.gpa === null && g.earnedCredits <= 0) {
         return { message: '성적이 입력된 과목이 없습니다. CAMPUS 더보기 → 학점에서 입력하세요.' }
       }
+      const grad = store.profile.graduationCredits
+      const gradLine =
+        grad && grad > 0
+          ? ` · 졸업 ${g.earnedCredits}/${grad} (남은 ${Math.max(0, grad - g.earnedCredits)})`
+          : ` · 이수학점 ${g.earnedCredits}`
       return {
-        message: `GPA ${g.gpa} / ${store.profile.gradeScale} · 이수학점 ${g.earnedCredits}`,
+        message: `GPA ${g.gpa ?? '—'} / ${store.profile.gradeScale}${gradLine}`,
       }
     }
     default:

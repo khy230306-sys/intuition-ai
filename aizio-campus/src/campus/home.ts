@@ -1,7 +1,7 @@
 import { upcomingAssignments } from './assignments'
 import { findCourseByName, listCourses } from './courses'
 import { upcomingExams } from './exams'
-import { formatDateKo } from './id'
+import { formatDateKo, formatDDayLabel } from './id'
 import { buildSmartReview } from './review'
 import { loadCampusStore } from './storage'
 import { todaySessions } from './timetable'
@@ -31,7 +31,8 @@ export function buildCampusHome(displayName = '', now = new Date()): CampusHomeM
   const todos: CampusHomeModel['todos'] = []
   for (const a of asg.slice(0, 5)) {
     const dd = a.dDay
-    const due = dd === null ? '' : dd === 0 ? ' · D-Day' : ` · D-${dd}`
+    const due =
+      dd === null ? '' : dd === 0 ? ' · D-Day' : dd < 0 ? ` · ${Math.abs(dd)}일 지남` : ` · D-${dd}`
     todos.push({
       label: `${a.course?.name || '과목'} ${a.assignment.title}${due}`,
       kind: 'assignment',
@@ -93,13 +94,11 @@ export function formatUrgentText(): string {
   if (!asg.length && !exams.length) return '급한 과제/시험이 없습니다. (등록된 항목 기준)'
   const lines = ['【가장 급한 일정】']
   for (const e of exams.slice(0, 2)) {
-    lines.push(`• ${e.course?.name || ''} ${e.exam.name} · D-${e.dDay ?? '?'}`)
+    lines.push(`• ${e.course?.name || ''} ${e.exam.name} · ${formatDDayLabel(e.dDay, '?')}`)
   }
   for (const a of asg.slice(0, 3)) {
     lines.push(
-      `• ${a.course?.name || ''} ${a.assignment.title} · ${
-        a.dDay === null ? '기한 없음' : `D-${a.dDay}`
-      }`,
+      `• ${a.course?.name || ''} ${a.assignment.title} · ${formatDDayLabel(a.dDay)}`,
     )
   }
   return lines.join('\n')

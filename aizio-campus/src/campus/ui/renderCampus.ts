@@ -4,6 +4,7 @@ import { upcomingExams } from '../exams'
 import { focusStats } from '../focus'
 import { computeGpa } from '../gpa'
 import { buildCampusHome } from '../home'
+import { formatDDayLabel } from '../id'
 import { conceptStats } from '../quiz'
 import { buildSmartReview } from '../review'
 import { searchCampus } from '../search'
@@ -87,7 +88,10 @@ function renderToday(): string {
       ${
         home.upcoming.length
           ? `<ul class="campus-list">${home.upcoming
-              .map((u) => `<li>${esc(u.label)}${u.dDay === null ? '' : ` D-${u.dDay}`}</li>`)
+              .map(
+                (u) =>
+                  `<li>${esc(u.label)}${u.dDay === null ? '' : ` · ${esc(formatDDayLabel(u.dDay))}`}</li>`,
+              )
               .join('')}</ul>`
           : '<p class="hint">다가오는 시험이 없습니다.</p>'
       }
@@ -220,8 +224,11 @@ function renderCourseWorkspace(courseId: string): string {
               ).padStart(2, '0')}
               ${recState.paused ? '(일시정지)' : ''}
               <div class="campus-inline">
-                <button type="button" class="ghost-btn tiny" data-campus-action="rec-pause">일시정지</button>
-                <button type="button" class="ghost-btn tiny" data-campus-action="rec-resume">재개</button>
+                ${
+                  recState.paused
+                    ? `<button type="button" class="ghost-btn tiny" data-campus-action="rec-resume">재개</button>`
+                    : `<button type="button" class="ghost-btn tiny" data-campus-action="rec-pause">일시정지</button>`
+                }
                 <button type="button" class="primary-btn tiny" data-campus-action="rec-stop">종료</button>
               </div>
               <div class="campus-inline">
@@ -239,6 +246,7 @@ function renderCourseWorkspace(courseId: string): string {
             const tr = store.transcripts.find((t) => t.recordingId === r.id)
             return `<li>
               ${esc(r.title)} · ${Math.round(r.durationMs / 60000)}분 · 마커 ${r.markers.length}
+              <button type="button" class="ghost-btn tiny" data-campus-action="rec-play" data-recording-id="${esc(r.id)}">재생</button>
               <button type="button" class="ghost-btn tiny" data-campus-action="transcribe" data-recording-id="${esc(r.id)}">Transcript</button>
               ${
                 tr?.status === 'ready'
@@ -468,8 +476,13 @@ function renderMore(): string {
         </form>
         <ul class="campus-list">
           ${
-            hits.map((h) => `<li>[${esc(h.kind)}] ${esc(h.title)} <span class="hint">${esc(h.subtitle)}</span></li>`).join('') ||
-            '<li class="hint">결과 없음</li>'
+            hits
+              .map((h) =>
+                h.courseId
+                  ? `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(h.courseId)}">[${esc(h.kind)}] ${esc(h.title)} <span class="hint">${esc(h.subtitle)}</span></button></li>`
+                  : `<li>[${esc(h.kind)}] ${esc(h.title)} <span class="hint">${esc(h.subtitle)}</span></li>`,
+              )
+              .join('') || '<li class="hint">결과 없음</li>'
           }
         </ul>
       </section>`
@@ -479,7 +492,11 @@ function renderMore(): string {
       <section class="campus-panel">
         <button type="button" class="ghost-btn tiny" data-campus-action="more-menu">← 더보기</button>
         <h2>학점</h2>
-        <p>기준 ${esc(store.profile.gradeScale)} · GPA ${gpa.gpa ?? '—'} · 이수학점 ${gpa.earnedCredits}</p>
+        <p>기준 ${esc(store.profile.gradeScale)} · GPA ${gpa.gpa ?? '—'} · 이수학점 ${gpa.earnedCredits}${
+          store.profile.graduationCredits && store.profile.graduationCredits > 0
+            ? ` / 졸업 ${store.profile.graduationCredits} (남은 ${Math.max(0, store.profile.graduationCredits - gpa.earnedCredits)})`
+            : ''
+        }</p>
         <form data-campus-form="gpa-scale" class="campus-form">
           <label>학점 기준
             <select name="scale">
@@ -561,7 +578,7 @@ function renderMore(): string {
       <section class="campus-panel">
         <button type="button" class="ghost-btn tiny" data-campus-action="more-menu">← 더보기</button>
         <h2>Campus 설정</h2>
-        <form data-campus-form="onboard" class="campus-form">
+        <form data-campus-form="settings" class="campus-form">
           <label>학교명(선택) <input name="schoolName" value="${esc(p.schoolName)}" /></label>
           <label>학점 기준
             <select name="gradeScale">

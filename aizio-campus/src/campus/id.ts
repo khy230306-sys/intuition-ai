@@ -77,6 +77,14 @@ export function dDay(targetIso: string | null | undefined, now = new Date()): nu
   return Math.round((b.getTime() - a.getTime()) / 86_400_000)
 }
 
+/** Human-readable D-Day label — never emits `D--2`. */
+export function formatDDayLabel(dd: number | null | undefined, empty = '기한 없음'): string {
+  if (dd === null || dd === undefined) return empty
+  if (dd === 0) return 'D-Day'
+  if (dd < 0) return `${Math.abs(dd)}일 지남`
+  return `D-${dd}`
+}
+
 export function formatDateKo(d = new Date()): string {
   const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
   return `${days[d.getDay()]} · ${d.getMonth() + 1}월 ${d.getDate()}일`

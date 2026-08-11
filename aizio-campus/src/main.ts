@@ -10,10 +10,10 @@ import {
 import { executeCampusIntent } from './campus/service'
 import { parseCampusIntent } from './campus/nlu/campusIntent'
 import { syncCampusNotifications } from './campus/notifications'
-import { bindCampus, renderCampusShell } from './campus'
+import { bindCampus, openCampusToQuiz, renderCampusShell } from './campus'
 import { rehydrateAlarms } from './notify'
 
-export const APP_VERSION = '1.0.0'
+export const APP_VERSION = '1.0.1'
 export const FIXED_APP_URL = 'https://aizio-campus.shipstatic.com'
 
 type ChatMsg = { role: 'user' | 'bot'; text: string }
@@ -140,6 +140,7 @@ function bindChat(): void {
       if (intent) {
         const r = await executeCampusIntent(intent)
         reply = r.message
+        if (r.quizId) openCampusToQuiz(r.quizId)
         if (r.openCampus) state.chatOpen = false
       } else {
         reply =

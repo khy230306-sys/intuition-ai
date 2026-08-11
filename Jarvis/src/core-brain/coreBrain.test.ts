@@ -185,7 +185,7 @@ describe('AIZIO Core Brain', () => {
     const open = await processCoreBrain({ text: '캠퍼스 열어줘', allowDuplicate: true })
     expect(open.fallbackLegacy).toBe(false)
     expect(open.selectedSkills).toContain('campus')
-    expect(open.brainReply?.view).toBe('campus')
+    expect(open.responseText).toMatch(/aizio-campus\.shipstatic\.com/)
 
     const add = await processCoreBrain({
       text: '월요일 10시부터 11시 반까지 자료구조 수업 넣어줘',

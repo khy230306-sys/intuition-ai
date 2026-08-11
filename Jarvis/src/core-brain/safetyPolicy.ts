@@ -68,6 +68,7 @@ export function isAllowedExternalUrl(url: string): boolean {
       'm.map.naver.com',
       'translate.google.com',
       'jarvis-app.shipstatic.com',
+      'aizio-campus.shipstatic.com',
     ]
     return allow.some((h) => host === h || host.endsWith(`.${h}`))
   } catch {

@@ -4707,6 +4707,14 @@ function bind(): void {
   document.querySelector('[data-action="home-v2-open-nav"]')?.addEventListener('click', () => {
     openNavigationSheet()
   })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="open-campus-external"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.homeV2MoreOpen = false
+      window.open('https://aizio-campus.shipstatic.com', '_blank', 'noopener,noreferrer')
+      showFlash('AIZIO CAMPUS를 엽니다')
+      render()
+    })
+  })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false
     state.view = 'chat'

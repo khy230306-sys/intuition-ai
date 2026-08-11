@@ -69,7 +69,7 @@ export function renderHomeV2Shell(model: HomeV2Model, opts: {
           }
         </div>
         <div class="home-v2-header-actions">
-          <button type="button" class="ghost-btn tiny" data-view="campus" aria-label="CAMPUS">CAMPUS</button>
+          <button type="button" class="ghost-btn tiny" data-action="open-campus-external" aria-label="CAMPUS">CAMPUS</button>
           <button type="button" class="ghost-btn tiny home-v2-settings" data-view="settings" aria-label="설정">설정</button>
         </div>
       </header>
@@ -226,7 +226,7 @@ export function renderHomeV2MoreSheet(): string {
         <div class="home-v2-more-group">
           <h4>생활</h4>
           <ul class="home-v2-more-list">
-            ${moreItem('CAMPUS', 'data-view="campus"')}
+            ${moreItem('CAMPUS', 'data-action="open-campus-external"')}
             ${moreItem('길안내', 'data-action="home-v2-open-nav"')}
             ${moreItem('날씨', 'data-action="home-v2-quick" data-quick-id="weather"')}
             ${moreItem('음악', 'data-action="home-v2-music"')}

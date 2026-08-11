@@ -1,0 +1,7 @@
+{
+  "app": "AIZIO CAMPUS",
+  "version": "1.0.0",
+  "channel": "production",
+  "productionUrl": "https://aizio-campus.shipstatic.com",
+  "note": "Standalone Campus — separate from jarvis-app.shipstatic.com"
+}

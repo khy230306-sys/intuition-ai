@@ -58,6 +58,33 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
+.campus-chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px 8px;
+}
+
+.campus-chip {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campus-chip:active {
+  background: rgba(31, 111, 235, 0.22);
+}
+
 .primary-btn,
 .ghost-btn {
   appearance: none;

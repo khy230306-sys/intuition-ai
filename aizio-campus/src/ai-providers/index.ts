@@ -16,7 +16,7 @@ export {
 } from './providerConfig'
 
 export const LOCAL_NO_AI_MESSAGE =
-  'AI API 키가 없습니다. CAMPUS 설정에서 OpenAI/Groq/OpenRouter 키를 연결해 주세요.'
+  'AI API 키가 없습니다. 상단 「대화」에서 OpenAI 또는 Groq 키를 저장해 주세요. 키 없이도 시간표·과제·타이머는 동작합니다.'
 
 export type HybridChatInput = {
   message: string

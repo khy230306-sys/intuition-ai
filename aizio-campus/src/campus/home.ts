@@ -1,20 +1,55 @@
 import { upcomingAssignments } from './assignments'
 import { findCourseByName, listCourses } from './courses'
 import { upcomingExams } from './exams'
-import { formatDateKo, formatDDayLabel } from './id'
+import { formatDateKo, formatDDayLabel, timeToMinutes } from './id'
 import { buildSmartReview } from './review'
 import { loadCampusStore } from './storage'
 import { todaySessions } from './timetable'
+import type { Weekday } from './types'
 
 export type CampusHomeModel = {
   greeting: string
   dateLine: string
-  classes: Array<{ time: string; name: string; room: string; courseId: string }>
-  todos: Array<{ label: string; kind: string; id: string }>
-  upcoming: Array<{ label: string; dDay: number | null }>
-  aiCard: string | null
+  classes: Array<{
+    time: string
+    endTime: string
+    name: string
+    room: string
+    courseId: string
+  }>
+  nextClass: {
+    name: string
+    time: string
+    room: string
+    courseId: string
+    minutesUntil: number
+    inProgress: boolean
+  } | null
+  todos: Array<{ label: string; kind: string; id: string; courseId?: string }>
+  upcoming: Array<{ label: string; dDay: number | null; courseId?: string; examId?: string }>
+  tipCard: string | null
   empty: boolean
   onboarded: boolean
+}
+
+export function nextClassToday(now = new Date()) {
+  const rows = todaySessions(now)
+  const nowM = now.getHours() * 60 + now.getMinutes()
+  for (const x of rows) {
+    const start = timeToMinutes(x.session.startTime)
+    const end = timeToMinutes(x.session.endTime)
+    if (Number.isNaN(start) || Number.isNaN(end)) continue
+    if (end <= nowM) continue
+    return {
+      name: x.course!.name,
+      time: x.session.startTime,
+      room: x.session.room || x.course!.room || '',
+      courseId: x.course!.id,
+      minutesUntil: Math.max(0, start - nowM),
+      inProgress: start <= nowM && nowM < end,
+    }
+  }
+  return null
 }
 
 export function buildCampusHome(displayName = '', now = new Date()): CampusHomeModel {
@@ -23,20 +58,20 @@ export function buildCampusHome(displayName = '', now = new Date()): CampusHomeM
   const greeting = name ? `안녕하세요, ${/님$/.test(name) ? name : `${name}님`}` : '안녕하세요'
   const classes = todaySessions(now).map((x) => ({
     time: x.session.startTime,
+    endTime: x.session.endTime,
     name: x.course!.name,
     room: x.session.room || x.course!.room || '',
     courseId: x.course!.id,
   }))
+  const nextClass = nextClassToday(now)
   const asg = upcomingAssignments(8)
   const todos: CampusHomeModel['todos'] = []
   for (const a of asg.slice(0, 5)) {
-    const dd = a.dDay
-    const due =
-      dd === null ? '' : dd === 0 ? ' · D-Day' : dd < 0 ? ` · ${Math.abs(dd)}일 지남` : ` · D-${dd}`
     todos.push({
-      label: `${a.course?.name || '과목'} ${a.assignment.title}${due}`,
+      label: `${a.course?.name || '과목'} ${a.assignment.title} · ${formatDDayLabel(a.dDay)}`,
       kind: 'assignment',
       id: a.assignment.id,
+      courseId: a.assignment.courseId,
     })
   }
   const review = buildSmartReview(3, now)
@@ -46,6 +81,7 @@ export function buildCampusHome(displayName = '', now = new Date()): CampusHomeM
       label: `${r.courseName} · ${r.title} (${r.minutes}분)`,
       kind: 'review',
       id: r.id,
+      courseId: r.courseId,
     })
   }
 
@@ -53,32 +89,49 @@ export function buildCampusHome(displayName = '', now = new Date()): CampusHomeM
   const upcoming = exams.map((e) => ({
     label: `${e.course?.name || '과목'} ${e.exam.name}`,
     dDay: e.dDay,
+    courseId: e.exam.courseId,
+    examId: e.exam.id,
   }))
 
-  let aiCard: string | null = null
-  if (review[0]) {
-    aiCard = `오늘 ${review[0].courseName} 「${review[0].title}」을 ${review[0].minutes}분 복습하면 좋습니다.`
+  let tipCard: string | null = null
+  if (nextClass) {
+    tipCard = nextClass.inProgress
+      ? `지금 ${nextClass.name} 수업 중${nextClass.room ? ` · ${nextClass.room}` : ''}`
+      : `다음 수업 ${nextClass.name} ${nextClass.time}${
+          nextClass.minutesUntil <= 120 ? ` · ${nextClass.minutesUntil}분 후` : ''
+        }`
+  } else if (review[0]) {
+    tipCard = `추천: ${review[0].courseName} 「${review[0].title}」 ${review[0].minutes}분 복습`
   } else if (classes[0]) {
-    aiCard = `오늘 ${classes[0].name} 수업이 ${classes[0].time}에 있습니다.`
+    tipCard = `오늘 ${classes[0].name} 수업이 ${classes[0].time}에 있습니다.`
   }
 
   return {
     greeting,
     dateLine: formatDateKo(now),
     classes,
+    nextClass,
     todos,
     upcoming,
-    aiCard,
+    tipCard,
     empty: listCourses().length === 0,
     onboarded: Boolean(store.profile.onboardedAt),
   }
 }
 
-export function formatTodayClassesText(now = new Date()): string {
-  const rows = todaySessions(now)
-  if (!rows.length) return '오늘 등록된 수업이 없습니다.'
+function formatSessionsText(label: string, weekday: Weekday): string {
+  const store = loadCampusStore()
+  const rows = store.sessions
+    .filter((s) => s.weekday === weekday)
+    .map((s) => ({
+      session: s,
+      course: store.courses.find((c) => c.id === s.courseId) || null,
+    }))
+    .filter((x) => x.course)
+    .sort((a, b) => timeToMinutes(a.session.startTime) - timeToMinutes(b.session.startTime))
+  if (!rows.length) return `${label} 등록된 수업이 없습니다.`
   return [
-    '【오늘 수업】',
+    `【${label}】`,
     ...rows.map(
       (r) =>
         `• ${r.session.startTime}–${r.session.endTime} ${r.course!.name}${
@@ -86,6 +139,16 @@ export function formatTodayClassesText(now = new Date()): string {
         }`,
     ),
   ].join('\n')
+}
+
+export function formatTodayClassesText(now = new Date()): string {
+  return formatSessionsText('오늘 수업', now.getDay() as Weekday)
+}
+
+export function formatTomorrowClassesText(now = new Date()): string {
+  const t = new Date(now)
+  t.setDate(t.getDate() + 1)
+  return formatSessionsText('내일 수업', t.getDay() as Weekday)
 }
 
 export function formatUrgentText(): string {

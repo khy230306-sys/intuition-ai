@@ -11,12 +11,21 @@ import { executeCampusIntent } from './campus/service'
 import { parseCampusIntent } from './campus/nlu/campusIntent'
 import { syncCampusNotifications } from './campus/notifications'
 import { bindCampus, openCampusToQuiz, renderCampusShell } from './campus'
+import { campusUi } from './campus/ui/state'
 import { rehydrateAlarms } from './notify'
 
-export const APP_VERSION = '1.0.1'
+export const APP_VERSION = '1.0.2'
 export const FIXED_APP_URL = 'https://aizio-campus.shipstatic.com'
 
 type ChatMsg = { role: 'user' | 'bot'; text: string }
+
+const CHAT_CHIPS = [
+  '오늘 수업 뭐야?',
+  '내일 수업 뭐야?',
+  '이번 주 과제',
+  '학점 알려줘',
+  '월요일 10시부터 11시 반까지 자료구조 수업 넣어줘',
+]
 
 const state = {
   chatOpen: false,
@@ -45,6 +54,7 @@ function renderChatSheet(): string {
   if (!state.chatOpen) return ''
   const openai = getProviderSlot('openai')
   const groq = getProviderSlot('groq')
+  const keysOpen = campusUi.chatKeysOpen
   return `
     <div class="campus-chat-sheet" data-chat-sheet="1">
       <div class="campus-chat-panel" role="dialog" aria-label="Campus 대화">
@@ -53,17 +63,29 @@ function renderChatSheet(): string {
           <button type="button" class="ghost-btn tiny" data-action="close-chat">닫기</button>
         </div>
         <div class="campus-settings-card">
-          <p class="hint">AI 요약/문제생성용 키 (기기에만 저장). 없으면 시간표·과제 등 로컬 기능만 동작.</p>
-          <form data-form="ai-keys">
-            <label>OpenAI API Key
-              <input name="openai" type="password" autocomplete="off" placeholder="${openai.apiKey ? '저장됨 · 변경 시 입력' : 'sk-...'}" />
-            </label>
-            <label>Groq API Key
-              <input name="groq" type="password" autocomplete="off" placeholder="${groq.apiKey ? '저장됨 · 변경 시 입력' : 'gsk-...'}" />
-            </label>
-            <button class="ghost-btn tiny" type="submit">키 저장</button>
-            <p class="hint">${hasAnyConfiguredProvider() ? 'AI 연결됨' : 'AI 미연결 · 로컬 기능만'}</p>
-          </form>
+          <button type="button" class="ghost-btn tiny" data-action="toggle-ai-keys">
+            AI 키 ${keysOpen ? '접기' : '펼치기'} · ${hasAnyConfiguredProvider() ? '연결됨' : '미연결(로컬만)'}
+          </button>
+          ${
+            keysOpen
+              ? `<p class="hint">요약/문제생성용 키 (기기에만 저장). 없어도 시간표·과제·타이머는 됩니다.</p>
+            <form data-form="ai-keys">
+              <label>OpenAI API Key
+                <input name="openai" type="password" autocomplete="off" placeholder="${openai.apiKey ? '저장됨 · 변경 시 입력' : 'sk-...'}" />
+              </label>
+              <label>Groq API Key
+                <input name="groq" type="password" autocomplete="off" placeholder="${groq.apiKey ? '저장됨 · 변경 시 입력' : 'gsk-...'}" />
+              </label>
+              <button class="ghost-btn tiny" type="submit">키 저장</button>
+            </form>`
+              : ''
+          }
+        </div>
+        <div class="campus-chat-chips">
+          ${CHAT_CHIPS.map(
+            (c) =>
+              `<button type="button" class="campus-chip" data-chat-chip="${esc(c)}">${esc(c)}</button>`,
+          ).join('')}
         </div>
         <div class="campus-chat-log" id="chat-log">
           ${
@@ -71,7 +93,7 @@ function renderChatSheet(): string {
               ? state.messages
                   .map((m) => `<div class="campus-chat-msg ${m.role}">${esc(m.text)}</div>`)
                   .join('')
-              : `<div class="campus-chat-msg bot">예: 「월요일 10시부터 11시 반까지 자료구조 수업 넣어줘」 · 「오늘 수업 뭐야?」 · 「이번 주 과제」</div>`
+              : `<div class="campus-chat-msg bot">학생처럼 말해 보세요. 예: 「오늘 수업 뭐야?」 · 「화요일 13시 마케팅 수업 넣어줘」</div>`
           }
         </div>
         <form class="campus-chat-form" id="chat-form">
@@ -101,9 +123,45 @@ function render(): void {
   }
 }
 
+async function sendChat(text: string): Promise<void> {
+  if (state.busy || !text.trim()) return
+  state.draft = ''
+  state.messages.push({ role: 'user', text: text.trim() })
+  state.busy = true
+  render()
+  try {
+    const intent = parseCampusIntent(text.trim())
+    let reply: string
+    if (intent) {
+      const r = await executeCampusIntent(intent)
+      reply = r.message
+      if (r.quizId) openCampusToQuiz(r.quizId)
+      if (r.openCampus) state.chatOpen = false
+    } else {
+      reply =
+        'Campus 명령으로 이해하지 못했습니다. 아래 칩을 눌러보거나 「오늘 수업 뭐야?」 · 「화요일 13시 마케팅 수업 넣어줘」처럼 말해 주세요.'
+    }
+    state.messages.push({ role: 'bot', text: reply })
+  } catch (e) {
+    state.messages.push({
+      role: 'bot',
+      text: e instanceof Error ? e.message : '처리 중 오류',
+    })
+  } finally {
+    state.busy = false
+    render()
+    const log = document.getElementById('chat-log')
+    if (log) log.scrollTop = log.scrollHeight
+  }
+}
+
 function bindChat(): void {
   document.querySelector('[data-action="close-chat"]')?.addEventListener('click', () => {
     state.chatOpen = false
+    render()
+  })
+  document.querySelector('[data-action="toggle-ai-keys"]')?.addEventListener('click', () => {
+    campusUi.chatKeysOpen = !campusUi.chatKeysOpen
     render()
   })
   document.querySelector('[data-chat-sheet]')?.addEventListener('click', (ev) => {
@@ -111,6 +169,12 @@ function bindChat(): void {
       state.chatOpen = false
       render()
     }
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-chat-chip]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const text = btn.getAttribute('data-chat-chip') || ''
+      void sendChat(text)
+    })
   })
   const keyForm = document.querySelector<HTMLFormElement>('[data-form="ai-keys"]')
   keyForm?.addEventListener('submit', (ev) => {
@@ -124,40 +188,10 @@ function bindChat(): void {
     render()
   })
   const form = document.getElementById('chat-form') as HTMLFormElement | null
-  form?.addEventListener('submit', async (ev) => {
+  form?.addEventListener('submit', (ev) => {
     ev.preventDefault()
-    if (state.busy) return
     const input = document.getElementById('chat-draft') as HTMLInputElement | null
-    const text = (input?.value || state.draft || '').trim()
-    if (!text) return
-    state.draft = ''
-    state.messages.push({ role: 'user', text })
-    state.busy = true
-    render()
-    try {
-      const intent = parseCampusIntent(text)
-      let reply: string
-      if (intent) {
-        const r = await executeCampusIntent(intent)
-        reply = r.message
-        if (r.quizId) openCampusToQuiz(r.quizId)
-        if (r.openCampus) state.chatOpen = false
-      } else {
-        reply =
-          'Campus 명령으로 이해하지 못했습니다. 예: 「오늘 수업 뭐야?」 · 「화요일 13시 마케팅 수업 넣어줘」 · 「캠퍼스 열어줘」'
-      }
-      state.messages.push({ role: 'bot', text: reply })
-    } catch (e) {
-      state.messages.push({
-        role: 'bot',
-        text: e instanceof Error ? e.message : '처리 중 오류',
-      })
-    } finally {
-      state.busy = false
-      render()
-      const log = document.getElementById('chat-log')
-      if (log) log.scrollTop = log.scrollHeight
-    }
+    void sendChat(input?.value || state.draft || '')
   })
 }
 

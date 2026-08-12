@@ -12,6 +12,7 @@ import {
   buildCampusHome,
   formatCourseAssignments,
   formatTodayClassesText,
+  formatTomorrowClassesText,
   formatUrgentText,
 } from './home'
 import type { CampusIntent } from './nlu/campusIntent'
@@ -66,6 +67,8 @@ export async function executeCampusIntent(intent: CampusIntent): Promise<CampusT
       return { message: 'AIZIO CAMPUS를 엽니다.', openCampus: true, speak: true }
     case 'campus_today':
       return { message: formatTodayClassesText(), speak: true }
+    case 'campus_tomorrow':
+      return { message: formatTomorrowClassesText(), speak: true }
     case 'campus_timetable_list': {
       const rows = weekSessions()
       if (!rows.length) {

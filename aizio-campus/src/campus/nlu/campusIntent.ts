@@ -3,6 +3,7 @@ import { parseTimetableAddUtterance, type ParsedTimetableAdd } from './parseTime
 export type CampusIntentKind =
   | 'open_campus'
   | 'campus_today'
+  | 'campus_tomorrow'
   | 'campus_timetable_list'
   | 'campus_timetable_add'
   | 'campus_assignments'
@@ -51,6 +52,10 @@ export function parseCampusIntent(text: string): CampusIntent | null {
 
   if (/내\s*시간표|시간표\s*(보여|알려|열어)|주간\s*시간표/.test(t)) {
     return { kind: 'campus_timetable_list', confidence: 0.93 }
+  }
+
+  if (/내일\s*수업|내일\s*강의|내일\s*뭐\s*들어/.test(t)) {
+    return { kind: 'campus_tomorrow', confidence: 0.93 }
   }
 
   if (/오늘\s*수업|오늘\s*강의|오늘\s*뭐\s*들어|수업\s*뭐야/.test(t)) {

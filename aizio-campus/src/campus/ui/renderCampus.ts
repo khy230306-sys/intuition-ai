@@ -59,21 +59,33 @@ function renderToday(): string {
         <div class="campus-empty">
           <p>첫 과목을 등록해보세요.</p>
           <button type="button" class="primary-btn" data-campus-action="goto-timetable">시간표 만들기</button>
-          <p class="hint">대화창 예: 「월요일 10시부터 11시 반까지 자료구조 수업 넣어줘」</p>
+          <p class="hint">대화 예: 「월요일 10시부터 11시 반까지 자료구조 수업 넣어줘」</p>
         </div>
       </section>`
   }
+  const next = home.nextClass
   return `
     <section class="campus-panel">
       <h2>${esc(home.greeting)}</h2>
       <p class="campus-date">${esc(home.dateLine)}</p>
+      ${
+        next
+          ? `<button type="button" class="campus-next-class" data-campus-action="open-course" data-course-id="${esc(next.courseId)}">
+              <span class="hint">${next.inProgress ? '지금 수업' : '다음 수업'}</span>
+              <strong>${esc(next.name)}</strong>
+              <span>${esc(next.time)}${next.room ? ` · ${esc(next.room)}` : ''}${
+                !next.inProgress && next.minutesUntil <= 120 ? ` · ${next.minutesUntil}분 후` : ''
+              }</span>
+            </button>`
+          : ''
+      }
       <h3>오늘 수업</h3>
       ${
         home.classes.length
           ? `<ul class="campus-list">${home.classes
               .map(
                 (c) =>
-                  `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(c.courseId)}"><strong>${esc(c.time)}</strong> ${esc(c.name)}${c.room ? ` · ${esc(c.room)}` : ''}</button></li>`,
+                  `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(c.courseId)}"><strong>${esc(c.time)}–${esc(c.endTime)}</strong> ${esc(c.name)}${c.room ? ` · ${esc(c.room)}` : ''}</button></li>`,
               )
               .join('')}</ul>`
           : '<p class="hint">오늘 등록된 수업이 없습니다.</p>'
@@ -81,8 +93,18 @@ function renderToday(): string {
       <h3>오늘 할 일</h3>
       ${
         home.todos.length
-          ? `<ul class="campus-list">${home.todos.map((t) => `<li>${esc(t.label)}</li>`).join('')}</ul>`
-          : '<p class="hint">할 일이 없습니다.</p>'
+          ? `<ul class="campus-list">${home.todos
+              .map((t) => {
+                if (t.kind === 'assignment' && t.courseId) {
+                  return `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(t.courseId)}">${esc(t.label)}</button></li>`
+                }
+                if (t.kind === 'review' && t.courseId) {
+                  return `<li><button type="button" data-campus-action="start-review" data-course-id="${esc(t.courseId)}" data-minutes="25">${esc(t.label)}</button></li>`
+                }
+                return `<li>${esc(t.label)}</li>`
+              })
+              .join('')}</ul>`
+          : '<p class="hint">할 일이 없습니다. 과목에서 과제를 추가해 보세요.</p>'
       }
       <h3>다가오는 일정</h3>
       ${
@@ -90,13 +112,44 @@ function renderToday(): string {
           ? `<ul class="campus-list">${home.upcoming
               .map(
                 (u) =>
-                  `<li>${esc(u.label)}${u.dDay === null ? '' : ` · ${esc(formatDDayLabel(u.dDay))}`}</li>`,
+                  u.courseId
+                    ? `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(u.courseId)}">${esc(u.label)}${u.dDay === null ? '' : ` · ${esc(formatDDayLabel(u.dDay))}`}</button></li>`
+                    : `<li>${esc(u.label)}</li>`,
               )
               .join('')}</ul>`
           : '<p class="hint">다가오는 시험이 없습니다.</p>'
       }
-      ${home.aiCard ? `<div class="campus-ai-card">${esc(home.aiCard)}</div>` : ''}
+      ${home.tipCard ? `<div class="campus-tip-card"><span class="hint">오늘의 팁</span><div>${esc(home.tipCard)}</div></div>` : ''}
     </section>`
+}
+
+function renderWeekGrid(): string {
+  const rows = weekSessions()
+  const days = [1, 2, 3, 4, 5] as const
+  if (!rows.length) return ''
+  return `
+    <div class="campus-week-grid" aria-label="주간 시간표">
+      ${days
+        .map((wd) => {
+          const items = rows.filter((r) => r.session.weekday === wd)
+          return `<div class="campus-week-col">
+            <div class="campus-week-head">${WEEKDAY_KO[wd]}</div>
+            ${
+              items.length
+                ? items
+                    .map(
+                      (r) => `<button type="button" class="campus-week-chip" style="--chip:${esc(r.course!.color)}" data-campus-action="open-course" data-course-id="${esc(r.course!.id)}">
+                        <strong>${esc(r.session.startTime)}</strong>
+                        <span>${esc(r.course!.name)}</span>
+                      </button>`,
+                    )
+                    .join('')
+                : '<div class="hint campus-week-empty">—</div>'
+            }
+          </div>`
+        })
+        .join('')}
+    </div>`
 }
 
 function renderTimetable(): string {
@@ -107,6 +160,7 @@ function renderTimetable(): string {
     wd,
     items: rows.filter((r) => r.session.weekday === wd),
   }))
+  const formOpen = campusUi.sessionFormOpen || !rows.length
   return `
     <section class="campus-panel">
       <div class="campus-row">
@@ -120,10 +174,11 @@ function renderTimetable(): string {
               .join(', ')}</p>`
           : ''
       }
+      ${renderWeekGrid()}
       ${
         !rows.length
           ? `<div class="campus-empty"><p>등록된 수업이 없습니다.</p>
-             <p class="hint">예: 월요일 10:00–11:30 자료구조</p></div>`
+             <p class="hint">아래에서 첫 수업을 추가하거나, 대화로 「월요일 10시부터 11시 반까지 자료구조 수업 넣어줘」</p></div>`
           : byDay
               .filter((d) => d.items.length)
               .map(
@@ -147,7 +202,7 @@ function renderTimetable(): string {
               )
               .join('')
       }
-      <form class="campus-form" data-campus-form="session" hidden>
+      <form class="campus-form" data-campus-form="session" ${formOpen ? '' : 'hidden'}>
         <h3>수업 추가/수정</h3>
         <input type="hidden" name="sessionId" value="" />
         <label>과목명 <input name="name" required maxlength="80" placeholder="자료구조" /></label>
@@ -187,6 +242,7 @@ function renderCourseWorkspace(courseId: string): string {
       <button type="button" class="ghost-btn tiny" data-campus-action="courses-list">← 과목 목록</button>
       <h2>${esc(course.name)}</h2>
       <p class="hint">${esc(course.professor || '')} · ${esc(course.room || '')} · ${course.credits}학점</p>
+      <button type="button" class="ghost-btn tiny" data-campus-action="delete-course" data-course-id="${esc(courseId)}">과목 삭제</button>
 
       <h3>강의자료</h3>
       <p class="hint">지원: PDF, TXT, Markdown, DOCX</p>
@@ -276,7 +332,11 @@ function renderCourseWorkspace(courseId: string): string {
       </ul>
 
       <h3>과제</h3>
-      <button type="button" class="ghost-btn tiny" data-campus-action="add-assignment" data-course-id="${esc(courseId)}">과제 추가</button>
+      <form class="campus-form" data-campus-form="assignment" data-course-id="${esc(courseId)}">
+        <label>제목 <input name="title" required maxlength="120" placeholder="과제 1" /></label>
+        <label>마감일 <input name="dueAt" type="date" /></label>
+        <button class="primary-btn tiny" type="submit">과제 저장</button>
+      </form>
       <ul class="campus-list">
         ${
           asg
@@ -290,12 +350,17 @@ function renderCourseWorkspace(courseId: string): string {
       </ul>
 
       <h3>시험</h3>
-      <button type="button" class="ghost-btn tiny" data-campus-action="add-exam" data-course-id="${esc(courseId)}">시험 추가</button>
+      <form class="campus-form" data-campus-form="exam" data-course-id="${esc(courseId)}">
+        <label>시험명 <input name="name" required maxlength="80" value="중간고사" /></label>
+        <label>일시 <input name="at" type="datetime-local" /></label>
+        <label>범위 <input name="scope" maxlength="200" placeholder="1~6장" /></label>
+        <button class="primary-btn tiny" type="submit">시험 저장</button>
+      </form>
       <ul class="campus-list">
         ${
           exams
             .map(
-              (e) => `<li>${esc(e.name)}${e.at ? ` · ${esc(e.at.slice(0, 16).replace('T', ' '))}` : ''}
+              (e) => `<li>${esc(e.name)}${e.at ? ` · ${esc(e.at.slice(0, 16).replace('T', ' '))}` : ''}${e.scope ? ` · ${esc(e.scope)}` : ''}
               <button type="button" class="ghost-btn tiny" data-campus-action="delete-exam" data-id="${esc(e.id)}">삭제</button></li>`,
             )
             .join('') || '<li class="hint">시험 없음</li>'
@@ -321,6 +386,7 @@ function renderCourseWorkspace(courseId: string): string {
                .map(
                  (c) => `<li>${esc(c.kind)} · ${esc(c.title)} · ${esc(c.dueHint)} · ${esc(c.confidence)}
                    <button type="button" class="primary-btn tiny" data-campus-action="accept-candidate" data-id="${esc(c.id)}">일정에 추가</button>
+                   <button type="button" class="ghost-btn tiny" data-campus-action="reject-candidate" data-id="${esc(c.id)}">무시</button>
                  </li>`,
                )
                .join('')}</ul>`
@@ -400,10 +466,13 @@ function renderStudy(): string {
           ? `<ol class="campus-list">${review
               .map(
                 (r) =>
-                  `<li>${esc(r.courseName)} · ${esc(r.title)} · ${r.minutes}분<div class="hint">${esc(r.reasons.join(' · '))}</div></li>`,
+                  `<li><button type="button" data-campus-action="start-review" data-course-id="${esc(r.courseId)}" data-minutes="${r.minutes}">
+                    ${esc(r.courseName)} · ${esc(r.title)} · ${r.minutes}분
+                    <div class="hint">${esc(r.reasons.join(' · '))}</div>
+                  </button></li>`,
               )
               .join('')}</ol>`
-          : '<p class="hint">추천을 만들 데이터가 없습니다.</p>'
+          : '<p class="hint">추천을 만들 데이터가 없습니다. 과제·시험·퀴즈를 쌓으면 여기가 채워집니다.</p>'
       }
 
       <h3>Focus Timer</h3>
@@ -430,7 +499,14 @@ function renderStudy(): string {
             ? `<button type="button" class="ghost-btn" data-campus-action="focus-stop">중단</button>`
             : `<button type="button" class="primary-btn" data-campus-action="focus-start">시작</button>`
         }
-        <p class="hint">오늘 ${stats.today}분 · 이번 주 ${stats.week}분</p>
+        <p class="hint">오늘 ${stats.today}분 · 이번 주 ${stats.week}분${
+          stats.byCourse.length
+            ? ` · ${stats.byCourse
+                .slice(0, 3)
+                .map((c) => `${c.name} ${c.minutes}분`)
+                .join(' · ')}`
+            : ''
+        }</p>
       </div>
 
       <h3>Quiz</h3>
@@ -461,9 +537,47 @@ function renderStudy(): string {
     </section>`
 }
 
+function renderDeadlines(): string {
+  const asg = upcomingAssignments(40)
+  const exams = upcomingExams(20)
+  return `
+    <section class="campus-panel">
+      <button type="button" class="ghost-btn tiny" data-campus-action="more-menu">← 더보기</button>
+      <h2>과제 · 시험</h2>
+      <h3>과제</h3>
+      <ul class="campus-list">
+        ${
+          asg
+            .map(
+              (a) => `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(a.assignment.courseId)}">
+                ${esc(a.course?.name || '')} ${esc(a.assignment.title)} · ${esc(formatDDayLabel(a.dDay))} · ${esc(a.assignment.status)}
+              </button>
+              <div class="campus-inline">
+                <button type="button" class="ghost-btn tiny" data-campus-action="asg-status" data-id="${esc(a.assignment.id)}">완료</button>
+              </div></li>`,
+            )
+            .join('') || '<li class="hint">등록된 과제가 없습니다.</li>'
+        }
+      </ul>
+      <h3>시험</h3>
+      <ul class="campus-list">
+        ${
+          exams
+            .map(
+              (e) => `<li><button type="button" data-campus-action="open-course" data-course-id="${esc(e.exam.courseId)}">
+                ${esc(e.course?.name || '')} ${esc(e.exam.name)} · ${esc(formatDDayLabel(e.dDay, '?'))}
+              </button></li>`,
+            )
+            .join('') || '<li class="hint">등록된 시험이 없습니다.</li>'
+        }
+      </ul>
+    </section>`
+}
+
 function renderMore(): string {
   const store = loadCampusStore()
   const gpa = computeGpa(store.courses, store.profile.gradeScale)
+  if (campusUi.morePane === 'deadlines') return renderDeadlines()
   if (campusUi.morePane === 'search') {
     const hits = searchCampus(campusUi.searchQ)
     return `
@@ -543,7 +657,17 @@ function renderMore(): string {
         <button type="button" class="ghost-btn tiny" data-campus-action="more-menu">← 더보기</button>
         <h2>팀플</h2>
         <p class="hint">외부 메시지 전송은 연동되지 않습니다. 로컬 Kanban만 제공합니다.</p>
-        <button type="button" class="primary-btn tiny" data-campus-action="add-project">프로젝트 추가</button>
+        <form class="campus-form" data-campus-form="project">
+          <label>과목
+            <select name="courseId" required>
+              ${store.courses.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('') || '<option value="">과목 없음</option>'}
+            </select>
+          </label>
+          <label>프로젝트명 <input name="name" required maxlength="80" placeholder="팀 프로젝트" /></label>
+          <label>팀원 (쉼표) <input name="members" placeholder="민수, 지영" /></label>
+          <label>마감 <input name="dueAt" type="date" /></label>
+          <button class="primary-btn tiny" type="submit">프로젝트 추가</button>
+        </form>
         <ul class="campus-list">
           ${
             store.projects
@@ -598,6 +722,16 @@ function renderMore(): string {
           <label><input type="checkbox" name="notifyClassStart" ${p.notifyClassStart ? 'checked' : ''}/> 수업 시작(10분 전)</label>
           <button class="primary-btn" type="submit">알림 설정 저장</button>
         </form>
+        <p class="hint">알림은 브라우저가 허용하고, 앱(탭)이 열려 있을 때 가장 안정적으로 표시됩니다. iOS/백그라운드는 제한될 수 있습니다.</p>
+        <h3>데이터 백업</h3>
+        <p class="hint">시간표·과제·시험·노트·퀴즈 등 텍스트 데이터를 JSON으로 저장합니다. 녹음/자료 원본 파일은 포함되지 않습니다.</p>
+        <div class="campus-inline">
+          <button type="button" class="primary-btn tiny" data-campus-action="export-backup">백업 내보내기</button>
+          <label class="ghost-btn tiny" style="display:inline-flex;align-items:center;cursor:pointer">
+            가져오기
+            <input type="file" accept="application/json,.json" data-campus-import="1" hidden />
+          </label>
+        </div>
       </section>`
   }
 
@@ -605,10 +739,11 @@ function renderMore(): string {
     <section class="campus-panel">
       <h2>더보기</h2>
       <ul class="campus-list campus-menu">
+        <li><button type="button" data-campus-action="more-deadlines">과제 · 시험 한눈에</button></li>
         <li><button type="button" data-campus-action="more-search">검색</button></li>
         <li><button type="button" data-campus-action="more-gpa">학점 / 졸업요건</button></li>
         <li><button type="button" data-campus-action="more-projects">팀플</button></li>
-        <li><button type="button" data-campus-action="more-settings">설정 · 온보딩</button></li>
+        <li><button type="button" data-campus-action="more-settings">설정 · 백업</button></li>
         <li><button type="button" data-campus-action="sync-notify">알림 동기화</button></li>
       </ul>
       <p class="hint">과제 ${upcomingAssignments(99).length} · 시험 ${upcomingExams(99).length}</p>
@@ -618,16 +753,26 @@ function renderMore(): string {
 function renderOnboarding(): string {
   const store = loadCampusStore()
   if (store.profile.onboardedAt || store.courses.length) return ''
+  const y = new Date().getFullYear()
+  const month = new Date().getMonth() + 1
+  const defaultTerm = month >= 8 || month <= 1 ? 2 : 1
   return `
     <section class="campus-onboard">
       <h2>AIZIO CAMPUS</h2>
       <p>대학생활 비서 · 학습관리. 2~3분이면 시작할 수 있습니다.</p>
       <form data-campus-form="onboard-start" class="campus-form">
         <label>학교명(선택) <input name="schoolName" placeholder="예: ○○대학교" /></label>
+        <label>연도
+          <select name="year">
+            <option value="${y - 1}">${y - 1}</option>
+            <option value="${y}" selected>${y}</option>
+            <option value="${y + 1}">${y + 1}</option>
+          </select>
+        </label>
         <label>학기
           <select name="term">
-            <option value="2">2026년 2학기</option>
-            <option value="1">2026년 1학기</option>
+            <option value="1" ${defaultTerm === 1 ? 'selected' : ''}>${y}년 1학기</option>
+            <option value="2" ${defaultTerm === 2 ? 'selected' : ''}>${y}년 2학기</option>
           </select>
         </label>
         <label>학점 기준

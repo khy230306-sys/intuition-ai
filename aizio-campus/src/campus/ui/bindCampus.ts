@@ -1,7 +1,8 @@
 import { analyzeMaterialAi, extractDeadlineCandidates, generateQuizFromSources, summarizeLectureFromTranscript } from '../ai/campusAi'
 import { createAssignment, deleteAssignment, setAssignmentStatus } from '../assignments'
+import { downloadTextFile, exportCampusBackupJson, importCampusBackupJson } from '../backup'
 import { getCampusBlob } from '../blobStore'
-import { createCourse, findCourseByName, updateCourse } from '../courses'
+import { createCourse, deleteCourseDeep, findCourseByName, updateCourse } from '../courses'
 import { createExam, deleteExam } from '../exams'
 import { logStudySession } from '../focus'
 import {
@@ -126,6 +127,50 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         }
         if (action === 'goto-timetable') {
           campusUi.tab = 'timetable'
+          campusUi.sessionFormOpen = true
+          repaint(el)
+          return
+        }
+        if (action === 'start-review') {
+          const courseId = btn.getAttribute('data-course-id') || ''
+          const minutes = Number(btn.getAttribute('data-minutes') || 25)
+          campusUi.tab = 'study'
+          campusUi.focusCourseId = courseId
+          campusUi.focusMinutes = Math.min(180, Math.max(5, Math.round(minutes) || 25))
+          campusUi.focusRemaining = campusUi.focusMinutes * 60
+          campusUi.focusSessionStartRemaining = campusUi.focusRemaining
+          flash(opts, '추천 복습 · 타이머를 시작하세요.')
+          repaint(el)
+          return
+        }
+        if (action === 'delete-course') {
+          const id = btn.getAttribute('data-course-id') || ''
+          if (!confirm('이 과목과 관련 과제·시험·퀴즈·노트 메타데이터를 삭제할까요? (녹음 파일도 삭제)')) return
+          await deleteCourseDeep(id)
+          campusUi.courseId = null
+          flash(opts, '과목을 삭제했습니다.')
+          repaint(el)
+          return
+        }
+        if (action === 'export-backup') {
+          const json = exportCampusBackupJson()
+          const day = new Date().toISOString().slice(0, 10)
+          downloadTextFile(`aizio-campus-backup-${day}.json`, json)
+          flash(opts, '백업 파일을 저장했습니다. (녹음 원본 제외)')
+          return
+        }
+        if (action === 'more-deadlines') {
+          campusUi.morePane = 'deadlines'
+          campusUi.tab = 'more'
+          repaint(el)
+          return
+        }
+        if (action === 'reject-candidate') {
+          const id = btn.getAttribute('data-id') || ''
+          updateCampusStore((s) => {
+            s.candidates = s.candidates.filter((c) => c.id !== id)
+          })
+          flash(opts, '후보를 무시했습니다.')
           repaint(el)
           return
         }
@@ -142,6 +187,7 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           return
         }
         if (action === 'add-session') {
+          campusUi.sessionFormOpen = true
           const form = el.querySelector<HTMLFormElement>('[data-campus-form="session"]')
           if (form) {
             form.reset()
@@ -152,6 +198,7 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           return
         }
         if (action === 'cancel-session-form') {
+          campusUi.sessionFormOpen = false
           const form = el.querySelector<HTMLFormElement>('[data-campus-form="session"]')
           if (form) resetSessionForm(form)
           return
@@ -289,20 +336,6 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           repaint(el)
           return
         }
-        if (action === 'add-assignment') {
-          const courseId = btn.getAttribute('data-course-id') || ''
-          const title = prompt('과제 제목')
-          if (!title) return
-          const due = prompt('마감일 (YYYY-MM-DD, 선택)') || ''
-          createAssignment({
-            courseId,
-            title,
-            dueAt: due ? new Date(due + 'T23:59:00').toISOString() : null,
-          })
-          flash(opts, '과제 저장')
-          repaint(el)
-          return
-        }
         if (action === 'asg-status') {
           setAssignmentStatus(btn.getAttribute('data-id') || '', 'DONE')
           repaint(el)
@@ -310,22 +343,6 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         }
         if (action === 'delete-assignment') {
           deleteAssignment(btn.getAttribute('data-id') || '')
-          repaint(el)
-          return
-        }
-        if (action === 'add-exam') {
-          const courseId = btn.getAttribute('data-course-id') || ''
-          const name = prompt('시험명', '중간고사')
-          if (!name) return
-          const when = prompt('일시 (YYYY-MM-DDTHH:mm)', '') || ''
-          const scope = prompt('범위 (선택)', '') || ''
-          createExam({
-            courseId,
-            name,
-            at: when ? new Date(when).toISOString() : null,
-            scope,
-          })
-          flash(opts, '시험 저장')
           repaint(el)
           return
         }
@@ -536,22 +553,6 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
           flash(opts, notifyFlashSummary(r))
           return
         }
-        if (action === 'add-project') {
-          const courses = loadCampusStore().courses
-          if (!courses.length) {
-            flash(opts, '먼저 과목을 등록하세요.')
-            return
-          }
-          const name = prompt('프로젝트명')
-          if (!name) return
-          const members = (prompt('팀원 (쉼표 구분)', '') || '')
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-          createProject({ courseId: courses[0].id, name, members })
-          repaint(el)
-          return
-        }
         if (action === 'add-task') {
           const title = prompt('Task')
           if (!title) return
@@ -597,6 +598,27 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         flash(opts, e instanceof Error ? e.message : '업로드 실패')
       }
       repaint(el)
+    })
+  })
+
+  el.querySelectorAll<HTMLInputElement>('[data-campus-import]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const res = importCampusBackupJson(text)
+        if (!res.ok) {
+          flash(opts, res.error)
+          return
+        }
+        flash(opts, '백업을 가져왔습니다.')
+        campusUi.tab = 'today'
+        campusUi.morePane = 'menu'
+        repaint(el)
+      } catch (e) {
+        flash(opts, e instanceof Error ? e.message : '가져오기 실패')
+      }
     })
   })
 
@@ -651,6 +673,7 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
             endTime,
             room,
           })
+          campusUi.sessionFormOpen = false
           flash(
             opts,
             conflicts.length
@@ -662,14 +685,68 @@ export function bindCampus(opts: BindOpts, root?: HTMLElement): void {
         return
       }
       if (kind === 'onboard-start') {
+        const year = Number(fd.get('year')) || new Date().getFullYear()
         completeOnboarding({
           schoolName: String(fd.get('schoolName') || ''),
-          year: 2026,
+          year,
           term: (Number(fd.get('term') || 2) === 1 ? 1 : 2) as 1 | 2,
           gradeScale: String(fd.get('gradeScale') || '4.5') as '4.5' | '4.3' | '4.0',
         })
         campusUi.tab = 'timetable'
-        flash(opts, '온보딩 완료 · 시간표를 추가하세요.')
+        campusUi.sessionFormOpen = true
+        flash(opts, '온보딩 완료 · 첫 수업을 추가하세요.')
+        repaint(el)
+        return
+      }
+      if (kind === 'assignment') {
+        const courseId = form.getAttribute('data-course-id') || ''
+        const title = String(fd.get('title') || '').trim()
+        const due = String(fd.get('dueAt') || '')
+        if (!courseId || !title) return
+        createAssignment({
+          courseId,
+          title,
+          dueAt: due ? new Date(due + 'T23:59:00').toISOString() : null,
+        })
+        flash(opts, '과제를 저장했습니다.')
+        repaint(el)
+        return
+      }
+      if (kind === 'exam') {
+        const courseId = form.getAttribute('data-course-id') || ''
+        const name = String(fd.get('name') || '').trim()
+        const at = String(fd.get('at') || '')
+        const scope = String(fd.get('scope') || '')
+        if (!courseId || !name) return
+        createExam({
+          courseId,
+          name,
+          at: at ? new Date(at).toISOString() : null,
+          scope,
+        })
+        flash(opts, '시험을 저장했습니다.')
+        repaint(el)
+        return
+      }
+      if (kind === 'project') {
+        const courseId = String(fd.get('courseId') || '')
+        const name = String(fd.get('name') || '').trim()
+        const members = String(fd.get('members') || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        const due = String(fd.get('dueAt') || '')
+        if (!courseId || !name) {
+          flash(opts, '과목과 프로젝트명이 필요합니다.')
+          return
+        }
+        createProject({
+          courseId,
+          name,
+          members,
+          dueAt: due ? new Date(due + 'T23:59:00').toISOString() : null,
+        })
+        flash(opts, '프로젝트를 추가했습니다.')
         repaint(el)
         return
       }

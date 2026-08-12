@@ -20,7 +20,14 @@ import { createCourse, deleteCourse, ensureActiveSemester, findCourseByName, lis
 import { createExam, upcomingExams } from './exams'
 import { logStudySession, focusStats } from './focus'
 import { computeGpa } from './gpa'
-import { buildCampusHome, formatTodayClassesText, formatUrgentText } from './home'
+import { exportCampusBackupJson, importCampusBackupJson } from './backup'
+import {
+  buildCampusHome,
+  formatTodayClassesText,
+  formatTomorrowClassesText,
+  formatUrgentText,
+  nextClassToday,
+} from './home'
 import { formatDDayLabel } from './id'
 import { parseCampusIntent } from './nlu/campusIntent'
 import { parseTimetableAddUtterance } from './nlu/parseTimetableUtterance'
@@ -316,5 +323,52 @@ describe('chat quiz opens campus with quizId', () => {
     // No materials/notes → no quizId (honest empty), but must not throw
     expect(typeof res.message).toBe('string')
     expect(c.name).toBe('자료구조')
+  })
+})
+
+describe('student daily helpers', () => {
+  it('parses tomorrow class intent', () => {
+    expect(parseCampusIntent('내일 수업 뭐야?')?.kind).toBe('campus_tomorrow')
+  })
+
+  it('lists tomorrow classes without inventing', () => {
+    expect(formatTomorrowClassesText()).toMatch(/없습니다/)
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '선형대수' })
+    const tomorrow = (new Date().getDay() + 1) % 7
+    addClassSession({
+      courseId: c.id,
+      weekday: tomorrow as 0 | 1 | 2 | 3 | 4 | 5 | 6,
+      startTime: '09:00',
+      endTime: '10:30',
+    })
+    expect(formatTomorrowClassesText()).toMatch(/선형대수/)
+  })
+
+  it('computes next class today', () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    const c = createCourse({ name: '자료구조' })
+    const wd = new Date().getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
+    addClassSession({
+      courseId: c.id,
+      weekday: wd,
+      startTime: '23:50',
+      endTime: '23:59',
+    })
+    const next = nextClassToday()
+    expect(next?.name).toBe('자료구조')
+  })
+
+  it('exports and imports backup JSON', () => {
+    ensureActiveSemester({ year: 2026, term: 2 })
+    createCourse({ name: '백업과목' })
+    const json = exportCampusBackupJson()
+    clearCampusStore()
+    expect(listCourses()).toHaveLength(0)
+    const res = importCampusBackupJson(json)
+    expect(res.ok).toBe(true)
+    expect(findCourseByName('백업과목')).toBeTruthy()
+    const home = buildCampusHome()
+    expect(home.empty).toBe(false)
   })
 })

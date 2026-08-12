@@ -14,7 +14,10 @@ export type CampusUiState = {
   recordingCourseId: string
   status: string
   searchQ: string
-  morePane: 'menu' | 'gpa' | 'projects' | 'settings' | 'search'
+  morePane: 'menu' | 'gpa' | 'projects' | 'settings' | 'search' | 'deadlines'
+  /** After onboarding / empty timetable, keep add form open. */
+  sessionFormOpen: boolean
+  chatKeysOpen: boolean
 }
 
 export const campusUi: CampusUiState = {
@@ -31,6 +34,8 @@ export const campusUi: CampusUiState = {
   status: '',
   searchQ: '',
   morePane: 'menu',
+  sessionFormOpen: false,
+  chatKeysOpen: false,
 }
 
 let focusTimer: number | null = null

@@ -42,7 +42,7 @@ export const REWARD_ASSETS: AssetSpec[] = [
     size: { w: 256, h: 256 },
     transparentBackground: true,
     states: ['empty', 'earned', 'sparkle'],
-    animationRequirements: '획득 시 pop + twinkle. Unicode ★ / emoji 사용 금지.',
+    animationRequirements: '획득 시 pop + twinkle. Unicode star pictogram / emoji 사용 금지.',
     status: 'ASSET_REQUIRED',
   },
   {

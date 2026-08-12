@@ -148,20 +148,16 @@ export function createFiretruckEntity(opts?: {
 function regionColorForPart(part: FireTruck01PartId, design: VehicleDesign): string | undefined {
   const map: Partial<Record<FireTruck01PartId, keyof NonNullable<VehicleDesign['colors']>>> = {
     body: 'BODY',
-    frontDoor: 'DOOR',
-    rearDoor: 'DOOR',
+    frontDoor: 'FRONT_DOOR',
+    rearDoor: 'REAR_DOOR',
     frontRim: 'RIM',
     rearRim: 'RIM',
     bumper: 'BUMPER',
     ladder: 'LADDER',
-    emergencyLight: 'LIGHT',
-    headLight: 'LIGHT',
-    hose: 'HOSE',
-    frontWindow: 'WINDOW',
-    sideWindow: 'WINDOW',
   }
   const region = map[part]
-  return region ? design.colors[region] : undefined
+  if (!region) return undefined
+  return design.colors[region] ?? (region === 'FRONT_DOOR' || region === 'REAR_DOOR' ? design.colors.DOOR : undefined)
 }
 
 export function isFullyAssembled(entity: VehicleEntity): boolean {
@@ -173,13 +169,12 @@ export function toDesign(entity: VehicleEntity): VehicleDesign {
     vehicleId: 'FIRE_TRUCK_01',
     colors: {
       BODY: entity.parts.body.color,
+      FRONT_DOOR: entity.parts.frontDoor.color,
+      REAR_DOOR: entity.parts.rearDoor.color,
       DOOR: entity.parts.frontDoor.color,
       RIM: entity.parts.frontRim.color,
       BUMPER: entity.parts.bumper.color,
       LADDER: entity.parts.ladder.color,
-      LIGHT: entity.parts.emergencyLight.color,
-      HOSE: entity.parts.hose.color,
-      WINDOW: entity.parts.frontWindow.color,
     },
     assembledParts: entity.assembleOrder.filter((id) => entity.parts[id].assembled),
     updatedAt: Date.now(),

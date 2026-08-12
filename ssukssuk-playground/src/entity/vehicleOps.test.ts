@@ -45,7 +45,7 @@ describe('FIRE_TRUCK_01 vehicle entity (logic only)', () => {
     const design = toDesign(v)
     expect(design.vehicleId).toBe('FIRE_TRUCK_01')
     expect(design.colors.BODY).toBe('#E53935')
-    expect(design.colors.DOOR).toBe('#FFD54F')
+    expect(design.colors.FRONT_DOOR).toBe('#FFD54F')
     expect(isFullyAssembled(v)).toBe(true)
   })
 })

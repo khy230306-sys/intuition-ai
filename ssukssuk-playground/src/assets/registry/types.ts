@@ -41,6 +41,8 @@ export type AssetSpec = {
 
 export type PaintRegionId =
   | 'BODY'
+  | 'FRONT_DOOR'
+  | 'REAR_DOOR'
   | 'DOOR'
   | 'RIM'
   | 'BUMPER'

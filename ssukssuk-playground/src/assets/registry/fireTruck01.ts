@@ -70,5 +70,12 @@ export const FIRE_TRUCK_01_VEHICLE = {
   workshopReady: false,
   note: '기준 Asset 트라이어드(쑥쑥이 + FIRE_TRUCK_01 + 공방) Quality Gate 통과 전 플레이 불가. 임시 SVG READY 처리 금지.',
   parts: FIRE_TRUCK_01_PART_IDS,
-  paintRegions: ['BODY', 'DOOR', 'RIM', 'BUMPER', 'LADDER', 'LIGHT', 'HOSE', 'WINDOW'] as const,
+  paintRegions: [
+    'BODY',
+    'FRONT_DOOR',
+    'REAR_DOOR',
+    'RIM',
+    'BUMPER',
+    'LADDER',
+  ] as const,
 }

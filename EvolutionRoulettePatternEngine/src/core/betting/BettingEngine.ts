@@ -494,12 +494,14 @@ export class BettingEngine {
     const action: WinAction = rule?.onWin ?? 'WAIT_NEW_PATTERN';
 
     switch (action) {
-      case 'CONTINUE':
       case 'CONTINUE_SAME_PATTERN':
+        // Photo condition #3: 승리 시 같은 색 연속 배팅
         this.continueActive = { ruleId, color: betColor, mode: 'SAME' };
         this.sm.force('SIGNAL_READY');
         break;
+      case 'CONTINUE':
       case 'CONTINUE_OPPOSITE':
+        // Alternating / 승리시 반대색: next bet is opposite of the color we just won on
         this.continueActive = {
           ruleId,
           color: betColor === 'R' ? 'B' : 'R',
@@ -519,23 +521,6 @@ export class BettingEngine {
         this.sm.force('WAIT_PATTERN');
         break;
     }
-
-    // Alternating continueUntilLoss: if metadata says so, keep continuing opposite each win
-    const alt = rule as PatternRule & { /* config baked in onWin */ };
-    if (action === 'CONTINUE' || action === 'CONTINUE_SAME_PATTERN') {
-      // For alternating, after win the next expected is opposite of what we just bet? 
-      // Actually we bet the expected color and won, so pattern continues — next bet is opposite of last result.
-      // Handled by re-detecting pattern next round unless continueActive forces color.
-      // Update continue color to opposite of last bet for alternating streams:
-      if (ruleId.includes('alternating') || (rule?.onWin === 'CONTINUE')) {
-        this.continueActive = {
-          ruleId,
-          color: betColor === 'R' ? 'B' : 'R',
-          mode: 'OPPOSITE',
-        };
-      }
-    }
-    void alt;
   }
 
   private applyLossAction(ruleId: string): void {

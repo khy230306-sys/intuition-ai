@@ -24,12 +24,12 @@ describe('Same Color Change rule', () => {
       minimumSameColorRun: 2,
       requiredChanges: 1,
       entryOffset: 1,
-      betMode: 'OPPOSITE',
+      betMode: 'SAME',
     });
-    // BB then R (change) — afterChangeCount=1 == entryOffset → bet opposite of R = B
+    // BB then R (change) — afterChangeCount=1 == entryOffset → bet SAME as R = R
     const match = rule.detect(parseResultSequence('B,B,R'));
     expect(match).not.toBeNull();
-    expect(match!.nextExpectedColor).toBe('B');
+    expect(match!.nextExpectedColor).toBe('R');
   });
 
   it('does not fire before entry offset', () => {

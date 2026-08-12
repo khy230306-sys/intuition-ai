@@ -5,6 +5,7 @@ import { createSameColorChangeRule } from '../core/patterns/rules/SameColorChang
 import { createAlternatingRule } from '../core/patterns/rules/AlternatingRule.js';
 import { createRepeatingBlockRule } from '../core/patterns/rules/RepeatingBlockRule.js';
 import { createCustomSequenceRule } from '../core/patterns/rules/CustomSequenceRule.js';
+import { createSuppressSequenceRule } from '../core/patterns/rules/SuppressSequenceRule.js';
 import { BettingEngine } from '../core/betting/BettingEngine.js';
 import { parseResultSequence, resultFromNumber, createRoundId } from '../core/roulette/result.js';
 import type {
@@ -28,6 +29,7 @@ export function buildRulesFromConfig(store: ConfigStore): PatternRule[] {
     createAlternatingRule(c.alternating),
     createRepeatingBlockRule(c.repeatingBlock),
     ...c.customPatterns.map(createCustomSequenceRule),
+    ...(c.suppressPatterns ?? []).map(createSuppressSequenceRule),
   ];
   return rules;
 }

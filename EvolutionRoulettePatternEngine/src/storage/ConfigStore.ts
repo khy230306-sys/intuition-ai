@@ -7,6 +7,7 @@ import type {
   SameColorChangeRuleConfig,
   SameColorRuleConfig,
   StrategyConfig,
+  SuppressPatternDefinition,
 } from '../core/types.js';
 import {
   DEFAULT_ALTERNATING,
@@ -14,6 +15,8 @@ import {
   DEFAULT_SAME_COLOR,
   DEFAULT_SAME_COLOR_CHANGE,
   DEFAULT_STRATEGY,
+  PHOTO_CUSTOM_PATTERNS,
+  PHOTO_SUPPRESS_PATTERNS,
 } from '../config/defaults.js';
 
 export interface AppConfigFile {
@@ -23,6 +26,7 @@ export interface AppConfigFile {
   alternating: AlternatingRuleConfig;
   repeatingBlock: RepeatingBlockRuleConfig;
   customPatterns: CustomPatternDefinition[];
+  suppressPatterns: SuppressPatternDefinition[];
 }
 
 export function defaultAppConfig(): AppConfigFile {
@@ -32,8 +36,17 @@ export function defaultAppConfig(): AppConfigFile {
     sameColorChange: structuredClone(DEFAULT_SAME_COLOR_CHANGE),
     alternating: structuredClone(DEFAULT_ALTERNATING),
     repeatingBlock: structuredClone(DEFAULT_REPEATING_BLOCK),
-    customPatterns: [],
+    customPatterns: structuredClone(PHOTO_CUSTOM_PATTERNS),
+    suppressPatterns: structuredClone(PHOTO_SUPPRESS_PATTERNS),
   };
+}
+
+function mergeById<T extends { id: string }>(base: T[], incoming: T[] | undefined): T[] {
+  if (!incoming) return base;
+  const map = new Map<string, T>();
+  for (const item of base) map.set(item.id, item);
+  for (const item of incoming) map.set(item.id, item);
+  return [...map.values()];
 }
 
 export class ConfigStore {
@@ -42,7 +55,39 @@ export class ConfigStore {
   constructor(private filePath: string) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     if (fs.existsSync(filePath)) {
-      this.config = { ...defaultAppConfig(), ...JSON.parse(fs.readFileSync(filePath, 'utf8')) };
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Partial<AppConfigFile>;
+      const defaults = defaultAppConfig();
+      this.config = {
+        ...defaults,
+        ...raw,
+        strategy: { ...defaults.strategy, ...(raw.strategy ?? {}) },
+        sameColor: { ...defaults.sameColor, ...(raw.sameColor ?? {}) },
+        sameColorChange: { ...defaults.sameColorChange, ...(raw.sameColorChange ?? {}) },
+        alternating: { ...defaults.alternating, ...(raw.alternating ?? {}) },
+        repeatingBlock: { ...defaults.repeatingBlock, ...(raw.repeatingBlock ?? {}) },
+        // Seed photo patterns if file has empty/missing lists; merge by id otherwise
+        customPatterns:
+          !raw.customPatterns || raw.customPatterns.length === 0
+            ? defaults.customPatterns
+            : mergeById(defaults.customPatterns, raw.customPatterns),
+        suppressPatterns:
+          !raw.suppressPatterns || raw.suppressPatterns.length === 0
+            ? defaults.suppressPatterns
+            : mergeById(defaults.suppressPatterns, raw.suppressPatterns),
+      };
+      if (raw.strategy?.martingale) {
+        this.config.strategy.martingale = {
+          ...defaults.strategy.martingale,
+          ...raw.strategy.martingale,
+        };
+      }
+      if (raw.strategy?.idleAction) {
+        this.config.strategy.idleAction = {
+          ...defaults.strategy.idleAction,
+          ...raw.strategy.idleAction,
+        };
+      }
+      this.save();
     } else {
       this.config = defaultAppConfig();
       this.save();
@@ -63,8 +108,8 @@ export class ConfigStore {
       alternating: { ...this.config.alternating, ...(partial.alternating ?? {}) },
       repeatingBlock: { ...this.config.repeatingBlock, ...(partial.repeatingBlock ?? {}) },
       customPatterns: partial.customPatterns ?? this.config.customPatterns,
+      suppressPatterns: partial.suppressPatterns ?? this.config.suppressPatterns,
     };
-    // deep merge nested strategy bits
     if (partial.strategy?.martingale) {
       this.config.strategy.martingale = {
         ...this.config.strategy.martingale,

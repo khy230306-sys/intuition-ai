@@ -74,11 +74,12 @@ export class PatternEngine {
     const betColor = rule?.determineBet(winner) ?? winner.nextExpectedColor ?? null;
 
     if (!betColor) {
+      const suppressed = Boolean(winner.metadata?.suppress);
       return {
         match: winner,
         betColor: null,
         conflicts: matches.slice(1),
-        reason: 'INVALID_SIGNAL',
+        reason: suppressed ? 'NO_BET_SUPPRESS_WAIT' : 'INVALID_SIGNAL',
       };
     }
 

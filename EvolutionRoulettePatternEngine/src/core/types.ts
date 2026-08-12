@@ -143,6 +143,15 @@ export interface CustomPatternDefinition {
   confidence?: number;
 }
 
+/** Exact suffix match → force NO BET / wait (photo: 13번 흘려보내기). */
+export interface SuppressPatternDefinition {
+  id: string;
+  name: string;
+  sequence: RouletteColor[];
+  priority: number;
+  enabled: boolean;
+}
+
 export interface SameColorRuleConfig {
   id: string;
   name: string;

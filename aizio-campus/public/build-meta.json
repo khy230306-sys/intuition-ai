@@ -1,10 +1,10 @@
 {
   "app": "AIZIO CAMPUS",
-  "version": "1.0.2",
-  "buildId": "production-1786499587635",
-  "commit": "52f92ee",
+  "version": "1.0.3",
+  "buildId": "production-1786501290854",
+  "commit": "cab90dd",
   "channel": "production",
-  "builtAt": "2026-08-12T01:53:07.639Z",
+  "builtAt": "2026-08-12T02:21:30.858Z",
   "productionUrl": "https://aizio-campus.shipstatic.com",
   "note": "Fixed Campus production"
 }

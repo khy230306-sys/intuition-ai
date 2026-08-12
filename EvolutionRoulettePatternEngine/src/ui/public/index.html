@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evolution Roulette Pattern Engine V1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <div class="brand">
+        <div class="brand-mark">ERPE</div>
+        <div>
+          <h1>Evolution Roulette Pattern Engine</h1>
+          <p class="tag">Pattern detection · State machine · Martingale · Replay — not a guaranteed-profit system</p>
+        </div>
+      </div>
+      <div class="auth" id="authBox">
+        <input id="username" placeholder="username" value="admin" />
+        <input id="password" type="password" placeholder="password" value="admin123" />
+        <button id="btnLogin">Login</button>
+        <span id="authUser"></span>
+      </div>
+    </header>
+
+    <section class="history-bar" id="historyBar">
+      <div class="label">LATEST</div>
+      <div class="history-numbers" id="historyNumbers">—</div>
+      <div class="history-colors" id="historyColors">—</div>
+    </section>
+
+    <main class="grid">
+      <section class="panel dash">
+        <div class="stat"><span>TABLE</span><strong id="tableName">—</strong></div>
+        <div class="stat"><span>STATUS</span><strong id="status">IDLE</strong></div>
+        <div class="stat"><span>MODE</span><strong id="mode">DRY_RUN</strong></div>
+        <div class="stat"><span>PATTERN</span><strong id="patternName">—</strong></div>
+        <div class="stat"><span>SIGNAL</span><strong id="signal">NO BET</strong></div>
+        <div class="stat"><span>MARTINGALE</span><strong id="martingale">Stage 1 / 14</strong></div>
+        <div class="stat"><span>BET</span><strong id="betAmount">1 unit</strong></div>
+        <div class="stat"><span>REST</span><strong id="rest">0</strong></div>
+        <div class="stat"><span>SESSION</span><strong id="session">+0 units</strong></div>
+      </section>
+
+      <section class="panel visualizer">
+        <h2>Pattern Visualizer</h2>
+        <div id="vizDots" class="viz-dots"></div>
+        <div id="vizMeta" class="viz-meta">
+          <div>현재 패턴: <span id="vizPattern">—</span></div>
+          <div>RULE: <span id="vizRule">—</span></div>
+          <div>상태: <span id="vizState">WAIT</span></div>
+          <div>다음 조건: <span id="vizNext">—</span></div>
+          <div id="vizConflict" class="conflict hidden"></div>
+        </div>
+      </section>
+
+      <section class="panel controls">
+        <h2>Controls</h2>
+        <div class="btn-row">
+          <button id="btnStart">START</button>
+          <button id="btnStop" class="ghost">STOP</button>
+          <button id="btnDry">DRY RUN</button>
+          <button id="btnReal" class="danger">REAL</button>
+          <button id="btnReset" class="ghost">RESET SESSION</button>
+        </div>
+        <div class="manual">
+          <h3>Inject Result</h3>
+          <div class="btn-row">
+            <input id="manualNumber" type="number" min="0" max="36" placeholder="0-36" />
+            <button id="btnInjectNum">Add Number</button>
+            <button data-color="R" class="c-r">+R</button>
+            <button data-color="B" class="c-b">+B</button>
+            <button data-color="Z" class="c-z">+Z</button>
+          </div>
+        </div>
+        <div class="replay">
+          <h3>Replay / Simulation</h3>
+          <textarea id="replayInput" rows="3" placeholder="R,R,R,B,B,R,B,R,B  or  1,7,3,20,8,12,31"></textarea>
+          <button id="btnReplay">RUN REPLAY</button>
+          <pre id="replayOut" class="log-box"></pre>
+        </div>
+      </section>
+
+      <section class="panel stats">
+        <h2>Session Stats</h2>
+        <pre id="statsBox" class="log-box"></pre>
+        <h3>Rule Stats</h3>
+        <pre id="ruleStatsBox" class="log-box"></pre>
+      </section>
+
+      <section class="panel logs">
+        <h2>Logs</h2>
+        <pre id="logBox" class="log-box"></pre>
+      </section>
+
+      <section class="panel admin" id="adminPanel">
+        <h2>Admin / Pattern Manager</h2>
+        <div class="tabs">
+          <button class="tab active" data-tab="strategy">Strategy</button>
+          <button class="tab" data-tab="builder">Pattern Builder</button>
+          <button class="tab" data-tab="rules">Rules</button>
+          <button class="tab" data-tab="users">Users</button>
+          <button class="tab" data-tab="adapter">Adapter</button>
+        </div>
+
+        <div class="tab-pane active" id="tab-strategy">
+          <label>Base Bet <input id="cfgBaseBet" type="number" step="any" /></label>
+          <label>Multiplier <input id="cfgMultiplier" type="number" step="any" /></label>
+          <label>Max Stage <input id="cfgMaxStage" type="number" /></label>
+          <label>Rest Rounds (0-30) <input id="cfgRest" type="number" min="0" max="30" /></label>
+          <label>Zero Handling
+            <select id="cfgZero">
+              <option value="ZERO_BREAKS_PATTERN">ZERO_BREAKS_PATTERN</option>
+              <option value="ZERO_IGNORED">ZERO_IGNORED</option>
+            </select>
+          </label>
+          <fieldset>
+            <legend>Idle Action (separated from strategy)</legend>
+            <label><input id="cfgIdleEnabled" type="checkbox" /> Enabled</label>
+            <label>Timeout ms <input id="cfgIdleTimeout" type="number" /></label>
+            <label>Min chip <input id="cfgIdleChip" type="number" /></label>
+            <label>Target number <input id="cfgIdleTarget" type="number" min="0" max="36" /></label>
+            <label><input id="cfgIdleWarn" type="checkbox" checked /> Warn only (no auto bet)</label>
+          </fieldset>
+          <button id="btnSaveStrategy">Save Strategy</button>
+        </div>
+
+        <div class="tab-pane" id="tab-builder">
+          <p>Build custom patterns (no source change required). Do not invent photo patterns — register only confirmed ones.</p>
+          <div class="builder-seq" id="builderSeq"></div>
+          <div class="btn-row">
+            <button id="bAddR" class="c-r">+ RED</button>
+            <button id="bAddB" class="c-b">+ BLACK</button>
+            <button id="bAddZ" class="c-z">+ ZERO</button>
+            <button id="bDel" class="ghost">삭제</button>
+            <button id="bClear" class="ghost">초기화</button>
+          </div>
+          <label>Name <input id="pName" placeholder="RRR Reverse" /></label>
+          <label>ID <input id="pId" placeholder="pattern-001" /></label>
+          <label>Entry Mode
+            <select id="pEntry">
+              <option value="OPPOSITE">OPPOSITE</option>
+              <option value="SAME">SAME</option>
+              <option value="FIXED">FIXED</option>
+            </select>
+          </label>
+          <label>Fixed color (if FIXED)
+            <select id="pFixed"><option value="R">R</option><option value="B">B</option></select>
+          </label>
+          <label>On Win
+            <select id="pOnWin">
+              <option value="WAIT_NEW_PATTERN">WAIT_NEW_PATTERN</option>
+              <option value="CONTINUE">CONTINUE</option>
+              <option value="CONTINUE_SAME_PATTERN">CONTINUE_SAME_PATTERN</option>
+              <option value="CONTINUE_OPPOSITE">CONTINUE_OPPOSITE</option>
+              <option value="REST">REST</option>
+            </select>
+          </label>
+          <label>On Loss
+            <select id="pOnLoss">
+              <option value="REST">REST</option>
+              <option value="WAIT_NEW_PATTERN">WAIT_NEW_PATTERN</option>
+              <option value="CONTINUE">CONTINUE</option>
+            </select>
+          </label>
+          <label>Rest rounds <input id="pRest" type="number" value="3" min="0" max="30" /></label>
+          <label>Priority <input id="pPriority" type="number" value="10" /></label>
+          <label><input id="pEnabled" type="checkbox" checked /> Enabled</label>
+          <button id="btnSavePattern">Save Pattern</button>
+          <div id="customList" class="custom-list"></div>
+        </div>
+
+        <div class="tab-pane" id="tab-rules">
+          <h3>Same Color / Reverse</h3>
+          <label>Min streak (2-10) <input id="scStreak" type="number" min="2" max="10" /></label>
+          <label><input id="scOpposite" type="checkbox" /> Bet opposite</label>
+          <label>Priority <input id="scPriority" type="number" /></label>
+          <label><input id="scEnabled" type="checkbox" /> Enabled</label>
+
+          <h3>Same Color → Change</h3>
+          <label>Min same run <input id="sccRun" type="number" /></label>
+          <label>Required changes <input id="sccChanges" type="number" /></label>
+          <label>Entry offset <input id="sccOffset" type="number" /></label>
+          <label>Bet mode
+            <select id="sccMode"><option value="OPPOSITE">OPPOSITE</option><option value="SAME">SAME</option></select>
+          </label>
+          <label><input id="sccEnabled" type="checkbox" /> Enabled</label>
+
+          <h3>Alternating</h3>
+          <label>Min length <input id="altLen" type="number" /></label>
+          <label><input id="altContinue" type="checkbox" /> Continue until loss</label>
+          <label><input id="altEnabled" type="checkbox" /> Enabled</label>
+
+          <h3>Repeating Block</h3>
+          <label>Min block <input id="rbMin" type="number" /></label>
+          <label>Max block <input id="rbMax" type="number" /></label>
+          <label>Lookback <input id="rbLook" type="number" /></label>
+          <label><input id="rbEnabled" type="checkbox" /> Enabled</label>
+
+          <button id="btnSaveRules">Save Rules</button>
+        </div>
+
+        <div class="tab-pane" id="tab-users">
+          <div id="userList"></div>
+          <h3>Create User</h3>
+          <label>Username <input id="nuUser" /></label>
+          <label>Password <input id="nuPass" type="password" /></label>
+          <label>Expires (ISO or empty) <input id="nuExp" /></label>
+          <label>Device memo <input id="nuMemo" /></label>
+          <button id="btnCreateUser">Create</button>
+        </div>
+
+        <div class="tab-pane" id="tab-adapter">
+          <p>Core engine is fully separated from the Evolution site adapter.</p>
+          <label>CDP URL <input id="cdpUrl" placeholder="http://127.0.0.1:9222" /></label>
+          <label>Table URL (optional) <input id="tableUrl" /></label>
+          <button id="btnConnectEvo">Connect Evolution (Playwright CDP)</button>
+          <button id="btnSimAdapter" class="ghost">Use Simulation Adapter</button>
+          <button id="btnStartPoll">Start Polling</button>
+          <p class="hint">You must log in to Evolution yourself (CAPTCHA/2FA). No bypass is provided. REAL chip placement stays blocked until table selectors are verified.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      European Roulette RED/BLACK is disadvantaged by ZERO. Martingale does not improve expected value. This is a pattern execution & risk-management tool.
+    </footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

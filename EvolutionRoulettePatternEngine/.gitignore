@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-portable/
+*.log
+data/*.db
+data/sessions/
+data/users.json
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+.DS_Store
+.env
+*.exe
+portable-out/
+build-out/

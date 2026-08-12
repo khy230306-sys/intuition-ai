@@ -3,6 +3,7 @@ import path from 'node:path';
 import type {
   AlternatingRuleConfig,
   CustomPatternDefinition,
+  FirstBetRuleConfig,
   RepeatingBlockRuleConfig,
   SameColorChangeRuleConfig,
   SameColorRuleConfig,
@@ -11,6 +12,7 @@ import type {
 } from '../core/types.js';
 import {
   DEFAULT_ALTERNATING,
+  DEFAULT_FIRST_BET,
   DEFAULT_REPEATING_BLOCK,
   DEFAULT_SAME_COLOR,
   DEFAULT_SAME_COLOR_CHANGE,
@@ -25,6 +27,7 @@ export interface AppConfigFile {
   sameColorChange: SameColorChangeRuleConfig;
   alternating: AlternatingRuleConfig;
   repeatingBlock: RepeatingBlockRuleConfig;
+  firstBet: FirstBetRuleConfig;
   customPatterns: CustomPatternDefinition[];
   suppressPatterns: SuppressPatternDefinition[];
 }
@@ -36,6 +39,7 @@ export function defaultAppConfig(): AppConfigFile {
     sameColorChange: structuredClone(DEFAULT_SAME_COLOR_CHANGE),
     alternating: structuredClone(DEFAULT_ALTERNATING),
     repeatingBlock: structuredClone(DEFAULT_REPEATING_BLOCK),
+    firstBet: structuredClone(DEFAULT_FIRST_BET),
     customPatterns: structuredClone(PHOTO_CUSTOM_PATTERNS),
     suppressPatterns: structuredClone(PHOTO_SUPPRESS_PATTERNS),
   };
@@ -65,6 +69,7 @@ export class ConfigStore {
         sameColorChange: { ...defaults.sameColorChange, ...(raw.sameColorChange ?? {}) },
         alternating: { ...defaults.alternating, ...(raw.alternating ?? {}) },
         repeatingBlock: { ...defaults.repeatingBlock, ...(raw.repeatingBlock ?? {}) },
+        firstBet: { ...defaults.firstBet, ...(raw.firstBet ?? {}) },
         // Seed photo patterns if file has empty/missing lists; merge by id otherwise
         customPatterns:
           !raw.customPatterns || raw.customPatterns.length === 0
@@ -107,6 +112,7 @@ export class ConfigStore {
       sameColorChange: { ...this.config.sameColorChange, ...(partial.sameColorChange ?? {}) },
       alternating: { ...this.config.alternating, ...(partial.alternating ?? {}) },
       repeatingBlock: { ...this.config.repeatingBlock, ...(partial.repeatingBlock ?? {}) },
+      firstBet: { ...this.config.firstBet, ...(partial.firstBet ?? {}) },
       customPatterns: partial.customPatterns ?? this.config.customPatterns,
       suppressPatterns: partial.suppressPatterns ?? this.config.suppressPatterns,
     };

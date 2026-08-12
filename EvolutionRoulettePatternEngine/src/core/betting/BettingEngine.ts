@@ -69,6 +69,8 @@ export class BettingEngine {
   } | null = null;
   private sessionRecords: SessionRoundRecord[] = [];
   private lastBetAt = 0;
+  /** Photo: 첫 배팅 전용 규칙 — 첫 신호 발생 후 false */
+  private firstBetPending = true;
 
   constructor(
     private config: StrategyConfig,
@@ -133,7 +135,13 @@ export class BettingEngine {
     this.ruleStats.reset();
     this.sessionStats.reset();
     this.lastBetAt = 0;
+    this.firstBetPending = true;
     this.logger.info('SESSION RESET');
+  }
+
+  /** 세션에서 아직 첫 배팅 신호를 내지 않았는지 (사진 첫배팅 규칙용) */
+  isFirstBetPending(): boolean {
+    return this.firstBetPending;
   }
 
   getSessionRecords(): SessionRoundRecord[] {
@@ -446,6 +454,10 @@ export class BettingEngine {
     this.lastBetRoundId = request.roundId;
     this.pendingBet = request;
     this.lastBetAt = Date.now();
+    if (this.firstBetPending) {
+      this.firstBetPending = false;
+      this.logger.info('FIRST_BET CONSUMED');
+    }
     this.sm.force('WAIT_RESULT');
 
     this.logger.info(

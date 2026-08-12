@@ -6,6 +6,7 @@ import { createAlternatingRule } from '../core/patterns/rules/AlternatingRule.js
 import { createRepeatingBlockRule } from '../core/patterns/rules/RepeatingBlockRule.js';
 import { createCustomSequenceRule } from '../core/patterns/rules/CustomSequenceRule.js';
 import { createSuppressSequenceRule } from '../core/patterns/rules/SuppressSequenceRule.js';
+import { createFirstBetEntryRule } from '../core/patterns/rules/FirstBetEntryRule.js';
 import { BettingEngine } from '../core/betting/BettingEngine.js';
 import { parseResultSequence, resultFromNumber, createRoundId } from '../core/roulette/result.js';
 import type {
@@ -21,9 +22,21 @@ import type { ConfigStore } from '../storage/ConfigStore.js';
 import type { SessionStore } from '../storage/SessionStore.js';
 import { IdleActionSupervisor } from '../idle/IdleAction.js';
 
-export function buildRulesFromConfig(store: ConfigStore): PatternRule[] {
+export function buildRulesFromConfig(
+  store: ConfigStore,
+  isFirstBet: () => boolean = () => false,
+): PatternRule[] {
   const c = store.get();
   const rules: PatternRule[] = [
+    createFirstBetEntryRule(c.firstBet ?? {
+      id: 'first-bet-entry',
+      name: '첫 배팅 (단일→반대 / 연속→같은색)',
+      enabled: true,
+      priority: 90,
+      onWin: 'CONTINUE',
+      onLoss: 'REST',
+      restRoundsAfterLoss: 3,
+    }, isFirstBet),
     createSameColorReverseRule(c.sameColor),
     createSameColorChangeRule(c.sameColorChange),
     createAlternatingRule(c.alternating),
@@ -51,12 +64,17 @@ export class AppOrchestrator {
   ) {
     this.logger = new Logger(logDir);
     const cfg = configStore.get().strategy;
-    this.engine = new BettingEngine(cfg, buildRulesFromConfig(configStore), this.logger);
+    this.engine = new BettingEngine(cfg, [], this.logger);
+    this.engine.patterns.setRules(
+      buildRulesFromConfig(configStore, () => this.engine.isFirstBetPending()),
+    );
     this.idle = new IdleActionSupervisor(() => this.engine.getConfig().idleAction, this.logger);
   }
 
   reloadRules(): void {
-    this.engine.patterns.setRules(buildRulesFromConfig(this.configStore));
+    this.engine.patterns.setRules(
+      buildRulesFromConfig(this.configStore, () => this.engine.isFirstBetPending()),
+    );
     const strategy = this.configStore.get().strategy;
     this.engine.updateConfig(strategy);
     this.logger.info('RULES RELOADED');

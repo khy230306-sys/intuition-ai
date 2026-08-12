@@ -175,6 +175,11 @@ function fillConfig(cfg) {
   $('scPriority').value = cfg.sameColor.priority;
   $('scEnabled').checked = cfg.sameColor.enabled;
 
+  if (cfg.firstBet) {
+    $('fbEnabled').checked = cfg.firstBet.enabled;
+    $('fbPriority').value = cfg.firstBet.priority;
+  }
+
   $('sccRun').value = cfg.sameColorChange.minimumSameColorRun;
   $('sccChanges').value = cfg.sameColorChange.requiredChanges;
   $('sccOffset').value = cfg.sameColorChange.entryOffset;
@@ -411,6 +416,10 @@ function bind() {
     await api('/api/config', {
       method: 'PUT',
       body: JSON.stringify({
+        firstBet: {
+          enabled: $('fbEnabled').checked,
+          priority: Number($('fbPriority').value),
+        },
         sameColor: {
           minimumStreak: Number($('scStreak').value),
           betOpposite: $('scOpposite').checked,

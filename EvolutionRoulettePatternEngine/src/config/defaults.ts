@@ -2,6 +2,7 @@ import type { StrategyConfig } from '../core/types.js';
 import type {
   AlternatingRuleConfig,
   CustomPatternDefinition,
+  FirstBetRuleConfig,
   SameColorChangeRuleConfig,
   SameColorRuleConfig,
   RepeatingBlockRuleConfig,
@@ -83,6 +84,17 @@ export const DEFAULT_REPEATING_BLOCK: RepeatingBlockRuleConfig = {
   maxBlockLength: 8,
   lookback: 40,
   onWin: 'WAIT_NEW_PATTERN',
+  onLoss: 'REST',
+  restRoundsAfterLoss: 3,
+};
+
+/** 사진: 첫 배팅만 — 단일 반대 / 연속 같은색. 승리 시 지그재그(반대) 계속, 패배 시 휴식 */
+export const DEFAULT_FIRST_BET: FirstBetRuleConfig = {
+  id: 'first-bet-entry',
+  name: '첫 배팅 (단일→반대 / 연속→같은색)',
+  enabled: true,
+  priority: 90,
+  onWin: 'CONTINUE',
   onLoss: 'REST',
   restRoundsAfterLoss: 3,
 };

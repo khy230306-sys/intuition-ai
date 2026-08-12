@@ -203,6 +203,17 @@ export interface RepeatingBlockRuleConfig {
   restRoundsAfterLoss: number;
 }
 
+/** Photo: 첫 배팅 전용 — 단일→반대, 연속→같은색 */
+export interface FirstBetRuleConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  onWin: WinAction;
+  onLoss: LossAction;
+  restRoundsAfterLoss: number;
+}
+
 export interface UserRecord {
   id: string;
   username: string;

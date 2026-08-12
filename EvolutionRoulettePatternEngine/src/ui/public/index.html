@@ -178,6 +178,11 @@
         </div>
 
         <div class="tab-pane" id="tab-rules">
+          <h3>첫 배팅 (사진 규칙)</h3>
+          <p class="hint">앞에 색이 안 붙었으면(단일) 반대색, 붙어서 연속이면 같은색. <strong>세션 첫 배팅에만</strong> 적용됩니다.</p>
+          <label><input id="fbEnabled" type="checkbox" /> 사용</label>
+          <label>우선순위 <input id="fbPriority" type="number" /></label>
+
           <h3>같은 색 연속 → 반대 배팅</h3>
           <label>최소 연속 (2~10) <input id="scStreak" type="number" min="2" max="10" /></label>
           <label><input id="scOpposite" type="checkbox" /> 반대 색에 배팅</label>

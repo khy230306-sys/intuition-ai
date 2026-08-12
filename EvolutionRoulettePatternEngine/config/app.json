@@ -64,6 +64,15 @@
     "onLoss": "REST",
     "restRoundsAfterLoss": 3
   },
+  "firstBet": {
+    "id": "first-bet-entry",
+    "name": "첫 배팅 (단일→반대 / 연속→같은색)",
+    "enabled": true,
+    "priority": 90,
+    "onWin": "CONTINUE",
+    "onLoss": "REST",
+    "restRoundsAfterLoss": 3
+  },
   "customPatterns": [
     {
       "id": "photo-12221-bet2-as-rbbbr",

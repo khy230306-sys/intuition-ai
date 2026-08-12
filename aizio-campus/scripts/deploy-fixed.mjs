@@ -136,13 +136,15 @@ function buildFreshDist() {
   if (res.status !== 0) throw new Error('npm run build failed')
   if (!existsSync(join(dist, 'index.html'))) throw new Error('dist/index.html missing')
   const assetsDir = join(dist, 'assets')
-  const jsName = readdirSync(assetsDir).find((f) => /^index-.*\.js$/.test(f))
-  if (!jsName) throw new Error('dist assets index-*.js missing')
-  const js = readFileSync(join(assetsDir, jsName), 'utf8')
-  if (!js.includes(pkg.version)) {
+  const jsNames = readdirSync(assetsDir).filter((f) => /^index-.*\.js$/.test(f))
+  if (!jsNames.length) throw new Error('dist assets index-*.js missing')
+  const hit = jsNames.find((name) =>
+    readFileSync(join(assetsDir, name), 'utf8').includes(pkg.version),
+  )
+  if (!hit) {
     throw new Error(`Built bundle does not contain version ${pkg.version}`)
   }
-  console.log(`Build OK: ${jsName} contains v${pkg.version}`)
+  console.log(`Build OK: ${hit} contains v${pkg.version}`)
 }
 
 async function main() {

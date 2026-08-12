@@ -10,6 +10,11 @@ import {
 } from './assets/registry'
 import { buildFactorySnapshot } from './assets/factory/pipeline'
 import { getAssetProviderStatus } from './assets/factory/provider'
+import {
+  ASSET_DELIVERY_MODE,
+  IMPORT_DIRECTORY,
+} from './assets/delivery/mode'
+import { REQUIRED_BASELINE_FILENAMES } from './assets/delivery/slots'
 import { buildClientManifest } from './assets/manifest/productionGate'
 import { AssetRequired } from './components/AssetRequired'
 import { BaselineGate } from './components/BaselineGate'
@@ -101,6 +106,9 @@ export default function App() {
             넣지 않습니다.
           </p>
           <ul className="pipeline-list">
+            <li>ASSET_DELIVERY_MODE: {ASSET_DELIVERY_MODE}</li>
+            <li>IMPORT_DIRECTORY: {IMPORT_DIRECTORY}</li>
+            <li>REQUIRED masters: {REQUIRED_BASELINE_FILENAMES.join(', ')}</li>
             <li>ASSET_PROVIDER_STATUS: {provider.status}</li>
             <li>Factory baselineReady: {String(factory.baselineReady)}</li>
             <li>Manifest productionApproved: {manifestApproved}</li>

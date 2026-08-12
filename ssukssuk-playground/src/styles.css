@@ -241,6 +241,7 @@ button {
   height: 110px;
   overflow: hidden;
   position: relative;
+  pointer-events: none;
 }
 
 .thumb .vehicle-svg {
@@ -249,6 +250,17 @@ button {
   left: -30%;
   top: -35%;
   position: absolute;
+  pointer-events: none;
+}
+
+.vehicle-card.ready {
+  cursor: pointer;
+}
+
+.vehicle-card .start-label {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #0d47a1;
 }
 
 .character-slot {
@@ -451,10 +463,23 @@ button {
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
 }
 
+.btn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .btn.primary {
   width: 100%;
   color: #fff;
   background: linear-gradient(180deg, #ffb04a 0%, var(--accent) 100%);
+}
+
+.btn.ghost {
+  width: 100%;
+  color: #0d47a1;
+  background: #e3f2fd;
+  box-shadow: 0 4px 0 rgba(21, 101, 192, 0.15);
 }
 
 .btn.primary:active {

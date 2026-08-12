@@ -106,11 +106,31 @@ export default function App() {
     }
   }
 
+  function snapOrAdvance(next: VehicleEntity, partId: FiretruckPartId, wasAssembled: boolean) {
+    setVehicle(next)
+    if (next.parts[partId].assembled && !wasAssembled) {
+      sfx.snap()
+      setToast(`찰칵! ${partLabel(partId)} 장착!`)
+      if (isFullyAssembled(next)) {
+        setToast('조립 완료! 색칠하러 가요')
+        window.setTimeout(() => go('paint'), 450)
+      }
+    }
+  }
+
   function onAssemblePointerDown(e: ReactPointerEvent<SVGSVGElement>) {
     if (!vehicle) return
     const p = svgPoint(e, 40)
     const hit = hitTestPart(vehicle, p, false)
     if (!hit) return
+    // Double-tap / quick second pointer: snap part to its slot (kid-friendly).
+    if (e.detail >= 2) {
+      const before = vehicle.parts[hit].assembled
+      const next = trySnapPart(vehicle, hit, { ...vehicle.parts[hit].slotPos })
+      setSelectedPart(hit)
+      snapOrAdvance(next, hit, before)
+      return
+    }
     setDragPart(hit)
     setSelectedPart(hit)
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -138,15 +158,23 @@ export default function App() {
     const p = svgPoint(e, 40)
     const before = vehicle.parts[dragPart].assembled
     const next = trySnapPart(vehicle, dragPart, p)
-    setVehicle(next)
     setDragPart(null)
-    if (next.parts[dragPart].assembled && !before) {
-      sfx.snap()
-      setToast(`찰칵! ${partLabel(dragPart)} 장착!`)
-      if (isFullyAssembled(next)) {
-        setToast('조립 완료! 색칠하러 가요')
-        window.setTimeout(() => go('paint'), 450)
+    snapOrAdvance(next, dragPart, before)
+  }
+
+  function assembleAllRemaining() {
+    if (!vehicle) return
+    let next = vehicle
+    for (const id of next.assembleOrder) {
+      if (!next.parts[id].assembled) {
+        next = trySnapPart(next, id, { ...next.parts[id].slotPos })
       }
+    }
+    setVehicle(next)
+    sfx.snap()
+    if (isFullyAssembled(next)) {
+      setToast('조립 완료! 색칠하러 가요')
+      window.setTimeout(() => go('paint'), 350)
     }
   }
 
@@ -291,6 +319,7 @@ export default function App() {
                         <VehicleThumb />
                         <strong>{entry.labelKo}</strong>
                         <span className="ready-badge">READY</span>
+                        <span className="start-label">공방 시작</span>
                       </>
                     ) : (
                       <AssetRequired title={entry.labelKo} detail={entry.note} />
@@ -332,16 +361,33 @@ export default function App() {
             </div>
             <div className="part-legend">
               {vehicle.assembleOrder.map((id) => (
-                <span key={id} className={`chip${vehicle.parts[id].assembled ? ' on' : ''}`}>
+                <button
+                  key={id}
+                  type="button"
+                  className={`chip${vehicle.parts[id].assembled ? ' on' : ''}`}
+                  onClick={() => {
+                    if (vehicle.parts[id].assembled) return
+                    const before = vehicle.parts[id].assembled
+                    const next = trySnapPart(vehicle, id, { ...vehicle.parts[id].slotPos })
+                    snapOrAdvance(next, id, before)
+                  }}
+                >
                   {partLabel(id)}
-                </span>
+                </button>
               ))}
             </div>
-            {assembled && (
-              <button type="button" className="btn primary" onClick={() => go('paint')}>
-                색칠하러 가기
-              </button>
-            )}
+            <div className="btn-row">
+              {!assembled && (
+                <button type="button" className="btn ghost" onClick={assembleAllRemaining}>
+                  남은 부품 끼우기
+                </button>
+              )}
+              {assembled && (
+                <button type="button" className="btn primary" onClick={() => go('paint')}>
+                  색칠하러 가기
+                </button>
+              )}
+            </div>
           </section>
         )}
 

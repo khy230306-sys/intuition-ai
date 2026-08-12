@@ -1,16 +1,8 @@
-# Ssukssuk character slots — ASSET_REQUIRED
+# Ssukssuk Character Bible — ASSET_REQUIRED
 
-Required pose folders (production files not yet authored):
+Required states (identical character across all):
 
-- idle/
-- walk/
-- jump/
-- happy/
-- surprised/
-- thinking/
-- cheer/
-- sad/
-- celebrate/
+idle, walk, run, point, thinking, happy, surprised, encourage, sad, celebrate, wave
 
-Until independent production art is delivered, the app shows **Asset Required**.
-Do not fill these slots with Visual Bible crops, emoji, or temporary rectangles.
+Do not fill with Visual Bible crops, emoji, or temporary SVG.
+Registry IDs: `ASSET_SSUKSSUK_*` in `src/assets/registry/ssukssuk.ts`.

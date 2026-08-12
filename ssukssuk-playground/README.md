@@ -1,21 +1,23 @@
 # 쑥쑥놀이터 NEW · 자동차 공방
 
-Style-reference–driven kids workshop app. First production vehicle: **소방차 (firetruck)**.
+상용 어린이 앱 Visual System을 위한 공방 앱입니다.
 
-## Principle
+## 최상위 규칙
 
-`REFERENCE IMAGE IS NOT A GAME ASSET.`
+[`docs/VISUAL_ASSET_CONSTITUTION.md`](docs/VISUAL_ASSET_CONSTITUTION.md)
 
-All playable graphics are independent production assets. Missing content is shown as **Asset Required**.
+**REFERENCE ≠ ASSET** — Visual Bible은 style reference only.  
+임시 SVG · Emoji · crop · hue-filter 자동차로 빈 공간을 채우지 않습니다.  
+없는 상태가 잘못된 그래픽보다 낫습니다.
 
-## Pipeline (firetruck)
+## 기준 Asset 트라이어드 (먼저 확정)
 
-1. **선택** — only firetruck is READY; other vehicles are Asset Required  
-2. **조립** — drag individual parts onto chassis slots  
-3. **색칠** — paint body / door / wheels / ladder independently (not whole-car hue)  
-4. **운전** — Vehicle Entity drag move + wheel spin  
-5. **미션** — drive to the fire with siren  
-6. **보상** — stars + celebrate animation  
+1. 쑥쑥이 Character Bible (idle/walk/run/…)
+2. `FIRE_TRUCK_01` 파츠 세트
+3. 자동차 공방 배경·소품
+
+Quality Gate `APPROVED` 후에만 조립·색칠·운전·미션 그래픽이 활성화되고,  
+그 다음에 굴착기·덤프·구급차·경찰차·크레인으로 확장합니다.
 
 ## Run
 
@@ -23,9 +25,6 @@ All playable graphics are independent production assets. Missing content is show
 cd ssukssuk-playground
 npm install
 npm run dev
-```
-
-```bash
 npm test
 npm run build
 ```
@@ -33,9 +32,9 @@ npm run build
 ## Structure
 
 ```
-src/assets/vehicles/firetruck/   # production part renderers + manifest
-src/entity/                      # Vehicle Entity factory + ops
-src/components/                  # renderer, stage bar, Asset Required
-public/assets/                   # asset slots / docs for future packs
-docs/ASSET_POLICY.md
+docs/VISUAL_ASSET_CONSTITUTION.md
+src/assets/registry/          # central Asset Registry (IDs only)
+src/entity/                   # Vehicle Entity + paint design persistence
+src/components/AssetRequired  # constitution empty state
+public/assets/                # APPROVED bitmaps only (slots today)
 ```

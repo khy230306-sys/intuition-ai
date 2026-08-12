@@ -315,6 +315,111 @@ button {
   opacity: 0.85;
 }
 
+.asset-id {
+  font-size: 0.68rem;
+  color: #455a64;
+  word-break: break-all;
+}
+
+.asset-spec-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asset-spec-list li {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.asset-spec-list span {
+  display: block;
+  color: #37474f;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.constitution-banner {
+  border: 2px solid rgba(229, 57, 53, 0.25);
+  background: linear-gradient(180deg, #fff8f6 0%, #ffffff 100%);
+}
+
+.baseline-gate h3 {
+  margin: 18px 0 8px;
+  font-family: var(--font-display);
+}
+
+.triad-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.triad-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 14px;
+  background: #eceff1;
+  border: 2px dashed #90a4ae;
+}
+
+.triad-pill.ok {
+  background: #e8f5e9;
+  border-style: solid;
+  border-color: #43a047;
+}
+
+.triad-pill strong {
+  font-size: 0.85rem;
+}
+
+.triad-pill span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #607d8b;
+}
+
+.triad-pill.ok span {
+  color: #2e7d32;
+}
+
+.triad-pill em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.pipeline-list {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .triad-status {
+    grid-template-columns: 1fr;
+  }
+}
+
 .canvas {
   position: relative;
   width: 100%;

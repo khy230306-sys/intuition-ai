@@ -65,11 +65,30 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
+        // Keep build-meta.json out of precache so version probes always hit the network.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['**/build-meta.json'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        runtimeCaching: [
+          // Always try network first for document navigations so deploys win over precache.
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'campus-html-nav',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 8, maxAgeSeconds: 86_400 },
+            },
+          },
+          // Version probe must never be served from Cache Storage.
+          {
+            urlPattern: /\/build-meta\.json(?:\?.*)?$/i,
+            handler: 'NetworkOnly',
+          },
+        ],
       },
       devOptions: { enabled: true },
     }),

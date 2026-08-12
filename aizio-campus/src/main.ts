@@ -13,8 +13,13 @@ import { syncCampusNotifications } from './campus/notifications'
 import { bindCampus, openCampusToQuiz, renderCampusShell } from './campus'
 import { campusUi } from './campus/ui/state'
 import { rehydrateAlarms } from './notify'
+import {
+  bindServiceWorkerUpdateChecks,
+  ensureLatestBuild,
+  hardReloadToLatest,
+} from './update'
 
-export const APP_VERSION = '1.0.2'
+export const APP_VERSION = '1.0.3'
 export const FIXED_APP_URL = 'https://aizio-campus.shipstatic.com'
 
 type ChatMsg = { role: 'user' | 'bot'; text: string }
@@ -195,12 +200,30 @@ function bindChat(): void {
   })
 }
 
-function boot(): void {
+async function boot(): Promise<void> {
+  registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      void hardReloadToLatest('sw')
+    },
+    onRegisteredSW(_url, reg) {
+      bindServiceWorkerUpdateChecks(reg)
+    },
+  })
+
+  const freshness = await ensureLatestBuild(APP_VERSION)
+  if (freshness === 'reloading') return
+
+  // Re-check when user returns to the tab (new deploy while backgrounded).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    void ensureLatestBuild(APP_VERSION)
+  })
+
   rehydrateAlarms()
-  registerSW({ immediate: true })
   render()
   console.log(`AIZIO CAMPUS v${APP_VERSION} · ${FIXED_APP_URL}`)
   showFlash(`AIZIO CAMPUS v${APP_VERSION}`)
 }
 
-boot()
+void boot()

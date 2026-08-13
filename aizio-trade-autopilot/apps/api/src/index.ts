@@ -8,32 +8,45 @@ import { registerRoutes } from './routes/api.js';
 import { runtime } from './workers/runtime.js';
 import { onActivity, emitEvent } from './services/events.js';
 import { prisma } from './db/client.js';
-import { getTossConnection } from './brokers/tossConnection.js';
 import { refreshUniverse } from './services/universe.js';
+import { credentialGuidance, runShadowConnectionVerify } from './services/shadowVerify.js';
 
 async function main() {
   logCredentialHealth();
   await ensureAutopilotRow();
   await bootstrapBrokers();
 
-  if (tossConfigured()) {
-    try {
-      const health = await getTossConnection().verifyAccountReadOnly();
-      await emitEvent(
-        'BROKER_CONNECTED',
-        `Broker health auth=${health.authentication} account=${health.account}`,
-        'info',
-      );
-    } catch {
-      await emitEvent('BROKER_DISCONNECTED', 'Toss verify skipped/failed at boot', 'warn');
-    }
+  const guidance = credentialGuidance();
+  if (guidance.needed) {
+    console.log(guidance.message);
+    await emitEvent('TOSS_CREDENTIALS_MISSING', 'Toss credentials NOT_CONFIGURED — see .env guidance', 'warn');
+  } else {
+    const verify = await runShadowConnectionVerify();
+    await emitEvent(
+      verify.allCriticalPass ? 'SHADOW_VERIFY_PASS' : 'SHADOW_VERIFY_FAIL',
+      `Boot verify criticalPass=${verify.allCriticalPass} stages=${verify.stages.length}`,
+      verify.allCriticalPass ? 'info' : 'warn',
+    );
   }
 
-  try {
-    const universe = await refreshUniverse(true);
-    await emitEvent('UNIVERSE_REFRESH', `Universe symbols=${universe.length}`, 'info');
-  } catch (e) {
-    await emitEvent('UNIVERSE_REFRESH', e instanceof Error ? e.message : 'universe failed', 'warn');
+  if (tossConfigured()) {
+    try {
+      const universe = await refreshUniverse(true);
+      await emitEvent('UNIVERSE_REFRESH', `Universe LIVE symbols=${universe.length}`, 'info');
+    } catch (e) {
+      await emitEvent(
+        'UNIVERSE_REFRESH',
+        e instanceof Error ? e.message : 'universe failed (no REPLAY fallback)',
+        'warn',
+      );
+    }
+  } else {
+    try {
+      const universe = await refreshUniverse(true);
+      await emitEvent('UNIVERSE_REFRESH', `Universe REPLAY_SEED symbols=${universe.length}`, 'info');
+    } catch (e) {
+      await emitEvent('UNIVERSE_REFRESH', e instanceof Error ? e.message : 'universe failed', 'warn');
+    }
   }
 
   const recovery = await runRecovery();

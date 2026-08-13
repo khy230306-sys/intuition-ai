@@ -16,10 +16,11 @@ function sessionLabel(s: AutopilotPublicState['marketSession']) {
   return '장마감';
 }
 
-function stateLabel(state: string, enabled: boolean) {
+function stateLabel(state: string, enabled: boolean, opts?: { shadowWaiting?: boolean }) {
   if (!enabled && state === 'OFF') return '중지';
-  if (state === 'RUNNING') return '실행중';
+  if (opts?.shadowWaiting) return 'MARKET CLOSED · SHADOW WAITING';
   if (state === 'MARKET_CLOSED') return '실행중 · 휴장대기';
+  if (state === 'RUNNING') return '실행중';
   if (state === 'STARTING') return '시작중';
   if (state === 'PAUSED') return '신규매수 중지';
   if (state === 'HALTED') return '정지';
@@ -29,6 +30,13 @@ function stateLabel(state: string, enabled: boolean) {
 
 function laneBadge(lane?: string) {
   return lane ?? 'PAPER';
+}
+
+function resultClass(r: string) {
+  if (r === 'PASS' || r === 'FALSE' || r === 'LOCKED') return r === 'PASS' ? 'pass' : 'locked';
+  if (r === 'WARN') return 'warn';
+  if (r === 'FAIL') return 'fail';
+  return '';
 }
 
 export function App() {
@@ -62,6 +70,10 @@ export function App() {
   }, []);
 
   const running = Boolean(status?.enabled && status.state !== 'OFF');
+  const shadowWaiting =
+    status?.mode === 'SHADOW' &&
+    status.enabled &&
+    (Boolean(status.marketWaiting) || status.state === 'MARKET_CLOSED');
 
   return (
     <div className="app">
@@ -74,6 +86,10 @@ export function App() {
           서버에서 계속 도는 완전자동매매. 앱을 닫아도 멈추지 않습니다.
         </p>
 
+        {status?.credentialGuidance && (
+          <pre className="cred-guidance">{status.credentialGuidance}</pre>
+        )}
+
         {status && (
           <div className="status-row">
             <span
@@ -85,7 +101,7 @@ export function App() {
                     : 'off'
               }`}
             />
-            <strong>{stateLabel(status.state, status.enabled)}</strong>
+            <strong>{stateLabel(status.state, status.enabled, { shadowWaiting })}</strong>
             <span style={{ color: 'var(--muted)' }}>· {status.mode}</span>
             <span className="lane-pill">{laneBadge(status.health.dataLane)}</span>
           </div>
@@ -116,6 +132,16 @@ export function App() {
             <div>
               <span>LIVE GATE</span>
               <strong>{status.health.liveGate}</strong>
+            </div>
+            <div>
+              <span>UNIVERSE</span>
+              <strong>
+                {status.universeLabel ?? 'REPLAY'} · {status.universeCount ?? 0}
+              </strong>
+            </div>
+            <div>
+              <span>ALLOW_LIVE</span>
+              <strong>FALSE</strong>
             </div>
           </div>
         )}
@@ -154,8 +180,10 @@ export function App() {
                 <strong>{status.openPositions}종목</strong>
               </div>
               <div className="metric">
-                <label>Universe</label>
-                <strong>{status.universeCount ?? 0}</strong>
+                <label>UNIVERSE</label>
+                <strong>
+                  {status.universeLabel ?? 'REPLAY'} · {(status.universeCount ?? 0).toLocaleString('ko-KR')}
+                </strong>
               </div>
               <div className="metric">
                 <label>AI 상태</label>
@@ -163,23 +191,49 @@ export function App() {
               </div>
             </div>
 
-            {status.accountSummary && (
-              <div className="account-box">
+            <div className="account-split">
+              <div className="account-box real">
                 <div className="account-title">
-                  계좌 · {status.accountSummary.source}{' '}
-                  <span className="lane-pill">{status.accountSummary.lane}</span>
+                  REAL ACCOUNT <span className="lane-pill">LIVE</span>
                 </div>
-                <div className="account-grid">
-                  <div>현금 ₩{Math.round(status.accountSummary.cash ?? 0).toLocaleString('ko-KR')}</div>
-                  <div>
-                    매수가능 ₩{Math.round(status.accountSummary.buyingPower ?? 0).toLocaleString('ko-KR')}
+                {status.realAccount ? (
+                  <div className="account-grid">
+                    <div>총 자산 ₩{Math.round(status.realAccount.totalEquity ?? 0).toLocaleString('ko-KR')}</div>
+                    <div>현금 ₩{Math.round(status.realAccount.cash ?? 0).toLocaleString('ko-KR')}</div>
+                    <div>
+                      매수가능 ₩{Math.round(status.realAccount.buyingPower ?? 0).toLocaleString('ko-KR')}
+                    </div>
+                    <div>보유주식 {status.realAccount.positionsCount ?? 0}종목</div>
+                    <div>미체결 {status.realAccount.openOrdersCount ?? 0}</div>
                   </div>
-                  <div>보유 {status.accountSummary.positionsCount ?? 0}종목</div>
-                  <div>미체결 {status.accountSummary.openOrdersCount ?? 0}</div>
-                  <div>평가손익 {money(status.accountSummary.unrealizedPnl ?? 0)}</div>
-                </div>
+                ) : (
+                  <div className="account-grid">
+                    <div>Toss 미연결 / 자격증명 없음</div>
+                  </div>
+                )}
               </div>
-            )}
+              <div className="account-box shadow">
+                <div className="account-title">
+                  SHADOW ACCOUNT <span className="lane-pill">SHADOW</span>
+                </div>
+                {status.shadowAccount ? (
+                  <div className="account-grid">
+                    <div>
+                      가상 운용금 ₩{Math.round(status.shadowAccount.totalEquity ?? status.capital).toLocaleString('ko-KR')}
+                    </div>
+                    <div>가상 현금 ₩{Math.round(status.shadowAccount.cash ?? 0).toLocaleString('ko-KR')}</div>
+                    <div>가상 보유 {status.shadowAccount.positionsCount ?? 0}종목</div>
+                    <div>가상 손익 {money(status.shadowAccount.unrealizedPnl ?? 0)}</div>
+                    <div>Shadow P/L {money(status.shadowResearch?.shadowPnl ?? 0)}</div>
+                  </div>
+                ) : (
+                  <div className="account-grid">
+                    <div>가상 운용금 ₩{Math.round(status.capital).toLocaleString('ko-KR')}</div>
+                    <div>가상 보유 0종목</div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="cta-row">
               <button
@@ -280,6 +334,33 @@ export function App() {
         {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       </section>
 
+      {status?.diagnosticsPanel && status.diagnosticsPanel.length > 0 && (
+        <section className="section">
+          <h2>Diagnostics</h2>
+          <div className="diag-panel">
+            {status.diagnosticsPanel.map((row) => (
+              <div key={row.name} className={`diag-row ${resultClass(String(row.result))}`}>
+                <span className="diag-name">{row.name}</span>
+                <span className="diag-result">{row.result}</span>
+                <span className="diag-detail">{row.detail}</span>
+              </div>
+            ))}
+          </div>
+          {status.shadowResearch?.funnelChain && (
+            <p className="funnel-line">
+              Scanner funnel: {status.shadowResearch.funnelChain.join(' → ')}
+            </p>
+          )}
+          {status.universeStats && (
+            <p className="funnel-line">
+              Universe {status.universeStats.liveLabel}: total={status.universeStats.total} KOSPI=
+              {status.universeStats.kospi} KOSDAQ={status.universeStats.kosdaq} tradable=
+              {status.universeStats.tradable}
+            </p>
+          )}
+        </section>
+      )}
+
       {status && (
         <section className="section">
           <h2>Activity</h2>
@@ -303,6 +384,22 @@ export function App() {
       <details className="expert">
         <summary>전문가 설정 / 진단</summary>
         <div className="cta-row" style={{ marginTop: 12 }}>
+          <button
+            className="secondary"
+            onClick={() =>
+              void api.diagnosticsPanel().then((d) => setDiagnostics(JSON.stringify(d, null, 2)))
+            }
+          >
+            진단 패널 새로고침
+          </button>
+          <button
+            className="secondary"
+            onClick={() =>
+              void api.shadowVerify().then((d) => setDiagnostics(JSON.stringify(d, null, 2)))
+            }
+          >
+            SHADOW 연결 검증
+          </button>
           <button
             className="secondary"
             onClick={() =>

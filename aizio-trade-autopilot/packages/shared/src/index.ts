@@ -226,6 +226,27 @@ export interface HealthSnapshot {
   lastHeartbeatAt: string | null;
 }
 
+export interface UniversePublicStats {
+  total: number;
+  kospi: number;
+  kosdaq: number;
+  tradable: number;
+  excluded: number;
+  etf: number;
+  etn: number;
+  spac: number;
+  preferred: number;
+  suspended: number;
+  source: 'TOSS' | 'REPLAY_SEED';
+  liveLabel: 'LIVE' | 'REPLAY';
+}
+
+export interface DiagnosticsPanelRow {
+  name: string;
+  result: GateResult | 'FALSE' | 'LOCKED' | 'TRUE';
+  detail: string;
+}
+
 export interface AutopilotPublicState {
   enabled: boolean;
   state: AutopilotState;
@@ -246,10 +267,28 @@ export interface AutopilotPublicState {
   venueSessions?: VenueSessions | null;
   health: HealthSnapshot;
   brokerHealth?: BrokerHealth | null;
+  /** @deprecated prefer realAccount / shadowAccount — never sum them */
   accountSummary?: AccountSummary | null;
+  /** REAL Toss account — never mixed with shadow */
+  realAccount?: AccountSummary | null;
+  /** SHADOW / paper virtual account — never mixed with real */
+  shadowAccount?: AccountSummary | null;
   activity: ActivityItem[];
   universeCount?: number;
+  universeStats?: UniversePublicStats | null;
+  universeLabel?: 'LIVE' | 'REPLAY';
   liveGateChecks?: LiveGateCheck[];
+  diagnosticsPanel?: DiagnosticsPanelRow[];
+  credentialGuidance?: string | null;
+  marketWaiting?: boolean;
+  shadowResearch?: {
+    funnelChain?: number[];
+    regime?: string | null;
+    quantEligible?: number;
+    aiBlocked?: number;
+    shadowTrades?: number;
+    shadowPnl?: number;
+  } | null;
 }
 
 export interface AccountSummary {

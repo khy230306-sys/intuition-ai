@@ -25,7 +25,10 @@ import { getTossConnection } from '../brokers/tossConnection.js';
 import { getReplayProvider, getTossMarketDataProvider } from '../marketdata/index.js';
 import { runLiveReadiness } from '../services/liveGate.js';
 import { runRecovery } from '../services/recovery.js';
-import { universeCount } from '../services/universe.js';
+import { universeCount, getUniverseStats } from '../services/universe.js';
+import { credentialGuidance, getLastShadowVerify, runShadowConnectionVerify } from '../services/shadowVerify.js';
+import { buildDiagnosticsPanel } from '../services/diagnosticsPanel.js';
+import { getShadowResearch } from '../services/shadowMetrics.js';
 
 function laneFor(mode: string): DataLane {
   if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') return 'LIVE';
@@ -87,34 +90,40 @@ async function buildHealth(ap: Awaited<ReturnType<typeof ensureAutopilotRow>>): 
   };
 }
 
-async function accountSummary(mode: TradingMode): Promise<AccountSummary | null> {
+async function realAccountSummary(): Promise<AccountSummary | null> {
+  if (!tossConfigured()) return null;
   try {
-    if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') {
-      if (!tossConfigured()) return { lane: 'LIVE', source: 'TOSS', positionsCount: 0 };
-      const toss = getTossBroker();
-      await toss.connect();
-      const [acc, bp, positions, orders] = await Promise.all([
-        toss.getAccount(),
-        toss.getBuyingPower(),
-        toss.getPositions(),
-        toss.getOpenOrders(),
-      ]);
-      const unrealized = positions.reduce(
-        (s, p) => s + (p.lastPrice - p.averagePurchasePrice) * p.quantity,
-        0,
-      );
-      return {
-        lane: 'LIVE',
-        source: 'TOSS',
-        cash: acc.cash,
-        buyingPower: bp.cashBuyingPower,
-        totalEquity: acc.cash + positions.reduce((s, p) => s + p.marketValue, 0),
-        positionsCount: positions.length,
-        openOrdersCount: orders.length,
-        unrealizedPnl: unrealized,
-        dayRealizedPnl: 0,
-      };
-    }
+    const toss = getTossBroker();
+    await toss.connect();
+    const [acc, bp, positions, orders] = await Promise.all([
+      toss.getAccount(),
+      toss.getBuyingPower(),
+      toss.getPositions(),
+      toss.getOpenOrders(),
+    ]);
+    const unrealized = positions.reduce(
+      (s, p) => s + (p.lastPrice - p.averagePurchasePrice) * p.quantity,
+      0,
+    );
+    return {
+      lane: 'LIVE',
+      source: 'TOSS',
+      cash: acc.cash,
+      buyingPower: bp.cashBuyingPower,
+      totalEquity: acc.cash + positions.reduce((s, p) => s + p.marketValue, 0),
+      positionsCount: positions.length,
+      openOrdersCount: orders.length,
+      unrealizedPnl: unrealized,
+      dayRealizedPnl: 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function shadowAccountSummary(mode: TradingMode): Promise<AccountSummary | null> {
+  if (mode !== 'SHADOW' && mode !== 'PAPER' && mode !== 'PAPER_REPLAY') return null;
+  try {
     const paper = getPaperBroker();
     await paper.connect();
     const acc = await paper.getAccount();
@@ -138,6 +147,11 @@ async function accountSummary(mode: TradingMode): Promise<AccountSummary | null>
   }
 }
 
+async function accountSummary(mode: TradingMode): Promise<AccountSummary | null> {
+  if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') return realAccountSummary();
+  return shadowAccountSummary(mode);
+}
+
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/api/health', async () => {
     const health = await buildHealth(await ensureAutopilotRow());
@@ -155,6 +169,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.get('/api/status', async (): Promise<AutopilotPublicState> => {
     const ap = await ensureAutopilotRow();
+    const mode = ap.mode as TradingMode;
     const session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
     const venues = await getKrVenueSessionsAsync({ preferTossCalendar: tossConfigured() });
     const perf = await computePerformance();
@@ -173,11 +188,24 @@ export async function registerRoutes(app: FastifyInstance) {
         /* */
       }
     }
+    const universeStats = await getUniverseStats();
+    const research = await getShadowResearch();
+    const panel = await buildDiagnosticsPanel({ refreshVerify: false });
+    const guidance = credentialGuidance();
+    const real = await realAccountSummary();
+    const shadow = await shadowAccountSummary(mode === 'LIVE' || mode === 'LIVE_OBSERVE' ? 'SHADOW' : mode);
+    // For LIVE_OBSERVE still expose paper/shadow lane separately when paper ledger exists
+    const shadowAlways =
+      mode === 'SHADOW'
+        ? shadow
+        : mode === 'PAPER' || mode === 'PAPER_REPLAY'
+          ? shadow
+          : await shadowAccountSummary('SHADOW');
 
     return {
       enabled: ap.enabled,
       state: ap.state as AutopilotPublicState['state'],
-      mode: ap.mode as AutopilotPublicState['mode'],
+      mode: mode,
       stopMode: ap.stopMode as AutopilotPublicState['stopMode'],
       startedAt: ap.startedAt?.toISOString() ?? null,
       stoppedAt: ap.stoppedAt?.toISOString() ?? null,
@@ -194,10 +222,25 @@ export async function registerRoutes(app: FastifyInstance) {
       venueSessions: venues,
       health,
       brokerHealth,
-      accountSummary: await accountSummary(ap.mode as TradingMode),
+      accountSummary: await accountSummary(mode),
+      realAccount: real,
+      shadowAccount: mode === 'SHADOW' ? shadow : shadowAlways,
       activity,
       universeCount: await universeCount(),
+      universeStats,
+      universeLabel: universeStats.liveLabel,
       liveGateChecks,
+      diagnosticsPanel: panel.rows,
+      credentialGuidance: guidance.needed ? guidance.message : null,
+      marketWaiting: research.marketWaiting,
+      shadowResearch: {
+        funnelChain: research.funnel?.chain,
+        regime: research.regime,
+        quantEligible: research.quantEligibleTotal,
+        aiBlocked: research.aiBlockedTotal,
+        shadowTrades: research.shadowTrades,
+        shadowPnl: research.shadowPnl,
+      },
     };
   });
 
@@ -265,6 +308,12 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.get('/api/diagnostics/live', async () => runLiveReadiness());
   app.post('/api/diagnostics/recovery', async () => runRecovery());
+  app.get('/api/diagnostics/panel', async () => buildDiagnosticsPanel({ refreshVerify: false }));
+  app.post('/api/diagnostics/shadow-verify', async () => runShadowConnectionVerify());
+  app.get('/api/diagnostics/shadow-verify', async () => getLastShadowVerify());
+  app.get('/api/diagnostics/shadow-research', async () => getShadowResearch());
+  app.get('/api/universe/stats', async () => getUniverseStats());
+  app.get('/api/credentials/guidance', async () => credentialGuidance());
 
   app.get('/api/config/public', async () => ({
     tossConfigured: tossConfigured(),
@@ -276,5 +325,6 @@ export async function registerRoutes(app: FastifyInstance) {
     tossStreaming: false,
     openApiVersion: '1.2.14',
     modes: ['PAPER', 'PAPER_REPLAY', 'SHADOW', 'LIVE_OBSERVE', 'LIVE'],
+    credentialGuidance: credentialGuidance(),
   }));
 }

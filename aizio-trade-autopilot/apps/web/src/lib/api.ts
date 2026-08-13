@@ -30,5 +30,19 @@ export const api = {
       locked: boolean;
       checks: Array<{ name: string; result: string; detail: string }>;
     }>('/api/diagnostics/live'),
+  diagnosticsPanel: () =>
+    json<{
+      rows: Array<{ name: string; result: string; detail: string }>;
+      guidance: { needed: boolean; message: string };
+      allowLive: boolean;
+      liveLocked: boolean;
+      universe: Record<string, unknown>;
+      research: Record<string, unknown>;
+    }>('/api/diagnostics/panel'),
+  shadowVerify: () =>
+    json<{ stages: Array<{ name: string; result: string; detail: string }>; allCriticalPass?: boolean }>(
+      '/api/diagnostics/shadow-verify',
+      { method: 'POST' },
+    ),
   config: () => json<Record<string, unknown>>('/api/config/public'),
 };

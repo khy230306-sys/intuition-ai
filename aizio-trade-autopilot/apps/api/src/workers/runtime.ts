@@ -59,6 +59,11 @@ export class AutopilotRuntime {
     const ap = await ensureAutopilotRow();
     await heartbeat(ap.aiStatusText);
 
+    if (ap.stopMode === 'CLOSE_AND_STOP' || ap.circuitBreakerOn) {
+      await this.closeAll(ap.haltReason === 'EMERGENCY_STOP' ? 'KILL_CLOSE' : 'KILL_CLOSE');
+      if (!ap.enabled || ap.state === 'HALTED') return;
+    }
+
     if (!ap.enabled) {
       if (ap.state !== 'OFF' && ap.state !== 'HALTED' && ap.state !== 'PAUSED') {
         await setState('OFF');
@@ -66,10 +71,7 @@ export class AutopilotRuntime {
       return;
     }
 
-    if (ap.circuitBreakerOn || ap.state === 'HALTED') {
-      if (ap.stopMode === 'CLOSE_AND_STOP') {
-        await this.closeAll('KILL_CLOSE');
-      }
+    if (ap.state === 'HALTED') {
       return;
     }
 
@@ -481,12 +483,29 @@ export class AutopilotRuntime {
   private async closeAll(reason: string) {
     const ap = await ensureAutopilotRow();
     const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: ap.mode } });
-    if (!opens.length) return;
+    if (!opens.length) {
+      if (ap.stopMode === 'CLOSE_AND_STOP') {
+        await prisma.autopilotStateRow.update({
+          where: { id: 'singleton' },
+          data: { stopMode: 'NONE' },
+        });
+      }
+      return;
+    }
     const broker = getActiveBroker(ap.mode === 'LIVE' ? 'LIVE' : 'PAPER');
     await broker.connect();
+
+    // PAPER: ensure ledger mirrors DB open positions before forced exits
+    if (ap.mode === 'PAPER') {
+      const paper = getPaperBroker();
+      for (const pos of opens) {
+        paper.forcePosition(pos.symbol, pos.quantity, pos.entryPrice);
+      }
+    }
+
     for (const pos of opens) {
       try {
-        await placeManagedOrder({
+        const order = await placeManagedOrder({
           broker,
           mode: ap.mode === 'LIVE' ? 'LIVE' : 'PAPER',
           symbol: pos.symbol,
@@ -494,15 +513,18 @@ export class AutopilotRuntime {
           quantity: pos.quantity,
           strategyId: pos.strategyId,
         });
+        if (String(order.status) !== 'FILLED' && Number(order.filledQuantity) <= 0) {
+          await emitEvent('CLOSE_REJECT', `${pos.symbol} close rejected: ${order.status}`, 'error');
+          continue;
+        }
         await prisma.positionRow.update({
           where: { id: pos.id },
-          data: { status: 'CLOSED', exitReason: reason, closedAt: new Date() },
+          data: { status: 'CLOSED', exitReason: reason, closedAt: new Date(), realizedPnl: order.averageFilledPrice != null ? (order.averageFilledPrice - pos.entryPrice) * pos.quantity : undefined },
         });
-      } catch {
-        // leave open; degraded
+      } catch (e) {
+        await emitEvent('CLOSE_ERROR', e instanceof Error ? e.message : 'close-failed', 'error');
       }
     }
-    // cancel open orders
     const openOrders = await broker.getOpenOrders();
     for (const o of openOrders) {
       try {

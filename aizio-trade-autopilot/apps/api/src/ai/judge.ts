@@ -26,7 +26,8 @@ export function deterministicJudge(input: JudgeInput): JudgeResult {
     Math.min(100, Math.max(0, -candidate.quote.changePct) * 8 + candidate.spreadPct * 20 + (quant.total < 40 ? 30 : 0));
   const dataQuality = candidate.quote.source === 'TOSS' ? 90 : candidate.quote.source === 'REPLAY' ? 70 : 50;
   let action: 'BUY' | 'WATCH' | 'REJECT' = 'WATCH';
-  if (quant.total >= 55 && bull > bear + 8 && candidate.quote.changePct > 0) action = 'BUY';
+  // Deterministic thresholds (config-like constants): prefer evidence over LLM autonomy.
+  if (quant.total >= 48 && bull > bear + 5 && candidate.quote.changePct > 0.2) action = 'BUY';
   if (bear >= bull || quant.total < 35 || dataQuality < 40) action = 'REJECT';
 
   const decision = AITradeDecisionSchema.parse({

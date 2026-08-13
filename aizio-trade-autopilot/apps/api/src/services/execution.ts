@@ -74,6 +74,10 @@ export async function placeManagedOrder(opts: {
         avgFillPrice: brokerOrder.averageFilledPrice ?? undefined,
         commission: brokerOrder.commission ?? 0,
         tax: brokerOrder.tax ?? 0,
+        rejectReason:
+          String(brokerOrder.status) === 'REJECTED'
+            ? String((brokerOrder as { rejectReason?: string }).rejectReason ?? 'rejected')
+            : undefined,
         rawJson: JSON.stringify(brokerOrder),
       },
     });

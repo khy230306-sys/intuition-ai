@@ -57,9 +57,19 @@ export class RiskEngine {
     }
 
     const maxNotional = ctx.profile.maxCapital * (ctx.profile.maxPositionPct / 100);
-    const riskNotional = ctx.profile.maxCapital * (ctx.profile.riskPerTradePct / 100);
-    const notional = Math.min(maxNotional, riskNotional * 5, ctx.proposedNotional || maxNotional);
-    const qty = Math.floor(notional / ctx.quote.lastPrice);
+    // riskPerTradePct informs soft target size; maxPositionPct is the hard cap.
+    const riskTarget = ctx.profile.maxCapital * (ctx.profile.riskPerTradePct / 100) * 8;
+    const notional = Math.min(maxNotional, Math.max(riskTarget, ctx.quote.lastPrice), ctx.proposedNotional || maxNotional);
+    let qty = Math.floor(notional / ctx.quote.lastPrice);
+    // High-priced KR names: allow 1 share if still inside max position / capital.
+    if (
+      qty < 1 &&
+      ctx.quote.lastPrice > 0 &&
+      ctx.quote.lastPrice <= maxNotional &&
+      ctx.capitalUsed + ctx.quote.lastPrice <= ctx.profile.maxCapital
+    ) {
+      qty = 1;
+    }
     if (qty < 1) return reject('SIZE_TOO_SMALL');
 
     reasons.push('RISK_PASS');

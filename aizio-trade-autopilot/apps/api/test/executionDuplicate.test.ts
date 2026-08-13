@@ -18,11 +18,13 @@ describe('Execution duplicate protection', () => {
   });
 
   it('blocks duplicate signal orders', async () => {
+    const { prisma } = await import('../src/db/client.js');
+    await prisma.orderRow.deleteMany();
     const { getPaperBroker } = await import('../src/brokers/index.js');
     const { placeManagedOrder, DuplicateOrderError } = await import('../src/services/execution.js');
     const broker = getPaperBroker(5_000_000);
     await broker.connect();
-    const signalId = 'sig-dup-1';
+    const signalId = `sig-dup-${Date.now()}`;
     const a = await placeManagedOrder({
       broker,
       mode: 'PAPER',

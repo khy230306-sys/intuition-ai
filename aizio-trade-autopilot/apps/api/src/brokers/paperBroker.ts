@@ -1,6 +1,7 @@
 import { newId } from '../utils/id.js';
 import { round, clamp } from '../utils/math.js';
 import type { MarketDataProvider } from '../marketdata/types.js';
+import { loadPaperState, savePaperState } from './paperPersist.js';
 import type {
   BrokerAdapter,
   BrokerAccount,
@@ -50,8 +51,40 @@ export class PaperBrokerAdapter implements BrokerAdapter {
     return this.state.cash;
   }
 
-  async connect(): Promise<void> {
+  async resetLedger(cash: number) {
+    this.state.cash = cash;
+    this.state.positions.clear();
+    this.state.orders.clear();
+    this.state.executions = [];
+    this.state.clientOrderIndex.clear();
     this.connected = true;
+    await this.persist();
+  }
+
+  async connect(): Promise<void> {
+    if (!this.connected) {
+      const saved = await loadPaperState();
+      if (saved) {
+        this.state.cash = saved.cash;
+        this.state.positions = new Map(
+          saved.positions.map((p) => [p.symbol, { quantity: p.quantity, avgPrice: p.avgPrice, name: p.name }]),
+        );
+      }
+    }
+    this.connected = true;
+    await this.persist();
+  }
+
+  private async persist() {
+    await savePaperState({
+      cash: this.state.cash,
+      positions: [...this.state.positions.entries()].map(([symbol, p]) => ({
+        symbol,
+        quantity: p.quantity,
+        avgPrice: p.avgPrice,
+        name: p.name,
+      })),
+    });
   }
 
   async health() {
@@ -197,6 +230,7 @@ export class PaperBrokerAdapter implements BrokerAdapter {
       tax,
       executedAt: new Date(),
     });
+    await this.persist();
     return order;
   }
 
@@ -222,11 +256,12 @@ export class PaperBrokerAdapter implements BrokerAdapter {
   forcePosition(symbol: string, quantity: number, avgPrice: number) {
     if (quantity <= 0) this.state.positions.delete(symbol);
     else this.state.positions.set(symbol, { quantity, avgPrice, name: symbol });
+    void this.persist();
   }
 
   private reject(req: PlaceOrderRequest, reason: string): BrokerOrder {
     const orderId = newId('prej');
-    const order: BrokerOrder = {
+    const order: BrokerOrder & { rejectReason: string } = {
       orderId,
       clientOrderId: req.clientOrderId,
       symbol: req.symbol,
@@ -238,8 +273,8 @@ export class PaperBrokerAdapter implements BrokerAdapter {
       filledQuantity: 0,
       averageFilledPrice: null,
       orderedAt: new Date(),
+      rejectReason: reason,
     };
-    (order as BrokerOrder & { rejectReason?: string }).rejectReason = reason;
     this.state.orders.set(orderId, order);
     this.state.clientOrderIndex.set(req.clientOrderId, orderId);
     return order;

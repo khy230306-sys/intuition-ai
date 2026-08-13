@@ -34,8 +34,7 @@ export async function startAutopilot(opts: {
     throw new Error('LIVE_NOT_ALLOWED');
   }
   const paper = getPaperBroker(opts.capital);
-  paper.setCash(opts.capital);
-  await paper.connect();
+  await paper.resetLedger(opts.capital);
 
   const profile = RISK_PRESETS[opts.riskLevel];
   await prisma.riskProfileRow.updateMany({ data: { active: false } });

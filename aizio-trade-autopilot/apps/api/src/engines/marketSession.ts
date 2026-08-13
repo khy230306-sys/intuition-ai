@@ -1,6 +1,6 @@
-import type { MarketSession, SessionPhase } from '@aizio/trade-shared';
+import type { MarketSession, SessionPhase, VenueSessions } from '@aizio/trade-shared';
 import { kstParts } from '../utils/time.js';
-import { getTossBroker } from '../brokers/index.js';
+import { getTossConnection } from '../brokers/tossConnection.js';
 import { tossConfigured } from '../config/env.js';
 
 /** KR public holidays / exchange closures (static baseline; Toss calendar preferred when configured). */
@@ -47,66 +47,75 @@ function inRange(now: Date, startIso: string, endIso: string): boolean {
   return t >= new Date(startIso).getTime() && t < new Date(endIso).getTime();
 }
 
-export function getKrSessionLocal(now = new Date()): MarketSession {
+function kstWall(y: number, m: number, d: number, hm: string): Date {
+  const [oh, om] = hm.split(':').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, oh - 9, om, 0));
+}
+
+/** Local KRX/NXT venue sessions (Toss calendar preferred when available). */
+export function getKrVenueSessions(nowOrOpts: Date | MarketSessionEngineOptions = new Date()): VenueSessions {
+  const opts = nowOrOpts instanceof Date ? { now: nowOrOpts } : nowOrOpts;
+  const now = opts.now ?? new Date();
   const k = kstParts(now);
   const date = k.dateStr;
   const weekend = k.weekday === 0 || k.weekday === 6;
   const holiday = KR_HOLIDAYS.has(date);
   const isTradingDay = !weekend && !holiday;
-
-  const openHm = '09:00';
   const closeHm = KR_EARLY_CLOSE[date] ?? '15:30';
-  const [oh, om] = openHm.split(':').map(Number);
-  const [ch, cm] = closeHm.split(':').map(Number);
+  const mins = k.hh * 60 + k.mm;
 
-  // Build KST wall times as UTC-equivalent timestamps via offset
-  const opensAt = isTradingDay
-    ? new Date(Date.UTC(k.y, k.m - 1, k.d, oh - 9, om, 0))
-    : null;
-  const closesAt = isTradingDay
-    ? new Date(Date.UTC(k.y, k.m - 1, k.d, ch - 9, cm, 0))
-    : null;
+  const base = (venue: 'KRX' | 'NXT', session: SessionPhase, isOpen: boolean, reason: string, openHm: string, closeHm2: string): MarketSession => ({
+    market: 'KR',
+    venue,
+    tradingDate: date,
+    isTradingDay,
+    isOpen: isTradingDay && isOpen,
+    session: isTradingDay ? session : 'CLOSED',
+    opensAt: isTradingDay ? kstWall(k.y, k.m, k.d, openHm).toISOString() : null,
+    closesAt: isTradingDay ? kstWall(k.y, k.m, k.d, closeHm2).toISOString() : null,
+    reason: isTradingDay ? reason : weekend ? 'WEEKEND' : 'HOLIDAY',
+  });
 
-  let session: SessionPhase = 'CLOSED';
-  let isOpen = false;
-  let reason: string | undefined;
-
+  let krx: MarketSession;
+  let nxt: MarketSession;
   if (!isTradingDay) {
-    reason = weekend ? 'WEEKEND' : 'HOLIDAY';
+    krx = base('KRX', 'CLOSED', false, 'CLOSED', '09:00', closeHm);
+    nxt = base('NXT', 'CLOSED', false, 'CLOSED', '08:00', '20:00');
   } else {
-    const mins = k.hh * 60 + k.mm;
-    const openMin = oh * 60 + om;
-    const closeMin = ch * 60 + cm;
-    // NXT pre 08:00-09:00, regular 09:00-15:30, after 15:30-20:00
-    if (mins >= 8 * 60 && mins < openMin) {
-      session = 'PRE_MARKET';
-      isOpen = true;
-      reason = 'NXT_PRE_MARKET';
-    } else if (mins >= openMin && mins < closeMin) {
-      session = 'REGULAR';
-      isOpen = true;
-      reason = KR_EARLY_CLOSE[date] ? 'EARLY_CLOSE_DAY' : 'KRX_NXT_REGULAR';
-    } else if (mins >= closeMin && mins < 20 * 60) {
-      session = 'AFTER_HOURS';
-      isOpen = true;
-      reason = 'NXT_AFTER_HOURS';
+    const openMin = 9 * 60;
+    const closeMin = Number(closeHm.split(':')[0]) * 60 + Number(closeHm.split(':')[1]);
+    if (mins >= openMin && mins < closeMin) {
+      krx = base('KRX', 'REGULAR', true, KR_EARLY_CLOSE[date] ? 'EARLY_CLOSE_DAY' : 'KRX_REGULAR', '09:00', closeHm);
     } else {
-      session = 'CLOSED';
-      reason = 'OUTSIDE_SESSION';
+      krx = base('KRX', 'CLOSED', false, 'OUTSIDE_SESSION', '09:00', closeHm);
+    }
+    if (mins >= 8 * 60 && mins < openMin) {
+      nxt = base('NXT', 'PRE_MARKET', true, 'NXT_PRE_MARKET', '08:00', '09:00');
+    } else if (mins >= openMin && mins < closeMin) {
+      nxt = base('NXT', 'REGULAR', true, 'NXT_REGULAR', '09:00', closeHm);
+    } else if (mins >= closeMin && mins < 20 * 60) {
+      nxt = base('NXT', 'AFTER_HOURS', true, 'NXT_AFTER_HOURS', closeHm, '20:00');
+    } else {
+      nxt = base('NXT', 'CLOSED', false, 'OUTSIDE_SESSION', '08:00', '20:00');
     }
   }
 
-  return {
+  const integrated: MarketSession = {
     market: 'KR',
-    venue: 'KRX',
+    venue: krx.isOpen ? 'KRX' : nxt.isOpen ? 'NXT' : 'KRX',
     tradingDate: date,
     isTradingDay,
-    isOpen,
-    session,
-    opensAt: opensAt?.toISOString() ?? null,
-    closesAt: closesAt?.toISOString() ?? null,
-    reason,
+    isOpen: krx.isOpen || nxt.isOpen,
+    session: krx.isOpen ? krx.session : nxt.isOpen ? nxt.session : 'CLOSED',
+    opensAt: nxt.opensAt ?? krx.opensAt,
+    closesAt: nxt.closesAt ?? krx.closesAt,
+    reason: krx.isOpen ? krx.reason : nxt.reason,
   };
+  return { tradingDate: date, krx, nxt, integrated };
+}
+
+export function getKrSessionLocal(now = new Date()): MarketSession {
+  return getKrVenueSessions(now).integrated;
 }
 
 /** US session expressed with DST-aware open/close in America/New_York via Intl. */
@@ -171,9 +180,9 @@ export async function getMarketSession(
   const now = opts.now ?? new Date();
   if (opts.preferTossCalendar && tossConfigured()) {
     try {
-      const toss = getTossBroker();
-      await toss.connect();
-      const cal = (await toss.getMarketCalendar(market)) as {
+      const conn = getTossConnection();
+      await conn.authenticate();
+      const cal = (await conn.api('GET', `/api/v1/market-calendar/${market}`, 'MARKET_INFO', false)) as {
         result?: {
           today: {
             date: string;
@@ -270,4 +279,26 @@ export async function getMarketSession(
 
 export function isRegularSessionOpen(session: MarketSession): boolean {
   return session.isTradingDay && session.session === 'REGULAR' && session.isOpen;
+}
+
+export async function getKrVenueSessionsAsync(
+  opts: MarketSessionEngineOptions = {},
+): Promise<VenueSessions> {
+  const now = opts.now ?? new Date();
+  if (opts.preferTossCalendar && tossConfigured()) {
+    try {
+      const integrated = await getMarketSession('KR', { ...opts, now });
+      const local = getKrVenueSessions(now);
+      // Venue split from local schedule; trading-day flag from Toss integrated calendar
+      return {
+        tradingDate: integrated.tradingDate,
+        krx: { ...local.krx, isTradingDay: integrated.isTradingDay, tradingDate: integrated.tradingDate },
+        nxt: { ...local.nxt, isTradingDay: integrated.isTradingDay, tradingDate: integrated.tradingDate },
+        integrated,
+      };
+    } catch {
+      /* fall through */
+    }
+  }
+  return getKrVenueSessions(now);
 }

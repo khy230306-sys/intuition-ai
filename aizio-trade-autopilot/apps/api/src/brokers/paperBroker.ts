@@ -1,6 +1,7 @@
 import { newId } from '../utils/id.js';
 import { round, clamp } from '../utils/math.js';
 import type { MarketDataProvider } from '../marketdata/types.js';
+import { quoteToBrokerQuote } from '../marketdata/types.js';
 import { loadPaperState, savePaperState } from './paperPersist.js';
 import type {
   BrokerAdapter,
@@ -31,7 +32,7 @@ export class PaperBrokerAdapter implements BrokerAdapter {
   private state: PaperState;
 
   constructor(
-    private readonly market: MarketDataProvider,
+    private market: MarketDataProvider,
     initialCash = 3_000_000,
   ) {
     this.state = {
@@ -41,6 +42,10 @@ export class PaperBrokerAdapter implements BrokerAdapter {
       executions: [],
       clientOrderIndex: new Map(),
     };
+  }
+
+  setMarketProvider(market: MarketDataProvider) {
+    this.market = market;
   }
 
   setCash(cash: number) {
@@ -115,7 +120,7 @@ export class PaperBrokerAdapter implements BrokerAdapter {
     this.assertConnected();
     const out: BrokerPosition[] = [];
     for (const [symbol, p] of this.state.positions) {
-      const q = await this.market.getQuote(symbol);
+      const q = quoteToBrokerQuote(await this.market.getQuote(symbol));
       out.push({
         symbol,
         name: p.name || symbol,
@@ -137,7 +142,7 @@ export class PaperBrokerAdapter implements BrokerAdapter {
 
   async getQuote(symbol: string): Promise<BrokerQuote> {
     this.assertConnected();
-    return this.market.getQuote(symbol);
+    return quoteToBrokerQuote(await this.market.getQuote(symbol));
   }
 
   async placeOrder(req: PlaceOrderRequest): Promise<BrokerOrder> {
@@ -148,7 +153,7 @@ export class PaperBrokerAdapter implements BrokerAdapter {
       if (existing) return existing;
     }
 
-    const quote = await this.market.getQuote(req.symbol);
+    const quote = quoteToBrokerQuote(await this.market.getQuote(req.symbol));
     const mid = quote.lastPrice;
     const spreadPct = mid > 0 ? ((quote.ask - quote.bid) / mid) * 100 : 99;
     const slip = BASE_SLIPPAGE + spreadPct / 100 / 4;

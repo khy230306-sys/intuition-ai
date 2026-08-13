@@ -3,22 +3,23 @@ import type { DiscoverySignal } from '@aizio/trade-shared';
 import type { QuantResult } from '../engines/quant.js';
 import type { ScanCandidate } from '../engines/scanner.js';
 import { AITradeDecisionSchema, type ValidatedAITradeDecision } from './schemas.js';
+import { getAiProvider } from './providers.js';
 
 export interface JudgeInput {
   candidate: ScanCandidate;
   quant: QuantResult;
   signals: DiscoverySignal[];
   regime: string;
+  signalCreatedAt?: string;
 }
 
 export interface JudgeResult {
   decision: ValidatedAITradeDecision | null;
   valid: boolean;
-  providerStatus: 'OK' | 'NOT_CONFIGURED' | 'TIMEOUT' | 'MALFORMED' | 'ERROR' | 'DETERMINISTIC';
+  providerStatus: 'OK' | 'NOT_CONFIGURED' | 'TIMEOUT' | 'MALFORMED' | 'ERROR' | 'DETERMINISTIC' | 'STALE_DECISION';
   error?: string;
 }
 
-/** Deterministic bull/bear/risk synthesis used when AI provider is absent or as fail-safe baseline. */
 export function deterministicJudge(input: JudgeInput): JudgeResult {
   const { candidate, quant, signals } = input;
   const bull = Math.min(100, quant.total + Math.max(0, candidate.quote.changePct) * 5);
@@ -26,9 +27,12 @@ export function deterministicJudge(input: JudgeInput): JudgeResult {
     Math.min(100, Math.max(0, -candidate.quote.changePct) * 8 + candidate.spreadPct * 20 + (quant.total < 40 ? 30 : 0));
   const dataQuality = candidate.quote.source === 'TOSS' ? 90 : candidate.quote.source === 'REPLAY' ? 70 : 50;
   let action: 'BUY' | 'WATCH' | 'REJECT' = 'WATCH';
-  // Deterministic thresholds (config-like constants): prefer evidence over LLM autonomy.
   if (quant.total >= 48 && bull > bear + 5 && candidate.quote.changePct > 0.2) action = 'BUY';
   if (bear >= bull || quant.total < 35 || dataQuality < 40) action = 'REJECT';
+
+  const generatedAt = new Date().toISOString();
+  const signalCreatedAt = input.signalCreatedAt ?? generatedAt;
+  const decisionAgeMs = Date.now() - new Date(signalCreatedAt).getTime();
 
   const decision = AITradeDecisionSchema.parse({
     symbol: candidate.symbol,
@@ -46,7 +50,11 @@ export function deterministicJudge(input: JudgeInput): JudgeResult {
       bear > 50 ? '과열/반락 위험' : '일반 변동성',
       candidate.spreadPct > 0.5 ? '스프레드 확대' : '스프레드 정상',
     ],
-    generatedAt: new Date().toISOString(),
+    generatedAt,
+    signalCreatedAt,
+    aiStartedAt: generatedAt,
+    aiCompletedAt: generatedAt,
+    decisionAgeMs,
   });
 
   return {
@@ -57,9 +65,10 @@ export function deterministicJudge(input: JudgeInput): JudgeResult {
 }
 
 export async function runAiJudge(input: JudgeInput): Promise<JudgeResult> {
+  const signalCreatedAt = input.signalCreatedAt ?? new Date().toISOString();
+
   if (!aiConfigured()) {
-    // Fail-safe default: NO AI CONFIDENCE → treat deterministic as advisory only.
-    const det = deterministicJudge(input);
+    const det = deterministicJudge({ ...input, signalCreatedAt });
     if (env.AI_REQUIRED_FOR_ENTRY) {
       return {
         decision: {
@@ -74,52 +83,53 @@ export async function runAiJudge(input: JudgeInput): Promise<JudgeResult> {
     return det;
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.AI_TIMEOUT_MS);
+  const provider = getAiProvider();
+  const aiStartedAt = new Date().toISOString();
   try {
-    const prompt = {
-      role: 'system',
-      content:
-        'You are AIZIO Final Judge. Return ONLY JSON matching schema: symbol,action(BUY|WATCH|REJECT),confidence,bullScore,bearScore,dataQuality,reasons,risks,generatedAt. Bull must justify entry; Bear must argue against.',
-    };
-    const user = {
-      role: 'user',
-      content: JSON.stringify({
-        candidate: input.candidate,
-        quant: input.quant,
-        signals: input.signals,
-        regime: input.regime,
-      }),
-    };
-    const res = await fetch(`${env.AI_PROVIDER_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.AI_PROVIDER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: env.AI_PROVIDER_MODEL,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [prompt, user],
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      return { decision: null, valid: false, providerStatus: 'ERROR', error: `HTTP ${res.status}` };
-    }
-    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) return { decision: null, valid: false, providerStatus: 'MALFORMED', error: 'empty' };
+    const content = await provider.complete(
+      [
+        {
+          role: 'system',
+          content:
+            'You are AIZIO Final Judge. Return ONLY JSON matching schema: symbol,action(BUY|WATCH|REJECT),confidence,bullScore,bearScore,dataQuality,reasons,risks,generatedAt. Bull must justify entry; Bear must argue against. News alone must not force BUY.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            candidate: input.candidate,
+            quant: input.quant,
+            signals: input.signals,
+            regime: input.regime,
+            signalCreatedAt,
+          }),
+        },
+      ],
+      { timeoutMs: env.AI_TIMEOUT_MS },
+    );
+    const aiCompletedAt = new Date().toISOString();
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
       return { decision: null, valid: false, providerStatus: 'MALFORMED', error: 'json-parse' };
     }
-    const decision = AITradeDecisionSchema.safeParse(parsed);
+    const decision = AITradeDecisionSchema.safeParse({
+      ...(parsed as object),
+      signalCreatedAt,
+      aiStartedAt,
+      aiCompletedAt,
+      decisionAgeMs: Date.now() - new Date(signalCreatedAt).getTime(),
+    });
     if (!decision.success) {
       return { decision: null, valid: false, providerStatus: 'MALFORMED', error: decision.error.message };
+    }
+    if ((decision.data.decisionAgeMs ?? 0) > env.AI_MAX_DECISION_AGE_MS) {
+      return {
+        decision: { ...decision.data, action: 'REJECT', reasons: [...decision.data.reasons, 'STALE_DECISION'] },
+        valid: false,
+        providerStatus: 'STALE_DECISION',
+        error: 'decision_too_old',
+      };
     }
     return { decision: decision.data, valid: true, providerStatus: 'OK' };
   } catch (e) {
@@ -128,7 +138,5 @@ export async function runAiJudge(input: JudgeInput): Promise<JudgeResult> {
       return { decision: null, valid: false, providerStatus: 'TIMEOUT', error: msg };
     }
     return { decision: null, valid: false, providerStatus: 'ERROR', error: msg };
-  } finally {
-    clearTimeout(timer);
   }
 }

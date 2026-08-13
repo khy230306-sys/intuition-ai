@@ -1,4 +1,4 @@
-import type { AutopilotPublicState, RiskLevel } from '@aizio/trade-shared';
+import type { AutopilotPublicState, RiskLevel, TradingMode } from '@aizio/trade-shared';
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -14,7 +14,7 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => json<AutopilotPublicState>('/api/status'),
-  start: (body: { capital: number; riskLevel: RiskLevel; mode?: 'PAPER' | 'LIVE' }) =>
+  start: (body: { capital: number; riskLevel: RiskLevel; mode?: TradingMode }) =>
     json<{ ok: boolean }>('/api/autopilot/start', { method: 'POST', body: JSON.stringify(body) }),
   stop: (stopMode: 'STOP_NEW_ENTRIES' | 'CLOSE_AND_STOP') =>
     json<{ ok: boolean }>('/api/autopilot/stop', {
@@ -24,8 +24,11 @@ export const api = {
   emergency: () => json<{ ok: boolean }>('/api/autopilot/emergency-stop', { method: 'POST' }),
   journal: () => json<{ journal: unknown[] }>('/api/journal'),
   performance: () => json<Record<string, unknown>>('/api/performance'),
-  liveDiagnostics: () => json<{ ready: boolean; checks: Array<{ name: string; pass: boolean; detail: string }> }>(
-    '/api/diagnostics/live',
-  ),
+  liveDiagnostics: () =>
+    json<{
+      ready: boolean;
+      locked: boolean;
+      checks: Array<{ name: string; result: string; detail: string }>;
+    }>('/api/diagnostics/live'),
   config: () => json<Record<string, unknown>>('/api/config/public'),
 };

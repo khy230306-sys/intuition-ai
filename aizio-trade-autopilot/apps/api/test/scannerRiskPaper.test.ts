@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import { ReplayMarketDataProvider } from '../src/marketdata/replayProvider.js';
+import { quoteToBrokerQuote } from '../src/marketdata/types.js';
 import { MarketScanner } from '../src/engines/scanner.js';
 import { RiskEngine } from '../src/engines/risk.js';
 import { RISK_PRESETS } from '@aizio/trade-shared';
@@ -25,7 +26,7 @@ describe('RiskEngine', () => {
   const market = new ReplayMarketDataProvider();
 
   it('rejects daily loss, drawdown, max positions, stale data, abnormal spread', async () => {
-    const quote = await market.getQuote('005930');
+    const quote = quoteToBrokerQuote(await market.getQuote('005930'));
     const base = {
       profile: RISK_PRESETS.BALANCED,
       capitalUsed: 0,

@@ -1,8 +1,8 @@
 import { RISK_PRESETS, type AutopilotState, type RiskLevel, type StopMode, type TradingMode } from '@aizio/trade-shared';
 import { prisma } from '../db/client.js';
-import { env } from '../config/env.js';
+import { env, tossConfigured } from '../config/env.js';
 import { emitEvent } from './events.js';
-import { getPaperBroker } from '../brokers/index.js';
+import { getPaperBroker, rebindPaperMarketData } from '../brokers/index.js';
 
 export async function ensureAutopilotRow() {
   const existing = await prisma.autopilotStateRow.findUnique({ where: { id: 'singleton' } });
@@ -33,8 +33,17 @@ export async function startAutopilot(opts: {
   if (mode === 'LIVE' && !env.ALLOW_LIVE) {
     throw new Error('LIVE_NOT_ALLOWED');
   }
+  if ((mode === 'LIVE' || mode === 'LIVE_OBSERVE' || mode === 'SHADOW') && !tossConfigured()) {
+    throw new Error('TOSS_NOT_CONFIGURED');
+  }
   const paper = getPaperBroker(opts.capital);
-  await paper.resetLedger(opts.capital);
+  if (mode === 'SHADOW') rebindPaperMarketData('SHADOW');
+  if (mode === 'PAPER' || mode === 'PAPER_REPLAY') rebindPaperMarketData('PAPER_REPLAY');
+  if (mode !== 'LIVE' && mode !== 'LIVE_OBSERVE') {
+    await paper.resetLedger(opts.capital);
+  } else {
+    await paper.connect();
+  }
 
   const profile = RISK_PRESETS[opts.riskLevel];
   await prisma.riskProfileRow.updateMany({ data: { active: false } });
@@ -68,7 +77,14 @@ export async function startAutopilot(opts: {
       riskLevel: opts.riskLevel,
       circuitBreakerOn: false,
       aiStatusText: '시장 탐색 준비',
-      readiness: mode === 'PAPER' ? 'PAPER_MODE' : 'LIVE_READY',
+      readiness:
+        mode === 'PAPER' || mode === 'PAPER_REPLAY'
+          ? 'PAPER_MODE'
+          : mode === 'SHADOW'
+            ? 'SHADOW'
+            : mode === 'LIVE_OBSERVE'
+              ? 'LIVE_OBSERVE'
+              : 'LIVE_READY',
       lastHeartbeatAt: new Date(),
     },
   });

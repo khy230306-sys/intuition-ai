@@ -10,6 +10,10 @@ export const AITradeDecisionSchema = z.object({
   reasons: z.array(z.string()).min(1),
   risks: z.array(z.string()),
   generatedAt: z.string(),
+  signalCreatedAt: z.string().optional(),
+  aiStartedAt: z.string().optional(),
+  aiCompletedAt: z.string().optional(),
+  decisionAgeMs: z.number().optional(),
 });
 
 export type ValidatedAITradeDecision = z.infer<typeof AITradeDecisionSchema>;

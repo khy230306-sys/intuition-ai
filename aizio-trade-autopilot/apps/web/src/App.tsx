@@ -1,5 +1,5 @@
 import { useEffect, useState, useTransition } from 'react';
-import type { AutopilotPublicState, RiskLevel } from '@aizio/trade-shared';
+import type { AutopilotPublicState, RiskLevel, TradingMode } from '@aizio/trade-shared';
 import { api } from './lib/api';
 
 function money(n: number) {
@@ -27,12 +27,16 @@ function stateLabel(state: string, enabled: boolean) {
   return state;
 }
 
+function laneBadge(lane?: string) {
+  return lane ?? 'PAPER';
+}
+
 export function App() {
   const [status, setStatus] = useState<AutopilotPublicState | null>(null);
   const [capital, setCapital] = useState(3_000_000);
   const [riskLevel, setRiskLevel] = useState<RiskLevel>('BALANCED');
+  const [mode, setMode] = useState<TradingMode>('PAPER');
   const [error, setError] = useState<string | null>(null);
-  const [expertOpen, setExpertOpen] = useState(false);
   const [diagnostics, setDiagnostics] = useState<string>('');
   const [pending, startTransition] = useTransition();
 
@@ -44,6 +48,7 @@ export function App() {
           setStatus(s);
           setCapital(s.capital);
           setRiskLevel(s.riskLevel);
+          setMode(s.mode);
           setError(null);
         })
         .catch((e: Error) => setError(e.message));
@@ -82,6 +87,36 @@ export function App() {
             />
             <strong>{stateLabel(status.state, status.enabled)}</strong>
             <span style={{ color: 'var(--muted)' }}>· {status.mode}</span>
+            <span className="lane-pill">{laneBadge(status.health.dataLane)}</span>
+          </div>
+        )}
+
+        {status && (
+          <div className="panel-grid">
+            <div>
+              <span>AUTOPILOT</span>
+              <strong>{status.enabled ? 'ON' : 'OFF'}</strong>
+            </div>
+            <div>
+              <span>BROKER</span>
+              <strong>{String(status.health.broker)}</strong>
+            </div>
+            <div>
+              <span>MARKET DATA</span>
+              <strong>{String(status.health.marketData)}</strong>
+            </div>
+            <div>
+              <span>AI</span>
+              <strong>{status.health.ai === 'NOT_CONFIGURED' ? 'NOT_CONFIGURED' : 'READY'}</strong>
+            </div>
+            <div>
+              <span>MARKET</span>
+              <strong>{sessionLabel(status.marketSession)}</strong>
+            </div>
+            <div>
+              <span>LIVE GATE</span>
+              <strong>{status.health.liveGate}</strong>
+            </div>
           </div>
         )}
 
@@ -92,12 +127,20 @@ export function App() {
                 <label>시장</label>
                 <strong>{sessionLabel(status.marketSession)}</strong>
               </div>
+              {status.venueSessions && (
+                <div className="metric">
+                  <label>KRX / NXT</label>
+                  <strong style={{ fontSize: '1rem' }}>
+                    {status.venueSessions.krx.session} / {status.venueSessions.nxt.session}
+                  </strong>
+                </div>
+              )}
               <div className="metric">
                 <label>운용금액</label>
                 <strong>₩{Math.round(status.capital).toLocaleString('ko-KR')}</strong>
               </div>
               <div className="metric">
-                <label>오늘 손익</label>
+                <label>오늘 손익 ({laneBadge(status.health.dataLane)})</label>
                 <strong className={status.todayPnl >= 0 ? 'pos' : 'neg'}>{money(status.todayPnl)}</strong>
               </div>
               <div className="metric">
@@ -111,17 +154,32 @@ export function App() {
                 <strong>{status.openPositions}종목</strong>
               </div>
               <div className="metric">
+                <label>Universe</label>
+                <strong>{status.universeCount ?? 0}</strong>
+              </div>
+              <div className="metric">
                 <label>AI 상태</label>
                 <strong style={{ fontSize: '1.05rem' }}>{status.aiStatusText}</strong>
               </div>
             </div>
 
-            <div className="health">
-              <div>서버 {status.health.server === 'OK' ? '●' : '○'} 정상</div>
-              <div>Broker ● {status.health.broker}</div>
-              <div>시세 ● {status.health.marketData}</div>
-              <div>AI ● {status.health.ai}</div>
-            </div>
+            {status.accountSummary && (
+              <div className="account-box">
+                <div className="account-title">
+                  계좌 · {status.accountSummary.source}{' '}
+                  <span className="lane-pill">{status.accountSummary.lane}</span>
+                </div>
+                <div className="account-grid">
+                  <div>현금 ₩{Math.round(status.accountSummary.cash ?? 0).toLocaleString('ko-KR')}</div>
+                  <div>
+                    매수가능 ₩{Math.round(status.accountSummary.buyingPower ?? 0).toLocaleString('ko-KR')}
+                  </div>
+                  <div>보유 {status.accountSummary.positionsCount ?? 0}종목</div>
+                  <div>미체결 {status.accountSummary.openOrdersCount ?? 0}</div>
+                  <div>평가손익 {money(status.accountSummary.unrealizedPnl ?? 0)}</div>
+                </div>
+              </div>
+            )}
 
             <div className="cta-row">
               <button
@@ -177,13 +235,35 @@ export function App() {
                 ))}
               </div>
             </div>
+            <div>
+              <div style={{ color: 'var(--muted)', marginBottom: 8 }}>모드</div>
+              <div className="risk-options">
+                {(
+                  [
+                    ['PAPER', 'PAPER (리플레이 시세)'],
+                    ['SHADOW', 'SHADOW (실세세+페이퍼체결)'],
+                    ['LIVE_OBSERVE', 'LIVE_OBSERVE (실계좌 관찰, 주문금지)'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <label key={id}>
+                    <input
+                      type="radio"
+                      name="mode"
+                      checked={mode === id}
+                      onChange={() => setMode(id)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="cta-row">
               <button
                 className="primary"
                 disabled={pending}
                 onClick={() =>
                   void api
-                    .start({ capital, riskLevel, mode: 'PAPER' })
+                    .start({ capital, riskLevel, mode })
                     .then(refresh)
                     .catch((e: Error) => setError(e.message))
                 }
@@ -192,7 +272,7 @@ export function App() {
               </button>
             </div>
             <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>
-              기본은 PAPER MODE입니다. Toss 실계좌 LIVE는 진단 통과 후에만 가능합니다.
+              LIVE 실주문은 LIVE GATE READY + ALLOW_LIVE=true 가 필요합니다. 기본 잠금입니다.
             </p>
           </div>
         )}
@@ -220,7 +300,7 @@ export function App() {
         </section>
       )}
 
-      <details className="expert" open={expertOpen} onToggle={(e) => setExpertOpen((e.target as HTMLDetailsElement).open)}>
+      <details className="expert">
         <summary>전문가 설정 / 진단</summary>
         <div className="cta-row" style={{ marginTop: 12 }}>
           <button

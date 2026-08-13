@@ -7,7 +7,13 @@ export type AutopilotState =
   | 'HALTED'
   | 'ERROR';
 
-export type TradingMode = 'PAPER' | 'LIVE';
+/** PAPER = paper broker + local/replay data; PAPER_REPLAY = explicit replay universe.
+ *  SHADOW = real market data + paper fills; LIVE_OBSERVE = real reads, no orders;
+ *  LIVE = real orders only when ALLOW_LIVE + gate PASS.
+ */
+export type TradingMode = 'PAPER' | 'PAPER_REPLAY' | 'SHADOW' | 'LIVE_OBSERVE' | 'LIVE';
+
+export type DataLane = 'REPLAY' | 'PAPER' | 'SHADOW' | 'LIVE';
 
 export type StopMode = 'NONE' | 'STOP_NEW_ENTRIES' | 'CLOSE_AND_STOP';
 
@@ -16,8 +22,19 @@ export type SystemReadiness =
   | 'PAPER_MODE'
   | 'LIVE_READY'
   | 'LIVE_RUNNING'
+  | 'LIVE_OBSERVE'
+  | 'SHADOW'
   | 'DEGRADED'
   | 'HALTED';
+
+export type TossConnectionState =
+  | 'NOT_CONFIGURED'
+  | 'AUTHENTICATING'
+  | 'CONNECTED'
+  | 'DEGRADED'
+  | 'AUTH_FAILED'
+  | 'RATE_LIMITED'
+  | 'DISCONNECTED';
 
 export type MarketCode = 'KR' | 'US';
 export type Venue = 'KRX' | 'NXT';
@@ -38,6 +55,8 @@ export type MarketRegime =
 
 export type RiskLevel = 'STABLE' | 'BALANCED' | 'AGGRESSIVE';
 
+export type GateResult = 'PASS' | 'WARN' | 'FAIL';
+
 export interface MarketSession {
   market: MarketCode;
   venue?: Venue;
@@ -48,6 +67,13 @@ export interface MarketSession {
   opensAt: string | null;
   closesAt: string | null;
   reason?: string;
+}
+
+export interface VenueSessions {
+  tradingDate: string;
+  krx: MarketSession;
+  nxt: MarketSession;
+  integrated: MarketSession;
 }
 
 export interface DiscoverySignal {
@@ -74,6 +100,10 @@ export interface AITradeDecision {
   reasons: string[];
   risks: string[];
   generatedAt: string;
+  signalCreatedAt?: string;
+  aiStartedAt?: string;
+  aiCompletedAt?: string;
+  decisionAgeMs?: number;
 }
 
 export interface RiskProfile {
@@ -113,12 +143,86 @@ export interface MarketEvidence {
   freshnessMs: number;
 }
 
+export interface Quote {
+  symbol: string;
+  price: number;
+  bid: number;
+  ask: number;
+  volume: number;
+  tradingValue: number;
+  changePct: number;
+  marketTimestamp: string;
+  receivedAt: string;
+  source: 'TOSS' | 'REPLAY' | 'CACHE';
+  ageMs: number;
+  currency?: string;
+}
+
+export interface MarketStatus {
+  market: MarketCode;
+  venues: VenueSessions;
+  provider: string;
+  degraded: boolean;
+  reason?: string;
+}
+
+export interface BrokerHealth {
+  authentication: boolean;
+  account: boolean;
+  buyingPower: boolean;
+  positions: boolean;
+  openOrders: boolean;
+  executions: boolean;
+  checkedAt: string;
+  connectionState: TossConnectionState;
+}
+
+export interface MarketEvent {
+  symbol?: string;
+  title: string;
+  summary?: string;
+  source: string;
+  sourceTier: 1 | 2 | 3 | 4;
+  publishedAt: string;
+  receivedAt: string;
+  sentiment?: number;
+  relevance?: number;
+  verified: boolean;
+}
+
+export interface FinalTradeCandidate {
+  symbol: string;
+  quantScore: number;
+  aiConfidence: number;
+  riskScore: number;
+  dataQuality: number;
+  marketRegime: string;
+  action: 'BUY' | 'WATCH' | 'REJECT' | 'WOULD_BUY' | 'WOULD_SELL';
+  entryPlan?: {
+    price?: number;
+    maxPrice?: number;
+    quantity?: number;
+  };
+  stopLoss?: number;
+  takeProfit?: number;
+  validUntil: string;
+  lane: DataLane;
+}
+
+export interface LiveGateCheck {
+  name: string;
+  result: GateResult;
+  detail: string;
+}
+
 export interface HealthSnapshot {
   server: 'OK' | 'DEGRADED' | 'DOWN';
-  broker: SystemReadiness;
-  marketData: SystemReadiness | 'REPLAY' | 'OK';
+  broker: SystemReadiness | TossConnectionState;
+  marketData: SystemReadiness | 'REPLAY' | 'LIVE' | 'OK' | 'DEGRADED' | 'NOT_CONFIGURED' | 'ERROR';
   ai: SystemReadiness;
   readiness: SystemReadiness;
+  liveGate: 'LOCKED' | 'READY' | 'NOT_CONFIGURED';
+  dataLane: DataLane;
   lastHeartbeatAt: string | null;
 }
 
@@ -139,8 +243,25 @@ export interface AutopilotPublicState {
   openPositions: number;
   aiStatusText: string;
   marketSession: MarketSession | null;
+  venueSessions?: VenueSessions | null;
   health: HealthSnapshot;
+  brokerHealth?: BrokerHealth | null;
+  accountSummary?: AccountSummary | null;
   activity: ActivityItem[];
+  universeCount?: number;
+  liveGateChecks?: LiveGateCheck[];
+}
+
+export interface AccountSummary {
+  lane: DataLane;
+  totalEquity?: number;
+  cash?: number;
+  buyingPower?: number;
+  positionsCount?: number;
+  openOrdersCount?: number;
+  dayRealizedPnl?: number;
+  unrealizedPnl?: number;
+  source: string;
 }
 
 export interface ActivityItem {
@@ -197,3 +318,10 @@ export const RISK_PRESETS: Record<RiskLevel, RiskProfile> = {
     maxSpreadPct: 2,
   },
 };
+
+export const FRESHNESS_THRESHOLDS_MS = {
+  KR: 60_000,
+  US: 90_000,
+} as const;
+
+export const AI_MAX_DECISION_AGE_MS = 20_000;

@@ -1,9 +1,10 @@
-import { RISK_PRESETS, type RiskLevel } from '@aizio/trade-shared';
-import { env, tossConfigured, aiConfigured } from '../config/env.js';
+import type { DataLane, FinalTradeCandidate, TradingMode } from '@aizio/trade-shared';
+import { env, tossConfigured } from '../config/env.js';
 import { prisma } from '../db/client.js';
-import { getActiveBroker, getPaperBroker } from '../brokers/index.js';
-import { getMarketDataProvider } from '../marketdata/index.js';
+import { executionMode, getActiveBroker, getPaperBroker, getTossBroker, rebindPaperMarketData } from '../brokers/index.js';
+import { MarketDataNotAvailableError, resolveMarketDataProvider } from '../marketdata/index.js';
 import { getMarketSession, isRegularSessionOpen } from '../engines/marketSession.js';
+import { refreshUniverse, getUniverse, setWatchlist, getWatchlist } from '../services/universe.js';
 import { MarketScanner } from '../engines/scanner.js';
 import { runDiscovery } from '../engines/discovery.js';
 import { scoreCandidate } from '../engines/quant.js';
@@ -77,10 +78,11 @@ export class AutopilotRuntime {
 
     // Market session worker
     let session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
+    const mode = ap.mode as TradingMode;
     if (
-      ap.mode === 'PAPER' &&
+      (mode === 'PAPER' || mode === 'PAPER_REPLAY') &&
       env.PAPER_SIMULATE_REGULAR_SESSION &&
-      env.MARKET_DATA_PROVIDER === 'replay' &&
+      (env.MARKET_DATA_PROVIDER === 'replay' || env.MARKET_DATA_PROVIDER === 'auto') &&
       (!session.isTradingDay || session.session !== 'REGULAR')
     ) {
       session = {
@@ -125,11 +127,32 @@ export class AutopilotRuntime {
       return;
     }
 
-    // Scanner → Discovery → Quant → AI → Risk → Execution
-    const market = getMarketDataProvider();
+    // Scanner → Discovery → Quant → AI → Risk → Execution / Observe / Shadow
+    let market;
+    try {
+      market = resolveMarketDataProvider(mode);
+      if (mode === 'SHADOW' || mode === 'PAPER' || mode === 'PAPER_REPLAY') {
+        rebindPaperMarketData(mode === 'SHADOW' ? 'SHADOW' : 'PAPER_REPLAY');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'market-data-unavailable';
+      await setState('ERROR', { readiness: 'DEGRADED', haltReason: msg, aiStatusText: '시세 DEGRADED' });
+      await emitEvent('MARKET_DATA_STALE', msg, 'error');
+      // Never fall back to REPLAY for live/shadow/observe
+      return;
+    }
+
+    await refreshUniverse(false);
+    const universe = await getUniverse();
+    const watch = getWatchlist();
+    const scanUniverse = watch.length
+      ? universe.filter((u) => watch.includes(u.symbol))
+      : universe;
     const scanner = new MarketScanner(market);
+
     await emitEvent('SCAN_START', '전체 종목 스캔 시작', 'info');
-    const scan = await scanner.scan('KR');
+    const scan = await scanner.scan('KR', scanUniverse);
+    setWatchlist(scan.candidates.slice(0, 40).map((c) => c.symbol));
     await emitEvent('SCAN_DONE', `${scan.scanned}개 분석 → ${scan.candidates.length}개 1차 후보`, 'info');
 
     const regimeEngine = new RuleRegimeEngine();
@@ -149,7 +172,9 @@ export class AutopilotRuntime {
 
     await emitEvent('QUANT', `${quanted.length}개 정밀분석`, 'info');
 
-    const broker = getActiveBroker(ap.mode === 'LIVE' ? 'LIVE' : 'PAPER');
+    const broker = getActiveBroker(mode);
+    const execMode = executionMode(mode);
+    const lane: DataLane = mode === 'LIVE' ? 'LIVE' : mode === 'SHADOW' ? 'SHADOW' : mode === 'LIVE_OBSERVE' ? 'LIVE' : 'PAPER';
     try {
       await broker.connect();
     } catch {
@@ -159,7 +184,7 @@ export class AutopilotRuntime {
     }
 
     const riskProfile = await getActiveRiskProfile();
-    const openPositions = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: ap.mode } });
+    const openPositions = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: execMode } });
     const perf = await computePerformance();
     const equity = ap.capital + perf.netPnl;
     if (this.peakEquity == null) this.peakEquity = equity;
@@ -292,10 +317,53 @@ export class AutopilotRuntime {
         ? `${topSignal.symbol}:${topSignal.strategyId}:${topSignal.detectedAt}`
         : `${item.candidate.symbol}:quant:${item.quant.total}`;
 
+      const candidate: FinalTradeCandidate = {
+        symbol: item.candidate.symbol,
+        quantScore: item.quant.total,
+        aiConfidence: judge.decision.confidence,
+        riskScore: risk.allowed ? 100 : 0,
+        dataQuality: judge.decision.dataQuality,
+        marketRegime: regimeResult.regime,
+        action: mode === 'LIVE_OBSERVE' ? 'WOULD_BUY' : 'BUY',
+        entryPlan: {
+          price: item.candidate.quote.lastPrice,
+          maxPrice: item.candidate.quote.ask,
+          quantity: risk.positionSize,
+        },
+        stopLoss: defaultStops(item.candidate.quote.lastPrice).stopLoss,
+        takeProfit: defaultStops(item.candidate.quote.lastPrice).takeProfit,
+        validUntil: new Date(Date.now() + 60_000).toISOString(),
+        lane,
+      };
+
+      if (mode === 'LIVE_OBSERVE' || (mode === 'LIVE' && (!env.ALLOW_LIVE || !getTossBroker().allowLiveOrders))) {
+        await emitEvent('WOULD_BUY', `${candidate.symbol} WOULD_BUY qty=${risk.positionSize}`, 'trade', { candidate });
+        await writeJournal({
+          symbol: candidate.symbol,
+          strategyId: topSignal?.strategyId,
+          signalId,
+          discoveryWhy: topSignal?.evidence.map((e) => e.reason).join('; '),
+          buyWhy: `WOULD_BUY: ${judge.decision.reasons.join('; ')}`,
+          marketRegime: regimeResult.regime,
+          quantScore: item.quant.total,
+          aiAction: 'WOULD_BUY',
+          aiConfidence: judge.decision.confidence,
+          riskDecision: 'PASS_OBSERVE',
+          entryPrice: item.candidate.quote.lastPrice,
+          quantity: risk.positionSize,
+          meta: { lane, shadow: false, observe: true, candidate },
+        });
+        break;
+      }
+
+      if (mode === 'SHADOW') {
+        await emitEvent('SHADOW_SIGNAL', `${candidate.symbol} SHADOW buy sim`, 'trade', { candidate });
+      }
+
       try {
         const order = await placeManagedOrder({
-          broker,
-          mode: ap.mode === 'LIVE' ? 'LIVE' : 'PAPER',
+          broker: mode === 'LIVE' ? broker : getPaperBroker(),
+          mode: execMode,
           symbol: item.candidate.symbol,
           side: 'BUY',
           quantity: risk.positionSize,
@@ -319,7 +387,7 @@ export class AutopilotRuntime {
               highestPrice: order.averageFilledPrice,
               lowestPrice: order.averageFilledPrice,
               status: 'OPEN',
-              mode: ap.mode,
+              mode: execMode,
             },
           });
           openPositions.push({
@@ -383,9 +451,16 @@ export class AutopilotRuntime {
 
   private async managePositions(regularClosed: boolean) {
     const ap = await ensureAutopilotRow();
-    const broker = getActiveBroker(ap.mode === 'LIVE' ? 'LIVE' : 'PAPER');
+    const mode = ap.mode as TradingMode;
+    const broker = getActiveBroker(mode);
     await broker.connect();
-    const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: ap.mode } });
+    const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: executionMode(mode) } });
+    if (mode === 'LIVE_OBSERVE') {
+      for (const pos of opens) {
+        await emitEvent('WOULD_SELL', `${pos.symbol} WOULD_SELL (observe exit eval)`, 'trade');
+      }
+      return;
+    }
     for (const pos of opens) {
       const quote = await broker.getQuote(pos.symbol);
       const decision = evaluateExit(
@@ -419,8 +494,8 @@ export class AutopilotRuntime {
       await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'EXITING' } });
       try {
         const order = await placeManagedOrder({
-          broker,
-          mode: ap.mode === 'LIVE' ? 'LIVE' : 'PAPER',
+          broker: (ap.mode as TradingMode) === 'LIVE' ? broker : getPaperBroker(),
+          mode: executionMode(ap.mode as TradingMode),
           symbol: pos.symbol,
           side: 'SELL',
           quantity: pos.quantity,
@@ -482,7 +557,7 @@ export class AutopilotRuntime {
 
   private async closeAll(reason: string) {
     const ap = await ensureAutopilotRow();
-    const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: ap.mode } });
+    const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: executionMode(ap.mode as TradingMode) } });
     if (!opens.length) {
       if (ap.stopMode === 'CLOSE_AND_STOP') {
         await prisma.autopilotStateRow.update({
@@ -492,11 +567,12 @@ export class AutopilotRuntime {
       }
       return;
     }
-    const broker = getActiveBroker(ap.mode === 'LIVE' ? 'LIVE' : 'PAPER');
+    const mode = ap.mode as TradingMode;
+    const broker = getActiveBroker(mode);
     await broker.connect();
 
-    // PAPER: ensure ledger mirrors DB open positions before forced exits
-    if (ap.mode === 'PAPER') {
+    // PAPER/SHADOW: ensure ledger mirrors DB open positions before forced exits
+    if (mode !== 'LIVE') {
       const paper = getPaperBroker();
       for (const pos of opens) {
         paper.forcePosition(pos.symbol, pos.quantity, pos.entryPrice);
@@ -506,8 +582,8 @@ export class AutopilotRuntime {
     for (const pos of opens) {
       try {
         const order = await placeManagedOrder({
-          broker,
-          mode: ap.mode === 'LIVE' ? 'LIVE' : 'PAPER',
+          broker: (ap.mode as TradingMode) === 'LIVE' ? broker : getPaperBroker(),
+          mode: executionMode(ap.mode as TradingMode),
           symbol: pos.symbol,
           side: 'SELL',
           quantity: pos.quantity,

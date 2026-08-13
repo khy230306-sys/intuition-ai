@@ -1,5 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type {
+  AccountSummary,
+  AutopilotPublicState,
+  DataLane,
+  HealthSnapshot,
+  SystemReadiness,
+  TradingMode,
+} from '@aizio/trade-shared';
 import {
   ensureAutopilotRow,
   startAutopilot,
@@ -8,55 +16,139 @@ import {
   getActiveRiskProfile,
 } from '../services/autopilot.js';
 import { recentActivity } from '../services/events.js';
-import { getMarketSession } from '../engines/marketSession.js';
+import { getKrVenueSessionsAsync, getMarketSession } from '../engines/marketSession.js';
 import { computePerformance } from '../engines/performance.js';
 import { prisma } from '../db/client.js';
 import { env, tossConfigured, aiConfigured } from '../config/env.js';
 import { getPaperBroker, getTossBroker } from '../brokers/index.js';
-import { getMarketDataProvider } from '../marketdata/index.js';
+import { getTossConnection } from '../brokers/tossConnection.js';
+import { getReplayProvider, getTossMarketDataProvider } from '../marketdata/index.js';
 import { runLiveReadiness } from '../services/liveGate.js';
 import { runRecovery } from '../services/recovery.js';
-import type { AutopilotPublicState, HealthSnapshot, SystemReadiness } from '@aizio/trade-shared';
+import { universeCount } from '../services/universe.js';
 
-async function buildHealth(): Promise<HealthSnapshot> {
-  const ap = await ensureAutopilotRow();
-  const market = getMarketDataProvider();
-  let brokerStatus: SystemReadiness = 'NOT_CONFIGURED';
-  if (ap.mode === 'PAPER') {
+function laneFor(mode: string): DataLane {
+  if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') return 'LIVE';
+  if (mode === 'SHADOW') return 'SHADOW';
+  if (mode === 'PAPER_REPLAY') return 'REPLAY';
+  return 'PAPER';
+}
+
+async function buildHealth(ap: Awaited<ReturnType<typeof ensureAutopilotRow>>): Promise<HealthSnapshot> {
+  const conn = getTossConnection();
+  const mode = ap.mode as TradingMode;
+  let broker: HealthSnapshot['broker'] = 'NOT_CONFIGURED';
+  if (mode === 'PAPER' || mode === 'PAPER_REPLAY' || mode === 'SHADOW') {
     const h = await getPaperBroker().health();
-    brokerStatus = (h.status as SystemReadiness) || 'PAPER_MODE';
+    broker = mode === 'SHADOW' ? (conn.getState() === 'CONNECTED' ? 'CONNECTED' : conn.getState()) : (h.status as SystemReadiness);
   } else if (tossConfigured()) {
-    const h = await getTossBroker().health();
-    brokerStatus = h.ok ? (ap.state === 'RUNNING' ? 'LIVE_RUNNING' : 'LIVE_READY') : 'DEGRADED';
+    broker = conn.getState();
+  }
+
+  let marketData: HealthSnapshot['marketData'] = 'REPLAY';
+  if (mode === 'SHADOW' || mode === 'LIVE_OBSERVE' || mode === 'LIVE') {
+    marketData = tossConfigured() ? getTossMarketDataProvider().status : 'NOT_CONFIGURED';
+  } else if (env.MARKET_DATA_PROVIDER === 'replay' || mode === 'PAPER_REPLAY') {
+    marketData = 'REPLAY';
+  } else {
+    marketData = getReplayProvider().status;
   }
 
   const ai: SystemReadiness = aiConfigured() ? 'LIVE_READY' : 'NOT_CONFIGURED';
   let readiness: SystemReadiness = 'NOT_CONFIGURED';
   if (ap.state === 'HALTED') readiness = 'HALTED';
-  else if (ap.mode === 'PAPER' && ap.enabled) readiness = 'PAPER_MODE';
-  else if (ap.mode === 'LIVE' && ap.enabled && ap.state === 'RUNNING') readiness = 'LIVE_RUNNING';
-  else if (ap.mode === 'LIVE') readiness = tossConfigured() ? 'LIVE_READY' : 'NOT_CONFIGURED';
-  else if (ap.mode === 'PAPER') readiness = 'PAPER_MODE';
+  else if (mode === 'SHADOW') readiness = 'SHADOW';
+  else if (mode === 'LIVE_OBSERVE') readiness = 'LIVE_OBSERVE';
+  else if ((mode === 'PAPER' || mode === 'PAPER_REPLAY') && ap.enabled) readiness = 'PAPER_MODE';
+  else if (mode === 'LIVE' && ap.enabled && ap.state === 'RUNNING') readiness = 'LIVE_RUNNING';
+  else if (mode === 'LIVE') readiness = tossConfigured() ? 'LIVE_READY' : 'NOT_CONFIGURED';
+  else readiness = 'PAPER_MODE';
+
+  const gateRow = await prisma.configKv.findUnique({ where: { key: 'live_gate' } });
+  let liveGate: HealthSnapshot['liveGate'] = 'NOT_CONFIGURED';
+  if (gateRow) {
+    try {
+      const g = JSON.parse(gateRow.valueJson) as { ready?: boolean; locked?: boolean };
+      liveGate = g.ready && !g.locked ? 'READY' : 'LOCKED';
+    } catch {
+      liveGate = 'LOCKED';
+    }
+  } else if (!env.ALLOW_LIVE) liveGate = 'LOCKED';
 
   return {
     server: 'OK',
-    broker: brokerStatus,
-    marketData: market.status === 'REPLAY' ? 'REPLAY' : market.status,
+    broker,
+    marketData,
     ai,
     readiness,
+    liveGate,
+    dataLane: laneFor(mode),
     lastHeartbeatAt: ap.lastHeartbeatAt?.toISOString() ?? null,
   };
 }
 
+async function accountSummary(mode: TradingMode): Promise<AccountSummary | null> {
+  try {
+    if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') {
+      if (!tossConfigured()) return { lane: 'LIVE', source: 'TOSS', positionsCount: 0 };
+      const toss = getTossBroker();
+      await toss.connect();
+      const [acc, bp, positions, orders] = await Promise.all([
+        toss.getAccount(),
+        toss.getBuyingPower(),
+        toss.getPositions(),
+        toss.getOpenOrders(),
+      ]);
+      const unrealized = positions.reduce(
+        (s, p) => s + (p.lastPrice - p.averagePurchasePrice) * p.quantity,
+        0,
+      );
+      return {
+        lane: 'LIVE',
+        source: 'TOSS',
+        cash: acc.cash,
+        buyingPower: bp.cashBuyingPower,
+        totalEquity: acc.cash + positions.reduce((s, p) => s + p.marketValue, 0),
+        positionsCount: positions.length,
+        openOrdersCount: orders.length,
+        unrealizedPnl: unrealized,
+        dayRealizedPnl: 0,
+      };
+    }
+    const paper = getPaperBroker();
+    await paper.connect();
+    const acc = await paper.getAccount();
+    const positions = await paper.getPositions();
+    const unrealized = positions.reduce(
+      (s, p) => s + (p.lastPrice - p.averagePurchasePrice) * p.quantity,
+      0,
+    );
+    return {
+      lane: mode === 'SHADOW' ? 'SHADOW' : mode === 'PAPER_REPLAY' ? 'REPLAY' : 'PAPER',
+      source: mode === 'SHADOW' ? 'PAPER_ON_LIVE_QUOTES' : 'PAPER',
+      cash: acc.cash,
+      buyingPower: acc.cash,
+      totalEquity: acc.cash + positions.reduce((s, p) => s + p.marketValue, 0),
+      positionsCount: positions.length,
+      openOrdersCount: (await paper.getOpenOrders()).length,
+      unrealizedPnl: unrealized,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/api/health', async () => {
-    const health = await buildHealth();
+    const health = await buildHealth(await ensureAutopilotRow());
     return {
       ok: true,
       health,
       tossConfigured: tossConfigured(),
       aiConfigured: aiConfigured(),
+      tossState: getTossConnection().getState(),
       websocketStreaming: false,
+      openApiVersion: '1.2.14',
       note: 'Toss Open API is REST-only per official docs',
     };
   });
@@ -64,12 +156,23 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get('/api/status', async (): Promise<AutopilotPublicState> => {
     const ap = await ensureAutopilotRow();
     const session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
+    const venues = await getKrVenueSessionsAsync({ preferTossCalendar: tossConfigured() });
     const perf = await computePerformance();
     const openPositions = await prisma.positionRow.count({ where: { status: 'OPEN' } });
     const activity = await recentActivity(30);
     const today = new Date().toISOString().slice(0, 10);
     const day = await prisma.dailyPerformance.findUnique({ where: { date: today } });
-    const health = await buildHealth();
+    const health = await buildHealth(ap);
+    const brokerHealth = getTossConnection().getLastHealth();
+    const gateRow = await prisma.configKv.findUnique({ where: { key: 'live_gate' } });
+    let liveGateChecks = undefined;
+    if (gateRow) {
+      try {
+        liveGateChecks = (JSON.parse(gateRow.valueJson) as { checks?: AutopilotPublicState['liveGateChecks'] }).checks;
+      } catch {
+        /* */
+      }
+    }
 
     return {
       enabled: ap.enabled,
@@ -88,8 +191,13 @@ export async function registerRoutes(app: FastifyInstance) {
       openPositions,
       aiStatusText: ap.aiStatusText,
       marketSession: session,
+      venueSessions: venues,
       health,
+      brokerHealth,
+      accountSummary: await accountSummary(ap.mode as TradingMode),
       activity,
+      universeCount: await universeCount(),
+      liveGateChecks,
     };
   });
 
@@ -98,7 +206,7 @@ export async function registerRoutes(app: FastifyInstance) {
       .object({
         capital: z.number().positive().default(env.DEFAULT_CAPITAL),
         riskLevel: z.enum(['STABLE', 'BALANCED', 'AGGRESSIVE']).default('BALANCED'),
-        mode: z.enum(['PAPER', 'LIVE']).default('PAPER'),
+        mode: z.enum(['PAPER', 'PAPER_REPLAY', 'SHADOW', 'LIVE_OBSERVE', 'LIVE']).default('PAPER'),
       })
       .parse(req.body ?? {});
     try {
@@ -139,41 +247,34 @@ export async function registerRoutes(app: FastifyInstance) {
     return { journal: rows };
   });
 
-  app.get('/api/performance', async () => {
-    return computePerformance();
-  });
-
-  app.get('/api/activity', async () => {
-    return { activity: await recentActivity(100) };
-  });
-
-  app.get('/api/risk', async () => {
-    return { profile: await getActiveRiskProfile() };
-  });
+  app.get('/api/performance', async () => computePerformance());
+  app.get('/api/activity', async () => ({ activity: await recentActivity(100) }));
+  app.get('/api/risk', async () => ({ profile: await getActiveRiskProfile() }));
 
   app.get('/api/market/session', async () => {
     const kr = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
     const us = await getMarketSession('US', { preferTossCalendar: tossConfigured() });
-    return { kr, us };
+    const venues = await getKrVenueSessionsAsync({ preferTossCalendar: tossConfigured() });
+    return { kr, us, venues };
   });
 
-  app.get('/api/diagnostics/live', async () => {
-    return runLiveReadiness();
+  app.get('/api/account', async () => {
+    const ap = await ensureAutopilotRow();
+    return { account: await accountSummary(ap.mode as TradingMode) };
   });
 
-  app.post('/api/diagnostics/recovery', async () => {
-    return runRecovery();
-  });
+  app.get('/api/diagnostics/live', async () => runLiveReadiness());
+  app.post('/api/diagnostics/recovery', async () => runRecovery());
 
-  app.get('/api/config/public', async () => {
-    return {
-      tossConfigured: tossConfigured(),
-      aiConfigured: aiConfigured(),
-      allowLive: env.ALLOW_LIVE,
-      marketDataProvider: env.MARKET_DATA_PROVIDER,
-      defaultCapital: env.DEFAULT_CAPITAL,
-      aiRequiredForEntry: env.AI_REQUIRED_FOR_ENTRY,
-      tossStreaming: false,
-    };
-  });
+  app.get('/api/config/public', async () => ({
+    tossConfigured: tossConfigured(),
+    aiConfigured: aiConfigured(),
+    allowLive: env.ALLOW_LIVE,
+    marketDataProvider: env.MARKET_DATA_PROVIDER,
+    defaultCapital: env.DEFAULT_CAPITAL,
+    aiRequiredForEntry: env.AI_REQUIRED_FOR_ENTRY,
+    tossStreaming: false,
+    openApiVersion: '1.2.14',
+    modes: ['PAPER', 'PAPER_REPLAY', 'SHADOW', 'LIVE_OBSERVE', 'LIVE'],
+  }));
 }

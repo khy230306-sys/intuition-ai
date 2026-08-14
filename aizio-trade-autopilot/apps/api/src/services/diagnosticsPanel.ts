@@ -81,13 +81,23 @@ export async function buildDiagnosticsPanel(opts?: { refreshVerify?: boolean }) 
     pick('MARKET SESSION', { name: 'MARKET CLOCK', result: 'FAIL', detail: 'NOT_RUN' }),
     {
       name: 'SCANNER',
-      result: research.funnel ? 'PASS' : 'WARN',
-      detail: research.funnel ? `funnel=${research.funnel.chain.join('→')}` : 'NO_FUNNEL_YET',
+      result: research.funnel ? 'PASS' : research.marketWaiting ? 'PASS' : 'WARN',
+      detail: research.funnel
+        ? `funnel=${research.funnel.chain.join('→')}`
+        : research.marketWaiting
+          ? 'MARKET_WAITING — scan resumes at REGULAR'
+          : 'NO_FUNNEL_YET',
     },
     {
       name: 'DATA FRESHNESS',
-      result: research.dataFreshness.ok ? 'PASS' : 'FAIL',
-      detail: `ageMs=${research.dataFreshness.lastAgeMs ?? 'n/a'} source=${research.dataFreshness.source ?? 'n/a'}`,
+      result: research.marketWaiting
+        ? 'PASS'
+        : research.dataFreshness.ok
+          ? 'PASS'
+          : 'FAIL',
+      detail: research.marketWaiting
+        ? 'SHADOW_WAITING — freshness checked on REGULAR'
+        : `ageMs=${research.dataFreshness.lastAgeMs ?? 'n/a'} source=${research.dataFreshness.source ?? 'n/a'}`,
     },
     {
       name: 'RISK',

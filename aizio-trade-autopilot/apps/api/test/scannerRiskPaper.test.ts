@@ -60,6 +60,7 @@ describe('PaperBroker', () => {
   beforeAll(async () => {
     broker = new PaperBrokerAdapter(market, 3_000_000);
     await broker.connect();
+    await broker.resetLedger(3_000_000);
   });
 
   it('buys and sells with fee/slippage and supports stops conceptually', async () => {

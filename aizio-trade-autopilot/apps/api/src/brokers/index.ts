@@ -19,8 +19,14 @@ export function getPaperBroker(capital?: number): PaperBrokerAdapter {
 /** Bind paper broker to a specific market data provider (SHADOW uses live quotes). */
 export function rebindPaperMarketData(mode: TradingMode) {
   const broker = getPaperBroker();
+  if (mode === 'SHADOW') {
+    // Never silently fall back to REPLAY for SHADOW
+    const provider = resolveMarketDataProvider('SHADOW');
+    broker.setMarketProvider(provider);
+    return broker;
+  }
   try {
-    const provider = resolveMarketDataProvider(mode === 'SHADOW' ? 'SHADOW' : 'PAPER_REPLAY');
+    const provider = resolveMarketDataProvider('PAPER_REPLAY');
     broker.setMarketProvider(provider);
   } catch {
     broker.setMarketProvider(getReplayProvider());

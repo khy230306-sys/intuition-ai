@@ -36,7 +36,6 @@ export async function runLiveReadiness(): Promise<{
 
   // Credentials (presence only)
   const creds = tossCredentialsPresent();
-  const credOk = creds.clientId && creds.clientSecret && creds.accountSeq;
   checks.push(
     check(
       'Toss Credentials',

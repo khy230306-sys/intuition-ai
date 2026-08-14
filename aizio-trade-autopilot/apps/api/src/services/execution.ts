@@ -36,7 +36,13 @@ export async function placeManagedOrder(opts: {
   const idempotencyKey = `${opts.signalId ?? 'nosig'}:${opts.side}:${opts.symbol}:${opts.strategyId ?? 'na'}`;
   const existingKey = await prisma.orderRow.findUnique({ where: { idempotencyKey } });
   if (existingKey && opts.side === 'BUY') {
-    throw new DuplicateOrderError(`duplicate idempotency ${idempotencyKey}`);
+    const st = String(existingKey.status);
+    if (st === 'REJECTED' || st === 'CANCELED') {
+      // Allow retry after failed attempt — delete old key row
+      await prisma.orderRow.delete({ where: { idempotencyKey } }).catch(() => undefined);
+    } else {
+      throw new DuplicateOrderError(`duplicate idempotency ${idempotencyKey}`);
+    }
   }
 
   await prisma.orderRow.create({

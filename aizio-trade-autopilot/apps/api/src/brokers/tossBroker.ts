@@ -110,16 +110,49 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getQuote(symbol: string): Promise<BrokerQuote> {
-    const [priceRes, bookRes] = await Promise.all([
-      this.conn.api<unknown>('GET', `/api/v1/prices?symbols=${encodeURIComponent(symbol)}`, 'MARKET_DATA', false),
-      this.conn.api<unknown>('GET', `/api/v1/orderbook?symbol=${encodeURIComponent(symbol)}`, 'MARKET_DATA', false),
-    ]);
+    // Prefer market-data provider (rankings-enriched volume/value/change)
+    try {
+      const { getTossMarketDataProvider } = await import('../marketdata/index.js');
+      const q = await getTossMarketDataProvider().getQuote(symbol);
+      return {
+        symbol: q.symbol,
+        lastPrice: q.price,
+        bid: q.bid,
+        ask: q.ask,
+        volume: q.volume,
+        value: q.tradingValue,
+        changePct: q.changePct,
+        timestamp: new Date(q.marketTimestamp),
+        source: 'TOSS',
+        freshnessMs: q.ageMs,
+      };
+    } catch {
+      /* fall through to raw prices */
+    }
+    const priceRes = await this.conn.api<unknown>(
+      'GET',
+      `/api/v1/prices?symbols=${encodeURIComponent(symbol)}`,
+      'MARKET_DATA',
+      false,
+    );
     const prices = unwrapList(priceRes, 'prices');
     const p = prices[0] ?? {};
-    const book = unwrapObj(bookRes);
     const last = Number(p.lastPrice);
-    const bid = Number((book.bids as Array<{ price: string }>)?.[0]?.price ?? last);
-    const ask = Number((book.asks as Array<{ price: string }>)?.[0]?.price ?? last);
+    let bid = last;
+    let ask = last;
+    try {
+      const bookRes = await this.conn.api<unknown>(
+        'GET',
+        `/api/v1/orderbook?symbol=${encodeURIComponent(symbol)}`,
+        'MARKET_DATA',
+        false,
+      );
+      const book = unwrapObj(bookRes);
+      bid = Number((book.bids as Array<{ price: string }>)?.[0]?.price ?? last);
+      ask = Number((book.asks as Array<{ price: string }>)?.[0]?.price ?? last);
+    } catch {
+      /* */
+    }
     const ts = new Date(String(p.timestamp ?? Date.now()));
     return {
       symbol,

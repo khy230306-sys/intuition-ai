@@ -40,6 +40,11 @@ export async function startAutopilot(opts: {
   if (mode === 'SHADOW') rebindPaperMarketData('SHADOW');
   if (mode === 'PAPER' || mode === 'PAPER_REPLAY') rebindPaperMarketData('PAPER_REPLAY');
   if (mode !== 'LIVE' && mode !== 'LIVE_OBSERVE') {
+    // Fresh paper ledger for new session — clear prior OPEN paper/shadow rows to avoid orphan exits
+    await prisma.positionRow.updateMany({
+      where: { status: { in: ['OPEN', 'EXITING'] }, mode: 'PAPER' },
+      data: { status: 'CLOSED', exitReason: 'LEDGER_RESET', closedAt: new Date() },
+    });
     await paper.resetLedger(opts.capital);
   } else {
     await paper.connect();

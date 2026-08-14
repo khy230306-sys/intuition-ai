@@ -50,7 +50,7 @@ describe('Autopilot persistence + recovery', () => {
     expect(again.resumed).toBe(false);
   });
 
-  it('reconciles DB vs broker position mismatch', async () => {
+  it('reconciles paper ledger from DB open positions on recovery', async () => {
     const { prisma } = await import('../src/db/client.js');
     const autopilot = await import('../src/services/autopilot.js');
     const recovery = await import('../src/services/recovery.js');
@@ -62,7 +62,7 @@ describe('Autopilot persistence + recovery', () => {
         symbol: '005930',
         entryPrice: 70000,
         quantity: 5,
-        strategyId: 'ghost',
+        strategyId: 'persist',
         openedAt: new Date(),
         highestPrice: 70000,
         lowestPrice: 70000,
@@ -70,13 +70,15 @@ describe('Autopilot persistence + recovery', () => {
         mode: 'PAPER',
       },
     });
-    // broker has no such position
+    // Simulate restart: empty paper ledger while DB still has OPEN
     getPaperBroker().forcePosition('005930', 0, 0);
     await recovery.runRecovery();
-    const ghost = await prisma.positionRow.findFirst({
-      where: { symbol: '005930', strategyId: 'ghost' },
+    const row = await prisma.positionRow.findFirst({
+      where: { symbol: '005930', strategyId: 'persist' },
     });
-    expect(ghost?.status).toBe('CLOSED');
+    expect(row?.status).toBe('OPEN');
+    const paperPos = await getPaperBroker().getPositions();
+    expect(paperPos.find((p) => p.symbol === '005930')?.quantity).toBe(5);
     await autopilot.stopAutopilot('CLOSE_AND_STOP');
   });
 });

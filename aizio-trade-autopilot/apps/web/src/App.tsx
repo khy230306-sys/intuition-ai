@@ -141,7 +141,7 @@ export function App() {
             </div>
             <div>
               <span>ALLOW_LIVE</span>
-              <strong>FALSE</strong>
+              <strong>{status.health.liveGate === 'READY' ? 'CHECK' : 'FALSE'}</strong>
             </div>
           </div>
         )}

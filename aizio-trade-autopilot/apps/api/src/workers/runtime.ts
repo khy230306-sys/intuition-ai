@@ -2,7 +2,7 @@ import type { DataLane, FinalTradeCandidate, TradingMode } from '@aizio/trade-sh
 import { env, tossConfigured } from '../config/env.js';
 import { prisma } from '../db/client.js';
 import { executionMode, getActiveBroker, getPaperBroker, getTossBroker, rebindPaperMarketData } from '../brokers/index.js';
-import { MarketDataNotAvailableError, resolveMarketDataProvider } from '../marketdata/index.js';
+import { resolveMarketDataProvider } from '../marketdata/index.js';
 import { getMarketSession, isRegularSessionOpen } from '../engines/marketSession.js';
 import { refreshUniverse, getUniverse, setWatchlist, getWatchlist } from '../services/universe.js';
 import { MarketScanner } from '../engines/scanner.js';
@@ -42,6 +42,7 @@ export class AutopilotRuntime {
   private runningTick = false;
   private consecutiveLosses = 0;
   private peakEquity: number | null = null;
+  private lastBroadScanAt = 0;
 
   start() {
     if (this.timer) return;
@@ -62,8 +63,13 @@ export class AutopilotRuntime {
       await this.tick();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'tick-error';
-      await emitEvent('WORKER_ERROR', msg, 'error');
-      await setState('ERROR', { haltReason: msg, readiness: 'DEGRADED' });
+      const ap = await ensureAutopilotRow().catch(() => null);
+      if (ap?.enabled && ap.state === 'MARKET_CLOSED') {
+        await emitEvent('WORKER_WARN', `closed-wait tick warn: ${msg}`, 'warn');
+      } else {
+        await emitEvent('WORKER_ERROR', msg, 'error');
+        await setState('ERROR', { haltReason: msg, readiness: 'DEGRADED' });
+      }
     } finally {
       this.runningTick = false;
     }
@@ -117,6 +123,8 @@ export class AutopilotRuntime {
         if (ap.state !== 'MARKET_CLOSED' || !String(ap.aiStatusText).includes('SHADOW WAITING')) {
           await setState('MARKET_CLOSED', {
             aiStatusText: 'MARKET CLOSED · SHADOW WAITING',
+            haltReason: null,
+            readiness: 'SHADOW',
           });
           await emitEvent(
             'SHADOW_WAITING',
@@ -127,11 +135,20 @@ export class AutopilotRuntime {
       } else if (ap.state !== 'MARKET_CLOSED') {
         await setState('MARKET_CLOSED', {
           aiStatusText: '휴장/세션 대기 — 다음 거래일 자동 재개',
+          haltReason: null,
         });
         await emitEvent('MARKET_CLOSED_WAIT', `시장 대기: ${session.reason ?? session.session}`, 'info');
       }
-      if (session.isTradingDay && session.session !== 'REGULAR') {
-        await this.managePositions(true);
+      try {
+        if (session.isTradingDay && session.session !== 'REGULAR') {
+          await this.managePositions(true);
+        }
+      } catch (e) {
+        await emitEvent(
+          'EXIT_SKIP',
+          `closed-session position mgmt: ${e instanceof Error ? e.message : 'err'}`,
+          'warn',
+        );
       }
       return;
     }
@@ -176,14 +193,36 @@ export class AutopilotRuntime {
     await refreshUniverse(false);
     const universe = await getUniverse();
     const watch = getWatchlist();
-    const scanUniverse = watch.length
+    const now = Date.now();
+    const broadDue = now - this.lastBroadScanAt >= env.SCANNER_BROAD_INTERVAL_MS;
+    let scanUniverse = watch.length
       ? universe.filter((u) => watch.includes(u.symbol))
       : universe;
+
+    // SHADOW/LIVE: prefer rankings-liquid subset for broad scans to avoid orderbook DoS
+    if ((mode === 'SHADOW' || mode === 'LIVE') && !watch.length && broadDue) {
+      try {
+        const { getTossMarketDataProvider } = await import('../marketdata/index.js');
+        const liquid = await getTossMarketDataProvider().listLiquidSymbols(200);
+        const set = new Set(liquid);
+        const filtered = universe.filter((u) => set.has(u.symbol));
+        if (filtered.length) scanUniverse = filtered;
+      } catch {
+        /* full universe fallback */
+      }
+      this.lastBroadScanAt = now;
+    } else if (watch.length && now - this.lastBroadScanAt < env.SCANNER_WATCH_INTERVAL_MS) {
+      // Watchlist cadence — skip heavy work until interval
+      await this.managePositions(false);
+      return;
+    }
+
     const scanner = new MarketScanner(market);
 
     await emitEvent('SCAN_START', `전체 종목 스캔 시작 (${scanUniverse.length})`, 'info');
     const scan = await scanner.scan('KR', scanUniverse);
     setWatchlist(scan.candidates.slice(0, 40).map((c) => c.symbol));
+    if (broadDue) this.lastBroadScanAt = now;
 
     // Enforce TOSS-only quotes for SHADOW
     let candidates = scan.candidates;
@@ -498,11 +537,10 @@ export class AutopilotRuntime {
       if (mode === 'SHADOW') {
         await emitEvent(
           'WOULD_BUY',
-          `${candidate.symbol} WOULD_BUY → paper fill on TOSS quote`,
+          `${candidate.symbol} WOULD_BUY candidate qty=${risk.positionSize}`,
           'trade',
           { candidate, QUANT_ELIGIBLE: true, AI_BLOCKED: aiBlocked },
         );
-        if (topSignal) await recordStrategyOutcome(topSignal.strategyId, 'WOULD_BUY');
       }
 
       try {
@@ -517,6 +555,9 @@ export class AutopilotRuntime {
         });
 
         if (order.status === 'FILLED' && order.averageFilledPrice) {
+          if (mode === 'SHADOW' && topSignal) {
+            await recordStrategyOutcome(topSignal.strategyId, 'WOULD_BUY');
+          }
           const stops = defaultStops(order.averageFilledPrice);
           await prisma.positionRow.create({
             data: {
@@ -636,7 +677,7 @@ export class AutopilotRuntime {
     const mode = ap.mode as TradingMode;
     if (mode === 'LIVE_OBSERVE') {
       // Observe-only: evaluate exits as WOULD_SELL, never order
-      const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN' } });
+      const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: 'LIVE' } });
       for (const pos of opens) {
         await emitEvent('WOULD_SELL', `${pos.symbol} WOULD_SELL (LIVE_OBSERVE — no order)`, 'trade');
         if (pos.strategyId) await recordStrategyOutcome(pos.strategyId, 'WOULD_SELL');
@@ -645,16 +686,27 @@ export class AutopilotRuntime {
     }
 
     const broker = getActiveBroker(mode);
-    await broker.connect();
+    try {
+      await broker.connect();
+    } catch (e) {
+      await emitEvent('EXIT_SKIP', `broker connect: ${e instanceof Error ? e.message : 'err'}`, 'warn');
+      return;
+    }
     const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: executionMode(mode) } });
 
     for (const pos of opens) {
-      const quote = await broker.getQuote(pos.symbol);
+      let quote;
+      try {
+        quote = await broker.getQuote(pos.symbol);
+      } catch (e) {
+        await emitEvent('EXIT_SKIP', `${pos.symbol} quote fail: ${e instanceof Error ? e.message : 'err'}`, 'warn');
+        continue;
+      }
       if (mode === 'SHADOW' && quote.source !== 'TOSS') {
         await emitEvent('EXIT_SKIP', `${pos.symbol} non-TOSS quote — skip exit`, 'warn');
         continue;
       }
-      if (quote.freshnessMs > env.FRESHNESS_KR_MS) {
+      if (quote.freshnessMs > env.FRESHNESS_KR_MS && !regularClosed) {
         await emitEvent('EXIT_SKIP', `${pos.symbol} stale quote ageMs=${quote.freshnessMs}`, 'warn');
         continue;
       }
@@ -695,6 +747,11 @@ export class AutopilotRuntime {
         );
       }
 
+      // Ensure paper ledger has the position before sell
+      if (mode !== 'LIVE') {
+        getPaperBroker().forcePosition(pos.symbol, pos.quantity, pos.entryPrice);
+      }
+
       await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'EXITING' } });
       try {
         const order = await placeManagedOrder({
@@ -706,6 +763,11 @@ export class AutopilotRuntime {
           strategyId: pos.strategyId,
           signalId: pos.signalId ? `${pos.signalId}:exit` : undefined,
         });
+        if (String(order.status) !== 'FILLED' && Number(order.filledQuantity) <= 0) {
+          await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'OPEN' } });
+          await emitEvent('EXIT_REJECT', `${pos.symbol} exit rejected: ${order.status}`, 'warn');
+          continue;
+        }
         const exitPrice = order.averageFilledPrice ?? quote.lastPrice;
         const gross = (exitPrice - pos.entryPrice) * pos.quantity;
         const net = gross - (order.commission ?? 0) - (order.tax ?? 0);
@@ -835,6 +897,3 @@ export class AutopilotRuntime {
 }
 
 export const runtime = new AutopilotRuntime();
-
-// silence unused import warning path for MarketDataNotAvailableError in type-only catches
-void MarketDataNotAvailableError;

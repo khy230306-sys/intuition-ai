@@ -20,7 +20,7 @@ import { getKrVenueSessionsAsync, getMarketSession } from '../engines/marketSess
 import { computePerformance } from '../engines/performance.js';
 import { prisma } from '../db/client.js';
 import { env, tossConfigured, aiConfigured } from '../config/env.js';
-import { getPaperBroker, getTossBroker } from '../brokers/index.js';
+import { getPaperBroker, getTossBroker, executionMode } from '../brokers/index.js';
 import { getTossConnection } from '../brokers/tossConnection.js';
 import { getReplayProvider, getTossMarketDataProvider } from '../marketdata/index.js';
 import { runLiveReadiness } from '../services/liveGate.js';
@@ -29,6 +29,7 @@ import { universeCount, getUniverseStats } from '../services/universe.js';
 import { credentialGuidance, getLastShadowVerify, runShadowConnectionVerify } from '../services/shadowVerify.js';
 import { buildDiagnosticsPanel } from '../services/diagnosticsPanel.js';
 import { getShadowResearch } from '../services/shadowMetrics.js';
+import { kstParts } from '../utils/time.js';
 
 function laneFor(mode: string): DataLane {
   if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') return 'LIVE';
@@ -173,9 +174,11 @@ export async function registerRoutes(app: FastifyInstance) {
     const session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
     const venues = await getKrVenueSessionsAsync({ preferTossCalendar: tossConfigured() });
     const perf = await computePerformance();
-    const openPositions = await prisma.positionRow.count({ where: { status: 'OPEN' } });
+    const openPositions = await prisma.positionRow.count({
+      where: { status: 'OPEN', mode: executionMode(mode) },
+    });
     const activity = await recentActivity(30);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = kstParts().dateStr;
     const day = await prisma.dailyPerformance.findUnique({ where: { date: today } });
     const health = await buildHealth(ap);
     const brokerHealth = getTossConnection().getLastHealth();

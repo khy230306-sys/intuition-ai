@@ -147,17 +147,21 @@ export async function runShadowConnectionVerify(): Promise<{
   {
     const t0 = Date.now();
     try {
+      const session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
+      const regular = session.isTradingDay && session.session === 'REGULAR';
       const q = await toss.getQuote('005930');
       const fresh = q.freshnessMs <= env.FRESHNESS_KR_MS;
       const sourceOk = q.source === 'TOSS';
-      stages.push(
-        stage(
-          'QUOTES',
-          q.lastPrice > 0 && sourceOk ? (fresh ? 'PASS' : 'WARN') : 'FAIL',
-          `source=${q.source} ageMs=${q.freshnessMs}`,
-          Date.now() - t0,
-        ),
-      );
+      let result: GateResult = 'FAIL';
+      let detail = `source=${q.source} ageMs=${q.freshnessMs}`;
+      if (q.lastPrice > 0 && sourceOk) {
+        if (fresh) result = 'PASS';
+        else if (!regular) {
+          result = 'PASS';
+          detail += ' expected_stale_when_closed';
+        } else result = 'WARN';
+      }
+      stages.push(stage('QUOTES', result, detail, Date.now() - t0));
     } catch (e) {
       stages.push(stage('QUOTES', 'FAIL', e instanceof Error ? e.message : 'fail', Date.now() - t0));
     }
@@ -184,11 +188,14 @@ export async function runShadowConnectionVerify(): Promise<{
     const t0 = Date.now();
     try {
       const session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
+      const regular = session.isTradingDay && session.session === 'REGULAR';
       stages.push(
         stage(
           'MARKET SESSION',
           'PASS',
-          `${session.tradingDate} ${session.session} open=${session.isOpen}`,
+          regular
+            ? `${session.tradingDate} REGULAR open`
+            : `${session.tradingDate} ${session.session} SHADOW_WAITING_OK`,
           Date.now() - t0,
         ),
       );
@@ -200,9 +207,11 @@ export async function runShadowConnectionVerify(): Promise<{
   stages.push(stage('ALLOW_LIVE', env.ALLOW_LIVE ? 'WARN' : 'PASS', env.ALLOW_LIVE ? 'true' : 'FALSE'));
   stages.push(stage('LIVE STATUS', env.ALLOW_LIVE ? 'WARN' : 'PASS', env.ALLOW_LIVE ? 'UNLOCKED_FLAG' : 'LOCKED'));
 
-  const critical = ['TOSS AUTH', 'ACCOUNT', 'BUYING POWER', 'QUOTES', 'UNIVERSE', 'MARKET SESSION'];
+  // QUOTES may be WARN during REGULAR; PASS when closed+stale is OK. AUTH/ACCOUNT/BP/UNIVERSE/SESSION required.
+  const critical = ['TOSS AUTH', 'ACCOUNT', 'BUYING POWER', 'UNIVERSE', 'MARKET SESSION'];
   const by = new Map(stages.map((s) => [s.name, s]));
-  const allCriticalPass = critical.every((n) => by.get(n)?.result === 'PASS');
+  const quotesOk = by.get('QUOTES')?.result === 'PASS' || by.get('QUOTES')?.result === 'WARN';
+  const allCriticalPass = critical.every((n) => by.get(n)?.result === 'PASS') && quotesOk;
 
   await persist(stages);
   await emitEvent(

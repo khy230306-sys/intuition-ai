@@ -208,4 +208,14 @@ describe('V1.2 SHADOW readiness', () => {
     expect(result.providerStatus).toBe('NOT_CONFIGURED');
     expect(result.decision?.action).not.toBe('BUY');
   });
+
+  it('V1.2 report includes Actual Live Orders Sent = 0', async () => {
+    const { buildV12ShadowReport } = await import('../src/services/v12Report.js');
+    const r = await buildV12ShadowReport();
+    expect(r.title).toBe('AIZIO TRADE V1.2 SHADOW');
+    expect(r.actualLiveOrdersSent).toBe(0);
+    expect(r.items).toHaveLength(22);
+    expect(r.items[20].name).toBe('Actual Live Orders Sent');
+    expect(r.items[20].value).toBe('0');
+  });
 });

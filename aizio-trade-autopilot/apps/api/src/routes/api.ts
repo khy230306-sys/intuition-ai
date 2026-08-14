@@ -312,6 +312,11 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post('/api/diagnostics/shadow-verify', async () => runShadowConnectionVerify());
   app.get('/api/diagnostics/shadow-verify', async () => getLastShadowVerify());
   app.get('/api/diagnostics/shadow-research', async () => getShadowResearch());
+  app.get('/api/diagnostics/v12-report', async () => {
+    const { buildV12ShadowReport, formatV12ReportText } = await import('../services/v12Report.js');
+    const report = await buildV12ShadowReport();
+    return { ...report, text: formatV12ReportText(report) };
+  });
   app.get('/api/universe/stats', async () => getUniverseStats());
   app.get('/api/credentials/guidance', async () => credentialGuidance());
 

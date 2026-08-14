@@ -168,6 +168,12 @@ export class TossConnectionManager {
       create: { key: 'toss_account_seq', valueJson: JSON.stringify({ accountSeq: this.accountSeq, source: 'AUTO' }) },
       update: { valueJson: JSON.stringify({ accountSeq: this.accountSeq, source: 'AUTO' }) },
     });
+    try {
+      const { persistAccountSeqToEnv } = await import('../services/v12Report.js');
+      persistAccountSeqToEnv(this.accountSeq);
+    } catch {
+      /* env write optional */
+    }
     await emitEvent('ACCOUNT_SEQ_AUTO', `accountSeq auto-discovered (value not logged)`, 'info');
     return this.accountSeq;
   }

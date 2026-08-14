@@ -44,8 +44,9 @@ cd aizio-trade-autopilot
 cp .env.example .env   # then fill TOSS_CLIENT_ID / TOSS_CLIENT_SECRET
 npm install && npm run db:generate && npm run db:push
 npm run toss:probe     # must show AUTH PASS
+npm run toss:report    # prints AIZIO TRADE V1.2 SHADOW 1..22 report
 npm run dev            # API + Web
-# UI: mode=SHADOW → start  |  or POST /api/diagnostics/shadow-verify
+# UI: mode=SHADOW → start  |  or GET /api/diagnostics/v12-report
 ```
 
 Keep `ALLOW_LIVE=false`. Real `placeOrder` stays `LIVE_ORDERS_LOCKED`.

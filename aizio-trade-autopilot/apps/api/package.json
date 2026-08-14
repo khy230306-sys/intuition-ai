@@ -12,7 +12,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "toss:probe": "tsx scripts/probe-toss.ts"
+    "toss:probe": "tsx scripts/probe-toss.ts",
+    "toss:report": "tsx scripts/v12-report.ts"
   },
   "dependencies": {
     "@aizio/trade-shared": "*",

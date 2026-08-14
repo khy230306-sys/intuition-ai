@@ -24,12 +24,31 @@ Confirmed: OAuth2 Client Credentials, `X-Tossinvest-Account`, REST only (no WebS
 ```bash
 cd aizio-trade-autopilot
 cp .env.example .env
+# Edit .env: TOSS_CLIENT_ID + TOSS_CLIENT_SECRET (ACCOUNT_SEQ optional / auto)
+# ALLOW_LIVE=false
 npm install
 npm run db:generate
 npm run db:push
 npm run dev:api   # http://0.0.0.0:8787
 npm run dev:web   # http://0.0.0.0:5177
 ```
+
+## V1.2 SHADOW on your PC (recommended)
+
+Toss Open API locks to **allowed IPs**. Cursor Cloud egress IPs rotate → `IP_NOT_ALLOWED`.
+Run on the machine whose public IP is already allowlisted (e.g. `14.44.105.121`):
+
+```bash
+git fetch origin && git checkout cursor/aizio-trade-shadow-v12-1c4f
+cd aizio-trade-autopilot
+cp .env.example .env   # then fill TOSS_CLIENT_ID / TOSS_CLIENT_SECRET
+npm install && npm run db:generate && npm run db:push
+npm run toss:probe     # must show AUTH PASS
+npm run dev            # API + Web
+# UI: mode=SHADOW → start  |  or POST /api/diagnostics/shadow-verify
+```
+
+Keep `ALLOW_LIVE=false`. Real `placeOrder` stays `LIVE_ORDERS_LOCKED`.
 
 ## Tests
 
@@ -43,7 +62,7 @@ Set in `.env` (never commit secrets):
 
 - `TOSS_CLIENT_ID`
 - `TOSS_CLIENT_SECRET`
-- `TOSS_ACCOUNT_SEQ`
-- Allowed IP in Toss WTS Open API settings
+- `TOSS_ACCOUNT_SEQ` (optional — auto from accounts API)
+- Allowed IP in Toss WTS Open API settings (**this PC's IP**)
 - Optional: `AI_PROVIDER_*`
 - `ALLOW_LIVE=true` only after `/api/diagnostics/live` all PASS

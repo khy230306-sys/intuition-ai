@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "toss:probe": "tsx scripts/probe-toss.ts"
   },
   "dependencies": {
     "@aizio/trade-shared": "*",

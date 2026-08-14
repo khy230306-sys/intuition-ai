@@ -15,7 +15,8 @@
     "test": "npm run test -w @aizio/trade-api",
     "db:push": "npm run db:push -w @aizio/trade-api",
     "db:generate": "npm run db:generate -w @aizio/trade-api",
-    "start:api": "npm run start -w @aizio/trade-api"
+    "start:api": "npm run start -w @aizio/trade-api",
+    "toss:probe": "npm run toss:probe -w @aizio/trade-api"
   },
   "engines": {
     "node": ">=20"

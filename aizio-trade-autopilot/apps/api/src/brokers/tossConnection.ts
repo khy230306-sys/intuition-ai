@@ -76,14 +76,16 @@ export class TossConnectionManager {
   private lastError: string | null = null;
   private lastHealth: BrokerHealth | null = null;
   private clockSkewMs = 0;
+  private accountSeq: string;
   readonly limiter = new RateLimiter();
 
   constructor(
     private readonly clientId = env.TOSS_CLIENT_ID,
     private readonly clientSecret = env.TOSS_CLIENT_SECRET,
-    private readonly accountSeq = env.TOSS_ACCOUNT_SEQ,
+    accountSeq = env.TOSS_ACCOUNT_SEQ,
     private readonly baseUrl = env.TOSS_API_BASE_URL,
   ) {
+    this.accountSeq = accountSeq;
     const c = tossCredentialsPresent();
     if (!c.clientId || !c.clientSecret) this.state = 'NOT_CONFIGURED';
   }
@@ -102,6 +104,10 @@ export class TossConnectionManager {
 
   getAccountSeq(): string {
     return this.accountSeq;
+  }
+
+  setAccountSeq(seq: string) {
+    this.accountSeq = String(seq);
   }
 
   getBaseUrl(): string {
@@ -130,6 +136,7 @@ export class TossConnectionManager {
       await this.ensureToken(true);
       this.state = 'CONNECTED';
       this.lastError = null;
+      await this.ensureAccountSeq().catch(() => undefined);
       await emitEvent('BROKER_CONNECTED', 'Toss authentication OK', 'info');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'auth-failed';
@@ -139,6 +146,30 @@ export class TossConnectionManager {
       await emitEvent('BROKER_DISCONNECTED', `Toss auth failed (${classifyAuthError(msg)})`, 'error');
       throw e;
     }
+  }
+
+  /**
+   * GET /api/v1/accounts does NOT need X-Tossinvest-Account — it returns accountSeq.
+   * Persist discovered seq for subsequent account-scoped calls.
+   */
+  async ensureAccountSeq(): Promise<string> {
+    if (this.accountSeq) return this.accountSeq;
+    const data = await this.api<{
+      result?: Array<{ accountNo: string; accountSeq: number; accountType: string }> | { accounts: Array<{ accountSeq: number }> };
+    }>('GET', '/api/v1/accounts', 'ACCOUNT', false);
+    const list = Array.isArray(data.result)
+      ? data.result
+      : (data.result as { accounts?: Array<{ accountSeq: number }> } | undefined)?.accounts ?? [];
+    const first = list[0];
+    if (!first || first.accountSeq == null) throw new Error('TOSS_NO_ACCOUNT');
+    this.accountSeq = String(first.accountSeq);
+    await prisma.configKv.upsert({
+      where: { key: 'toss_account_seq' },
+      create: { key: 'toss_account_seq', valueJson: JSON.stringify({ accountSeq: this.accountSeq, source: 'AUTO' }) },
+      update: { valueJson: JSON.stringify({ accountSeq: this.accountSeq, source: 'AUTO' }) },
+    });
+    await emitEvent('ACCOUNT_SEQ_AUTO', `accountSeq auto-discovered (value not logged)`, 'info');
+    return this.accountSeq;
   }
 
   async ensureToken(force = false): Promise<string> {
@@ -265,12 +296,13 @@ export class TossConnectionManager {
     }
 
     try {
-      await this.api('GET', '/api/v1/accounts', 'ACCOUNT', true);
+      await this.ensureAccountSeq();
       health.account = true;
     } catch {
       /* leave false */
     }
     try {
+      await this.ensureAccountSeq();
       await this.api('GET', '/api/v1/buying-power?currency=KRW', 'ORDER_INFO', true);
       health.buyingPower = true;
     } catch {

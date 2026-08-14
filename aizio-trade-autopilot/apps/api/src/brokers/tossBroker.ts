@@ -44,15 +44,19 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getAccount(): Promise<BrokerAccount> {
-    const data = await this.conn.api<{ result?: { accounts: Array<{ accountNo: string; accountSeq: number; accountType: string }> } }>(
-      'GET',
-      '/api/v1/accounts',
-      'ACCOUNT',
-      true,
-    );
-    const accounts = data.result?.accounts ?? [];
+    // accounts list does not require X-Tossinvest-Account
+    const data = await this.conn.api<{
+      result?:
+        | Array<{ accountNo: string; accountSeq: number; accountType: string }>
+        | { accounts: Array<{ accountNo: string; accountSeq: number; accountType: string }> };
+    }>('GET', '/api/v1/accounts', 'ACCOUNT', false);
+    const accounts = Array.isArray(data.result)
+      ? data.result
+      : (data.result as { accounts?: Array<{ accountNo: string; accountSeq: number; accountType: string }> } | undefined)
+          ?.accounts ?? [];
     const acc = accounts[0];
     if (!acc) throw new Error('no-account');
+    this.conn.setAccountSeq(String(acc.accountSeq));
     const bp = await this.getBuyingPower();
     return {
       accountNo: acc.accountNo,
@@ -64,6 +68,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getBuyingPower(): Promise<BrokerBuyingPower> {
+    await this.conn.ensureAccountSeq();
     const data = await this.conn.api<{ result?: { currency: string; cashBuyingPower: string } }>(
       'GET',
       '/api/v1/buying-power?currency=KRW',
@@ -75,6 +80,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getPositions(): Promise<BrokerPosition[]> {
+    await this.conn.ensureAccountSeq();
     const data = await this.conn.api<{ result?: { items: Array<Record<string, unknown>> } }>(
       'GET',
       '/api/v1/holdings',
@@ -93,6 +99,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getOpenOrders(): Promise<BrokerOrder[]> {
+    await this.conn.ensureAccountSeq();
     const data = await this.conn.api<{ result?: { orders: Array<Record<string, unknown>> } }>(
       'GET',
       '/api/v1/orders?status=OPEN',
@@ -132,6 +139,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
     if (!this.allowLiveOrders) {
       throw new Error('LIVE_ORDERS_LOCKED: ALLOW_LIVE gate required; use LIVE_OBSERVE/SHADOW');
     }
+    await this.conn.ensureAccountSeq();
     const body: Record<string, unknown> = {
       clientOrderId: order.clientOrderId,
       symbol: order.symbol,
@@ -159,6 +167,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getOrder(orderId: string): Promise<BrokerOrder> {
+    await this.conn.ensureAccountSeq();
     const data = await this.conn.api<{ result?: Record<string, unknown> }>(
       'GET',
       `/api/v1/orders/${encodeURIComponent(orderId)}`,
@@ -169,6 +178,7 @@ export class TossBrokerAdapter implements BrokerAdapter {
   }
 
   async getExecutions(): Promise<BrokerExecution[]> {
+    await this.conn.ensureAccountSeq();
     const data = await this.conn.api<{ result?: { orders: Array<Record<string, unknown>> } }>(
       'GET',
       '/api/v1/orders?status=CLOSED&limit=50',

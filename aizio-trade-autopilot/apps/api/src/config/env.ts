@@ -69,8 +69,9 @@ const schema = z.object({
 
 export const env = schema.parse(process.env);
 
+/** Client ID + Secret are enough to auth; accountSeq is auto-discovered from GET /api/v1/accounts. */
 export function tossConfigured(): boolean {
-  return Boolean(env.TOSS_CLIENT_ID && env.TOSS_CLIENT_SECRET && env.TOSS_ACCOUNT_SEQ);
+  return Boolean(env.TOSS_CLIENT_ID && env.TOSS_CLIENT_SECRET);
 }
 
 export function tossCredentialsPresent(): {

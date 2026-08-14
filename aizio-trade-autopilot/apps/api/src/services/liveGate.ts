@@ -40,15 +40,15 @@ export async function runLiveReadiness(): Promise<{
   checks.push(
     check(
       'Toss Credentials',
-      credOk ? 'PASS' : 'FAIL',
-      `ID=${creds.clientId ? 'CONFIGURED' : 'MISSING'} SECRET=${creds.clientSecret ? 'CONFIGURED' : 'MISSING'} SEQ=${creds.accountSeq ? 'CONFIGURED' : 'MISSING'}`,
+      creds.clientId && creds.clientSecret ? 'PASS' : 'FAIL',
+      `ID=${creds.clientId ? 'CONFIGURED' : 'MISSING'} SECRET=${creds.clientSecret ? 'CONFIGURED' : 'MISSING'} SEQ=${creds.accountSeq ? 'CONFIGURED' : 'AUTO'}`,
     ),
   );
 
   const conn = getTossConnection();
   const toss = getTossBroker();
 
-  if (!credOk) {
+  if (!(creds.clientId && creds.clientSecret)) {
     checks.push(check('Toss Auth', 'FAIL', 'NOT_CONFIGURED'));
     checks.push(check('Account', 'FAIL', 'NOT_CONFIGURED'));
     checks.push(check('Buying Power', 'FAIL', 'NOT_CONFIGURED'));

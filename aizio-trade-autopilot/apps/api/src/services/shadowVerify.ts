@@ -22,7 +22,7 @@ export interface CredentialGuidance {
 
 export function credentialGuidance(): CredentialGuidance {
   const c = tossCredentialsPresent();
-  const needed = !(c.clientId && c.clientSecret && c.accountSeq);
+  const needed = !(c.clientId && c.clientSecret);
   return {
     needed,
     fields: ['TOSS_CLIENT_ID', 'TOSS_CLIENT_SECRET', 'TOSS_ACCOUNT_SEQ'],
@@ -34,6 +34,7 @@ export function credentialGuidance(): CredentialGuidance {
           'TOSS_CLIENT_SECRET=',
           'TOSS_ACCOUNT_SEQ=',
           '입력 후 서버를 재시작하세요.',
+          '(ACCOUNT_SEQ는 비워도 됩니다. 서버가 계좌 목록에서 자동 조회합니다.)',
         ].join('\n')
       : 'Toss credentials CONFIGURED (values not shown)',
   };
@@ -55,13 +56,13 @@ export async function runShadowConnectionVerify(): Promise<{
   const stages: VerifyStage[] = [];
   const guidance = credentialGuidance();
   const creds = tossCredentialsPresent();
-  const credOk = creds.clientId && creds.clientSecret && creds.accountSeq;
+  const credOk = creds.clientId && creds.clientSecret;
 
   stages.push(
     stage(
       'TOSS CREDENTIALS',
       credOk ? 'PASS' : 'FAIL',
-      `ID=${creds.clientId ? 'CONFIGURED' : 'MISSING'} SECRET=${creds.clientSecret ? 'CONFIGURED' : 'MISSING'} SEQ=${creds.accountSeq ? 'CONFIGURED' : 'MISSING'}`,
+      `ID=${creds.clientId ? 'CONFIGURED' : 'MISSING'} SECRET=${creds.clientSecret ? 'CONFIGURED' : 'MISSING'} SEQ=${creds.accountSeq ? 'CONFIGURED' : 'AUTO'}`,
     ),
   );
 

@@ -13,6 +13,8 @@ import { CoupangAdapter } from "./adapters/marketplaces/coupang.ts";
 import { NaverCommerceAdapter } from "./adapters/marketplaces/naver.ts";
 import { createApp, refreshIntegrationRows } from "./routes/app.ts";
 import { startWorker } from "./jobs/queue.ts";
+import { resumeMissions } from "./organization/orchestrator.ts";
+import { runWatchCycle } from "./watch/cycle.ts";
 import type { AppServices } from "./app-context.ts";
 
 export function buildServices(): AppServices {
@@ -43,6 +45,8 @@ export function buildServices(): AppServices {
 export function boot() {
   const services = buildServices();
   void refreshIntegrationRows(services);
+  resumeMissions(services);
+  runWatchCycle(services.repo);
   const app = createApp(services);
   const stopWorker = startWorker(services);
   const server = serve({ fetch: app.fetch, port: env.port, hostname: env.host }, (info) => {

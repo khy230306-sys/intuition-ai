@@ -13,15 +13,22 @@ import { buildMarketSnapshot } from "../engines/market/market-intelligence.ts";
 import { fetchUsdKrw } from "../adapters/fx/frankfurter.ts";
 import type { AppServices } from "../app-context.ts";
 import type { ProfitAnalysis } from "../shared/types.ts";
+import { executeMissionPlan } from "../organization/orchestrator.ts";
+import { runWatchCycle } from "../watch/cycle.ts";
 
 const BACKOFF_MS = [5_000, 15_000, 60_000, 5 * 60_000];
 
 export function startWorker(services: AppServices): () => void {
   let stopped = false;
+  let lastWatch = 0;
   const tick = async () => {
     if (stopped) return;
     try {
       await processOne(services);
+      if (Date.now() - lastWatch > 5000) {
+        lastWatch = Date.now();
+        runWatchCycle(services.repo);
+      }
     } catch (err) {
       console.error("[job-worker]", err);
     }
@@ -204,6 +211,25 @@ async function handleJob(
         humanReviewRequired: classified.decision === "HUMAN_REVIEW_REQUIRED",
       });
       return { status: classified.decision === "HUMAN_REVIEW_REQUIRED" ? "BLOCKED" : "SUCCESS", data: classified };
+    }
+    case "PLAN_MISSION":
+    case "RUN_DEPARTMENT":
+    case "CROSS_REVIEW":
+    case "SYNTHESIZE_STRATEGY":
+    case "AUDIT_MISSION":
+    case "FINALIZE_MISSION": {
+      const missionId = String(body.missionId ?? "");
+      const mission = await executeMissionPlan(services, missionId);
+      return { status: mission.status === "FAILED" ? "FAILED" : "SUCCESS", data: mission, error: mission.error ?? undefined };
+    }
+    case "WATCH_HEALTH":
+    case "WATCH_API":
+    case "WATCH_JOBS":
+    case "WATCH_DATA":
+    case "WATCH_COST":
+    case "HANDLE_INCIDENT": {
+      const report = runWatchCycle(services.repo);
+      return { status: "SUCCESS", data: report };
     }
     case "SYNC_LISTING":
     case "SYNC_TRACKING":

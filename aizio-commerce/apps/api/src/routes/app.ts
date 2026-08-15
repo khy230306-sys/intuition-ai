@@ -3,6 +3,10 @@ import { cors } from "hono/cors";
 import type { AppServices } from "../app-context.ts";
 import { approveProductSchema, commandSchema, safetySettingsSchema } from "../shared/schemas.ts";
 import { routeCommand } from "../engines/command/command-router.ts";
+import { classifyOwnerCommand } from "../organization/classify.ts";
+import { startOwnerMission } from "../organization/orchestrator.ts";
+import { runWatchCycle } from "../watch/cycle.ts";
+import { DEPARTMENT_LABEL } from "../organization/types.ts";
 import { enqueue } from "../jobs/queue.ts";
 import { evaluateSafetyGate } from "../engines/safety/safety-gate.ts";
 import { generateContent } from "../engines/content/content-engine.ts";
@@ -36,6 +40,15 @@ export function createApp(services: AppServices) {
     const settings = services.repo.getSafetySettings();
     const lastRun = services.repo.latestScoutRun();
     const scoutCounts = services.repo.scoutCountsFromDb();
+    const watch = services.repo.latestWatchSnapshot() ?? runWatchCycle(services.repo);
+    const currentMission = services.repo.listMissions({ limit: 1 })[0] ?? null;
+    const deptHealth = Object.fromEntries(
+      (currentMission?.departments ?? []).map((d) => {
+        const tasks = currentMission ? services.repo.listDepartmentTasks(currentMission.id) : [];
+        const t = tasks.find((x) => x.department === d);
+        return [d, t?.status === "SUCCESS" ? "READY" : t?.status === "RUNNING" ? "BUSY" : t?.status === "FAILED" ? "DEGRADED" : "READY"];
+      }),
+    );
     return c.json({
       analyzedToday,
       candidates,
@@ -57,6 +70,23 @@ export function createApp(services: AppServices) {
       note: pending.length
         ? "외부 API가 연결되지 않아 실시간 판매 수치는 0일 수 있습니다. 가상 매출은 표시하지 않습니다."
         : null,
+      watch,
+      safetyLock: settings.globalSafetyLock,
+      hq: {
+        currentMission: currentMission
+          ? {
+              id: currentMission.id,
+              command: currentMission.ownerCommand,
+              status: currentMission.status,
+              progress: currentMission.progress,
+              departments: currentMission.departments.map((d) => ({
+                id: d,
+                label: DEPARTMENT_LABEL[d],
+                health: deptHealth[d] ?? "READY",
+              })),
+            }
+          : null,
+      },
     });
   });
 
@@ -282,7 +312,17 @@ export function createApp(services: AppServices) {
   app.post("/api/command", async (c) => {
     const parsed = commandSchema.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: "INVALID" }, 400);
+    const classified = classifyOwnerCommand(parsed.data.text);
     const routed = routeCommand(parsed.data.text);
+    const useCommander =
+      classified.level === "STRATEGIC" ||
+      classified.level === "URGENT" ||
+      classified.intent === "org_watch" ||
+      classified.intent === "org_returns";
+    if (useCommander) {
+      const mission = await startOwnerMission(services, parsed.data.text);
+      return c.json({ classified, mission, routed, source: "COMMANDER" });
+    }
     if (routed.mutating) {
       const settings = services.repo.getSafetySettings();
       const gate = evaluateSafetyGate(settings, {
@@ -296,12 +336,31 @@ export function createApp(services: AppServices) {
         humanApproved: routed.intent !== "pause_loss",
       });
       if (routed.intent === "pause_loss" && !gate.allowed && gate.decision === "BLOCK") {
-        return c.json({ routed, error: gate.reasons }, 409);
+        return c.json({ routed, classified, error: gate.reasons }, 409);
       }
     }
     const result = await executeCommand(services, routed);
-    return c.json({ routed, result, source: "CODE_ROUTER" });
+    return c.json({ routed, classified, result, source: "CODE_ROUTER" });
   });
+
+  app.get("/api/missions", (c) => c.json({ missions: services.repo.listMissions({ limit: 30 }) }));
+  app.get("/api/missions/:id", (c) => {
+    const mission = services.repo.getMission(c.req.param("id"));
+    if (!mission) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json({
+      mission,
+      tasks: services.repo.listDepartmentTasks(mission.id),
+    });
+  });
+  app.get("/api/watch", (c) => {
+    const report = services.repo.latestWatchSnapshot() ?? runWatchCycle(services.repo);
+    return c.json({
+      report,
+      incidents: services.repo.listIncidents(),
+      lock: services.repo.getGlobalSafetyLock(),
+    });
+  });
+  app.post("/api/watch/tick", (c) => c.json(runWatchCycle(services.repo)));
 
   app.post("/api/vision", async (c) => {
     const body = await c.req.json().catch(() => ({}));

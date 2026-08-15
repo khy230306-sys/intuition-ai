@@ -9,7 +9,10 @@ type Page =
   | "orders"
   | "review"
   | "profit"
-  | "settings";
+  | "settings"
+  | "hq"
+  | "watch"
+  | "mission";
 
 function won(n: number | null | undefined) {
   if (n === null || n === undefined) return "—";
@@ -48,6 +51,7 @@ export function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Product | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [missionId, setMissionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [d, p] = await Promise.all([api.dashboard(), api.products()]);
@@ -72,9 +76,16 @@ export function App() {
     if (!command.trim()) return;
     setBusy(true);
     try {
-      const result = (await api.command(command.trim())) as { result?: { message?: string; jobId?: string } };
-      setNotice(result.result?.message ?? "명령을 실행했습니다.");
-      if (command.includes("찾아")) setPage("recs");
+      const result = (await api.command(command.trim())) as {
+        result?: { message?: string; jobId?: string };
+        source?: string;
+        mission?: { id: string };
+      };
+      setNotice(result.result?.message ?? (result.source === "COMMANDER" ? "Commander가 Mission을 시작했습니다." : "명령을 실행했습니다."));
+      if (result.source === "COMMANDER" && result.mission?.id) {
+        setMissionId(result.mission.id);
+        setPage("mission");
+      } else if (command.includes("찾아")) setPage("recs");
       if (command.includes("주문")) setPage("orders");
       if (command.includes("수익")) setPage("profit");
       await load();
@@ -187,6 +198,9 @@ export function App() {
       ) : null}
       {page === "orders" ? <Orders /> : null}
       {page === "profit" && dash ? <Profit dash={dash} /> : null}
+      {page === "hq" && dash ? <Hq dash={dash} onOpen={(id) => { setMissionId(id); setPage("mission"); }} /> : null}
+      {page === "watch" ? <Watch /> : null}
+      {page === "mission" && missionId ? <MissionView id={missionId} onBack={() => setPage("hq")} /> : null}
       {page === "settings" ? <Integrations /> : null}
 
       <nav className="nav">
@@ -196,11 +210,11 @@ export function App() {
         <button className={page === "recs" ? "on" : ""} onClick={() => setPage("recs")}>
           추천
         </button>
-        <button className={page === "orders" ? "on" : ""} onClick={() => setPage("orders")}>
-          주문
+        <button className={page === "hq" || page === "mission" ? "on" : ""} onClick={() => setPage("hq")}>
+          조직
         </button>
-        <button className={page === "review" ? "on" : ""} onClick={() => setPage("review")}>
-          검토
+        <button className={page === "watch" ? "on" : ""} onClick={() => setPage("watch")}>
+          감시
         </button>
         <button className={page === "profit" ? "on" : ""} onClick={() => setPage("profit")}>
           수익
@@ -233,6 +247,28 @@ function Home({
         <Stat k="검토 필요" v={dash.reviewNeeded} />
         <Stat k="연결 대기" v={dash.pendingSetupCount} />
       </div>
+      {dash.watch ? (
+        <div className="card" style={{ marginTop: 12 }}>
+          <h3>SYSTEM HEALTH</h3>
+          <div className="row"><span>Overall</span><Badge value={dash.watch.overall} /></div>
+          <div className="row"><span>API</span><b>{dash.watch.apiHealthy} / {dash.watch.apiTotal} Healthy</b></div>
+          <div className="row"><span>Jobs</span><b>{dash.watch.jobsRunning} Running · {dash.watch.jobsFailed} Failed</b></div>
+          <div className="row"><span>Queue</span><b>{dash.watch.queue}</b></div>
+          <div className="row"><span>Data</span><b>{dash.watch.data}</b></div>
+          <div className="row"><span>Incidents</span><b>{dash.watch.incidentsCritical} Critical · {dash.watch.incidentsLow} Low</b></div>
+          <div className="row"><span>Safety Lock</span><Badge value={dash.safetyLock ? "ON" : "OFF"} /></div>
+        </div>
+      ) : null}
+      {dash.hq?.currentMission ? (
+        <div className="card">
+          <h3>AIZIO COMMERCE HQ</h3>
+          <div className="row"><span>현재 Mission</span><b>{dash.hq.currentMission.command}</b></div>
+          <div className="row"><span>진행률</span><b>{dash.hq.currentMission.progress}%</b></div>
+          {dash.hq.currentMission.departments.map((d) => (
+            <div className="row" key={d.id}><span>{d.label}</span><Badge value={d.health} /></div>
+          ))}
+        </div>
+      ) : null}
       {counts ? (
         <div className="card" style={{ marginTop: 12 }}>
           <h3>실제 상품 탐색</h3>
@@ -455,6 +491,158 @@ function Profit({ dash }: { dash: Awaited<ReturnType<typeof api.dashboard>> }) {
         <div className="row"><span>실제 확정 순이익</span><b>{won(dash.actualNetProfit)}</b></div>
         <p className="muted">정산이 끝나기 전에는 실제 순이익을 추정으로 채우지 않습니다.</p>
       </div>
+    </>
+  );
+}
+
+function Hq({ dash, onOpen }: { dash: Dashboard; onOpen: (id: string) => void }) {
+  const [missions, setMissions] = useState<Array<Record<string, unknown>>>([]);
+  useEffect(() => {
+    void api.missions().then((r) => setMissions(r.missions));
+  }, []);
+  const current = dash.hq?.currentMission;
+  return (
+    <>
+      <h1>AIZIO COMMERCE HQ</h1>
+      {current ? (
+        <div className="card">
+          <h3>현재 Mission</h3>
+          <div className="row"><span>명령</span><b>{current.command}</b></div>
+          <div className="row"><span>상태</span><Badge value={current.status} /></div>
+          <div className="row"><span>진행률</span><b>{current.progress}%</b></div>
+          {current.departments.map((d) => (
+            <div className="row" key={d.id}><span>{d.label}</span><Badge value={d.health} /></div>
+          ))}
+          <div className="actions">
+            <button className="btn" onClick={() => onOpen(current.id)}>상세보기</button>
+          </div>
+        </div>
+      ) : (
+        <div className="empty">진행 중인 Mission이 없습니다. OWNER 명령을 한 문장으로 입력하세요.</div>
+      )}
+      {dash.watch ? (
+        <div className="card">
+          <h3>System Health</h3>
+          <div className="row"><span>Overall</span><Badge value={dash.watch.overall} /></div>
+          <div className="row"><span>Safety Lock</span><Badge value={dash.safetyLock ? "ON" : "OFF"} /></div>
+        </div>
+      ) : null}
+      {missions.map((m) => (
+        <div className="card" key={String(m.id)}>
+          <div className="row"><span>{String(m.ownerCommand)}</span><Badge value={String(m.status)} /></div>
+          <div className="row"><span>{String(m.level)} / {String(m.executionScope)}</span><b>{String(m.progress)}%</b></div>
+          <button className="btn ghost" onClick={() => onOpen(String(m.id))}>열기</button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function Watch() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.watch>> | null>(null);
+  useEffect(() => {
+    void api.watch().then(setData);
+  }, []);
+  if (!data) return <p className="muted">System Watch를 불러오는 중…</p>;
+  const report = data.report as {
+    overall?: string;
+    apiHealthy?: number;
+    apiTotal?: number;
+    jobsRunning?: number;
+    jobsFailed?: number;
+    queue?: string;
+    data?: string;
+    incidentsCritical?: number;
+    incidentsLow?: number;
+    findings?: string[];
+  };
+  return (
+    <>
+      <h1>System Watch</h1>
+      <div className="card">
+        <h3>Current Health</h3>
+        <div className="row"><span>Overall</span><Badge value={String(report.overall ?? "UNKNOWN")} /></div>
+        <div className="row"><span>API</span><b>{report.apiHealthy ?? 0} / {report.apiTotal ?? 0} Healthy</b></div>
+        <div className="row"><span>Jobs</span><b>{report.jobsRunning ?? 0} Running · {report.jobsFailed ?? 0} Failed</b></div>
+        <div className="row"><span>Queue</span><b>{String(report.queue ?? "Normal")}</b></div>
+        <div className="row"><span>Data</span><b>{String(report.data ?? "Fresh")}</b></div>
+        <div className="row"><span>Incidents</span><b>{report.incidentsCritical ?? 0} Critical · {report.incidentsLow ?? 0} Low</b></div>
+        <div className="row"><span>Safety Lock</span><Badge value={data.lock ? "ON" : "OFF"} /></div>
+      </div>
+      <h1>Open Incidents</h1>
+      {data.incidents.length === 0 ? <div className="empty">열린 Incident가 없습니다.</div> : null}
+      {data.incidents.map((inc) => (
+        <div className="card" key={String(inc.id)}>
+          <div className="row"><span>{String(inc.title)}</span><Badge value={String(inc.severity)} /></div>
+          <div className="row"><span>상태</span><Badge value={String(inc.status)} /></div>
+          <pre className="muted">{String(inc.description)}</pre>
+        </div>
+      ))}
+      {(report.findings ?? []).length ? (
+        <div className="card">
+          <h3>Findings</h3>
+          {(report.findings ?? []).map((f) => <p className="muted" key={f}>{f}</p>)}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function MissionView({ id, onBack }: { id: string; onBack: () => void }) {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.mission>> | null>(null);
+  useEffect(() => {
+    void api.mission(id).then(setData);
+  }, [id]);
+  if (!data) return <p className="muted">Mission을 불러오는 중…</p>;
+  const mission = data.mission;
+  const result = (mission.resultJson ?? {}) as {
+    classified?: { level?: string; executionScope?: string };
+    proposals?: Array<{
+      title: string;
+      hypothesis: string;
+      expectedUpside: string[];
+      risks: string[];
+      validationPlan: string[];
+      confidence: number;
+    }>;
+    audit?: { decision?: string; warnings?: string[] };
+    departments?: Record<string, { summary?: string; findings?: string[] }>;
+  };
+  const pct = (n: number) => (n <= 1 ? Math.round(n * 100) : Math.round(n));
+  return (
+    <>
+      <button className="btn ghost" onClick={onBack}>뒤로</button>
+      <h1>MISSION</h1>
+      <div className="card">
+        <h3>{String(mission.ownerCommand)}</h3>
+        <div className="row"><span>분류</span><b>{String(mission.level)} / {String(mission.executionScope)}</b></div>
+        <div className="row"><span>상태</span><Badge value={String(mission.status)} /></div>
+        <div className="row"><span>목표</span><b>{String(mission.objective)}</b></div>
+      </div>
+      {data.tasks.map((t) => (
+        <div className="card" key={String(t.id)}>
+          <div className="row"><span>{String(t.department)}</span><Badge value={String(t.status)} /></div>
+          <p className="muted">{String((t.result as { summary?: string } | null)?.summary ?? t.objective)}</p>
+        </div>
+      ))}
+      {(result.proposals ?? []).map((p, i) => (
+        <div className="card" key={p.title}>
+          <div className="rank">{i + 1}위</div>
+          <h3>{p.title}</h3>
+          <p className="muted">{p.hypothesis}</p>
+          <div className="row"><span>예상 장점</span><b>{(p.expectedUpside ?? []).join(" · ") || "데이터 범위 안"}</b></div>
+          <div className="row"><span>위험</span><b>{(p.risks ?? []).join(" · ") || "추가 검증 필요"}</b></div>
+          <div className="row"><span>권장 검증</span><b>{(p.validationPlan ?? []).join(" · ")}</b></div>
+          <div className="row"><span>Confidence</span><b>{pct(p.confidence)}%</b></div>
+        </div>
+      ))}
+      {result.audit ? (
+        <div className="card">
+          <h3>내부감사</h3>
+          <Badge value={result.audit.decision} />
+          {(result.audit.warnings ?? []).map((w) => <p className="muted" key={w}>{w}</p>)}
+        </div>
+      ) : null}
     </>
   );
 }

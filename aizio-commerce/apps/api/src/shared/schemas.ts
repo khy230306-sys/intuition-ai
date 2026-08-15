@@ -57,6 +57,15 @@ export const safetySettingsSchema = z.object({
     allowedCategories: [],
     blockedCategories: [],
   }),
+  globalSafetyLock: z.boolean().default(false),
+  aiBudget: z
+    .object({
+      maxPerMissionUsd: z.number().nonnegative().default(1),
+      dailyUsd: z.number().nonnegative().default(10),
+      monthlyUsd: z.number().nonnegative().default(80),
+      emergencyReserveUsd: z.number().nonnegative().default(20),
+    })
+    .default({ maxPerMissionUsd: 1, dailyUsd: 10, monthlyUsd: 80, emergencyReserveUsd: 20 }),
 });
 
 export function parseSafetySettings(raw: unknown) {
@@ -68,6 +77,7 @@ export function parseSafetySettings(raw: unknown) {
     ...obj,
     fx: { ...base.fx, ...(typeof obj.fx === "object" && obj.fx ? obj.fx : {}) },
     scout: { ...base.scout, ...(typeof obj.scout === "object" && obj.scout ? obj.scout : {}) },
+    aiBudget: { ...base.aiBudget, ...(typeof obj.aiBudget === "object" && obj.aiBudget ? obj.aiBudget : {}) },
   };
   const parsed = safetySettingsSchema.safeParse(merged);
   return parsed.success ? parsed.data : base;

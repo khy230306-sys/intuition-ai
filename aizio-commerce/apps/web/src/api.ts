@@ -85,6 +85,28 @@ export interface Dashboard {
     counts: ScoutCounts;
   };
   note: string | null;
+  safetyLock?: boolean;
+  watch?: {
+    overall: string;
+    apiHealthy: number;
+    apiTotal: number;
+    jobsRunning: number;
+    jobsFailed: number;
+    queue: string;
+    data: string;
+    incidentsCritical: number;
+    incidentsLow: number;
+    safetyLock: boolean;
+  };
+  hq?: {
+    currentMission: {
+      id: string;
+      command: string;
+      status: string;
+      progress: number;
+      departments: Array<{ id: string; label: string; health: string }>;
+    } | null;
+  };
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -123,6 +145,11 @@ export const api = {
   safety: () => req<Record<string, unknown>>("/api/settings/safety"),
   saveSafety: (body: unknown) => req("/api/settings/safety", { method: "PUT", body: JSON.stringify(body) }),
   command: (text: string) => req("/api/command", { method: "POST", body: JSON.stringify({ text }) }),
+  missions: () => req<{ missions: Array<Record<string, unknown>> }>("/api/missions"),
+  mission: (id: string) =>
+    req<{ mission: Record<string, unknown>; tasks: Array<Record<string, unknown>> }>(`/api/missions/${id}`),
+  watch: () =>
+    req<{ report: Record<string, unknown>; incidents: Array<Record<string, unknown>>; lock: boolean }>("/api/watch"),
   vision: (imageBase64: string, mimeType: string) =>
     req("/api/vision", { method: "POST", body: JSON.stringify({ imageBase64, mimeType }) }),
 };

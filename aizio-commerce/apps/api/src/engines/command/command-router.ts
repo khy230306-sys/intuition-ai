@@ -27,8 +27,8 @@ export function routeCommand(text: string): RoutedCommand {
     intent = "filter_margin";
     const m = t.match(/(\d+)\s*%/);
     if (m?.[1]) slots.minMargin = String(Number(m[1]) / 100);
-  } else if (/반품/.test(t)) intent = "high_return";
-  else if (/적자|일시중지|중지/.test(t)) intent = "pause_loss";
+  }   else if (/반품/.test(t) && !/왜|조사/.test(t)) intent = "high_return";
+  else if ((/적자/.test(t) && /중지/.test(t)) || /일시중지/.test(t)) intent = "pause_loss";
   else if (/주문/.test(t)) intent = "orders_today";
   else if (/원가/.test(t) && /오른|상승/.test(t)) intent = "cost_up";
   else if (/순이익|수익/.test(t)) intent = "profit_month";

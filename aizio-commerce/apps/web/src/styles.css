@@ -114,7 +114,15 @@ button { cursor: pointer; }
 .PASS, .TEST_SELL, .APPROVED { background: rgba(62, 224, 160, 0.15); color: var(--green); }
 .REVIEW_REQUIRED, .AUTHENTICATING, .LIVE_OBSERVE { background: rgba(245, 193, 92, 0.15); color: var(--gold); }
 .REJECTED { background: rgba(255, 107, 107, 0.16); color: var(--red); }
-.RATE_LIMITED, .DEGRADED { background: rgba(122, 162, 255, 0.15); color: var(--blue); }
+.RATE_LIMITED, .DEGRADED, .BUSY, .AGING, .MEDIUM, .LOW, .ON, .REVIEWING, .AUDITING, .PLANNING, .RUNNING {
+  background: rgba(245, 193, 92, 0.15); color: var(--gold);
+}
+.HEALTHY, .READY, .SUCCESS, .COMPLETED, .OFF, .FRESH, .PASS {
+  background: rgba(62, 224, 160, 0.15); color: var(--green);
+}
+.UNHEALTHY, .CRITICAL, .HIGH, .FAILED, .UNAVAILABLE, .BLOCK {
+  background: rgba(255, 107, 107, 0.16); color: var(--red);
+}
 
 .nav {
   position: fixed;

@@ -23,16 +23,22 @@ const TRADEMARK_HINTS = [
 ];
 
 const REGULATED: Array<{ code: string; label: string; patterns: RegExp[]; decision: RiskDecision }> = [
-  { code: "KC", label: "KC 인증 필요 가능성", patterns: [/전자/, /전기/, /충전기/, /어댑터/, /led/, /electronic/, /charger/], decision: "REVIEW_REQUIRED" },
-  { code: "EMC", label: "전기전자 인증", patterns: [/무선/, /블루투스/, /wifi/, /wireless/, /bluetooth/], decision: "REVIEW_REQUIRED" },
-  { code: "TOY", label: "어린이제품", patterns: [/유아/, /아기/, /장난감/, /baby/, /toddler/, /toy/, /kids/], decision: "REVIEW_REQUIRED" },
-  { code: "MEDICAL", label: "의료기기", patterns: [/의료/, /혈당/, /혈압/, /medical/, /diagnostic/], decision: "BLOCK" },
-  { code: "HEALTH", label: "건강기능식품", patterns: [/건강기능/, /영양제/, /supplement/, /vitamin/], decision: "BLOCK" },
-  { code: "COSMETIC", label: "화장품", patterns: [/화장품/, /세럼/, /cream/, /cosmetic/, /skincare/], decision: "REVIEW_REQUIRED" },
-  { code: "FOOD", label: "식품", patterns: [/식품/, /과자/, /snack/, /food/, /tea/], decision: "REVIEW_REQUIRED" },
+  { code: "KC", label: "KC 인증 필요 가능성", patterns: [/전자제품/, /전기용품/, /충전기/, /어댑터/, /\bled\b/, /electronic/, /charger/, /선풍기/, /전기히터/], decision: "REVIEW_REQUIRED" },
+  { code: "EMC", label: "전기전자 인증 / 무선통신", patterns: [/무선/, /블루투스/, /wifi/, /wireless/, /bluetooth/, /rf\b/, /4g/, /5g/], decision: "REVIEW_REQUIRED" },
+  { code: "TOY", label: "어린이제품", patterns: [/장난감/, /\btoy\b/, /\bkids\b/, /child product/], decision: "REVIEW_REQUIRED" },
+  { code: "INFANT", label: "유아제품", patterns: [/유아/, /아기/, /\bbaby\b/, /toddler/, /신생아/, /infant/, /newborn/], decision: "REVIEW_REQUIRED" },
+  { code: "MEDICAL", label: "의료기기", patterns: [/의료기기/, /혈당/, /혈압/, /medical device/, /diagnostic/, /thermometer medical/], decision: "BLOCK" },
+  { code: "DRUG", label: "의약품", patterns: [/의약품/, /\bmedicine\b/, /\bdrug\b/, /prescription/, /알약/], decision: "BLOCK" },
+  { code: "HEALTH", label: "건강기능식품", patterns: [/건강기능/, /영양제/, /supplement/, /vitamin/, /프로틴/], decision: "BLOCK" },
+  { code: "COSMETIC", label: "화장품", patterns: [/화장품/, /세럼/, /\bcream\b/, /cosmetic/, /skincare/, /lipstick/], decision: "REVIEW_REQUIRED" },
+  { code: "FOOD", label: "식품", patterns: [/식품/, /과자/, /\bsnack\b/, /\bfood\b/, /\btea\b/, /라면/], decision: "BLOCK" },
   { code: "BATTERY", label: "배터리 포함 제품", patterns: [/배터리/, /리튬/, /battery/, /lithium/, /power bank/, /보조배터리/], decision: "REVIEW_REQUIRED" },
-  { code: "HAZMAT", label: "위험물", patterns: [/인화/, /폭발/, /acid/, /flammable/, /explosive/], decision: "BLOCK" },
-  { code: "CUSTOMS", label: "통관제한", patterns: [/드론/, /무기/, /laser/, /drone/, /weapon/, /나이프/, /knife/], decision: "BLOCK" },
+  { code: "HAZMAT", label: "위험물", patterns: [/인화/, /폭발/, /acid/, /flammable/, /explosive/, /위험물/, /hazmat/], decision: "BLOCK" },
+  { code: "LIQUID", label: "액체류", patterns: [/액체류/, /liquid gel/, /인화성 액체/], decision: "REVIEW_REQUIRED" },
+  { code: "BLADE", label: "날붙이", patterns: [/날붙이/, /\bknife\b/, /나이프/, /커터칼/, /machete/, /blade/, /가위/], decision: "BLOCK" },
+  { code: "ADULT", label: "성인용품", patterns: [/성인용품/, /성인기구/, /vibrator/, /sex toy/, /콘돔/, /adult product/], decision: "BLOCK" },
+  { code: "CUSTOMS", label: "통관제한", patterns: [/드론/, /무기/, /laser/, /drone/, /weapon/], decision: "BLOCK" },
+  { code: "CERT_UNKNOWN", label: "인증 여부 미확인 전기전자", patterns: [/unknown certification/, /인증 미상/], decision: "REVIEW_REQUIRED" },
 ];
 
 function haystack(input: RiskInput): string {

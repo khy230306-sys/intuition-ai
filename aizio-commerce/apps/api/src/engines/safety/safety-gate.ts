@@ -1,11 +1,13 @@
 import type { SafetyContext, SafetyGateResult, SafetySettings } from "../../shared/types.ts";
 
-const MONEY_ACTIONS = new Set([
+const WRITE_ACTIONS = new Set([
   "SUPPLIER_ORDER",
   "SUPPLIER_PAYMENT",
   "CUSTOMER_REFUND",
   "MARKETPLACE_LISTING",
   "PRICE_UPDATE",
+  "STOCK_UPDATE",
+  "CANCEL_ORDER",
 ]);
 
 /**
@@ -25,6 +27,11 @@ export function evaluateSafetyGate(
     return { allowed: false, decision: "BLOCK", reasons, ruleHits };
   }
 
+  if (settings.operatingMode === "LIVE_OBSERVE" && WRITE_ACTIONS.has(ctx.action)) {
+    reasons.push("LIVE_OBSERVE 모드에서는 주문·결제·판매등록·재고/가격 변경·환불을 실행하지 않습니다.");
+    ruleHits.push("mode.LIVE_OBSERVE");
+  }
+
   if (ctx.category && settings.blockedCategories.includes(ctx.category)) {
     reasons.push(`차단된 카테고리입니다: ${ctx.category}`);
     ruleHits.push("blocked.category");
@@ -38,7 +45,7 @@ export function evaluateSafetyGate(
     ruleHits.push("blocked.country");
   }
 
-  if (MONEY_ACTIONS.has(ctx.action) || ctx.action === "SUPPLIER_ORDER") {
+  if (WRITE_ACTIONS.has(ctx.action) || ctx.action === "SUPPLIER_ORDER") {
     if (ctx.amountKRW > settings.maxPerOrderKRW) {
       reasons.push(
         `주문 금액 ₩${ctx.amountKRW.toLocaleString("ko-KR")}이 건당 한도 ₩${settings.maxPerOrderKRW.toLocaleString("ko-KR")}을 초과합니다.`,
@@ -90,7 +97,7 @@ export function evaluateSafetyGate(
 
   const needsManual =
     ctx.amountKRW >= settings.manualApprovalThresholdKRW &&
-    MONEY_ACTIONS.has(ctx.action) &&
+    WRITE_ACTIONS.has(ctx.action) &&
     !ctx.humanApproved;
 
   if (needsManual) {
@@ -110,6 +117,7 @@ export function evaluateSafetyGate(
       "limit.monthly",
       "margin.min",
       "supplier.priceSpike",
+      "mode.LIVE_OBSERVE",
     ].includes(r),
   );
 

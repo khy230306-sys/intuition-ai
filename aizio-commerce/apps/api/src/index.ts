@@ -29,7 +29,12 @@ export function buildServices(): AppServices {
     providers,
     manager: new ManagerAi(providers),
     vision: new VisionEngine(providers),
-    cj: new CjDropshippingAdapter(env.cjEmail, env.cjApiPassword, env.cjAccessToken),
+    cj: new CjDropshippingAdapter({
+      apiKey: env.cjApiKey || env.cjApiPassword,
+      accessToken: env.cjAccessToken,
+      refreshToken: env.cjRefreshToken,
+      writeEnabled: false,
+    }),
     coupang: new CoupangAdapter(env.coupangAccessKey, env.coupangSecretKey, env.coupangVendorId),
     naver: new NaverCommerceAdapter(env.naverClientId, env.naverClientSecret),
   };

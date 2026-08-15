@@ -1,6 +1,7 @@
 export const DATA_FRESHNESS = [
   "LIVE",
   "ESTIMATE",
+  "MANUAL",
   "STALE",
   "INSUFFICIENT_DATA",
   "UNKNOWN",
@@ -12,13 +13,43 @@ export const CONNECTION_STATUS = [
   "READY",
   "NOT_CONFIGURED",
   "PENDING_SETUP",
+  "AUTHENTICATING",
   "AUTH_FAILED",
+  "TOKEN_EXPIRED",
   "RATE_LIMITED",
   "DEGRADED",
   "UNAVAILABLE",
   "NOT_CONNECTED",
 ] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUS)[number];
+
+export const CREDENTIAL_STATUS = [
+  "NOT_CONFIGURED",
+  "AUTHENTICATING",
+  "READY",
+  "AUTH_FAILED",
+  "TOKEN_EXPIRED",
+  "RATE_LIMITED",
+  "UNAVAILABLE",
+] as const;
+export type CredentialStatus = (typeof CREDENTIAL_STATUS)[number];
+
+export const OPERATING_MODES = ["LIVE_OBSERVE", "LIVE_TRADE"] as const;
+export type OperatingMode = (typeof OPERATING_MODES)[number];
+
+export const PROFIT_STAGES = [
+  "PRELIMINARY_MARGIN",
+  "ESTIMATED_PROFIT",
+  "VERIFIED_EXPECTED_PROFIT",
+  "ACTUAL_PROFIT",
+] as const;
+export type ProfitStage = (typeof PROFIT_STAGES)[number];
+
+export const FX_STATUSES = ["LIVE", "MANUAL_RATE", "FX_RATE_NOT_CONFIGURED"] as const;
+export type FxStatus = (typeof FX_STATUSES)[number];
+
+export const SHIPPING_AVAILABILITY = ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"] as const;
+export type ShippingAvailability = (typeof SHIPPING_AVAILABILITY)[number];
 
 export const PROVIDER_STATUS = [
   "READY",
@@ -140,6 +171,8 @@ export interface ProfitAnalysis {
   inputFreshness: Record<string, DataFreshness>;
   currency: "KRW";
   calculatedAt: string;
+  stage: ProfitStage;
+  sellingPriceKind: "TARGET_MARGIN_PRICE" | "MARKET_OBSERVED_PRICE" | "NONE";
 }
 
 export interface ProfitInput {
@@ -158,6 +191,8 @@ export interface ProfitInput {
   otherCost: number | null;
   inputFreshness?: Partial<Record<string, DataFreshness>>;
   now?: Date;
+  sellingPriceKind?: "TARGET_MARGIN_PRICE" | "MARKET_OBSERVED_PRICE" | "NONE";
+  fxStatus?: FxStatus;
 }
 
 export interface ScoreBreakdown {
@@ -194,6 +229,22 @@ export interface RiskAssessment {
   assessedAt: string;
 }
 
+export interface ScoutFilterSettings {
+  limit: number;
+  keyword: string;
+  maxSupplierPrice: number | null;
+  maxShippingCost: number | null;
+  minPreliminaryMargin: number;
+  maximumDeliveryDays: number | null;
+  allowedCategories: string[];
+  blockedCategories: string[];
+}
+
+export interface FxSettings {
+  provider: "none" | "manual" | "frankfurter";
+  manualUsdKrw: number | null;
+}
+
 export interface SafetySettings {
   maxPerOrderKRW: number;
   maxDailyKRW: number;
@@ -205,6 +256,10 @@ export interface SafetySettings {
   blockedSuppliers: string[];
   blockedCountries: string[];
   manualApprovalThresholdKRW: number;
+  operatingMode: OperatingMode;
+  targetMarginRate: number;
+  fx: FxSettings;
+  scout: ScoutFilterSettings;
 }
 
 export interface SafetyContext {
@@ -278,6 +333,17 @@ export interface VisionAnalysis {
   provider: string | null;
 }
 
+export const DEFAULT_SCOUT_FILTERS: ScoutFilterSettings = {
+  limit: 30,
+  keyword: "storage organizer",
+  maxSupplierPrice: null,
+  maxShippingCost: null,
+  minPreliminaryMargin: 0.15,
+  maximumDeliveryDays: 21,
+  allowedCategories: [],
+  blockedCategories: [],
+};
+
 export const DEFAULT_SAFETY_SETTINGS: SafetySettings = {
   maxPerOrderKRW: 100_000,
   maxDailyKRW: 500_000,
@@ -289,4 +355,8 @@ export const DEFAULT_SAFETY_SETTINGS: SafetySettings = {
   blockedSuppliers: [],
   blockedCountries: [],
   manualApprovalThresholdKRW: 50_000,
+  operatingMode: "LIVE_OBSERVE",
+  targetMarginRate: 0.35,
+  fx: { provider: "none", manualUsdKrw: null },
+  scout: DEFAULT_SCOUT_FILTERS,
 };

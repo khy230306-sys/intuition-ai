@@ -3,7 +3,9 @@ import type {
   JobStatus,
   JobType,
   ProductStatus,
+  ProfitStage,
   SafetySettings,
+  ShippingAvailability,
 } from "../shared/types.ts";
 import { DEFAULT_SAFETY_SETTINGS } from "../shared/types.ts";
 import { parseSafetySettings } from "../shared/schemas.ts";
@@ -32,18 +34,31 @@ export interface ProductRecord {
   id: string;
   supplier: string;
   supplierProductId: string | null;
+  supplierVariantId: string | null;
   title: string;
   status: ProductStatus;
   category: string | null;
   imageUrl: string | null;
   supplierPriceKrw: number | null;
   supplierPriceUsd: number | null;
+  currency: string | null;
   shippingKrw: number | null;
+  shippingUsd: number | null;
+  shippingAvailability: ShippingAvailability | null;
+  shippingMethod: string | null;
   recommendedPriceKrw: number | null;
+  targetMarginPriceKrw: number | null;
+  marketObservedPriceKrw: number | null;
+  sellingPriceKind: "TARGET_MARGIN_PRICE" | "MARKET_OBSERVED_PRICE" | "NONE" | null;
+  profitStage: ProfitStage | null;
   stock: number | null;
   warehouse: string | null;
   deliveryMin: number | null;
   deliveryMax: number | null;
+  weight: number | null;
+  sourceUrl: string | null;
+  capturedAt: string | null;
+  scoutCandidate: boolean;
   profit: unknown;
   risk: unknown;
   decision: unknown;
@@ -53,6 +68,18 @@ export interface ProductRecord {
   confidence: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ScoutRunStats {
+  analyzed: number;
+  koreaShippable: number;
+  riskExcluded: number;
+  profitCalculable: number;
+  recommended: number;
+  skipped: number;
+  createdAt: string;
+  keyword: string | null;
+  supplier: string;
 }
 
 export class Repository {
@@ -130,44 +157,346 @@ export class Repository {
     }));
   }
 
+  findBySupplierIdentity(
+    supplier: string,
+    supplierProductId: string | null,
+    supplierVariantId: string | null,
+  ): ProductRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM products
+         WHERE supplier = ? AND ifnull(supplier_product_id,'') = ? AND ifnull(supplier_variant_id,'') = ?`,
+      )
+      .get(supplier, supplierProductId ?? "", supplierVariantId ?? "");
+    return row ? this.mapProduct(row) : null;
+  }
+
+  upsertScoutProduct(p: ProductRecord): { product: ProductRecord; created: boolean } {
+    const existing =
+      this.findBySupplierIdentity(p.supplier, p.supplierProductId, p.supplierVariantId) ??
+      this.getProduct(p.id);
+    const createdAt = existing?.createdAt ?? p.createdAt;
+    const idValue = existing?.id ?? p.id;
+    const next: ProductRecord = { ...p, id: idValue, createdAt };
+    if (existing) this.recordHistoryDiff(existing, next);
+    else this.insertInitialHistory(next);
+    this.saveProduct(next);
+    return { product: next, created: !existing };
+  }
+
+  private recordHistoryDiff(prev: ProductRecord, next: ProductRecord): void {
+    const at = next.capturedAt ?? next.updatedAt;
+    if (next.supplierPriceUsd !== null && next.supplierPriceUsd !== prev.supplierPriceUsd) {
+      this.insertPriceHistory({
+        productId: next.id,
+        supplier: next.supplier,
+        supplierProductId: next.supplierProductId,
+        variantId: next.supplierVariantId,
+        price: next.supplierPriceUsd,
+        currency: next.currency ?? "USD",
+        capturedAt: at,
+      });
+    }
+    if (next.stock !== null && next.stock !== prev.stock) {
+      this.insertInventoryHistory({
+        productId: next.id,
+        supplier: next.supplier,
+        supplierProductId: next.supplierProductId,
+        variantId: next.supplierVariantId,
+        stock: next.stock,
+        warehouse: next.warehouse,
+        capturedAt: at,
+      });
+    }
+    if (
+      next.shippingAvailability &&
+      (next.shippingAvailability !== prev.shippingAvailability ||
+        next.shippingUsd !== prev.shippingUsd ||
+        next.shippingMethod !== prev.shippingMethod)
+    ) {
+      this.insertShippingQuoteHistory({
+        productId: next.id,
+        supplier: next.supplier,
+        variantId: next.supplierVariantId,
+        availability: next.shippingAvailability,
+        method: next.shippingMethod,
+        cost: next.shippingUsd,
+        currency: "USD",
+        aging: next.deliveryMax !== null ? String(next.deliveryMax) : null,
+        warehouse: next.warehouse,
+        capturedAt: at,
+      });
+    }
+  }
+
+  private insertInitialHistory(p: ProductRecord): void {
+    const at = p.capturedAt ?? p.createdAt;
+    if (p.supplierPriceUsd !== null) {
+      this.insertPriceHistory({
+        productId: p.id,
+        supplier: p.supplier,
+        supplierProductId: p.supplierProductId,
+        variantId: p.supplierVariantId,
+        price: p.supplierPriceUsd,
+        currency: p.currency ?? "USD",
+        capturedAt: at,
+      });
+    }
+    if (p.stock !== null) {
+      this.insertInventoryHistory({
+        productId: p.id,
+        supplier: p.supplier,
+        supplierProductId: p.supplierProductId,
+        variantId: p.supplierVariantId,
+        stock: p.stock,
+        warehouse: p.warehouse,
+        capturedAt: at,
+      });
+    }
+    if (p.shippingAvailability) {
+      this.insertShippingQuoteHistory({
+        productId: p.id,
+        supplier: p.supplier,
+        variantId: p.supplierVariantId,
+        availability: p.shippingAvailability,
+        method: p.shippingMethod,
+        cost: p.shippingUsd,
+        currency: "USD",
+        aging: p.deliveryMax !== null ? String(p.deliveryMax) : null,
+        warehouse: p.warehouse,
+        capturedAt: at,
+      });
+    }
+  }
+
+  insertPriceHistory(row: {
+    productId: string;
+    supplier: string;
+    supplierProductId: string | null;
+    variantId: string | null;
+    price: number;
+    currency: string;
+    capturedAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO supplier_price_history(id, product_id, supplier, supplier_product_id, variant_id, price, currency, captured_at)
+         VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(id("pxh"), row.productId, row.supplier, row.supplierProductId, row.variantId, row.price, row.currency, row.capturedAt);
+  }
+
+  insertInventoryHistory(row: {
+    productId: string;
+    supplier: string;
+    supplierProductId: string | null;
+    variantId: string | null;
+    stock: number;
+    warehouse: string | null;
+    capturedAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO inventory_history(id, product_id, supplier, supplier_product_id, variant_id, stock, warehouse, captured_at)
+         VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(id("ivh"), row.productId, row.supplier, row.supplierProductId, row.variantId, row.stock, row.warehouse, row.capturedAt);
+  }
+
+  insertShippingQuoteHistory(row: {
+    productId: string;
+    supplier: string;
+    variantId: string | null;
+    availability: string;
+    method: string | null;
+    cost: number | null;
+    currency: string | null;
+    aging: string | null;
+    warehouse: string | null;
+    capturedAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO shipping_quote_history(id, product_id, supplier, variant_id, availability, method, cost, currency, aging, warehouse, captured_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        id("sqh"),
+        row.productId,
+        row.supplier,
+        row.variantId,
+        row.availability,
+        row.method,
+        row.cost,
+        row.currency,
+        row.aging,
+        row.warehouse,
+        row.capturedAt,
+      );
+  }
+
+  listPriceHistory(productId: string) {
+    return this.db
+      .prepare("SELECT price, currency, captured_at AS capturedAt FROM supplier_price_history WHERE product_id=? ORDER BY captured_at ASC")
+      .all(productId)
+      .map((row) => ({ price: Number(row.price), currency: str(row, "currency"), capturedAt: str(row, "capturedAt") }));
+  }
+
+  listInventoryHistory(productId: string) {
+    return this.db
+      .prepare("SELECT stock, warehouse, captured_at AS capturedAt FROM inventory_history WHERE product_id=? ORDER BY captured_at ASC")
+      .all(productId)
+      .map((row) => ({
+        stock: Number(row.stock),
+        warehouse: row.warehouse ? str(row, "warehouse") : null,
+        capturedAt: str(row, "capturedAt"),
+      }));
+  }
+
+  listShippingQuoteHistory(productId: string) {
+    return this.db
+      .prepare(
+        `SELECT availability, method, cost, currency, aging, warehouse, captured_at AS capturedAt
+         FROM shipping_quote_history WHERE product_id=? ORDER BY captured_at ASC`,
+      )
+      .all(productId)
+      .map((row) => ({
+        availability: str(row, "availability"),
+        method: row.method ? str(row, "method") : null,
+        cost: num(row, "cost"),
+        currency: row.currency ? str(row, "currency") : null,
+        aging: row.aging ? str(row, "aging") : null,
+        warehouse: row.warehouse ? str(row, "warehouse") : null,
+        capturedAt: str(row, "capturedAt"),
+      }));
+  }
+
+  saveScoutRun(stats: {
+    supplier: string;
+    keyword: string | null;
+    analyzed: number;
+    koreaShippable: number;
+    riskExcluded: number;
+    profitCalculable: number;
+    recommended: number;
+    skipped: number;
+    error?: string | null;
+    result?: unknown;
+  }): string {
+    const runId = id("sct");
+    this.db
+      .prepare(
+        `INSERT INTO scout_runs(
+          id, supplier, keyword, analyzed, korea_shippable, risk_excluded, profit_calculable,
+          recommended, skipped, error, result_json, created_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        runId,
+        stats.supplier,
+        stats.keyword,
+        stats.analyzed,
+        stats.koreaShippable,
+        stats.riskExcluded,
+        stats.profitCalculable,
+        stats.recommended,
+        stats.skipped,
+        stats.error ?? null,
+        JSON.stringify(stats.result ?? {}),
+        nowIso(),
+      );
+    return runId;
+  }
+
+  latestScoutRun(): ScoutRunStats | null {
+    const row = this.db.prepare("SELECT * FROM scout_runs ORDER BY created_at DESC LIMIT 1").get();
+    if (!row) return null;
+    return {
+      analyzed: Number(row.analyzed ?? 0),
+      koreaShippable: Number(row.korea_shippable ?? 0),
+      riskExcluded: Number(row.risk_excluded ?? 0),
+      profitCalculable: Number(row.profit_calculable ?? 0),
+      recommended: Number(row.recommended ?? 0),
+      skipped: Number(row.skipped ?? 0),
+      createdAt: str(row, "created_at"),
+      keyword: row.keyword ? str(row, "keyword") : null,
+      supplier: str(row, "supplier"),
+    };
+  }
+
+  scoutCountsFromDb() {
+    return {
+      analyzed: this.countProducts(),
+      koreaShippable: this.countProducts("shipping_availability = 'AVAILABLE'"),
+      riskExcluded: this.countProducts("status = 'BLOCKED'"),
+      profitCalculable: this.countProducts(
+        "target_margin_price_krw IS NOT NULL AND supplier_price_krw IS NOT NULL AND shipping_krw IS NOT NULL",
+      ),
+      recommended: this.countProducts("scout_candidate = 1"),
+    };
+  }
+
   saveProduct(p: ProductRecord): void {
     this.db
       .prepare(
         `INSERT INTO products(
-          id, supplier, supplier_product_id, title, status, category, image_url,
-          supplier_price_krw, supplier_price_usd, shipping_krw, recommended_price_krw,
-          stock, warehouse, delivery_min, delivery_max,
+          id, supplier, supplier_product_id, supplier_variant_id, title, status, category, image_url,
+          supplier_price_krw, supplier_price_usd, currency, shipping_krw, shipping_usd,
+          shipping_availability, shipping_method, recommended_price_krw,
+          target_margin_price_krw, market_observed_price_krw, selling_price_kind, profit_stage,
+          stock, warehouse, delivery_min, delivery_max, weight, source_url, captured_at, scout_candidate,
           profit_json, risk_json, decision_json, market_json, content_json, source_facts_json,
           confidence, created_at, updated_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET
+          supplier_product_id=excluded.supplier_product_id,
+          supplier_variant_id=excluded.supplier_variant_id,
           title=excluded.title, status=excluded.status, category=excluded.category,
           image_url=excluded.image_url, supplier_price_krw=excluded.supplier_price_krw,
-          supplier_price_usd=excluded.supplier_price_usd, shipping_krw=excluded.shipping_krw,
-          recommended_price_krw=excluded.recommended_price_krw, stock=excluded.stock,
-          warehouse=excluded.warehouse, delivery_min=excluded.delivery_min,
-          delivery_max=excluded.delivery_max, profit_json=excluded.profit_json,
-          risk_json=excluded.risk_json, decision_json=excluded.decision_json,
-          market_json=excluded.market_json, content_json=excluded.content_json,
-          source_facts_json=excluded.source_facts_json, confidence=excluded.confidence,
-          updated_at=excluded.updated_at`,
+          supplier_price_usd=excluded.supplier_price_usd, currency=excluded.currency,
+          shipping_krw=excluded.shipping_krw, shipping_usd=excluded.shipping_usd,
+          shipping_availability=excluded.shipping_availability, shipping_method=excluded.shipping_method,
+          recommended_price_krw=excluded.recommended_price_krw,
+          target_margin_price_krw=excluded.target_margin_price_krw,
+          market_observed_price_krw=excluded.market_observed_price_krw,
+          selling_price_kind=excluded.selling_price_kind, profit_stage=excluded.profit_stage,
+          stock=excluded.stock, warehouse=excluded.warehouse, delivery_min=excluded.delivery_min,
+          delivery_max=excluded.delivery_max, weight=excluded.weight, source_url=excluded.source_url,
+          captured_at=excluded.captured_at, scout_candidate=excluded.scout_candidate,
+          profit_json=excluded.profit_json, risk_json=excluded.risk_json,
+          decision_json=excluded.decision_json, market_json=excluded.market_json,
+          content_json=excluded.content_json, source_facts_json=excluded.source_facts_json,
+          confidence=excluded.confidence, updated_at=excluded.updated_at`,
       )
       .run(
         p.id,
         p.supplier,
         p.supplierProductId,
+        p.supplierVariantId,
         p.title,
         p.status,
         p.category,
         p.imageUrl,
         p.supplierPriceKrw,
         p.supplierPriceUsd,
+        p.currency,
         p.shippingKrw,
+        p.shippingUsd,
+        p.shippingAvailability,
+        p.shippingMethod,
         p.recommendedPriceKrw,
+        p.targetMarginPriceKrw,
+        p.marketObservedPriceKrw,
+        p.sellingPriceKind,
+        p.profitStage,
         p.stock,
         p.warehouse,
         p.deliveryMin,
         p.deliveryMax,
+        p.weight,
+        p.sourceUrl,
+        p.capturedAt,
+        p.scoutCandidate ? 1 : 0,
         JSON.stringify(p.profit),
         JSON.stringify(p.risk),
         JSON.stringify(p.decision),
@@ -185,18 +514,35 @@ export class Repository {
       id: str(row, "id"),
       supplier: str(row, "supplier"),
       supplierProductId: row.supplier_product_id ? str(row, "supplier_product_id") : null,
+      supplierVariantId: row.supplier_variant_id ? str(row, "supplier_variant_id") : null,
       title: str(row, "title"),
       status: str(row, "status") as ProductStatus,
       category: row.category ? str(row, "category") : null,
       imageUrl: row.image_url ? str(row, "image_url") : null,
       supplierPriceKrw: num(row, "supplier_price_krw"),
       supplierPriceUsd: num(row, "supplier_price_usd"),
+      currency: row.currency ? str(row, "currency") : null,
       shippingKrw: num(row, "shipping_krw"),
+      shippingUsd: num(row, "shipping_usd"),
+      shippingAvailability: row.shipping_availability
+        ? (str(row, "shipping_availability") as ShippingAvailability)
+        : null,
+      shippingMethod: row.shipping_method ? str(row, "shipping_method") : null,
       recommendedPriceKrw: num(row, "recommended_price_krw"),
+      targetMarginPriceKrw: num(row, "target_margin_price_krw"),
+      marketObservedPriceKrw: num(row, "market_observed_price_krw"),
+      sellingPriceKind: row.selling_price_kind
+        ? (str(row, "selling_price_kind") as ProductRecord["sellingPriceKind"])
+        : null,
+      profitStage: row.profit_stage ? (str(row, "profit_stage") as ProfitStage) : null,
       stock: num(row, "stock"),
       warehouse: row.warehouse ? str(row, "warehouse") : null,
       deliveryMin: num(row, "delivery_min"),
       deliveryMax: num(row, "delivery_max"),
+      weight: num(row, "weight"),
+      sourceUrl: row.source_url ? str(row, "source_url") : null,
+      capturedAt: row.captured_at ? str(row, "captured_at") : null,
+      scoutCandidate: Number(row.scout_candidate ?? 0) === 1,
       profit: json(str(row, "profit_json"), null),
       risk: json(str(row, "risk_json"), null),
       decision: json(str(row, "decision_json"), null),

@@ -105,14 +105,14 @@ button { cursor: pointer; }
   letter-spacing: 0.02em;
 }
 .LIVE { background: rgba(62, 224, 160, 0.15); color: var(--green); }
-.ESTIMATE { background: rgba(245, 193, 92, 0.15); color: var(--gold); }
-.INSUFFICIENT_DATA, .UNKNOWN, .STALE, .NOT_CONNECTED, .PENDING_SETUP, .NOT_CONFIGURED {
+.ESTIMATE, .MANUAL, .MANUAL_RATE, .PRELIMINARY_MARGIN, .ESTIMATED_PROFIT { background: rgba(245, 193, 92, 0.15); color: var(--gold); }
+.INSUFFICIENT_DATA, .UNKNOWN, .STALE, .NOT_CONNECTED, .PENDING_SETUP, .NOT_CONFIGURED, .CAPABILITY, .FX_RATE_NOT_CONFIGURED, .NONE {
   background: rgba(139, 147, 167, 0.18); color: var(--muted);
 }
-.READY { background: rgba(62, 224, 160, 0.15); color: var(--green); }
-.AUTH_FAILED, .UNAVAILABLE, .BLOCK, .BLOCKED { background: rgba(255, 107, 107, 0.16); color: var(--red); }
-.PASS, .TEST_SELL, .APPROVED, .LIVE { background: rgba(62, 224, 160, 0.15); color: var(--green); }
-.REVIEW_REQUIRED { background: rgba(245, 193, 92, 0.15); color: var(--gold); }
+.READY, .AVAILABLE { background: rgba(62, 224, 160, 0.15); color: var(--green); }
+.AUTH_FAILED, .UNAVAILABLE, .BLOCK, .BLOCKED, .TOKEN_EXPIRED { background: rgba(255, 107, 107, 0.16); color: var(--red); }
+.PASS, .TEST_SELL, .APPROVED { background: rgba(62, 224, 160, 0.15); color: var(--green); }
+.REVIEW_REQUIRED, .AUTHENTICATING, .LIVE_OBSERVE { background: rgba(245, 193, 92, 0.15); color: var(--gold); }
 .REJECTED { background: rgba(255, 107, 107, 0.16); color: var(--red); }
 .RATE_LIMITED, .DEGRADED { background: rgba(122, 162, 255, 0.15); color: var(--blue); }
 

@@ -234,5 +234,84 @@ export function migrate(db: DbClient): void {
       at TEXT NOT NULL,
       meta_json TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS supplier_price_history (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      supplier TEXT NOT NULL,
+      supplier_product_id TEXT,
+      variant_id TEXT,
+      price REAL NOT NULL,
+      currency TEXT NOT NULL,
+      captured_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS inventory_history (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      supplier TEXT NOT NULL,
+      supplier_product_id TEXT,
+      variant_id TEXT,
+      stock INTEGER NOT NULL,
+      warehouse TEXT,
+      captured_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS shipping_quote_history (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      supplier TEXT NOT NULL,
+      variant_id TEXT,
+      availability TEXT NOT NULL,
+      method TEXT,
+      cost REAL,
+      currency TEXT,
+      aging TEXT,
+      warehouse TEXT,
+      captured_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS scout_runs (
+      id TEXT PRIMARY KEY,
+      supplier TEXT NOT NULL,
+      keyword TEXT,
+      analyzed INTEGER NOT NULL DEFAULT 0,
+      korea_shippable INTEGER NOT NULL DEFAULT 0,
+      risk_excluded INTEGER NOT NULL DEFAULT 0,
+      profit_calculable INTEGER NOT NULL DEFAULT 0,
+      recommended INTEGER NOT NULL DEFAULT 0,
+      skipped INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      result_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
   `);
+
+  ensureColumn(db, "products", "supplier_variant_id", "TEXT");
+  ensureColumn(db, "products", "currency", "TEXT");
+  ensureColumn(db, "products", "shipping_availability", "TEXT");
+  ensureColumn(db, "products", "shipping_method", "TEXT");
+  ensureColumn(db, "products", "shipping_usd", "REAL");
+  ensureColumn(db, "products", "target_margin_price_krw", "INTEGER");
+  ensureColumn(db, "products", "market_observed_price_krw", "INTEGER");
+  ensureColumn(db, "products", "profit_stage", "TEXT");
+  ensureColumn(db, "products", "selling_price_kind", "TEXT");
+  ensureColumn(db, "products", "scout_candidate", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "products", "weight", "REAL");
+  ensureColumn(db, "products", "source_url", "TEXT");
+  ensureColumn(db, "products", "captured_at", "TEXT");
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_products_supplier_identity
+      ON products(supplier, ifnull(supplier_product_id,''), ifnull(supplier_variant_id,''));
+    CREATE INDEX IF NOT EXISTS idx_price_history_product ON supplier_price_history(product_id, captured_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_history_product ON inventory_history(product_id, captured_at);
+    CREATE INDEX IF NOT EXISTS idx_shipping_history_product ON shipping_quote_history(product_id, captured_at);
+  `);
+}
+
+function ensureColumn(db: DbClient, table: string, name: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (cols.some((row) => String(row.name) === name)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
 }

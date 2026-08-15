@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Product } from "./api";
+import { api, type Product, type Dashboard } from "./api";
 
 type Page =
   | "home"
@@ -19,6 +19,25 @@ function won(n: number | null | undefined) {
 function Badge({ value }: { value: string | null | undefined }) {
   if (!value) return null;
   return <span className={`badge ${value}`}>{value}</span>;
+}
+
+function Fresh({ value, at }: { value?: string | null; at?: string | null }) {
+  return (
+    <span>
+      <Badge value={value} /> {at ? <span className="muted">{timeAgo(at)}</span> : null}
+    </span>
+  );
+}
+
+function timeAgo(iso: string | null | undefined) {
+  if (!iso) return "확인 시각 없음";
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  const m = Math.max(0, Math.round(ms / 60_000));
+  if (m < 1) return "방금 확인";
+  if (m < 60) return `확인 ${m}분 전`;
+  const h = Math.round(m / 60);
+  return `확인 ${h}시간 전`;
 }
 
 export function App() {
@@ -69,10 +88,19 @@ export function App() {
   async function scout() {
     setBusy(true);
     try {
+      if (dash && dash.scout && !dash.scout.cjReady) {
+        setNotice("공급처 연결 필요");
+        setPage("settings");
+        return;
+      }
       const r = await api.scout();
-      setNotice(`상품 탐색 작업이 대기열에 들어갔습니다. (${r.jobId}) 공급처가 연결되어야 실제 결과가 생깁니다.`);
+      setNotice(`실제 상품 찾기 작업이 대기열에 들어갔습니다. (${r.jobId})`);
       setPage("recs");
       await load();
+    } catch (err) {
+      const e = err as { data?: { message?: string } };
+      setNotice(e.data?.message ?? "공급처 연결 필요");
+      setPage("settings");
     } finally {
       setBusy(false);
     }
@@ -187,10 +215,12 @@ function Home({
   onScout,
   go,
 }: {
-  dash: Awaited<ReturnType<typeof api.dashboard>>;
+  dash: Dashboard;
   onScout: () => void;
   go: (p: Page) => void;
 }) {
+  const counts = dash.scout?.counts;
+  const cjReady = dash.scout?.cjReady ?? dash.cjStatus === "READY";
   return (
     <>
       <div className="grid">
@@ -203,10 +233,23 @@ function Home({
         <Stat k="검토 필요" v={dash.reviewNeeded} />
         <Stat k="연결 대기" v={dash.pendingSetupCount} />
       </div>
+      {counts ? (
+        <div className="card" style={{ marginTop: 12 }}>
+          <h3>실제 상품 탐색</h3>
+          <p className="muted">숫자는 DB 레코드 기준입니다. 가짜 상품/가격은 만들지 않습니다. 모드 {dash.operatingMode ?? "LIVE_OBSERVE"}</p>
+          <div className="grid">
+            <Stat k="분석한 실제 상품" v={counts.analyzed} />
+            <Stat k="한국 배송 가능" v={counts.koreaShippable} />
+            <Stat k="위험 제외" v={counts.riskExcluded} />
+            <Stat k="수익 계산 가능" v={counts.profitCalculable} />
+            <Stat k="추천 후보" v={counts.recommended} />
+          </div>
+        </div>
+      ) : null}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row">
           <span>예상 순이익</span>
-          <b>{won(dash.expectedNetProfit)}</b>
+          <b>{won(dash.expectedNetProfit)} <Badge value="ESTIMATE" /></b>
         </div>
         <div className="row">
           <span>실제 확정 순이익</span>
@@ -214,9 +257,15 @@ function Home({
         </div>
         <p className="muted">예상과 실제는 따로 집계합니다. 없는 숫자는 0이며 가상 매출이 아닙니다.</p>
         <div className="actions">
-          <button className="btn" onClick={onScout}>
-            AI 상품 찾기
-          </button>
+          {cjReady ? (
+            <button className="btn" onClick={onScout}>
+              실제 상품 찾기
+            </button>
+          ) : (
+            <button className="btn warn" onClick={() => go("settings")}>
+              공급처 연결 필요
+            </button>
+          )}
           <button className="btn ghost" onClick={() => go("recs")}>
             오늘의 추천
           </button>
@@ -274,6 +323,8 @@ function List({
 
 function ProductCard({ product, rank, onOpen }: { product: Product; rank: number; onOpen: () => void }) {
   const profit = product.profit;
+  const evidence = (product.sourceFacts?.evidence ?? {}) as Record<string, { capturedAt?: string; status?: string }>;
+  const fx = evidence.fx;
   return (
     <article className="card">
       <div className="rank">AI 추천 {rank}위</div>
@@ -281,19 +332,21 @@ function ProductCard({ product, rank, onOpen }: { product: Product; rank: number
       <div className="actions" style={{ marginTop: 0 }}>
         <Badge value={product.status} />
         <Badge value={product.risk?.decision} />
+        <Badge value={product.profitStage} />
       </div>
-      <div className="row"><span>공급가</span><b>{won(product.supplierPriceKrw)} <Badge value={profit?.inputFreshness.productCost} /></b></div>
-      <div className="row"><span>예상 배송비</span><b>{won(product.shippingKrw)} <Badge value={profit?.inputFreshness.internationalShipping} /></b></div>
-      <div className="row"><span>권장 판매가</span><b>{won(product.recommendedPriceKrw)} <Badge value={profit?.inputFreshness.sellingPrice} /></b></div>
-      <div className="row"><span>예상 총비용</span><b>{won(profit?.totalCost)}</b></div>
-      <div className="row"><span>예상 순이익</span><b>{won(profit?.expectedNetProfit)}</b></div>
-      <div className="row"><span>순마진</span><b>{profit ? `${(profit.netMarginRate * 100).toFixed(1)}%` : "—"}</b></div>
-      <div className="row"><span>경쟁도</span><b>{product.market?.competitorCount ?? "UNKNOWN"} <Badge value={product.market?.freshness} /></b></div>
-      <div className="row"><span>공급 안정성</span><b>{product.decision?.scores.supplyStability?.score ?? "—"}/100</b></div>
-      <div className="row"><span>위험</span><b>{product.risk?.decision ?? "—"}</b></div>
-      <div className="row"><span>데이터 신뢰도</span><b>{Math.round((product.confidence ?? 0) * 100)}%</b></div>
+      <div className="row"><span>CJ 공급가</span><b>{won(product.supplierPriceKrw)} {product.supplierPriceUsd != null ? <span className="muted">${product.supplierPriceUsd}</span> : null} <Fresh value={profit?.inputFreshness.productCost ?? "LIVE"} at={evidence.product?.capturedAt ?? product.capturedAt} /></b></div>
+      <div className="row"><span>한국 배송비</span><b>{won(product.shippingKrw)} {product.shippingMethod ? <span className="muted">{product.shippingMethod}</span> : null} <Fresh value={product.shippingAvailability === "AVAILABLE" ? "LIVE" : product.shippingAvailability} at={evidence.shipping?.capturedAt} /></b></div>
+      <div className="row"><span>재고</span><b>{product.stock ?? "—"} <Badge value={product.stock === null ? "UNKNOWN" : "LIVE"} /></b></div>
+      <div className="row"><span>환율</span><b>{fx?.status === "FX_RATE_NOT_CONFIGURED" ? "데이터 없음" : fx?.status ?? "—"} <Badge value={fx?.status === "MANUAL_RATE" ? "MANUAL" : fx?.status === "LIVE" ? "LIVE" : "FX_RATE_NOT_CONFIGURED"} /></b></div>
+      <div className="row"><span>목표마진 기준 판매가</span><b>{won(product.targetMarginPriceKrw ?? product.recommendedPriceKrw)} <Badge value="ESTIMATE" /></b></div>
+      <div className="row"><span>시장 관측가격</span><b>{product.marketObservedPriceKrw != null ? won(product.marketObservedPriceKrw) : "데이터 없음"} <Badge value={product.marketObservedPriceKrw != null ? "LIVE" : "UNKNOWN"} /></b></div>
+      <div className="row"><span>예상 순이익</span><b>{won(profit?.expectedNetProfit)} <Badge value="ESTIMATE" /> <Badge value={profit?.stage} /></b></div>
+      <div className="row"><span>Risk</span><b>{product.risk?.decision ?? "—"}</b></div>
+      <div className="row"><span>Data Confidence</span><b>{Math.round((product.confidence ?? 0) * 100)}%</b></div>
       <div className="actions">
-        <button className="btn ghost" onClick={onOpen}>상세 분석</button>
+        <button className="btn ghost" onClick={onOpen}>원본 데이터</button>
+        <button className="btn ghost" onClick={onOpen}>수익 분석</button>
+        <button className="btn ghost" onClick={onOpen}>위험 분석</button>
       </div>
     </article>
   );
@@ -321,18 +374,25 @@ function Detail({ product, onBack, onChanged }: { product: Product; onBack: () =
       <div className="card">
         <div className="row"><span>상태</span><Badge value={product.status} /></div>
         <div className="row"><span>공급처</span><b>{product.supplier}</b></div>
-        <div className="row"><span>원본 확인</span><b>{product.updatedAt}</b></div>
+        <div className="row"><span>식별자</span><b>{product.supplierProductId ?? "—"} / {product.supplierVariantId ?? "—"}</b></div>
+        <div className="row"><span>원본 확인</span><b>{timeAgo(product.capturedAt ?? product.updatedAt)}</b></div>
+      </div>
+      <div className="card">
+        <h3>원본 데이터</h3>
+        <pre className="muted">{JSON.stringify(product.sourceFacts?.evidence ?? product.sourceFacts, null, 2)}</pre>
       </div>
       <div className="card">
         <h3>수익 분석 (코드 계산)</h3>
-        <p className="muted">AI가 만든 숫자가 아닙니다. 계산 시각 {profit?.calculatedAt ?? "—"}</p>
+        <p className="muted">확정 순이익이 아닙니다. 단계 {profit?.stage ?? "—"} · {profit?.calculatedAt ?? "—"}</p>
         {profit?.missingInputs.map((m) => (
           <div key={m} className="note">{m}</div>
         ))}
-        <div className="row"><span>권장 판매가</span><b>{won(profit?.sellingPrice)}</b></div>
-        <div className="row"><span>공급원가</span><b>{won(profit?.productCost)}</b></div>
+        <div className="row"><span>목표마진 기준 판매가</span><b>{won(product.targetMarginPriceKrw ?? profit?.sellingPrice)} <Badge value="ESTIMATE" /></b></div>
+        <div className="row"><span>시장 관측가격</span><b>{product.marketObservedPriceKrw != null ? won(product.marketObservedPriceKrw) : "데이터 없음"} <Badge value="UNKNOWN" /></b></div>
+        <div className="row"><span>공급원가</span><b>{won(profit?.productCost)} <Badge value={profit?.inputFreshness.productCost} /></b></div>
+        <div className="row"><span>한국 배송비</span><b>{won(profit?.internationalShipping)} <Badge value={profit?.inputFreshness.internationalShipping} /></b></div>
         <div className="row"><span>총비용</span><b>{won(profit?.totalCost)}</b></div>
-        <div className="row"><span>예상 순이익</span><b>{won(profit?.expectedNetProfit)}</b></div>
+        <div className="row"><span>예상 순이익</span><b>{won(profit?.expectedNetProfit)} <Badge value="ESTIMATE" /></b></div>
       </div>
       <div className="card">
         <h3>점수 근거</h3>
@@ -401,6 +461,7 @@ function Profit({ dash }: { dash: Awaited<ReturnType<typeof api.dashboard>> }) {
 
 function Integrations() {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.integrations>> | null>(null);
+  const [lastTest, setLastTest] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
     void api.integrations().then(setData);
   }, []);
@@ -408,22 +469,63 @@ function Integrations() {
   return (
     <>
       <h1>연결 상태</h1>
-      <p className="muted">API 키는 화면에 그대로 보여주지 않습니다. 키는 서버 `.env`에 넣으세요.</p>
+      <p className="muted">API 키와 토큰은 화면에 그대로 보여주지 않습니다. 키는 서버 `.env`에 넣으세요. 공식 인증: CJ_API_KEY 또는 CJ_ACCESS_TOKEN.</p>
       {data.integrations.map((i) => (
         <div className="card" key={String(i.id)}>
           <div className="row"><span>{String(i.name)}</span><Badge value={String(i.status)} /></div>
-          <div className="row"><span>마지막 성공</span><b>{String(i.lastSuccessAt ?? "없음")}</b></div>
+          <div className="row"><span>마지막 연결</span><b>{String(i.status) === "READY" ? String(i.lastSuccessAt ?? "없음") : "성공으로 표시하지 않음"}</b></div>
           <div className="row"><span>마지막 오류</span><b>{String(i.lastError ?? "없음")}</b></div>
-          <pre className="muted">{JSON.stringify(i.capabilities, null, 2)}</pre>
+          {i.id === "cjdropshipping" ? (
+            <CapabilityMap caps={i.capabilities as Record<string, unknown>} />
+          ) : (
+            <pre className="muted">{JSON.stringify(i.capabilities, null, 2)}</pre>
+          )}
           <div className="actions">
-            <button className="btn ghost" onClick={() => void api.testIntegration(String(i.id)).then(() => api.integrations().then(setData))}>
-              Test Connection
+            <button
+              className="btn ghost"
+              onClick={() =>
+                void api.testIntegration(String(i.id)).then((r) => {
+                  setLastTest(i.id === "cjdropshipping" ? r : null);
+                  return api.integrations().then(setData);
+                })
+              }
+            >
+              연결 테스트
             </button>
           </div>
+          {i.id === "cjdropshipping" && lastTest ? (
+            <pre className="muted">{JSON.stringify(lastTest.probes ?? lastTest, null, 2)}</pre>
+          ) : null}
         </div>
       ))}
       <Safety />
       <Audit />
+    </>
+  );
+}
+
+function capabilityLabel(value: unknown, whenMissing = "—"): string {
+  if (typeof value === "string") return value;
+  if (value === true) return "CAPABILITY";
+  if (value === false) return "UNAVAILABLE";
+  return whenMissing;
+}
+
+function CapabilityMap({ caps }: { caps: Record<string, unknown> }) {
+  const rows: Array<[string, string]> = [
+    ["Product Search", capabilityLabel(caps.productSearch)],
+    ["Product Detail", capabilityLabel(caps.productDetail)],
+    ["Inventory", capabilityLabel(caps.inventory)],
+    ["Shipping", capabilityLabel(caps.shipping)],
+    ["Order API", capabilityLabel(caps.orderApi ?? caps.orderCreate, "CAPABILITY")],
+    ["Tracking", capabilityLabel(caps.tracking, "CAPABILITY")],
+    ["Dispute", capabilityLabel(caps.dispute, "CAPABILITY")],
+  ];
+  return (
+    <>
+      {rows.map(([k, v]) => (
+        <div className="row" key={k}><span>{k}</span><Badge value={v} /></div>
+      ))}
     </>
   );
 }
@@ -463,6 +565,49 @@ function Safety() {
       ))}
       <div className="actions">
         <button className="btn" onClick={() => void api.saveSafety(form)}>저장</button>
+      </div>
+      <h1>환율 / Scout</h1>
+      <p className="muted">LIVE FX Provider가 없으면 FX_RATE_NOT_CONFIGURED입니다. 수동 환율은 MANUAL_RATE로 표시됩니다. USD를 KRW 엔진에 바로 넣지 않습니다.</p>
+      <label>
+        운영 모드
+        <input type="text" value={String(form.operatingMode ?? "LIVE_OBSERVE")} readOnly />
+      </label>
+      <label>
+        환율 Provider (none / manual / frankfurter)
+        <input
+          type="text"
+          value={String((form.fx as { provider?: string } | undefined)?.provider ?? "none")}
+          onChange={(e) => setForm({ ...form, fx: { ...(form.fx as object), provider: e.target.value } })}
+        />
+      </label>
+      <label>
+        수동 USD/KRW 환율
+        <input
+          type="number"
+          step="any"
+          value={Number((form.fx as { manualUsdKrw?: number | null } | undefined)?.manualUsdKrw ?? 0)}
+          onChange={(e) => setForm({ ...form, fx: { ...(form.fx as object), manualUsdKrw: Number(e.target.value) || null } })}
+        />
+      </label>
+      <label>
+        Scout 최대 상품 수 (1–50)
+        <input
+          type="number"
+          value={Number((form.scout as { limit?: number } | undefined)?.limit ?? 30)}
+          onChange={(e) => setForm({ ...form, scout: { ...(form.scout as object), limit: Number(e.target.value) } })}
+        />
+      </label>
+      <label>
+        목표 마진율 (0.35 = 35%)
+        <input
+          type="number"
+          step="any"
+          value={Number(form.targetMarginRate ?? 0.35)}
+          onChange={(e) => setForm({ ...form, targetMarginRate: Number(e.target.value) })}
+        />
+      </label>
+      <div className="actions">
+        <button className="btn" onClick={() => void api.saveSafety(form)}>환율/Scout 저장</button>
       </div>
     </>
   );

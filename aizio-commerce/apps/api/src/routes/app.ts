@@ -32,6 +32,10 @@ export function createApp(services: AppServices) {
     const pending = integrations.filter((i) =>
       ["PENDING_SETUP", "NOT_CONFIGURED", "NOT_CONNECTED"].includes(i.status),
     );
+    const cj = integrations.find((i) => i.id === "cjdropshipping");
+    const settings = services.repo.getSafetySettings();
+    const lastRun = services.repo.latestScoutRun();
+    const scoutCounts = services.repo.scoutCountsFromDb();
     return c.json({
       analyzedToday,
       candidates,
@@ -43,6 +47,13 @@ export function createApp(services: AppServices) {
       expectedNetProfit: profit.expectedNetProfit,
       actualNetProfit: profit.actualNetProfit,
       pendingSetupCount: pending.length,
+      operatingMode: settings.operatingMode,
+      cjStatus: cj?.status ?? "PENDING_SETUP",
+      scout: {
+        cjReady: cj?.status === "READY",
+        lastRun,
+        counts: scoutCounts,
+      },
       note: pending.length
         ? "외부 API가 연결되지 않아 실시간 판매 수치는 0일 수 있습니다. 가상 매출은 표시하지 않습니다."
         : null,
@@ -69,16 +80,33 @@ export function createApp(services: AppServices) {
     return c.json({ product });
   });
 
+  app.get("/api/products/:id/history", (c) => {
+    const product = services.repo.getProduct(c.req.param("id"));
+    if (!product) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json({
+      price: services.repo.listPriceHistory(product.id),
+      inventory: services.repo.listInventoryHistory(product.id),
+      shipping: services.repo.listShippingQuoteHistory(product.id),
+    });
+  });
+
   app.post("/api/products/scout", async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const keyword = typeof body.keyword === "string" ? body.keyword : undefined;
+    const cjStatus = await services.cj.getStatus();
+    if (cjStatus !== "READY") {
+      return c.json(
+        { error: "SUPPLIER_NOT_READY", message: "공급처 연결 필요", status: cjStatus },
+        409,
+      );
+    }
     const jobId = enqueue(services.repo, "SCOUT_PRODUCTS", { keyword });
     services.repo.insertAudit({
       actor: "USER",
       action: "SCOUT_ENQUEUED",
       entityType: "job",
       entityId: jobId,
-      summary: `AI 상품 찾기 작업이 대기열에 들어갔습니다.${keyword ? ` 키워드: ${keyword}` : ""}`,
+      summary: `실제 상품 찾기 작업이 대기열에 들어갔습니다.${keyword ? ` 키워드: ${keyword}` : ""}`,
     });
     return c.json({ jobId, status: "QUEUED" });
   });
@@ -201,7 +229,7 @@ export function createApp(services: AppServices) {
         openai: maskSecret(env.openaiKey),
         gemini: maskSecret(env.geminiKey),
         claude: maskSecret(env.anthropicKey),
-        cj: maskSecret(env.cjAccessToken || env.cjApiPassword),
+        cj: maskSecret(env.cjApiKey || env.cjApiPassword || env.cjAccessToken),
         coupang: maskSecret(env.coupangAccessKey),
         naver: maskSecret(env.naverClientId),
       },
@@ -210,12 +238,26 @@ export function createApp(services: AppServices) {
 
   app.post("/api/integrations/:id/test", async (c) => {
     const id = c.req.param("id");
+    if (id === "cjdropshipping") {
+      const report = await services.cj.runConnectionTest({ pauseMs: 1100 });
+      const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : report.status;
+      services.repo.upsertIntegration({
+        id: "cjdropshipping",
+        kind: "supplier",
+        name: "CJdropshipping",
+        status: display,
+        lastSuccessAt: report.status === "READY" ? report.lastConnectedAt : null,
+        lastError: report.error,
+        capabilities: report.capabilities,
+        docsUrl: "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html",
+      });
+      return c.json(report);
+    }
     let result: { status: string; error: string | null } = { status: "UNAVAILABLE", error: "unknown integration" };
     if (id === "openai" || id === "gemini" || id === "claude") {
       const p = services.providers.get(id);
       result = p ? await p.testConnection() : result;
-    } else if (id === "cjdropshipping") result = await services.cj.testConnection();
-    else if (id === "coupang") result = await services.coupang.testConnection();
+    } else if (id === "coupang") result = await services.coupang.testConnection();
     else if (id === "naver") result = await services.naver.testConnection();
     await refreshIntegrationRows(services, id, result);
     return c.json(result);
@@ -326,8 +368,12 @@ function numOrNull(v: unknown): number | null {
 async function executeCommand(services: AppServices, routed: ReturnType<typeof routeCommand>) {
   switch (routed.intent) {
     case "scout": {
+      const cjStatus = await services.cj.getStatus();
+      if (cjStatus !== "READY") {
+        return { message: "공급처 연결 필요", status: cjStatus };
+      }
       const jobId = enqueue(services.repo, "SCOUT_PRODUCTS", {});
-      return { message: "상품 탐색 작업을 시작했습니다. 공급처가 연결되어야 실제 결과가 생깁니다.", jobId };
+      return { message: "실제 상품 찾기 작업을 시작했습니다.", jobId };
     }
     case "recommendations":
       return { products: services.repo.listProducts({ status: "TEST_SELL" }) };
@@ -424,6 +470,7 @@ export async function refreshIntegrationRows(
       docsUrl: "https://apicenter.commerce.naver.com/docs/auth",
     },
   ];
+  const existing = services.repo.listIntegrations();
   for (const row of rows) {
     if (onlyId && row.id !== onlyId) continue;
     const status = test && onlyId === row.id ? test.status : await row.adapter();
@@ -431,14 +478,17 @@ export async function refreshIntegrationRows(
       status === "NOT_CONFIGURED" && (row.kind === "supplier" || row.kind === "marketplace")
         ? "PENDING_SETUP"
         : status;
+    const prev = existing.find((i) => i.id === row.id);
+    const prevCaps = prev?.capabilities as Record<string, unknown> | undefined;
+    const keepDetailed = prevCaps && typeof prevCaps.productSearch === "string";
     services.repo.upsertIntegration({
       id: row.id,
       kind: row.kind,
       name: row.name,
       status: display,
-      lastSuccessAt: display === "READY" ? nowIso() : null,
+      lastSuccessAt: display === "READY" ? (prev?.lastSuccessAt ?? nowIso()) : null,
       lastError: test && onlyId === row.id ? test.error : display === "PENDING_SETUP" ? `${row.name} — PENDING_SETUP` : null,
-      capabilities: row.capabilities,
+      capabilities: keepDetailed ? prevCaps : row.capabilities,
       docsUrl: row.docsUrl,
     });
   }

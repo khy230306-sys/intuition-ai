@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+data/*.sqlite
+data/*.sqlite-*
+data/.encryption-key
+*.log
+.DS_Store
+.vite
+.turbo
+apps/web/dev-dist

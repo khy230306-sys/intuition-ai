@@ -1,0 +1,28 @@
+{
+  "name": "aizio-commerce",
+  "private": true,
+  "version": "1.0.0",
+  "description": "AIZIO COMMERCE — AI commerce operator",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev -w @aizio/commerce-api\" \"npm run dev -w @aizio/commerce-web\"",
+    "dev:api": "npm run dev -w @aizio/commerce-api",
+    "dev:web": "npm run dev -w @aizio/commerce-web",
+    "build": "npm run build -w @aizio/commerce-api && npm run build -w @aizio/commerce-web",
+    "typecheck": "npm run typecheck -w @aizio/commerce-api && npm run typecheck -w @aizio/commerce-web",
+    "lint": "npm run lint -w @aizio/commerce-api && npm run lint -w @aizio/commerce-web",
+    "test": "npm run test -w @aizio/commerce-api",
+    "test:watch": "npm run test:watch -w @aizio/commerce-api",
+    "start": "npm run start -w @aizio/commerce-api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

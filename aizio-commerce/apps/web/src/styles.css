@@ -147,12 +147,35 @@ button { cursor: pointer; }
 .muted { color: var(--muted); font-size: 13px; line-height: 1.5; }
 h1 { font-size: 22px; margin: 0 0 12px; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 6px; }
-input[type="number"], input[type="text"], textarea {
+input[type="number"], input[type="text"], input[type="password"], textarea, .credential-input {
   width: 100%;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
+  min-height: 44px;
+}
+.secret-label .hint { display: block; font-size: 12px; margin: 4px 0 8px; color: var(--muted); }
+.secret-label .req, .secret-label .opt {
+  margin-left: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.secret-label .req { color: var(--gold); }
+.secret-label .opt { color: var(--muted); }
+.secret-field { display: flex; gap: 8px; align-items: stretch; }
+.secret-field .credential-input { flex: 1; }
+.connect-form, .wizard { margin-top: 8px; }
+.probe-card { margin-top: 12px; }
+
+.LOCKED, .MISSING, .NOT_CONNECTED, .CREDENTIAL_REQUIRED {
+  background: rgba(139, 147, 167, 0.18); color: var(--muted);
+}
+.CONFIGURED, .CONNECTED, .CONNECTED_READ_ONLY {
+  background: rgba(62, 224, 160, 0.15); color: var(--green);
+}
+.INVALID_API_KEY, .PRODUCT_API_FAILED, .INVENTORY_API_FAILED, .SHIPPING_API_FAILED, .CJ_UNAVAILABLE {
+  background: rgba(255, 107, 107, 0.16); color: var(--red);
 }
 .score-grid { display: grid; gap: 8px; }
 .score {

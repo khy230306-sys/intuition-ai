@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Product, type Dashboard } from "./api";
+import { CjConnectWizard } from "./cj/connect-wizard";
+import { scoutAllowed, supplierConnectionLabel } from "./cj/status";
 
 type Page =
   | "home"
@@ -21,7 +23,8 @@ function won(n: number | null | undefined) {
 
 function Badge({ value }: { value: string | null | undefined }) {
   if (!value) return null;
-  return <span className={`badge ${value}`}>{value}</span>;
+  const cls = value.replace(/[^A-Za-z0-9]+/g, "_").replace(/_+$/g, "");
+  return <span className={`badge ${cls}`}>{value}</span>;
 }
 
 function timeAgo(iso: string | null | undefined) {
@@ -97,7 +100,12 @@ export function App() {
   async function scout() {
     setBusy(true);
     try {
-      if (dash && dash.scout && !dash.scout.cjReady) {
+      if (dash && !scoutAllowed({
+        cjReady: Boolean(dash.scout?.cjReady ?? dash.cjStatus === "READY"),
+        operatingMode: dash.operatingMode,
+        watchOverall: dash.watch?.overall,
+        safetyLock: dash.safetyLock,
+      })) {
         setNotice("공급처 연결 필요");
         setPage("settings");
         return;
@@ -199,7 +207,7 @@ export function App() {
       {page === "hq" && dash ? <Hq dash={dash} onOpen={(id) => { setMissionId(id); setPage("mission"); }} /> : null}
       {page === "watch" ? <Watch /> : null}
       {page === "mission" && missionId ? <MissionView id={missionId} onBack={() => setPage("hq")} /> : null}
-      {page === "settings" ? <Integrations /> : null}
+      {page === "settings" ? <Integrations onScout={() => void scout()} /> : null}
 
       <nav className="nav">
         <button className={page === "home" ? "on" : ""} onClick={() => setPage("home")}>
@@ -234,11 +242,19 @@ function Home({
   const counts = dash.scout?.counts;
   const cjReady = dash.scout?.cjReady ?? dash.cjStatus === "READY";
   const cjStatus = dash.supplier?.status ?? dash.cjStatus ?? "PENDING_SETUP";
+  const connection = dash.supplier?.connection ?? supplierConnectionLabel(cjStatus);
+  const canScout = scoutAllowed({
+    cjReady,
+    operatingMode: dash.operatingMode,
+    watchOverall: dash.watch?.overall,
+    safetyLock: dash.safetyLock,
+  });
   return (
     <>
       <div className="card">
         <h3>AIZIO COMMERCE</h3>
         <div className="row"><span>SUPPLIER</span><b>CJdropshipping <Badge value={cjStatus} /></b></div>
+        <div className="row"><span>Connection</span><b data-testid="home-cj-connection">{connection}</b></div>
         <div className="row"><span>Operating Mode</span><Badge value={dash.operatingMode ?? "LIVE_OBSERVE"} /></div>
         {dash.cjDegraded ? <div className="note">CJ API DEGRADED</div> : null}
       </div>
@@ -298,8 +314,8 @@ function Home({
         </div>
         <p className="muted">예상과 실제는 따로 집계합니다. 없는 숫자는 0이며 가상 매출이 아닙니다.</p>
         <div className="actions">
-          {cjReady ? (
-            <button className="btn" onClick={onScout}>
+          {canScout ? (
+            <button className="btn" onClick={onScout} data-testid="home-scout-button">
               실제 상품 찾기
             </button>
           ) : (
@@ -663,125 +679,63 @@ function MissionView({ id, onBack }: { id: string; onBack: () => void }) {
   );
 }
 
-function Integrations() {
+function Integrations({ onScout }: { onScout: () => void }) {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.integrations>> | null>(null);
-  const [lastTest, setLastTest] = useState<Record<string, unknown> | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [connectMsg, setConnectMsg] = useState<string | null>(null);
   useEffect(() => {
     void api.integrations().then(setData);
   }, []);
   if (!data) return <p className="muted">연결 상태를 불러오는 중…</p>;
-  const token = (data as { token?: { maskedApiKey?: string | null; maskedAccessToken?: string | null; legacyWarning?: string | null; status?: string } }).token;
+  const token = data.token;
+  async function refresh() {
+    setData(await api.integrations());
+  }
   return (
     <>
       <h1>연결 상태</h1>
       <p className="muted">CJ_API_KEY는 공식 getAccessToken의 apiKey입니다. CJ_ACCESS_TOKEN은 헤더 CJ-Access-Token이며 같은 값이 아닙니다. 원문은 표시하지 않습니다.</p>
       {data.integrations.map((i) => (
         <div className="card" key={String(i.id)}>
-          <div className="row"><span>{String(i.name)}</span><Badge value={String(i.status)} /></div>
           {i.id === "cjdropshipping" ? (
-            <>
-              <div className="row"><span>모드</span><b>CONNECTED / READ ONLY · LIVE_OBSERVE</b></div>
-              <div className="row"><span>API Key</span><b>{token?.maskedApiKey ?? (data as { secrets?: { cjApiKey?: string } }).secrets?.cjApiKey ?? "미설정"}</b></div>
-              <div className="row"><span>Access Token</span><b>{token?.maskedAccessToken ?? (data as { secrets?: { cjAccessToken?: string } }).secrets?.cjAccessToken ?? "미설정"}</b></div>
-              {token?.legacyWarning ? <p className="note">{token.legacyWarning}</p> : null}
-            </>
-          ) : null}
-          <div className="row"><span>마지막 연결</span><b>{String(i.status) === "READY" ? String(i.lastSuccessAt ?? "없음") : "성공으로 표시하지 않음"}</b></div>
-          <div className="row"><span>마지막 오류</span><b>{String(i.lastError ?? "없음")}</b></div>
-          {i.id === "cjdropshipping" ? (
-            <CapabilityMap caps={i.capabilities as Record<string, unknown>} />
+            <CjConnectWizard
+              integration={{
+                id: String(i.id),
+                name: String(i.name),
+                status: String(i.status),
+                lastError: (i.lastError as string | null | undefined) ?? null,
+                lastSuccessAt: (i.lastSuccessAt as string | null | undefined) ?? null,
+                capabilities: i.capabilities as Record<string, unknown> | undefined,
+              }}
+              token={token}
+              operatingMode={String(data.operatingMode ?? "LIVE_OBSERVE")}
+              safetyLock={Boolean(data.safetyLock)}
+              watchOverall={String(data.watchOverall ?? "HEALTHY")}
+              scoutLimit={Number(data.scoutLimit ?? 30)}
+              lastTest={null}
+              onRefresh={refresh}
+              onScout={onScout}
+            />
           ) : (
-            <pre className="muted">{JSON.stringify(i.capabilities, null, 2)}</pre>
-          )}
-          {i.id === "cjdropshipping" ? (
-            <div className="card" style={{ marginTop: 8 }}>
-              <h3>CJ 연결하기</h3>
-              <label>
-                CJ API Key (공식 apiKey)
-                <input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="My CJ → Authorization → API Key" />
-              </label>
-              <label>
-                CJ Access Token (선택, 헤더 토큰)
-                <input type="password" autoComplete="off" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} placeholder="이미 발급된 CJ-Access-Token" />
-              </label>
+            <>
+              <div className="row"><span>{String(i.name)}</span><Badge value={String(i.status)} /></div>
+              <div className="row"><span>마지막 연결</span><b>{String(i.status) === "READY" ? String(i.lastSuccessAt ?? "없음") : "성공으로 표시하지 않음"}</b></div>
+              <div className="row"><span>마지막 오류</span><b>{String(i.lastError ?? "없음")}</b></div>
+              <pre className="muted">{JSON.stringify(i.capabilities, null, 2)}</pre>
               <div className="actions">
                 <button
-                  className="btn"
-                  disabled={busy}
-                  onClick={() => {
-                    setBusy(true);
-                    void api
-                      .connectCj({ apiKey: apiKey || undefined, accessToken: accessToken || undefined })
-                      .then((r) => {
-                        setConnectMsg(`${String(r.connection)} · ${String(r.mode)} · ${String(r.status)}`);
-                        setApiKey("");
-                        setAccessToken("");
-                        setLastTest(r);
-                        return api.integrations().then(setData);
-                      })
-                      .catch((err: { data?: { error?: string } }) => {
-                        setConnectMsg(err.data?.error ?? "CREDENTIAL_REQUIRED");
-                      })
-                      .finally(() => setBusy(false));
-                  }}
+                  className="btn ghost"
+                  onClick={() =>
+                    void api.testIntegration(String(i.id)).then(() => refresh())
+                  }
                 >
-                  CJ 연결하기
+                  연결 테스트
                 </button>
               </div>
-              {connectMsg ? <p className="muted">{connectMsg}</p> : null}
-            </div>
-          ) : null}
-          <div className="actions">
-            <button
-              className="btn ghost"
-              onClick={() =>
-                void api.testIntegration(String(i.id)).then((r) => {
-                  setLastTest(i.id === "cjdropshipping" ? r : null);
-                  return api.integrations().then(setData);
-                })
-              }
-            >
-              연결 테스트
-            </button>
-          </div>
-          {i.id === "cjdropshipping" && lastTest ? (
-            <pre className="muted">{JSON.stringify(lastTest.probes ?? lastTest, null, 2)}</pre>
-          ) : null}
+            </>
+          )}
         </div>
       ))}
       <Safety />
       <Audit />
-    </>
-  );
-}
-
-function capabilityLabel(value: unknown, whenMissing = "—"): string {
-  if (typeof value === "string") return value;
-  if (value === true) return "CAPABILITY";
-  if (value === false) return "UNAVAILABLE";
-  return whenMissing;
-}
-
-function CapabilityMap({ caps }: { caps: Record<string, unknown> }) {
-  const rows: Array<[string, string]> = [
-    ["Product Search", capabilityLabel(caps.productSearch)],
-    ["Product Detail", capabilityLabel(caps.productDetail)],
-    ["Inventory", capabilityLabel(caps.inventory)],
-    ["Shipping", capabilityLabel(caps.shipping)],
-    ["Order API", capabilityLabel(caps.orderApi ?? caps.orders, "LOCKED")],
-    ["Payments", capabilityLabel(caps.payments, "LOCKED")],
-    ["Tracking", capabilityLabel(caps.tracking, "LOCKED")],
-    ["Dispute", capabilityLabel(caps.dispute ?? caps.disputes, "LOCKED")],
-  ];
-  return (
-    <>
-      {rows.map(([k, v]) => (
-        <div className="row" key={k}><span>{k}</span><Badge value={v} /></div>
-      ))}
     </>
   );
 }

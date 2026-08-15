@@ -81,7 +81,7 @@ export interface Dashboard {
   operatingMode?: string;
   cjStatus?: string;
   cjDegraded?: boolean;
-  supplier?: { name: string; status: string; mode: string };
+  supplier?: { name: string; status: string; mode: string; connection?: string };
   scout?: {
     cjReady: boolean;
     lastRun: (ScoutCounts & { createdAt: string; keyword: string | null }) | null;
@@ -143,7 +143,25 @@ export const api = {
   orders: () => req<{ orders: Array<Record<string, unknown>> }>("/api/orders"),
   audit: () => req<{ entries: Array<Record<string, unknown>> }>("/api/audit"),
   jobs: () => req<{ jobs: Array<Record<string, unknown>> }>("/api/jobs"),
-  integrations: () => req<{ integrations: Array<Record<string, unknown>>; ai: Array<Record<string, unknown>> }>("/api/integrations"),
+  integrations: () =>
+    req<{
+      integrations: Array<Record<string, unknown>>;
+      ai: Array<Record<string, unknown>>;
+      operatingMode?: string;
+      safetyLock?: boolean;
+      watchOverall?: string;
+      scoutLimit?: number;
+      token?: {
+        hasApiKey?: boolean;
+        hasAccessToken?: boolean;
+        apiKey?: string;
+        accessToken?: string;
+        maskedApiKey?: string | null;
+        maskedAccessToken?: string | null;
+        legacyWarning?: string | null;
+        status?: string;
+      };
+    }>("/api/integrations"),
   testIntegration: (id: string) => req<Record<string, unknown>>(`/api/integrations/${id}/test`, { method: "POST" }),
   connectCj: (body: { apiKey?: string; accessToken?: string }) =>
     req<Record<string, unknown>>("/api/integrations/cjdropshipping/connect", {

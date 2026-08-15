@@ -54,9 +54,8 @@ export class AutopilotRuntime {
 
   private async loadPersistedRiskState(ap: Awaited<ReturnType<typeof ensureAutopilotRow>>) {
     if (this.riskStateLoaded) return;
-    this.consecutiveLosses = Number((ap as { consecutiveLosses?: number }).consecutiveLosses ?? 0);
-    const peak = (ap as { peakEquity?: number | null }).peakEquity;
-    this.peakEquity = peak == null ? null : Number(peak);
+    this.consecutiveLosses = Number(ap.consecutiveLosses ?? 0);
+    this.peakEquity = ap.peakEquity == null ? null : Number(ap.peakEquity);
     this.riskStateLoaded = true;
   }
 

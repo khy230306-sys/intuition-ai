@@ -11,6 +11,7 @@ export type DataFreshness = (typeof DATA_FRESHNESS)[number];
 
 export const CONNECTION_STATUS = [
   "READY",
+  "PARTIALLY_READY",
   "NOT_CONFIGURED",
   "PENDING_SETUP",
   "AUTHENTICATING",

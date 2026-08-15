@@ -1,5 +1,5 @@
 import type { ConnectionStatus, CredentialStatus, ShippingAvailability } from "../../shared/types.ts";
-import { mapHttpToConnection, requestJson } from "../http.ts";
+import { requestJson } from "../http.ts";
 import type {
   FreightOption,
   SupplierAdapter,
@@ -13,6 +13,17 @@ import {
   probeErrorCode,
   redactCredentialText,
 } from "./cj-errors.ts";
+import {
+  classifyInventory,
+  classifyShipping,
+  firstVariantId,
+  flattenListV2,
+  gradeConnection,
+  maskIdentifier,
+  normalizeListProduct,
+  originCountryFromStock,
+  parseFreightOptions,
+} from "./cj-catalog.ts";
 import type { RateLimitManager } from "../../data-hub/rate-limit.ts";
 import { liveObserveWriteBlock } from "../../engines/safety/live-observe.ts";
 
@@ -68,14 +79,25 @@ export interface CjProbeResult {
   name: string;
   status: ConnectionStatus;
   error: string | null;
+  httpStatus?: number | null;
+  cjCode?: number | null;
+  cjMessage?: string | null;
+  endpoint?: string;
+  requestFields?: string[];
+  productId?: string | null;
+  variantId?: string | null;
+  capturedAt?: string;
+  correlationId?: string | null;
+  inventoryClass?: "READY" | "OUT_OF_STOCK" | "UNKNOWN" | "API_FAILED" | "UNSUPPORTED";
+  shippingClass?: "READY" | "UNAVAILABLE" | "API_FAILED";
 }
 
 export interface CjConnectionReport {
-  status: CredentialStatus;
+  status: ConnectionStatus | CredentialStatus;
   lastConnectedAt: string | null;
   error: string | null;
   probes: CjProbeResult[];
-  capabilities: Record<string, "READY" | "CAPABILITY" | "UNAVAILABLE" | "NOT_CONFIGURED" | "LOCKED">;
+  capabilities: Record<string, "READY" | "CAPABILITY" | "UNAVAILABLE" | "NOT_CONFIGURED" | "LOCKED" | "UNKNOWN">;
 }
 
 /**
@@ -94,6 +116,8 @@ export class CjDropshippingAdapter implements SupplierAdapter {
   private limiter: RateLimitManager | null;
   private onApiEvent?: CjAuthConfig["onApiEvent"];
   private persistTokens?: CjAuthConfig["persistTokens"];
+  private lastConnectionStatus: ConnectionStatus | null = null;
+  private lastCapabilities: CjConnectionReport["capabilities"] | null = null;
 
   constructor(config: CjAuthConfig | string, apiPassword?: string, existingToken?: string) {
     if (typeof config === "string") {
@@ -153,10 +177,38 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     return this.tokens.currentStatus();
   }
 
+  rememberConnection(status: string, capabilities?: Record<string, unknown> | null): void {
+    if (
+      status === "READY" ||
+      status === "PARTIALLY_READY" ||
+      status === "DEGRADED" ||
+      status === "UNAVAILABLE" ||
+      status === "PENDING_SETUP"
+    ) {
+      this.lastConnectionStatus = status;
+    }
+    if (capabilities && typeof capabilities.productSearch === "string") {
+      this.lastCapabilities = capabilities as CjConnectionReport["capabilities"];
+    }
+  }
+
+  lastProbeCapabilities() {
+    return this.lastCapabilities;
+  }
+
   async getStatus(): Promise<ConnectionStatus> {
     const status = this.tokens.currentStatus();
     if (status === "NOT_CONFIGURED") return "PENDING_SETUP";
-    if (status === "TOKEN_EXPIRING") return "READY";
+    if (status === "READY" || status === "TOKEN_EXPIRING") {
+      if (
+        this.lastConnectionStatus === "PARTIALLY_READY" ||
+        this.lastConnectionStatus === "DEGRADED" ||
+        this.lastConnectionStatus === "UNAVAILABLE"
+      ) {
+        return this.lastConnectionStatus;
+      }
+      return this.lastConnectionStatus === "READY" ? "READY" : status === "TOKEN_EXPIRING" ? "READY" : "READY";
+    }
     return status;
   }
 
@@ -375,14 +427,26 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     const officialOk = res.ok && isOfficialCjSuccess(res.data);
     this.noteCall(officialOk, res.status, res.error, res.timedOut);
     if (!officialOk) {
-      const status = mapHttpToConnection(res.status, res.timedOut);
+      const status = res.timedOut
+        ? "UNAVAILABLE"
+        : res.status === 429
+          ? "RATE_LIMITED"
+          : res.status === 401 || res.status === 403
+            ? "AUTH_FAILED"
+            : res.status >= 500
+              ? "DEGRADED"
+              : "UNAVAILABLE";
       if (status === "AUTH_FAILED" || status === "RATE_LIMITED" || status === "UNAVAILABLE" || status === "DEGRADED") {
         this.tokens.setStatus(status === "DEGRADED" ? "UNAVAILABLE" : status);
       }
       return {
         status,
         data: null as T | null,
-        error: this.safeError(res.data?.message ?? res.error ?? "CJ API 실패"),
+        error: this.safeError(
+          res.data && typeof res.data.code === "number"
+            ? `${res.data.message ?? "CJ API 실패"} (${res.data.code})`
+            : (res.data?.message ?? res.error ?? "CJ API 실패"),
+        ),
         raw: res,
       };
     }
@@ -397,6 +461,7 @@ export class CjDropshippingAdapter implements SupplierAdapter {
 
   async runConnectionTest(opts?: { pauseMs?: number }): Promise<CjConnectionReport> {
     const pauseMs = opts?.pauseMs ?? 0;
+    const capturedAt = new Date().toISOString();
     const probes: CjProbeResult[] = [];
     const locked = "LOCKED" as const;
     const cap: CjConnectionReport["capabilities"] = {
@@ -411,6 +476,7 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     };
 
     if (!this.tokens.getApiKey() && !this.tokens.getAccessToken()) {
+      this.lastConnectionStatus = "PENDING_SETUP";
       return {
         status: "NOT_CONFIGURED",
         lastConnectedAt: null,
@@ -438,78 +504,171 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       name: "authentication",
       status: toConnection(auth.status),
       error: auth.token ? null : authCode,
+      endpoint: "/authentication/getAccessToken",
+      requestFields: ["apiKey"],
+      capturedAt,
     });
     if (!auth.token) {
+      this.lastConnectionStatus = toConnection(auth.status);
       return { status: auth.status, lastConnectedAt: null, error: authCode, probes, capabilities: cap };
     }
 
     await sleep(pauseMs);
-    const list = await this.call<{ list?: Array<Record<string, unknown>>; content?: Array<Record<string, unknown>> }>(
-      "GET",
-      "/product/listV2",
-      { query: { page: 1, size: 1 } },
-    );
+    const list = await this.call<{
+      list?: Array<Record<string, unknown>>;
+      content?: Array<Record<string, unknown>>;
+    }>("GET", "/product/listV2", { query: { page: 1, size: 3 } });
+    const products = flattenListV2(list.data);
     probes.push({
       name: "productSearch",
       status: list.status,
       error: list.status === "READY" ? null : probeErrorCode("productSearch", list.status),
+      endpoint: "/product/listV2",
+      requestFields: ["page", "size"],
+      productId: maskIdentifier(products[0]?.pid),
+      capturedAt,
+      correlationId: envelopeRequestId(list.raw),
+      httpStatus: envelopeHttp(list.raw),
+      cjCode: envelopeCode(list.raw),
+      cjMessage: list.error,
     });
-    cap.productSearch = list.status === "READY" ? "READY" : "UNAVAILABLE";
-    cap.productDetail = list.status === "READY" ? "READY" : "UNAVAILABLE";
+    cap.productSearch =
+      list.status === "READY" && products.length > 0 ? "READY" : list.status === "READY" ? "UNKNOWN" : "UNAVAILABLE";
 
-    const sample = (list.data?.content ?? list.data?.list ?? [])[0];
-    const pid = sample ? String(sample.pid ?? sample.productId ?? "") : "";
-    let vid: string | null = sample?.vid ? String(sample.vid) : null;
+    let pid = "";
+    let vid: string | null = null;
+    cap.productDetail = "UNAVAILABLE";
 
-    if (!vid && pid) {
+    for (const sample of products.slice(0, 3)) {
+      pid = sample.pid;
+      // Official listV2 `id` is the product id and must never be treated as vid.
+      vid = sample.vid && sample.vid !== pid ? sample.vid : null;
+      if (!pid) continue;
       await sleep(pauseMs);
-      const variants = await this.getVariants(pid);
-      vid = firstVariant(variants.variants);
+      const detail = await this.call<unknown>("GET", "/product/query", { query: { pid } });
+      if (detail.status === "READY") cap.productDetail = "READY";
+      const detailRec =
+        detail.data && typeof detail.data === "object" && !Array.isArray(detail.data)
+          ? (detail.data as Record<string, unknown>)
+          : null;
+      if (!vid && detailRec) {
+        const fromVariants = firstVariantId(detailRec.variants);
+        vid = fromVariants && fromVariants !== pid ? fromVariants : null;
+      }
+      if (!vid) {
+        await sleep(pauseMs);
+        const variants = await this.getVariants(pid);
+        if (variants.status === "READY" && cap.productDetail !== "READY") cap.productDetail = "READY";
+        const fromQuery = firstVariantId(variants.variants);
+        vid = fromQuery && fromQuery !== pid ? fromQuery : null;
+      }
+      if (vid && vid !== pid) break;
+      vid = null;
     }
 
     if (vid) {
       await sleep(pauseMs);
-      const stock = await this.getStock({ vid });
+      const stock = await this.call<unknown>("GET", "/product/stock/queryByVid", { query: { vid } });
+      const inventoryApiOk = stock.status === "READY";
+      const inventoryClass = classifyInventory(stock.data, inventoryApiOk);
       probes.push({
         name: "inventory",
-        status: stock.status,
-        error: stock.status === "READY" ? null : probeErrorCode("inventory", stock.status),
+        status: inventoryApiOk ? "READY" : stock.status,
+        error: inventoryApiOk ? null : probeErrorCode("inventory", stock.status) ?? "INVENTORY_API_FAILED",
+        endpoint: "/product/stock/queryByVid",
+        requestFields: ["vid"],
+        productId: maskIdentifier(pid),
+        variantId: maskIdentifier(vid),
+        capturedAt,
+        correlationId: envelopeRequestId(stock.raw),
+        httpStatus: envelopeHttp(stock.raw),
+        cjCode: envelopeCode(stock.raw),
+        cjMessage: stock.error,
+        inventoryClass,
       });
-      cap.inventory = stock.status === "READY" ? "READY" : "UNAVAILABLE";
+      cap.inventory = inventoryApiOk ? "READY" : "UNAVAILABLE";
+
+      const startCountryCode = originCountryFromStock(stock.data);
       await sleep(pauseMs);
-      const freight = await this.getFreight({
-        startCountryCode: "CN",
-        endCountryCode: "KR",
-        vid,
-        quantity: 1,
+      const freight = await this.call<unknown>("POST", "/logistic/freightCalculate", {
+        body: {
+          startCountryCode,
+          endCountryCode: "KR",
+          products: [{ quantity: 1, vid }],
+        },
+      });
+      const shippingApiOk = freight.status === "READY";
+      const shippingClass = classifyShipping(freight.data, shippingApiOk);
+      probes.push({
+        name: "shipping",
+        status: shippingApiOk ? "READY" : freight.status,
+        error: shippingApiOk ? null : probeErrorCode("shipping", freight.status) ?? "SHIPPING_API_FAILED",
+        endpoint: "/logistic/freightCalculate",
+        requestFields: ["startCountryCode", "endCountryCode", "products.vid", "products.quantity"],
+        productId: maskIdentifier(pid),
+        variantId: maskIdentifier(vid),
+        capturedAt,
+        correlationId: envelopeRequestId(freight.raw),
+        httpStatus: envelopeHttp(freight.raw),
+        cjCode: envelopeCode(freight.raw),
+        cjMessage: freight.error,
+        shippingClass,
+      });
+      cap.shipping = shippingApiOk ? "READY" : "UNAVAILABLE";
+    } else {
+      probes.push({
+        name: "inventory",
+        status: "UNAVAILABLE",
+        error: "INVENTORY_API_FAILED",
+        endpoint: "/product/stock/queryByVid",
+        requestFields: ["vid"],
+        productId: maskIdentifier(pid || null),
+        variantId: null,
+        capturedAt,
+        inventoryClass: "UNKNOWN",
+        cjMessage: "official listV2/product query returned no vid",
       });
       probes.push({
         name: "shipping",
-        status: freight.status,
-        error: freight.status === "READY" ? null : probeErrorCode("shipping", freight.status),
+        status: "UNAVAILABLE",
+        error: "SHIPPING_API_FAILED",
+        endpoint: "/logistic/freightCalculate",
+        requestFields: ["startCountryCode", "endCountryCode", "products.vid", "products.quantity"],
+        productId: maskIdentifier(pid || null),
+        variantId: null,
+        capturedAt,
+        shippingClass: "API_FAILED",
+        cjMessage: "no official vid available for freightCalculate",
       });
-      cap.shipping = freight.status === "READY" ? "READY" : "UNAVAILABLE";
-    } else {
-      probes.push({ name: "inventory", status: "UNAVAILABLE", error: "INVENTORY_API_FAILED" });
-      probes.push({ name: "shipping", status: "UNAVAILABLE", error: "SHIPPING_API_FAILED" });
     }
 
-    const failed = probes.find((p) => p.name === "authentication" && p.status !== "READY");
-    const productOk = cap.productSearch === "READY";
-    const status: CredentialStatus = failed
-      ? (failed.status as CredentialStatus)
-      : productOk
-        ? "READY"
-        : "UNAVAILABLE";
-    this.tokens.setStatus(status === "READY" || status === "TOKEN_EXPIRING" ? "READY" : status);
+    const authReady = Boolean(auth.token);
+    const productsReady = cap.productSearch === "READY";
+    const inventoryReady = cap.inventory === "READY";
+    const shippingReady = cap.shipping === "READY";
+    const status = gradeConnection({
+      configured: true,
+      authReady,
+      productsReady,
+      inventoryReady,
+      shippingReady,
+    });
+    this.lastConnectionStatus = status;
+    this.lastCapabilities = cap;
+    if (status === "READY" || status === "PARTIALLY_READY") this.tokens.setStatus("READY");
+    const failedAuth = probes.find((p) => p.name === "authentication" && p.status !== "READY");
     const error =
-      failed?.error ??
+      failedAuth?.error ??
       (status === "READY"
         ? null
-        : probeErrorCode("productSearch", cap.productSearch) ?? "PRODUCT_API_FAILED");
+        : status === "PARTIALLY_READY"
+          ? inventoryReady
+            ? "SHIPPING_API_FAILED"
+            : "INVENTORY_API_FAILED"
+          : probeErrorCode("productSearch", cap.productSearch) ?? "PRODUCT_API_FAILED");
     return {
       status,
-      lastConnectedAt: status === "READY" ? new Date().toISOString() : null,
+      lastConnectedAt: status === "READY" || status === "PARTIALLY_READY" ? new Date().toISOString() : null,
       error,
       probes,
       capabilities: cap,
@@ -532,8 +691,22 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     if (result.status !== "READY") {
       return { status: result.status, products: [], error: result.error };
     }
-    const list = result.data?.content ?? result.data?.list ?? [];
-    const products = list.map((item) => mapProduct(item)).filter((p) => p.supplierProductId && p.title);
+    const list = result.data?.content ?? result.data?.list ?? result.data;
+    const products = flattenListV2(result.data ?? list)
+      .filter((p) => p.pid && p.title)
+      .map((p) => ({
+        supplierProductId: p.pid,
+        title: p.title,
+        imageUrl: p.imageUrl,
+        category: p.category,
+        priceUsd: p.priceUsd,
+        sku: p.sku,
+        variantId: p.vid,
+        warehouse: p.warehouse,
+        raw: p.raw,
+        capturedAt: new Date().toISOString(),
+        freshness: "LIVE" as const,
+      }));
     return { status: "READY" as const, products, error: null };
   }
 
@@ -584,11 +757,14 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       },
     });
     if (result.status !== "READY") return { status: result.status, options: [], error: result.error };
-    const options: FreightOption[] = (result.data ?? []).map((row) => ({
-      name: String(row.logisticName ?? "UNKNOWN"),
-      priceUsd: typeof row.logisticPrice === "number" ? row.logisticPrice : Number(row.logisticPrice ?? NaN) || null,
-      aging: row.logisticAging ? String(row.logisticAging) : null,
+    const parsed = parseFreightOptions(result.data);
+    const options: FreightOption[] = parsed.map((row) => ({
+      name: row.name,
+      priceUsd: row.priceUsd,
+      aging: row.aging,
       freshness: "LIVE",
+      currency: row.currency,
+      logisticsProductId: row.logisticsProductId,
     }));
     return { status: "READY" as const, options, error: null };
   }
@@ -653,30 +829,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function toConnection(status: CredentialStatus): ConnectionStatus {
+function toConnection(status: CredentialStatus | ConnectionStatus): ConnectionStatus {
   if (status === "NOT_CONFIGURED") return "PENDING_SETUP";
   if (status === "TOKEN_EXPIRING") return "READY";
   return status;
 }
 
-function firstVariant(raw: unknown): string | null {
-  if (Array.isArray(raw)) {
-    const row = raw[0] as Record<string, unknown> | undefined;
-    return row?.vid ? String(row.vid) : null;
-  }
-  if (raw && typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    const list = obj.variants ?? obj.list ?? obj.content;
-    if (Array.isArray(list) && list[0] && typeof list[0] === "object") {
-      const row = list[0] as Record<string, unknown>;
-      return row.vid ? String(row.vid) : null;
-    }
-  }
-  return null;
+function envelopeHttp(raw: unknown): number | null {
+  if (!raw || typeof raw !== "object") return null;
+  const n = Number((raw as { status?: number }).status);
+  return Number.isFinite(n) ? n : null;
+}
+
+function envelopeCode(raw: unknown): number | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = (raw as { data?: { code?: number } }).data;
+  const n = Number(data?.code);
+  return Number.isFinite(n) ? n : null;
+}
+
+function envelopeRequestId(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = (raw as { data?: { requestId?: string } }).data;
+  return typeof data?.requestId === "string" ? data.requestId : null;
 }
 
 export function extractVariantId(raw: unknown): string | null {
-  return firstVariant(raw);
+  return firstVariantId(raw);
 }
 
 export function extractInventoryTotal(raw: unknown): number | null {
@@ -701,18 +880,16 @@ export function extractInventoryTotal(raw: unknown): number | null {
 }
 
 function mapProduct(item: Record<string, unknown>): SupplierProduct {
-  const priceRaw = item.sellPrice ?? item.nowPrice ?? item.productPrice ?? item.price;
-  const priceUsd = priceRaw === undefined || priceRaw === null || priceRaw === "" ? null : Number(priceRaw);
-  const title = String(item.productNameEn ?? item.productName ?? item.name ?? "").trim();
+  const p = normalizeListProduct(item);
   return {
-    supplierProductId: String(item.pid ?? item.productId ?? item.id ?? ""),
-    title,
-    imageUrl: (item.productImage ?? item.bigImage ?? item.image) ? String(item.productImage ?? item.bigImage ?? item.image) : null,
-    category: item.categoryName ? String(item.categoryName) : null,
-    priceUsd: Number.isFinite(priceUsd as number) ? (priceUsd as number) : null,
-    sku: item.productSku ? String(item.productSku) : item.sku ? String(item.sku) : null,
-    variantId: item.vid ? String(item.vid) : null,
-    warehouse: item.defaultArea ? String(item.defaultArea) : null,
+    supplierProductId: p.pid,
+    title: p.title,
+    imageUrl: p.imageUrl,
+    category: p.category,
+    priceUsd: p.priceUsd,
+    sku: p.sku,
+    variantId: p.vid,
+    warehouse: p.warehouse,
     raw: item,
     capturedAt: new Date().toISOString(),
     freshness: "LIVE",

@@ -76,13 +76,18 @@ export function connectionTestErrorCode(
   if (inventory && inventory.status !== "READY") return "INVENTORY_API_FAILED";
   const shipping = probes.find((p) => p.name === "shipping");
   if (shipping && shipping.status !== "READY") return "SHIPPING_API_FAILED";
+  if (overallStatus === "PARTIALLY_READY") return "INVENTORY_API_FAILED";
   if (overallStatus === "RATE_LIMITED") return "RATE_LIMITED";
   if (overallStatus === "AUTH_FAILED") return "AUTH_FAILED";
   return "CJ_UNAVAILABLE";
 }
 
-export function supplierConnectionLabel(status: string): "NOT CONNECTED" | "CONNECTED / READ ONLY" {
-  return status === "READY" || status === "TOKEN_EXPIRING" ? "CONNECTED / READ ONLY" : "NOT CONNECTED";
+export function supplierConnectionLabel(
+  status: string,
+): "NOT CONNECTED" | "CONNECTED / READ ONLY" | "PARTIALLY READY" {
+  if (status === "READY" || status === "TOKEN_EXPIRING") return "CONNECTED / READ ONLY";
+  if (status === "PARTIALLY_READY") return "PARTIALLY READY";
+  return "NOT CONNECTED";
 }
 
 export function credentialConfiguredLabel(configured: boolean): "CONFIGURED" | "MISSING" {

@@ -48,12 +48,7 @@ export function buildServices(): AppServices {
   const storedAccess = repo.getEncryptedSecret("cj.accessToken");
   const storedRefresh = repo.getEncryptedSecret("cj.refreshToken");
   const storedExpiry = repo.getEncryptedSecret("cj.accessExpiry");
-  return {
-    repo,
-    providers,
-    manager: new ManagerAi(providers),
-    vision: new VisionEngine(providers),
-    cj: new CjDropshippingAdapter({
+  const cj = new CjDropshippingAdapter({
       apiKey: storedKey || env.cjApiKey,
       accessToken: storedAccess || env.cjAccessToken,
       refreshToken: storedRefresh || env.cjRefreshToken,
@@ -63,7 +58,15 @@ export function buildServices(): AppServices {
       limiter: defaultRateLimiter,
       onApiEvent: (row) => repo.recordApiEvent(row),
       persistTokens: (tokens) => persistCjTokens(repo, tokens),
-    }),
+    });
+  const cjRow = repo.listIntegrations().find((i) => i.id === "cjdropshipping");
+  if (cjRow) cj.rememberConnection(cjRow.status, cjRow.capabilities as Record<string, unknown>);
+  return {
+    repo,
+    providers,
+    manager: new ManagerAi(providers),
+    vision: new VisionEngine(providers),
+    cj,
     coupang: new CoupangAdapter(env.coupangAccessKey, env.coupangSecretKey, env.coupangVendorId),
     naver: new NaverCommerceAdapter(env.naverClientId, env.naverClientSecret),
   };

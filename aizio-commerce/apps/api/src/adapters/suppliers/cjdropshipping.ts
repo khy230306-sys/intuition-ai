@@ -7,6 +7,9 @@ import type {
   SupplierProduct,
   SupplierSearchQuery,
 } from "./types.ts";
+import { CJTokenManager, isOfficialCjSuccess } from "./cj-token-manager.ts";
+import type { RateLimitManager } from "../../data-hub/rate-limit.ts";
+import { liveObserveWriteBlock } from "../../engines/safety/live-observe.ts";
 
 const BASE = "https://developers.cjdropshipping.com/api2.0/v1";
 export const CJ_DOCS_AUTH = "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html";
@@ -49,6 +52,11 @@ export interface CjAuthConfig {
   accessToken?: string;
   refreshToken?: string;
   writeEnabled?: boolean;
+  legacyPasswordAlias?: string;
+  accessExpiry?: string;
+  limiter?: RateLimitManager | null;
+  onApiEvent?: (row: { provider: string; ok: boolean; status: number; error: string | null; circuit: string }) => void;
+  persistTokens?: (tokens: { accessToken: string | null; refreshToken: string | null; accessExpiry: string | null }) => void;
 }
 
 export interface CjProbeResult {
@@ -62,7 +70,7 @@ export interface CjConnectionReport {
   lastConnectedAt: string | null;
   error: string | null;
   probes: CjProbeResult[];
-  capabilities: Record<string, "READY" | "CAPABILITY" | "UNAVAILABLE" | "NOT_CONFIGURED">;
+  capabilities: Record<string, "READY" | "CAPABILITY" | "UNAVAILABLE" | "NOT_CONFIGURED" | "LOCKED">;
 }
 
 /**
@@ -76,47 +84,67 @@ export interface CjConnectionReport {
 export class CjDropshippingAdapter implements SupplierAdapter {
   readonly id = "cjdropshipping";
   readonly label = "CJdropshipping";
-  private apiKey: string;
-  private token: string | null;
-  private refreshToken: string | null;
-  private tokenExpiry: string | null = null;
+  private readonly tokens = new CJTokenManager();
   private writeEnabled: boolean;
-  private credentialStatus: CredentialStatus;
+  private limiter: RateLimitManager | null;
+  private onApiEvent?: CjAuthConfig["onApiEvent"];
+  private persistTokens?: CjAuthConfig["persistTokens"];
 
   constructor(config: CjAuthConfig | string, apiPassword?: string, existingToken?: string) {
     if (typeof config === "string") {
-      this.apiKey = apiPassword ?? "";
-      this.token = existingToken || null;
-      this.refreshToken = null;
+      this.tokens.configure({
+        apiKey: "",
+        legacyPasswordAlias: apiPassword,
+        accessToken: existingToken,
+      });
       this.writeEnabled = false;
+      this.limiter = null;
     } else {
-      this.apiKey = config.apiKey ?? "";
-      this.token = config.accessToken || null;
-      this.refreshToken = config.refreshToken || null;
+      this.tokens.configure({
+        apiKey: config.apiKey,
+        accessToken: config.accessToken,
+        refreshToken: config.refreshToken,
+        accessExpiry: config.accessExpiry,
+        legacyPasswordAlias: config.legacyPasswordAlias,
+      });
       this.writeEnabled = Boolean(config.writeEnabled);
+      this.limiter = config.limiter ?? null;
+      this.onApiEvent = config.onApiEvent;
+      this.persistTokens = config.persistTokens;
     }
-    this.credentialStatus = this.apiKey || this.token ? "NOT_CONFIGURED" : "NOT_CONFIGURED";
-    if (!this.apiKey && !this.token) this.credentialStatus = "NOT_CONFIGURED";
+  }
+
+  configure(input: {
+    apiKey?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    accessExpiry?: string;
+    legacyPasswordAlias?: string;
+  }): void {
+    this.tokens.configure(input);
+  }
+
+  tokenSnapshot() {
+    return this.tokens.snapshot();
+  }
+
+  persistableTokens() {
+    return this.tokens.persistable();
   }
 
   capabilities(): SupplierCapabilities {
-    return { ...CAPABILITIES, orderCreate: this.writeEnabled };
+    return { ...CAPABILITIES, orderCreate: false };
   }
 
   getCredentialStatus(): CredentialStatus {
-    if (!this.apiKey && !this.token) return "NOT_CONFIGURED";
-    return this.credentialStatus === "NOT_CONFIGURED" ? "NOT_CONFIGURED" : this.credentialStatus;
+    return this.tokens.currentStatus();
   }
 
   async getStatus(): Promise<ConnectionStatus> {
-    if (!this.apiKey && !this.token) return "PENDING_SETUP";
-    if (this.credentialStatus === "READY") return "READY";
-    if (this.credentialStatus === "AUTH_FAILED") return "AUTH_FAILED";
-    if (this.credentialStatus === "TOKEN_EXPIRED") return "TOKEN_EXPIRED";
-    if (this.credentialStatus === "RATE_LIMITED") return "RATE_LIMITED";
-    if (this.credentialStatus === "UNAVAILABLE") return "UNAVAILABLE";
-    if (this.credentialStatus === "AUTHENTICATING") return "AUTHENTICATING";
-    return "PENDING_SETUP";
+    const status = this.tokens.currentStatus();
+    if (status === "NOT_CONFIGURED") return "PENDING_SETUP";
+    if (status === "TOKEN_EXPIRING") return "READY";
+    return status;
   }
 
   private mapAuthFailure(httpStatus: number, timedOut: boolean, hadToken: boolean): CredentialStatus {
@@ -127,91 +155,167 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     return "UNAVAILABLE";
   }
 
+  circuitState() {
+    return this.limiter?.snapshot(this.id).circuit ?? "CLOSED";
+  }
+
   async ensureToken(): Promise<{ status: CredentialStatus; error: string | null; token: string | null }> {
-    if (!this.apiKey && !this.token) {
-      this.credentialStatus = "NOT_CONFIGURED";
+    if (!this.tokens.getApiKey() && !this.tokens.getAccessToken()) {
+      this.tokens.setStatus("NOT_CONFIGURED");
       return { status: "NOT_CONFIGURED", error: "CJ API Key 또는 Access Token이 필요합니다.", token: null };
     }
-    if (this.token && this.tokenExpiry) {
-      const exp = Date.parse(this.tokenExpiry);
-      if (Number.isFinite(exp) && exp < Date.now() + 60_000) {
-        const refreshed = await this.refreshAccessToken();
-        if (refreshed.token) return refreshed;
-      }
+    if (this.tokens.getAccessToken() && this.tokens.isExpired()) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed.token) return refreshed;
     }
-    if (this.token) {
-      return { status: this.credentialStatus === "READY" ? "READY" : "READY", error: null, token: this.token };
+    if (this.tokens.getAccessToken() && this.tokens.isExpiring() && (this.tokens.getRefreshToken() || this.tokens.getApiKey())) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed.token) return refreshed;
+    }
+    if (this.tokens.getAccessToken() && !this.tokens.isExpired()) {
+      if (this.tokens.currentStatus() === "NOT_CONFIGURED") this.tokens.setStatus("READY");
+      return { status: this.tokens.currentStatus(), error: null, token: this.tokens.getAccessToken() };
     }
     return this.fetchAccessToken();
   }
 
   private async fetchAccessToken(): Promise<{ status: CredentialStatus; error: string | null; token: string | null }> {
-    if (!this.apiKey) {
-      this.credentialStatus = "NOT_CONFIGURED";
+    if (!this.tokens.getApiKey()) {
+      this.tokens.setStatus("NOT_CONFIGURED");
       return { status: "NOT_CONFIGURED", error: "CJ_API_KEY가 없습니다.", token: null };
     }
-    this.credentialStatus = "AUTHENTICATING";
+    this.tokens.setStatus("AUTHENTICATING");
+    const gated = this.consumeBudget();
+    if (!gated.ok) {
+      this.tokens.setStatus("RATE_LIMITED");
+      return { status: "RATE_LIMITED", error: gated.error, token: null };
+    }
     const res = await requestJson<CjEnvelope<TokenPayload>>(`${BASE}/authentication/getAccessToken`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: this.apiKey }),
+      body: JSON.stringify({ apiKey: this.tokens.getApiKey() }),
     });
     const access = res.data?.data?.accessToken ?? null;
-    if (!res.ok || !access) {
-      this.credentialStatus = this.mapAuthFailure(res.status || 401, res.timedOut, false);
+    const ok = res.ok && Boolean(access) && isOfficialCjSuccess(res.data);
+    this.noteCall(ok, res.status, res.error, res.timedOut);
+    if (!ok || !access) {
+      const status = this.mapAuthFailure(res.status || 401, res.timedOut, false);
+      this.tokens.setStatus(status);
       return {
-        status: this.credentialStatus,
+        status,
         error: res.data?.message ?? res.error ?? "CJ 토큰 발급 실패",
         token: null,
       };
     }
-    this.token = access;
-    this.refreshToken = res.data?.data?.refreshToken ?? this.refreshToken;
-    this.tokenExpiry = res.data?.data?.accessTokenExpiryDate ?? null;
-    this.credentialStatus = "READY";
-    return { status: "READY", error: null, token: access };
+    this.tokens.applyIssued({
+      accessToken: access,
+      accessTokenExpiryDate: res.data?.data?.accessTokenExpiryDate ?? null,
+      refreshToken: res.data?.data?.refreshToken ?? null,
+      refreshTokenExpiryDate: res.data?.data?.refreshTokenExpiryDate ?? null,
+    });
+    this.persistTokens?.(this.tokens.persistable());
+    return { status: this.tokens.currentStatus(), error: null, token: access };
   }
 
   async refreshAccessToken(): Promise<{ status: CredentialStatus; error: string | null; token: string | null }> {
-    if (!this.refreshToken) {
-      this.credentialStatus = "TOKEN_EXPIRED";
-      this.token = null;
+    if (!this.tokens.getRefreshToken()) {
+      if (!this.tokens.getApiKey()) {
+        return {
+          status: this.tokens.currentStatus(),
+          error: this.tokens.isExpired() ? "refresh token 없음" : null,
+          token: this.tokens.getAccessToken(),
+        };
+      }
+      this.tokens.clearAccessToken();
+      this.tokens.setStatus("TOKEN_EXPIRED");
       return this.fetchAccessToken();
     }
-    this.credentialStatus = "AUTHENTICATING";
+    this.tokens.setStatus("AUTHENTICATING");
+    const gated = this.consumeBudget();
+    if (!gated.ok) {
+      this.tokens.setStatus("RATE_LIMITED");
+      return { status: "RATE_LIMITED", error: gated.error, token: null };
+    }
     const res = await requestJson<CjEnvelope<TokenPayload>>(`${BASE}/authentication/refreshAccessToken`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: this.refreshToken }),
+      body: JSON.stringify({ refreshToken: this.tokens.getRefreshToken() }),
     });
     const access = res.data?.data?.accessToken ?? null;
-    if (!res.ok || !access) {
-      this.credentialStatus = "TOKEN_EXPIRED";
-      this.token = null;
+    const ok = res.ok && Boolean(access) && isOfficialCjSuccess(res.data);
+    this.noteCall(ok, res.status, res.error, res.timedOut);
+    if (!ok || !access) {
+      this.tokens.clearAccessToken();
+      this.tokens.setStatus("TOKEN_EXPIRED");
+      if (this.tokens.getApiKey()) return this.fetchAccessToken();
       return {
         status: "TOKEN_EXPIRED",
         error: res.data?.message ?? res.error ?? "CJ refresh token 실패",
         token: null,
       };
     }
-    this.token = access;
-    this.refreshToken = res.data?.data?.refreshToken ?? this.refreshToken;
-    this.tokenExpiry = res.data?.data?.accessTokenExpiryDate ?? null;
-    this.credentialStatus = "READY";
-    return { status: "READY", error: null, token: access };
+    this.tokens.applyIssued({
+      accessToken: access,
+      accessTokenExpiryDate: res.data?.data?.accessTokenExpiryDate ?? null,
+      refreshToken: res.data?.data?.refreshToken ?? null,
+      refreshTokenExpiryDate: res.data?.data?.refreshTokenExpiryDate ?? null,
+    });
+    this.persistTokens?.(this.tokens.persistable());
+    return { status: this.tokens.currentStatus(), error: null, token: access };
+  }
+
+  private consumeBudget(): { ok: boolean; error: string | null } {
+    if (!this.limiter) return { ok: true, error: null };
+    const gate = this.limiter.canCall(this.id);
+    if (!gate.ok) {
+      this.onApiEvent?.({
+        provider: this.id,
+        ok: false,
+        status: 429,
+        error: gate.circuit === "OPEN" ? "circuit_open" : "qps_budget",
+        circuit: gate.circuit,
+      });
+      return {
+        ok: false,
+        error: gate.circuit === "OPEN" ? "CJ API DEGRADED — circuit OPEN" : "CJ QPS / points budget",
+      };
+    }
+    return { ok: true, error: null };
+  }
+
+  private noteCall(ok: boolean, status: number, error: string | null, timedOut = false, circuitOverride?: string) {
+    const circuit = circuitOverride ?? this.limiter?.record(this.id, ok && !timedOut) ?? "CLOSED";
+    this.onApiEvent?.({
+      provider: this.id,
+      ok: ok && !timedOut,
+      status: timedOut ? 0 : status,
+      error: timedOut ? "timeout" : error,
+      circuit,
+    });
   }
 
   private async call<T>(
     method: string,
     path: string,
     opts?: { query?: Record<string, string | number | undefined>; body?: unknown },
-  ) {
+    retried = false,
+  ): Promise<{ status: ConnectionStatus; data: T | null; error: string | null; raw: unknown }> {
     const auth = await this.ensureToken();
     if (!auth.token) {
       return {
         status: toConnection(auth.status),
         data: null as T | null,
         error: auth.error,
+        raw: null,
+      };
+    }
+    const gated = this.consumeBudget();
+    if (!gated.ok) {
+      this.tokens.setStatus("RATE_LIMITED");
+      return {
+        status: "RATE_LIMITED" as ConnectionStatus,
+        data: null as T | null,
+        error: gated.error,
         raw: null,
       };
     }
@@ -230,17 +334,26 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       body: opts?.body ? JSON.stringify(opts.body) : undefined,
     });
     if (res.error === "malformed_json") {
-      this.credentialStatus = this.credentialStatus === "READY" ? "READY" : "UNAVAILABLE";
+      this.noteCall(false, res.status, "malformed_json");
+      this.tokens.setStatus("UNAVAILABLE");
       return { status: "UNAVAILABLE" as ConnectionStatus, data: null as T | null, error: "malformed_json", raw: res };
     }
     if (res.status === 401) {
-      this.credentialStatus = "TOKEN_EXPIRED";
+      this.noteCall(false, 401, res.data?.message ?? "token expired");
+      this.tokens.clearAccessToken();
+      this.tokens.setStatus("TOKEN_EXPIRED");
+      if (!retried && (this.tokens.getRefreshToken() || this.tokens.getApiKey())) {
+        const next = await this.ensureToken();
+        if (next.token) return this.call<T>(method, path, opts, true);
+      }
       return { status: "TOKEN_EXPIRED" as ConnectionStatus, data: null as T | null, error: res.data?.message ?? "token expired", raw: res };
     }
-    if (!res.ok || res.data?.result === false) {
+    const officialOk = res.ok && isOfficialCjSuccess(res.data);
+    this.noteCall(officialOk, res.status, res.error, res.timedOut);
+    if (!officialOk) {
       const status = mapHttpToConnection(res.status, res.timedOut);
-      if (status === "AUTH_FAILED" || status === "RATE_LIMITED" || status === "UNAVAILABLE") {
-        this.credentialStatus = status;
+      if (status === "AUTH_FAILED" || status === "RATE_LIMITED" || status === "UNAVAILABLE" || status === "DEGRADED") {
+        this.tokens.setStatus(status === "DEGRADED" ? "UNAVAILABLE" : status);
       }
       return {
         status,
@@ -249,7 +362,7 @@ export class CjDropshippingAdapter implements SupplierAdapter {
         raw: res,
       };
     }
-    this.credentialStatus = "READY";
+    this.tokens.setStatus("READY");
     return { status: "READY" as ConnectionStatus, data: (res.data?.data ?? null) as T | null, error: null, raw: res };
   }
 
@@ -261,17 +374,19 @@ export class CjDropshippingAdapter implements SupplierAdapter {
   async runConnectionTest(opts?: { pauseMs?: number }): Promise<CjConnectionReport> {
     const pauseMs = opts?.pauseMs ?? 0;
     const probes: CjProbeResult[] = [];
+    const locked = "LOCKED" as const;
     const cap: CjConnectionReport["capabilities"] = {
       productSearch: "UNAVAILABLE",
       productDetail: "UNAVAILABLE",
       inventory: "UNAVAILABLE",
       shipping: "UNAVAILABLE",
-      orderApi: this.writeEnabled ? "UNAVAILABLE" : "CAPABILITY",
-      tracking: "CAPABILITY",
-      dispute: "CAPABILITY",
+      orderApi: locked,
+      tracking: locked,
+      dispute: locked,
+      payments: locked,
     };
 
-    if (!this.apiKey && !this.token) {
+    if (!this.tokens.getApiKey() && !this.tokens.getAccessToken()) {
       return {
         status: "NOT_CONFIGURED",
         lastConnectedAt: null,
@@ -282,9 +397,10 @@ export class CjDropshippingAdapter implements SupplierAdapter {
           productDetail: "NOT_CONFIGURED",
           inventory: "NOT_CONFIGURED",
           shipping: "NOT_CONFIGURED",
-          orderApi: "CAPABILITY",
-          tracking: "CAPABILITY",
-          dispute: "CAPABILITY",
+          orderApi: locked,
+          tracking: locked,
+          dispute: locked,
+          payments: locked,
         },
       };
     }
@@ -303,21 +419,16 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     );
     probes.push({ name: "productSearch", status: list.status, error: list.error });
     cap.productSearch = list.status === "READY" ? "READY" : "UNAVAILABLE";
+    cap.productDetail = list.status === "READY" ? "READY" : "UNAVAILABLE";
 
     const sample = (list.data?.content ?? list.data?.list ?? [])[0];
     const pid = sample ? String(sample.pid ?? sample.productId ?? "") : "";
     let vid: string | null = sample?.vid ? String(sample.vid) : null;
 
-    if (pid) {
+    if (!vid && pid) {
       await sleep(pauseMs);
-      const detail = await this.call<Record<string, unknown>>("GET", "/product/query", { query: { pid } });
-      probes.push({ name: "productDetail", status: detail.status, error: detail.error });
-      cap.productDetail = detail.status === "READY" ? "READY" : "UNAVAILABLE";
       const variants = await this.getVariants(pid);
-      const first = firstVariant(variants.variants);
-      if (first) vid = first;
-    } else {
-      probes.push({ name: "productDetail", status: "UNAVAILABLE", error: "샘플 상품 없음" });
+      vid = firstVariant(variants.variants);
     }
 
     if (vid) {
@@ -340,12 +451,13 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     }
 
     const failed = probes.find((p) => p.name === "authentication" && p.status !== "READY");
+    const productOk = cap.productSearch === "READY";
     const status: CredentialStatus = failed
       ? (failed.status as CredentialStatus)
-      : probes.some((p) => p.status === "READY")
+      : productOk
         ? "READY"
         : "UNAVAILABLE";
-    this.credentialStatus = status;
+    this.tokens.setStatus(status === "READY" || status === "TOKEN_EXPIRING" ? "READY" : status);
     return {
       status,
       lastConnectedAt: status === "READY" ? new Date().toISOString() : null,
@@ -461,16 +573,14 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     };
   }
 
-  async createOrder(payload: unknown) {
-    if (!this.writeEnabled) {
-      return {
-        status: "UNAVAILABLE" as const,
-        order: null,
-        error: "LIVE_OBSERVE: CJ 주문 생성은 서버에서 차단됩니다.",
-      };
-    }
-    const result = await this.call<unknown>("POST", "/shopping/order/createOrderV3", { body: payload });
-    return { status: result.status, order: result.data, error: result.error };
+  async createOrder(_payload: unknown) {
+    void this.writeEnabled;
+    const block = liveObserveWriteBlock("CREATE_ORDER");
+    return {
+      status: "UNAVAILABLE" as const,
+      order: null,
+      error: `${block.error} LIVE_OBSERVE: CJ 주문 생성은 서버에서 차단됩니다.`,
+    };
   }
 
   async getOrder(orderId: string) {
@@ -496,6 +606,7 @@ function sleep(ms: number): Promise<void> {
 
 function toConnection(status: CredentialStatus): ConnectionStatus {
   if (status === "NOT_CONFIGURED") return "PENDING_SETUP";
+  if (status === "TOKEN_EXPIRING") return "READY";
   return status;
 }
 

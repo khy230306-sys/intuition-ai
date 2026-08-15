@@ -80,5 +80,6 @@ describe("Safety Gate", () => {
     const r = evaluateSafetyGate(DEFAULT_SAFETY_SETTINGS, { ...base, action: "MARKETPLACE_LISTING" });
     expect(r.ruleHits).toContain("mode.LIVE_OBSERVE");
     expect(r.decision).toBe("BLOCK");
+    expect(r.code).toBe("BLOCKED_BY_LIVE_OBSERVE");
   });
 });

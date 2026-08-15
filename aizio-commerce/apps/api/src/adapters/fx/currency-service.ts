@@ -17,6 +17,23 @@ export interface CurrencyService {
   >;
 }
 
+export type FxDisplayStatus = "LIVE_FX" | "MANUAL_FX" | "STALE_FX" | "FX_NOT_CONFIGURED";
+
+const STALE_FX_MS = 24 * 60 * 60_000;
+
+export function classifyFxDisplay(input: {
+  status: string | null | undefined;
+  capturedAt?: string | null;
+  now?: number;
+}): FxDisplayStatus {
+  if (!input.status || input.status === "FX_RATE_NOT_CONFIGURED") return "FX_NOT_CONFIGURED";
+  const captured = input.capturedAt ? Date.parse(input.capturedAt) : NaN;
+  if (Number.isFinite(captured) && (input.now ?? Date.now()) - captured > STALE_FX_MS) return "STALE_FX";
+  if (input.status === "LIVE") return "LIVE_FX";
+  if (input.status === "MANUAL_RATE") return "MANUAL_FX";
+  return "FX_NOT_CONFIGURED";
+}
+
 export function createCurrencyService(opts: {
   provider: "none" | "manual" | "frankfurter";
   manualUsdKrw: number | null;

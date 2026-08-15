@@ -13,6 +13,7 @@ export interface ScoutCounts {
   riskExcluded: number;
   profitCalculable: number;
   recommended: number;
+  reviewNeeded?: number;
 }
 
 export interface Product {
@@ -79,6 +80,8 @@ export interface Dashboard {
   pendingSetupCount: number;
   operatingMode?: string;
   cjStatus?: string;
+  cjDegraded?: boolean;
+  supplier?: { name: string; status: string; mode: string };
   scout?: {
     cjReady: boolean;
     lastRun: (ScoutCounts & { createdAt: string; keyword: string | null }) | null;
@@ -142,6 +145,11 @@ export const api = {
   jobs: () => req<{ jobs: Array<Record<string, unknown>> }>("/api/jobs"),
   integrations: () => req<{ integrations: Array<Record<string, unknown>>; ai: Array<Record<string, unknown>> }>("/api/integrations"),
   testIntegration: (id: string) => req<Record<string, unknown>>(`/api/integrations/${id}/test`, { method: "POST" }),
+  connectCj: (body: { apiKey?: string; accessToken?: string }) =>
+    req<Record<string, unknown>>("/api/integrations/cjdropshipping/connect", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   safety: () => req<Record<string, unknown>>("/api/settings/safety"),
   saveSafety: (body: unknown) => req("/api/settings/safety", { method: "PUT", body: JSON.stringify(body) }),
   command: (text: string) => req("/api/command", { method: "POST", body: JSON.stringify({ text }) }),

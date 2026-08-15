@@ -37,12 +37,19 @@ export const env = {
   geminiModel: str("GEMINI_MODEL", "gemini-2.0-flash"),
   anthropicKey: str("ANTHROPIC_API_KEY"),
   anthropicModel: str("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+  /** Unused by official v2 token API. Kept only for migration warning. */
   cjEmail: str("CJ_EMAIL"),
-  /** Official CJ v2 token API body field: { apiKey }. */
+  /** Official v2 getAccessToken body field `{ apiKey }`. My CJ → Authorization → API → Type: API Key. */
   cjApiKey: str("CJ_API_KEY"),
-  /** Legacy alias for CJ_API_KEY. Not an email password. */
+  /**
+   * LEGACY: previously mistaken as email password.
+   * Official v2 does not accept email/password on getAccessToken.
+   * If CJ_API_KEY is empty, this value is treated as a migrated API Key with a warning.
+   */
   cjApiPassword: str("CJ_API_PASSWORD"),
+  /** Optional pre-issued access token for header `CJ-Access-Token`. Not the same as CJ_API_KEY. */
   cjAccessToken: str("CJ_ACCESS_TOKEN"),
+  /** Refresh token from getAccessToken / refreshAccessToken. */
   cjRefreshToken: str("CJ_REFRESH_TOKEN"),
   coupangAccessKey: str("COUPANG_ACCESS_KEY"),
   coupangSecretKey: str("COUPANG_SECRET_KEY"),
@@ -52,8 +59,9 @@ export const env = {
   rootDir: root,
 };
 
+/** UI/audit masking only. Never log the raw secret. Example: abcd********wxyz */
 export function maskSecret(value: string | null | undefined): string | null {
   if (!value) return null;
   if (value.length <= 8) return "••••";
-  return `${value.slice(0, 3)}••••${value.slice(-4)}`;
+  return `${value.slice(0, 4)}********${value.slice(-4)}`;
 }

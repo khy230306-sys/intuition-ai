@@ -17,7 +17,7 @@ export async function fulfillOrder(opts: {
   dailySpent: number;
   monthlySpent: number;
   humanApproved: boolean;
-}): Promise<{ status: string; error: string | null }> {
+}): Promise<{ status: string; error: string | null; code?: string }> {
   const order = opts.repo.getOrder(opts.orderId);
   if (!order) return { status: "FAILED", error: "주문을 찾을 수 없습니다." };
   if (!opts.product?.supplierProductId) {
@@ -73,7 +73,7 @@ export async function fulfillOrder(opts: {
       summary: `Order ${order.id} Auto fulfillment blocked. Reason: ${gate.reasons.join(" / ")}`,
       detail: { gate, oldCost, newCost, increase },
     });
-    return { status: gate.decision, error: gate.reasons.join(" / ") };
+    return { status: gate.decision, error: gate.reasons.join(" / "), code: gate.code };
   }
 
   const created = await opts.supplier.createOrder({

@@ -89,6 +89,7 @@ describe('V1.2 closed-market SHADOW perfection', () => {
       },
     });
     const { placeManagedOrder } = await import('../src/services/execution.js');
+    // No forcePosition → paper sell rejects; DB OPEN must stay OPEN
     const order = await placeManagedOrder({
       broker: paper,
       mode: 'PAPER',
@@ -97,6 +98,7 @@ describe('V1.2 closed-market SHADOW perfection', () => {
       quantity: 1,
       strategyId: 'momentum',
       signalId: `exit-reject-${Date.now()}`,
+      positionId: pos.id,
     });
     expect(String(order.status)).toBe('REJECTED');
     expect(Number(order.filledQuantity)).toBe(0);

@@ -1,5 +1,9 @@
-export function supplierConnectionLabel(status: string): "NOT CONNECTED" | "CONNECTED / READ ONLY" {
-  return status === "READY" || status === "TOKEN_EXPIRING" ? "CONNECTED / READ ONLY" : "NOT CONNECTED";
+export function supplierConnectionLabel(
+  status: string,
+): "NOT CONNECTED" | "CONNECTED / READ ONLY" | "PARTIALLY READY" {
+  if (status === "READY" || status === "TOKEN_EXPIRING") return "CONNECTED / READ ONLY";
+  if (status === "PARTIALLY_READY") return "PARTIALLY READY";
+  return "NOT CONNECTED";
 }
 
 export function credentialConfiguredLabel(configured: boolean): "CONFIGURED" | "MISSING" {
@@ -8,12 +12,18 @@ export function credentialConfiguredLabel(configured: boolean): "CONFIGURED" | "
 
 export function scoutAllowed(opts: {
   cjReady: boolean;
+  productsReady?: boolean;
+  inventoryReady?: boolean;
+  shippingReady?: boolean;
   operatingMode?: string | null;
   watchOverall?: string | null;
   safetyLock?: boolean | null;
 }): boolean {
   return (
     opts.cjReady &&
+    (opts.productsReady ?? true) &&
+    (opts.inventoryReady ?? true) &&
+    (opts.shippingReady ?? true) &&
     (opts.operatingMode ?? "LIVE_OBSERVE") === "LIVE_OBSERVE" &&
     opts.watchOverall !== "CRITICAL" &&
     !opts.safetyLock

@@ -23,7 +23,9 @@ export function runWatchCycle(repo: Repository, input: WatchInput = processMetri
 
   const integrations = repo.listIntegrations();
   const apiTotal = Math.max(integrations.length, 1);
-  const apiHealthy = integrations.filter((i) => i.status === "READY" || i.status === "PENDING_SETUP" || i.status === "NOT_CONFIGURED").length;
+  const apiHealthy = integrations.filter((i) =>
+    i.status === "READY" || i.status === "PENDING_SETUP" || i.status === "NOT_CONFIGURED",
+  ).length;
   const authFails = repo.countApiEvents({ sinceMinutes: 10, status: 401 });
   const rateLimited = repo.countApiEvents({ sinceMinutes: 10, status: 429 });
   const timeouts = repo.countApiEvents({ sinceMinutes: 10, error: "timeout" });
@@ -48,6 +50,34 @@ export function runWatchCycle(repo: Repository, input: WatchInput = processMetri
   const cjTimeout = repo.countApiEvents({ sinceMinutes: 10, error: "timeout", provider: "cjdropshipping" });
   const cjMalformed = repo.countApiEvents({ sinceMinutes: 10, error: "malformed_json", provider: "cjdropshipping" });
   const cjCircuit = repo.latestApiCircuit("cjdropshipping");
+  const cjRow = integrations.find((i) => i.id === "cjdropshipping");
+  const cjCaps = (cjRow?.capabilities ?? {}) as Record<string, unknown>;
+  if (cjCaps.inventory === "UNAVAILABLE") {
+    overall = worse(overall, "DEGRADED");
+    findings.push("CJ_INVENTORY_API_FAILED");
+    openIncident(
+      repo,
+      "HIGH",
+      "cjdropshipping",
+      "CJ_INVENTORY_API_FAILED",
+      "Inventory probe failed — Scout blocked, product browse still allowed, GLOBAL SAFETY LOCK not engaged",
+      ["cjdropshipping", "SCOUT_PRODUCTS"],
+      ["block SCOUT_PRODUCTS", "keep LIVE_OBSERVE", "no GLOBAL_SAFETY_LOCK"],
+    );
+  }
+  if (cjCaps.shipping === "UNAVAILABLE") {
+    overall = worse(overall, "DEGRADED");
+    findings.push("CJ_SHIPPING_API_FAILED");
+    openIncident(
+      repo,
+      "HIGH",
+      "cjdropshipping",
+      "CJ_SHIPPING_API_FAILED",
+      "Korea shipping probe failed — Scout blocked, product browse still allowed, GLOBAL SAFETY LOCK not engaged",
+      ["cjdropshipping", "SCOUT_PRODUCTS"],
+      ["block SCOUT_PRODUCTS", "keep LIVE_OBSERVE", "no GLOBAL_SAFETY_LOCK"],
+    );
+  }
   if (cj401) {
     overall = worse(overall, "DEGRADED");
     findings.push(`CJ 401 ${cj401}/10m`);

@@ -42,6 +42,8 @@ export interface FreightOption {
   priceUsd: number | null;
   aging: string | null;
   freshness: DataFreshness;
+  currency?: "USD" | null;
+  logisticsProductId?: string | null;
 }
 
 export interface SupplierAdapter {

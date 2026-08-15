@@ -34,6 +34,17 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    host: "0.0.0.0",
+    port: 4173,
+    allowedHosts: true,
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],

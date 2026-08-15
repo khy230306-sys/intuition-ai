@@ -25,6 +25,7 @@ import {
   redactCredentialText,
   supplierConnectionLabel,
 } from "../adapters/suppliers/cj-errors.ts";
+import { scoutCapsReady } from "../adapters/suppliers/cj-catalog.ts";
 
 export function createApp(services: AppServices) {
   const app = new Hono();
@@ -45,6 +46,7 @@ export function createApp(services: AppServices) {
       ["PENDING_SETUP", "NOT_CONFIGURED", "NOT_CONNECTED"].includes(i.status),
     );
     const cj = integrations.find((i) => i.id === "cjdropshipping");
+    const cjCaps = (cj?.capabilities ?? {}) as Record<string, unknown>;
     const settings = services.repo.getSafetySettings();
     const lastRun = services.repo.latestScoutRun();
     const scoutCounts = services.repo.scoutCountsFromDb();
@@ -74,11 +76,11 @@ export function createApp(services: AppServices) {
         name: "CJdropshipping",
         status: cj?.status ?? "PENDING_SETUP",
         connection: supplierConnectionLabel(cj?.status ?? "PENDING_SETUP"),
-        mode: (cj?.status ?? "PENDING_SETUP") === "READY" ? "READ ONLY" : "NOT CONNECTED",
+        mode: supplierMode(cj?.status ?? "PENDING_SETUP"),
       },
       cjDegraded: (watch.findings ?? []).some((f) => f.includes("CJ API DEGRADED")) || cj?.status === "RATE_LIMITED",
       scout: {
-        cjReady: cj?.status === "READY",
+        cjReady: scoutCapsReady(cjCaps, cj?.status ?? "PENDING_SETUP"),
         lastRun,
         counts: scoutCounts,
       },
@@ -262,6 +264,7 @@ export function createApp(services: AppServices) {
 
   app.get("/api/integrations", async (c) => {
     const snapshots = await services.providers.snapshots();
+    hydrateCjCredentials(services);
     await refreshIntegrationRows(services);
     const settings = services.repo.getSafetySettings();
     const watch = services.repo.latestWatchSnapshot() ?? runWatchCycle(services.repo);
@@ -306,17 +309,7 @@ export function createApp(services: AppServices) {
     if (id === "cjdropshipping") {
       hydrateCjCredentials(services);
       const report = await services.cj.runConnectionTest({ pauseMs: process.env.VITEST ? 0 : 1100 });
-      const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : report.status;
-      services.repo.upsertIntegration({
-        id: "cjdropshipping",
-        kind: "supplier",
-        name: "CJdropshipping",
-        status: display,
-        lastSuccessAt: report.status === "READY" ? report.lastConnectedAt : null,
-        lastError: report.error,
-        capabilities: report.capabilities,
-        docsUrl: "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html",
-      });
+      persistCjConnection(services, report);
       return c.json(publicCjReport(services, report));
     }
     let result: { status: string; error: string | null } = { status: "UNAVAILABLE", error: "unknown integration" };
@@ -369,24 +362,7 @@ export function createApp(services: AppServices) {
     if (issued.accessToken) services.repo.setEncryptedSecret("cj.accessToken", issued.accessToken);
     if (issued.refreshToken) services.repo.setEncryptedSecret("cj.refreshToken", issued.refreshToken);
     if (issued.accessExpiry) services.repo.setEncryptedSecret("cj.accessExpiry", issued.accessExpiry);
-    const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : report.status;
-    services.repo.upsertIntegration({
-      id: "cjdropshipping",
-      kind: "supplier",
-      name: "CJdropshipping",
-      status: display,
-      lastSuccessAt: report.status === "READY" ? report.lastConnectedAt : null,
-      lastError: report.error,
-      capabilities: {
-        ...report.capabilities,
-        authentication: report.status === "READY" || report.status === "TOKEN_EXPIRING" ? "READY" : report.status,
-        products: report.capabilities.productSearch,
-        orders: "LOCKED",
-        payments: "LOCKED",
-        disputes: "LOCKED",
-      },
-      docsUrl: "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html",
-    });
+    persistCjConnection(services, report);
     return c.json(publicCjConnectResponse(services, report, [apiKey, accessToken]));
   });
 
@@ -662,12 +638,52 @@ export async function refreshIntegrationRows(
       kind: row.kind,
       name: row.name,
       status: display,
-      lastSuccessAt: display === "READY" ? (prev?.lastSuccessAt ?? nowIso()) : null,
-      lastError: test && onlyId === row.id ? test.error : display === "PENDING_SETUP" ? `${row.name} — PENDING_SETUP` : null,
+      lastSuccessAt:
+        display === "READY" || display === "PARTIALLY_READY" ? (prev?.lastSuccessAt ?? nowIso()) : null,
+      lastError:
+        test && onlyId === row.id
+          ? test.error
+          : display === "PENDING_SETUP"
+            ? `${row.name} — PENDING_SETUP`
+            : display === "PARTIALLY_READY"
+              ? (prev?.lastError ?? null)
+              : display === "READY"
+                ? null
+                : (prev?.lastError ?? null),
       capabilities: keepDetailed ? prevCaps : row.capabilities,
       docsUrl: row.docsUrl,
     });
   }
+}
+
+function persistCjConnection(services: AppServices, report: CjConnectionReport): void {
+  const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : String(report.status);
+  const authProbe = report.probes.find((p) => p.name === "authentication")?.status ?? "UNAVAILABLE";
+  const caps = {
+    ...report.capabilities,
+    authentication: authProbe,
+    products: report.capabilities.productSearch,
+    orders: "LOCKED",
+    payments: "LOCKED",
+    disputes: "LOCKED",
+  };
+  services.cj.rememberConnection(display, caps);
+  services.repo.upsertIntegration({
+    id: "cjdropshipping",
+    kind: "supplier",
+    name: "CJdropshipping",
+    status: display,
+    lastSuccessAt: report.status === "READY" || report.status === "PARTIALLY_READY" ? report.lastConnectedAt : null,
+    lastError: report.error,
+    capabilities: caps,
+    docsUrl: "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html",
+  });
+}
+
+function supplierMode(status: string): "READ ONLY" | "READ ONLY / PARTIAL" | "NOT CONNECTED" {
+  if (status === "READY" || status === "TOKEN_EXPIRING") return "READ ONLY";
+  if (status === "PARTIALLY_READY") return "READ ONLY / PARTIAL";
+  return "NOT CONNECTED";
 }
 
 function hydrateCjCredentials(services: AppServices): void {
@@ -678,17 +694,26 @@ function hydrateCjCredentials(services: AppServices): void {
     accessExpiry: services.repo.getEncryptedSecret("cj.accessExpiry") ?? undefined,
     legacyPasswordAlias: env.cjApiPassword,
   });
+  const row = services.repo.listIntegrations().find((i) => i.id === "cjdropshipping");
+  if (row) services.cj.rememberConnection(row.status, row.capabilities as Record<string, unknown>);
 }
 
 async function scoutGate(
   services: AppServices,
 ): Promise<{ ok: true } | { ok: false; status: 409; body: Record<string, unknown> }> {
+  hydrateCjCredentials(services);
+  const cjRow = services.repo.listIntegrations().find((i) => i.id === "cjdropshipping");
   const cjStatus = await services.cj.getStatus();
-  if (cjStatus !== "READY") {
+  const caps = (cjRow?.capabilities ?? services.cj.lastProbeCapabilities() ?? {}) as Record<string, unknown>;
+  if (cjStatus !== "READY" || !scoutCapsReady(caps, "READY")) {
     return {
       ok: false,
       status: 409,
-      body: { error: "SUPPLIER_NOT_READY", message: "공급처 연결 필요", status: cjStatus },
+      body: {
+        error: "SUPPLIER_NOT_READY",
+        message: "공급처 연결 필요",
+        status: cjRow?.status ?? cjStatus,
+      },
     };
   }
   const settings = services.repo.getSafetySettings();
@@ -760,16 +785,23 @@ function stripSecrets<T>(payload: T, secrets: string[]): T {
   return JSON.parse(redactCredentialText(JSON.stringify(payload), secrets)) as T;
 }
 
+function connectionFlag(status: string): "CONNECTED" | "PARTIAL" | "NOT CONNECTED" | "FAILED" {
+  if (status === "READY" || status === "TOKEN_EXPIRING") return "CONNECTED";
+  if (status === "PARTIALLY_READY") return "PARTIAL";
+  if (status === "NOT_CONFIGURED" || status === "PENDING_SETUP") return "NOT CONNECTED";
+  return "FAILED";
+}
+
 function publicCjReport(services: AppServices, report: CjConnectionReport, extraSecrets: string[] = []) {
   const errorCode = connectionTestErrorCode(report.probes, report.status);
-  const connected = report.status === "READY" || report.status === "TOKEN_EXPIRING";
+  const connection = connectionFlag(String(report.status));
   return stripSecrets(
     {
       ...report,
       error: errorCode ?? report.error,
       errorCode,
-      connection: connected ? "CONNECTED" : report.status === "NOT_CONFIGURED" ? "NOT CONNECTED" : "FAILED",
-      mode: connected ? "READ ONLY" : "NOT CONNECTED",
+      connection,
+      mode: supplierMode(String(report.status)),
       operatingMode: "LIVE_OBSERVE",
       credentials: {
         apiKey: credentialConfiguredLabel(services.cj.tokenSnapshot().hasApiKey),
@@ -783,12 +815,11 @@ function publicCjReport(services: AppServices, report: CjConnectionReport, extra
 
 function publicCjConnectResponse(services: AppServices, report: CjConnectionReport, extraSecrets: string[] = []) {
   const errorCode = connectionTestErrorCode(report.probes, report.status);
-  const connected = report.status === "READY" || report.status === "TOKEN_EXPIRING";
   const snap = services.cj.tokenSnapshot();
   return stripSecrets(
     {
-      connection: connected ? "CONNECTED" : "FAILED",
-      mode: connected ? "READ ONLY" : "NOT CONNECTED",
+      connection: connectionFlag(String(report.status)),
+      mode: supplierMode(String(report.status)),
       operatingMode: "LIVE_OBSERVE",
       status: report.status,
       lastConnectedAt: report.lastConnectedAt,

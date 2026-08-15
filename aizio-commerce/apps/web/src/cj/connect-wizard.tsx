@@ -107,22 +107,27 @@ export function CjConnectWizard({
   const [connectMsg, setConnectMsg] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(lastTest);
   const status = String(integration.status ?? "PENDING_SETUP");
-  const connected = status === "READY" || status === "TOKEN_EXPIRING";
+  const fullReady = status === "READY" || status === "TOKEN_EXPIRING";
+  const partial = status === "PARTIALLY_READY";
   const connection = supplierConnectionLabel(status);
   const hasApiKey = Boolean(token?.hasApiKey) || token?.apiKey === "CONFIGURED";
   const hasAccessToken = Boolean(token?.hasAccessToken) || token?.accessToken === "CONFIGURED";
-  const canScout = scoutAllowed({
-    cjReady: connected,
-    operatingMode,
-    watchOverall,
-    safetyLock,
-  });
   const probes = ((result?.probes ?? lastTest?.probes) as Array<{ name: string; status: string; error: string | null }> | undefined) ?? [];
-  const connectOk = String(result?.connection ?? "") === "CONNECTED" || connected;
+  const connectOk = String(result?.connection ?? "") === "CONNECTED" || fullReady;
   const errorCode = connectOk
     ? ""
     : String(result?.errorCode ?? result?.error ?? integration.lastError ?? "");
   const caps = (result?.capabilities as Record<string, unknown> | undefined) ?? integration.capabilities;
+  const capReady = (key: string) => capabilityStatus(status, caps, key) === "READY";
+  const canScout = scoutAllowed({
+    cjReady: fullReady,
+    productsReady: capReady("productSearch") || capReady("products"),
+    inventoryReady: capReady("inventory"),
+    shippingReady: capReady("shipping"),
+    operatingMode,
+    watchOverall,
+    safetyLock,
+  });
 
   async function connect(e?: FormEvent) {
     e?.preventDefault();
@@ -141,7 +146,9 @@ export function CjConnectWizard({
       setConnectMsg(
         r.connection === "CONNECTED"
           ? `CONNECTED · READ ONLY · ${String(r.status)}`
-          : String(code || "AUTH_FAILED"),
+          : r.connection === "PARTIAL" || r.status === "PARTIALLY_READY"
+            ? `PARTIALLY_READY · 상품 API만 사용 가능`
+            : String(code || "AUTH_FAILED"),
       );
       setApiKey("");
       setAccessToken("");
@@ -258,7 +265,7 @@ export function CjConnectWizard({
           {connectMsg}
         </p>
       ) : null}
-      {errorCode && !connected ? (
+      {errorCode && !fullReady ? (
         <p className="note" data-testid="cj-error-code">
           {errorCode.replace(/^CJdropshipping — /, "")}
         </p>
@@ -282,9 +289,25 @@ export function CjConnectWizard({
           <span className="muted">Scout 최대 {scoutLimit}개 · READ ONLY</span>
         </div>
       ) : (
-        <p className="muted" data-testid="cj-scout-blocked">
-          실제 상품 찾기는 CJ READY · LIVE_OBSERVE · Watch not CRITICAL · Safety Lock OFF 일 때만 활성화됩니다.
-        </p>
+        <div>
+          {partial || (hasApiKey && !fullReady) ? (
+            <div className="actions">
+              <button
+                className="btn ghost"
+                type="button"
+                data-testid="cj-product-api-test"
+                disabled={busy}
+                onClick={() => void testStored()}
+              >
+                상품 API 테스트
+              </button>
+            </div>
+          ) : null}
+          <p className="muted" data-testid="cj-scout-blocked">
+            실제 상품 찾기는 CJ READY · Products READY · Inventory READY · Shipping READY · LIVE_OBSERVE · Watch not
+            CRITICAL · Safety Lock OFF 일 때만 활성화됩니다. PARTIALLY_READY에서는 상품 API 테스트만 가능합니다.
+          </p>
+        </div>
       )}
     </div>
   );

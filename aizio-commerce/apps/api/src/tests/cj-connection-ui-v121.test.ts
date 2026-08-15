@@ -255,6 +255,7 @@ describe("V1.2.1 CJ connection UI contract", () => {
     expect(authErrorCode({ status: "AUTH_FAILED", message: "invalid apiKey" })).toBe("INVALID_API_KEY");
     expect(supplierConnectionLabel("PENDING_SETUP")).toBe("NOT CONNECTED");
     expect(supplierConnectionLabel("READY")).toBe("CONNECTED / READ ONLY");
+    expect(supplierConnectionLabel("PARTIALLY_READY")).toBe("PARTIALLY READY");
     expect(credentialConfiguredLabel(true)).toBe("CONFIGURED");
     expect(
       connectionTestErrorCode([{ name: "productSearch", status: "UNAVAILABLE", error: null }], "UNAVAILABLE"),

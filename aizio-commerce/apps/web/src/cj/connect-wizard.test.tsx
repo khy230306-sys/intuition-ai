@@ -166,25 +166,49 @@ describe("CJ connection wizard UI", () => {
     expect(screen.getAllByText("LOCKED").length).toBeGreaterThan(0);
   });
 
-  it("external WRITE remains blocked in LIVE_OBSERVE scout gate", () => {
-    renderWizard();
-    expect(screen.getByTestId("cj-scout-blocked")).toBeTruthy();
+  it("PARTIALLY_READY blocks scout and allows product API test", () => {
+    renderWizard({
+      integration: {
+        ...pendingIntegration,
+        status: "PARTIALLY_READY",
+        lastError: "INVENTORY_API_FAILED",
+        capabilities: {
+          productSearch: "READY",
+          productDetail: "READY",
+          inventory: "UNAVAILABLE",
+          shipping: "UNAVAILABLE",
+        },
+      },
+      token: { hasApiKey: true, hasAccessToken: true, apiKey: "CONFIGURED", accessToken: "CONFIGURED" },
+    });
+    expect(screen.getByTestId("cj-connection-value").textContent).toBe("PARTIALLY READY");
     expect(screen.queryByTestId("cj-scout-button")).toBeNull();
+    expect(screen.getByTestId("cj-scout-blocked")).toBeTruthy();
+    expect(screen.getByTestId("cj-product-api-test")).toBeTruthy();
+    expect(
+      scoutAllowed({
+        cjReady: false,
+        productsReady: true,
+        inventoryReady: false,
+        shippingReady: false,
+        operatingMode: "LIVE_OBSERVE",
+        watchOverall: "HEALTHY",
+        safetyLock: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("READY with inventory and shipping enables scout", () => {
     expect(
       scoutAllowed({
         cjReady: true,
+        productsReady: true,
+        inventoryReady: true,
+        shippingReady: true,
         operatingMode: "LIVE_OBSERVE",
         watchOverall: "HEALTHY",
         safetyLock: false,
       }),
     ).toBe(true);
-    expect(
-      scoutAllowed({
-        cjReady: true,
-        operatingMode: "LIVE_TRADE",
-        watchOverall: "HEALTHY",
-        safetyLock: false,
-      }),
-    ).toBe(false);
   });
 });

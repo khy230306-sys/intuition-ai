@@ -1,4 +1,4 @@
-import type { DataFreshness, ProfitAnalysis, ProfitInput } from "../../shared/types.ts";
+import type { DataFreshness, FxStatus, ProfitAnalysis, ProfitInput, ProfitStage } from "../../shared/types.ts";
 import { roundKrw, safeDiv, toRate } from "../../shared/money.ts";
 import { nowIso } from "../../shared/ids.ts";
 
@@ -94,6 +94,16 @@ export function analyzeProfit(input: ProfitInput): ProfitAnalysis {
   const knownCostFields = COST_FIELDS.filter((f) => !isMissing(input[f])).length;
   const knownPrice = !isMissing(input.sellingPrice) && (input.sellingPrice ?? 0) > 0 ? 1 : 0;
   const confidence = toRate((knownCostFields + knownPrice) / (COST_FIELDS.length + 1));
+  const sellingPriceKind = input.sellingPriceKind ?? (isMissing(input.sellingPrice) ? "NONE" : "TARGET_MARGIN_PRICE");
+  const stage = classifyProfitStage({
+    supplierLive: freshness.productCost === "LIVE",
+    shippingLive: freshness.internationalShipping === "LIVE",
+    fxStatus: input.fxStatus ?? "FX_RATE_NOT_CONFIGURED",
+    marketplaceFeeKnown: !isMissing(input.marketplaceFee) && freshness.marketplaceFee === "LIVE",
+    sellingPriceKind,
+    adsKnown: !isMissing(input.expectedAdCost) && freshness.expectedAdCost === "LIVE",
+    returnKnown: !isMissing(input.expectedReturnLoss) && freshness.expectedReturnLoss === "LIVE",
+  });
 
   return {
     sellingPrice,
@@ -107,7 +117,39 @@ export function analyzeProfit(input: ProfitInput): ProfitAnalysis {
     inputFreshness: freshness,
     currency: "KRW",
     calculatedAt: nowIso(input.now),
+    stage,
+    sellingPriceKind,
   };
+}
+
+export function classifyProfitStage(input: {
+  supplierLive: boolean;
+  shippingLive: boolean;
+  fxStatus: FxStatus;
+  marketplaceFeeKnown: boolean;
+  sellingPriceKind: "TARGET_MARGIN_PRICE" | "MARKET_OBSERVED_PRICE" | "NONE";
+  adsKnown: boolean;
+  returnKnown: boolean;
+}): ProfitStage {
+  if (!input.supplierLive || input.fxStatus === "FX_RATE_NOT_CONFIGURED" || input.sellingPriceKind === "NONE") {
+    return "PRELIMINARY_MARGIN";
+  }
+  const fxOk = input.fxStatus === "LIVE" || input.fxStatus === "MANUAL_RATE";
+  if (
+    input.supplierLive &&
+    input.shippingLive &&
+    fxOk &&
+    input.marketplaceFeeKnown &&
+    input.adsKnown &&
+    input.returnKnown &&
+    input.sellingPriceKind === "MARKET_OBSERVED_PRICE"
+  ) {
+    return "VERIFIED_EXPECTED_PROFIT";
+  }
+  if (input.supplierLive && fxOk && (input.shippingLive || input.sellingPriceKind === "TARGET_MARGIN_PRICE")) {
+    return "ESTIMATED_PROFIT";
+  }
+  return "PRELIMINARY_MARGIN";
 }
 
 export function feeFromRate(base: number, rate: number | null): number | null {

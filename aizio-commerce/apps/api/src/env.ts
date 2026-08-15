@@ -38,8 +38,12 @@ export const env = {
   anthropicKey: str("ANTHROPIC_API_KEY"),
   anthropicModel: str("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
   cjEmail: str("CJ_EMAIL"),
+  /** Official CJ v2 token API body field: { apiKey }. */
+  cjApiKey: str("CJ_API_KEY"),
+  /** Legacy alias for CJ_API_KEY. Not an email password. */
   cjApiPassword: str("CJ_API_PASSWORD"),
   cjAccessToken: str("CJ_ACCESS_TOKEN"),
+  cjRefreshToken: str("CJ_REFRESH_TOKEN"),
   coupangAccessKey: str("COUPANG_ACCESS_KEY"),
   coupangSecretKey: str("COUPANG_SECRET_KEY"),
   coupangVendorId: str("COUPANG_VENDOR_ID"),

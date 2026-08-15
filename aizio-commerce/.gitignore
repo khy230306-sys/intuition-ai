@@ -5,6 +5,7 @@ coverage
 .env.local
 data/*.sqlite
 data/*.sqlite-*
+apps/api/data/
 data/.encryption-key
 *.log
 .DS_Store

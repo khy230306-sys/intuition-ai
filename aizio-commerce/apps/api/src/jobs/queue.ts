@@ -73,11 +73,13 @@ async function handleJob(
   const body = (payload ?? {}) as Record<string, unknown>;
   switch (type) {
     case "SCOUT_PRODUCTS": {
+      const settings = services.repo.getSafetySettings();
       const result = await scoutProducts({
         supplier: services.cj,
         repo: services.repo,
         keyword: typeof body.keyword === "string" ? body.keyword : undefined,
-        marketplaceFeeRate: null,
+        settings,
+        pauseMs: 1100,
       });
       if (result.status !== "READY") {
         return { status: "BLOCKED", data: result, error: result.error ?? result.status };

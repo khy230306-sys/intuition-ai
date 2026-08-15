@@ -129,4 +129,108 @@ describe("Profit Truth Engine", () => {
     expect(r.confidence).toBeLessThan(0.3);
     expect(r.inputFreshness.expectedAdCost).toBe("INSUFFICIENT_DATA");
   });
+
+  it("classifies LIVE supplier + LIVE shipping + MANUAL FX as ESTIMATED_PROFIT not verified", () => {
+    const r = analyzeProfit({
+      sellingPrice: 20000,
+      productCost: 8000,
+      internationalShipping: 3000,
+      domesticShipping: null,
+      customsDuty: null,
+      vat: null,
+      marketplaceFee: null,
+      paymentFee: null,
+      expectedAdCost: null,
+      promotionCost: null,
+      expectedReturnLoss: null,
+      fxBuffer: null,
+      otherCost: null,
+      sellingPriceKind: "TARGET_MARGIN_PRICE",
+      fxStatus: "MANUAL_RATE",
+      inputFreshness: {
+        productCost: "LIVE",
+        internationalShipping: "LIVE",
+        sellingPrice: "ESTIMATE",
+        marketplaceFee: "UNKNOWN",
+        expectedAdCost: "UNKNOWN",
+        expectedReturnLoss: "INSUFFICIENT_DATA",
+      },
+    });
+    expect(r.stage).toBe("ESTIMATED_PROFIT");
+    expect(r.sellingPriceKind).toBe("TARGET_MARGIN_PRICE");
+    expect(r.inputFreshness.marketplaceFee).toBe("UNKNOWN");
+  });
+
+  it("missing FX stays PRELIMINARY_MARGIN", () => {
+    const r = analyzeProfit({
+      sellingPrice: null,
+      productCost: 8000,
+      internationalShipping: 3000,
+      domesticShipping: null,
+      customsDuty: null,
+      vat: null,
+      marketplaceFee: null,
+      paymentFee: null,
+      expectedAdCost: null,
+      promotionCost: null,
+      expectedReturnLoss: null,
+      fxBuffer: null,
+      otherCost: null,
+      sellingPriceKind: "NONE",
+      fxStatus: "FX_RATE_NOT_CONFIGURED",
+      inputFreshness: { productCost: "LIVE", internationalShipping: "LIVE" },
+    });
+    expect(r.stage).toBe("PRELIMINARY_MARGIN");
+  });
+
+  it("negative margin is still not ACTUAL_PROFIT", () => {
+    const r = analyzeProfit({
+      sellingPrice: 10000,
+      productCost: 8000,
+      internationalShipping: 4000,
+      domesticShipping: 0,
+      customsDuty: 0,
+      vat: 0,
+      marketplaceFee: 1000,
+      paymentFee: 0,
+      expectedAdCost: 0,
+      promotionCost: 0,
+      expectedReturnLoss: 0,
+      fxBuffer: 0,
+      otherCost: 0,
+      sellingPriceKind: "TARGET_MARGIN_PRICE",
+      fxStatus: "MANUAL_RATE",
+      inputFreshness: {
+        productCost: "LIVE",
+        internationalShipping: "LIVE",
+        marketplaceFee: "UNKNOWN",
+      },
+    });
+    expect(r.expectedNetProfit).toBeLessThan(0);
+    expect(r.stage).not.toBe("ACTUAL_PROFIT");
+    expect(r.stage).not.toBe("VERIFIED_EXPECTED_PROFIT");
+  });
+
+  it("high shipping cost is visible in the cost stack", () => {
+    const r = analyzeProfit({
+      sellingPrice: 20000,
+      productCost: 5000,
+      internationalShipping: 16000,
+      domesticShipping: 0,
+      customsDuty: 0,
+      vat: 0,
+      marketplaceFee: null,
+      paymentFee: 0,
+      expectedAdCost: 0,
+      promotionCost: 0,
+      expectedReturnLoss: 0,
+      fxBuffer: 0,
+      otherCost: 0,
+      sellingPriceKind: "TARGET_MARGIN_PRICE",
+      fxStatus: "LIVE",
+      inputFreshness: { productCost: "LIVE", internationalShipping: "LIVE", marketplaceFee: "UNKNOWN" },
+    });
+    expect(r.internationalShipping).toBe(16000);
+    expect(r.expectedNetProfit).toBeLessThan(0);
+  });
 });

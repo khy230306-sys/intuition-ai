@@ -58,8 +58,27 @@ describe("Safety Gate", () => {
   });
 
   it("allows a safe order", () => {
-    const r = evaluateSafetyGate(DEFAULT_SAFETY_SETTINGS, base);
+    const r = evaluateSafetyGate({ ...DEFAULT_SAFETY_SETTINGS, operatingMode: "LIVE_TRADE" }, base);
     expect(r.allowed).toBe(true);
     expect(r.decision).toBe("ALLOW");
+  });
+
+  it("LIVE_OBSERVE blocks supplier order create", () => {
+    const r = evaluateSafetyGate(DEFAULT_SAFETY_SETTINGS, { ...base, action: "SUPPLIER_ORDER" });
+    expect(r.allowed).toBe(false);
+    expect(r.decision).toBe("BLOCK");
+    expect(r.ruleHits).toContain("mode.LIVE_OBSERVE");
+  });
+
+  it("LIVE_OBSERVE blocks payment", () => {
+    const r = evaluateSafetyGate(DEFAULT_SAFETY_SETTINGS, { ...base, action: "SUPPLIER_PAYMENT" });
+    expect(r.ruleHits).toContain("mode.LIVE_OBSERVE");
+    expect(r.decision).toBe("BLOCK");
+  });
+
+  it("LIVE_OBSERVE blocks marketplace listing", () => {
+    const r = evaluateSafetyGate(DEFAULT_SAFETY_SETTINGS, { ...base, action: "MARKETPLACE_LISTING" });
+    expect(r.ruleHits).toContain("mode.LIVE_OBSERVE");
+    expect(r.decision).toBe("BLOCK");
   });
 });

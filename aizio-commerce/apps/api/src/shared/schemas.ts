@@ -17,6 +17,22 @@ export const profitInputSchema = z.object({
   otherCost: z.number().nullable(),
 });
 
+export const fxSettingsSchema = z.object({
+  provider: z.enum(["none", "manual", "frankfurter"]).default("none"),
+  manualUsdKrw: z.number().positive().nullable().default(null),
+});
+
+export const scoutFilterSchema = z.object({
+  limit: z.number().int().min(1).max(50).default(30),
+  keyword: z.string().default("storage organizer"),
+  maxSupplierPrice: z.number().positive().nullable().default(null),
+  maxShippingCost: z.number().positive().nullable().default(null),
+  minPreliminaryMargin: z.number().default(0.15),
+  maximumDeliveryDays: z.number().int().positive().nullable().default(21),
+  allowedCategories: z.array(z.string()).default([]),
+  blockedCategories: z.array(z.string()).default([]),
+});
+
 export const safetySettingsSchema = z.object({
   maxPerOrderKRW: z.number().nonnegative(),
   maxDailyKRW: z.number().nonnegative(),
@@ -28,11 +44,33 @@ export const safetySettingsSchema = z.object({
   blockedSuppliers: z.array(z.string()),
   blockedCountries: z.array(z.string()),
   manualApprovalThresholdKRW: z.number().nonnegative(),
+  operatingMode: z.enum(["LIVE_OBSERVE", "LIVE_TRADE"]).default("LIVE_OBSERVE"),
+  targetMarginRate: z.number().min(0).max(0.95).default(0.35),
+  fx: fxSettingsSchema.default({ provider: "none", manualUsdKrw: null }),
+  scout: scoutFilterSchema.default({
+    limit: 30,
+    keyword: "storage organizer",
+    maxSupplierPrice: null,
+    maxShippingCost: null,
+    minPreliminaryMargin: 0.15,
+    maximumDeliveryDays: 21,
+    allowedCategories: [],
+    blockedCategories: [],
+  }),
 });
 
 export function parseSafetySettings(raw: unknown) {
-  const parsed = safetySettingsSchema.safeParse(raw);
-  return parsed.success ? parsed.data : DEFAULT_SAFETY_SETTINGS;
+  const base = DEFAULT_SAFETY_SETTINGS;
+  if (!raw || typeof raw !== "object") return base;
+  const obj = raw as Record<string, unknown>;
+  const merged = {
+    ...base,
+    ...obj,
+    fx: { ...base.fx, ...(typeof obj.fx === "object" && obj.fx ? obj.fx : {}) },
+    scout: { ...base.scout, ...(typeof obj.scout === "object" && obj.scout ? obj.scout : {}) },
+  };
+  const parsed = safetySettingsSchema.safeParse(merged);
+  return parsed.success ? parsed.data : base;
 }
 
 export const commandSchema = z.object({

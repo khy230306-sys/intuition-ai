@@ -8,6 +8,11 @@ import type {
   SupplierSearchQuery,
 } from "./types.ts";
 import { CJTokenManager, isOfficialCjSuccess } from "./cj-token-manager.ts";
+import {
+  authErrorCode,
+  probeErrorCode,
+  redactCredentialText,
+} from "./cj-errors.ts";
 import type { RateLimitManager } from "../../data-hub/rate-limit.ts";
 import { liveObserveWriteBlock } from "../../engines/safety/live-observe.ts";
 
@@ -132,6 +137,14 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     return this.tokens.persistable();
   }
 
+  private safeError(message: string | null | undefined): string {
+    return redactCredentialText(message ?? "CJ API 실패", [
+      this.tokens.getApiKey(),
+      this.tokens.getAccessToken(),
+      this.tokens.getRefreshToken(),
+    ]);
+  }
+
   capabilities(): SupplierCapabilities {
     return { ...CAPABILITIES, orderCreate: false };
   }
@@ -200,10 +213,16 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     this.noteCall(ok, res.status, res.error, res.timedOut);
     if (!ok || !access) {
       const status = this.mapAuthFailure(res.status || 401, res.timedOut, false);
-      this.tokens.setStatus(status);
+      this.tokens.setStatus(status === "UNAVAILABLE" && res.ok ? "AUTH_FAILED" : status);
+      const code = authErrorCode({
+        status: this.tokens.currentStatus(),
+        httpStatus: res.status,
+        timedOut: res.timedOut,
+        message: res.data?.message ?? res.error,
+      });
       return {
-        status,
-        error: res.data?.message ?? res.error ?? "CJ 토큰 발급 실패",
+        status: this.tokens.currentStatus(),
+        error: code,
         token: null,
       };
     }
@@ -250,7 +269,12 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       if (this.tokens.getApiKey()) return this.fetchAccessToken();
       return {
         status: "TOKEN_EXPIRED",
-        error: res.data?.message ?? res.error ?? "CJ refresh token 실패",
+        error: authErrorCode({
+          status: "TOKEN_EXPIRED",
+          httpStatus: res.status,
+          timedOut: res.timedOut,
+          message: res.data?.message ?? res.error,
+        }),
         token: null,
       };
     }
@@ -358,7 +382,7 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       return {
         status,
         data: null as T | null,
-        error: res.data?.message ?? res.error ?? "CJ API 실패",
+        error: this.safeError(res.data?.message ?? res.error ?? "CJ API 실패"),
         raw: res,
       };
     }
@@ -390,7 +414,7 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       return {
         status: "NOT_CONFIGURED",
         lastConnectedAt: null,
-        error: "CJdropshipping — NOT_CONFIGURED",
+        error: "CREDENTIAL_REQUIRED",
         probes,
         capabilities: {
           productSearch: "NOT_CONFIGURED",
@@ -406,9 +430,17 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     }
 
     const auth = await this.ensureToken();
-    probes.push({ name: "authentication", status: toConnection(auth.status), error: auth.error });
+    const authCode = auth.token
+      ? null
+      : probeErrorCode("authentication", toConnection(auth.status)) ??
+        authErrorCode({ status: auth.status, message: auth.error });
+    probes.push({
+      name: "authentication",
+      status: toConnection(auth.status),
+      error: auth.token ? null : authCode,
+    });
     if (!auth.token) {
-      return { status: auth.status, lastConnectedAt: null, error: auth.error, probes, capabilities: cap };
+      return { status: auth.status, lastConnectedAt: null, error: authCode, probes, capabilities: cap };
     }
 
     await sleep(pauseMs);
@@ -417,7 +449,11 @@ export class CjDropshippingAdapter implements SupplierAdapter {
       "/product/listV2",
       { query: { page: 1, size: 1 } },
     );
-    probes.push({ name: "productSearch", status: list.status, error: list.error });
+    probes.push({
+      name: "productSearch",
+      status: list.status,
+      error: list.status === "READY" ? null : probeErrorCode("productSearch", list.status),
+    });
     cap.productSearch = list.status === "READY" ? "READY" : "UNAVAILABLE";
     cap.productDetail = list.status === "READY" ? "READY" : "UNAVAILABLE";
 
@@ -434,7 +470,11 @@ export class CjDropshippingAdapter implements SupplierAdapter {
     if (vid) {
       await sleep(pauseMs);
       const stock = await this.getStock({ vid });
-      probes.push({ name: "inventory", status: stock.status, error: stock.error });
+      probes.push({
+        name: "inventory",
+        status: stock.status,
+        error: stock.status === "READY" ? null : probeErrorCode("inventory", stock.status),
+      });
       cap.inventory = stock.status === "READY" ? "READY" : "UNAVAILABLE";
       await sleep(pauseMs);
       const freight = await this.getFreight({
@@ -443,11 +483,15 @@ export class CjDropshippingAdapter implements SupplierAdapter {
         vid,
         quantity: 1,
       });
-      probes.push({ name: "shipping", status: freight.status, error: freight.error });
+      probes.push({
+        name: "shipping",
+        status: freight.status,
+        error: freight.status === "READY" ? null : probeErrorCode("shipping", freight.status),
+      });
       cap.shipping = freight.status === "READY" ? "READY" : "UNAVAILABLE";
     } else {
-      probes.push({ name: "inventory", status: "UNAVAILABLE", error: "variant id 없음" });
-      probes.push({ name: "shipping", status: "UNAVAILABLE", error: "variant id 없음" });
+      probes.push({ name: "inventory", status: "UNAVAILABLE", error: "INVENTORY_API_FAILED" });
+      probes.push({ name: "shipping", status: "UNAVAILABLE", error: "SHIPPING_API_FAILED" });
     }
 
     const failed = probes.find((p) => p.name === "authentication" && p.status !== "READY");
@@ -458,10 +502,15 @@ export class CjDropshippingAdapter implements SupplierAdapter {
         ? "READY"
         : "UNAVAILABLE";
     this.tokens.setStatus(status === "READY" || status === "TOKEN_EXPIRING" ? "READY" : status);
+    const error =
+      failed?.error ??
+      (status === "READY"
+        ? null
+        : probeErrorCode("productSearch", cap.productSearch) ?? "PRODUCT_API_FAILED");
     return {
       status,
       lastConnectedAt: status === "READY" ? new Date().toISOString() : null,
-      error: failed?.error ?? (status === "READY" ? null : "연결 테스트 실패"),
+      error,
       probes,
       capabilities: cap,
     };

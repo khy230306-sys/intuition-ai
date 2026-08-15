@@ -14,7 +14,7 @@
     "build": "npm run build -w @aizio/commerce-api && npm run build -w @aizio/commerce-web",
     "typecheck": "npm run typecheck -w @aizio/commerce-api && npm run typecheck -w @aizio/commerce-web",
     "lint": "npm run lint -w @aizio/commerce-api && npm run lint -w @aizio/commerce-web",
-    "test": "npm run test -w @aizio/commerce-api",
+    "test": "npm run test -w @aizio/commerce-api && npm run test -w @aizio/commerce-web",
     "test:watch": "npm run test:watch -w @aizio/commerce-api",
     "start": "npm run start -w @aizio/commerce-api"
   },

@@ -10,6 +10,7 @@ import type {
 import { DEFAULT_SAFETY_SETTINGS } from "../shared/types.ts";
 import { parseSafetySettings } from "../shared/schemas.ts";
 import { id, nowIso } from "../shared/ids.ts";
+import { OrgPlatform } from "./org-platform.ts";
 
 function str(row: SqlRow | undefined, key: string): string {
   const v = row?.[key];
@@ -83,7 +84,10 @@ export interface ScoutRunStats {
 }
 
 export class Repository {
-  constructor(private readonly db: DbClient) {}
+  readonly os: OrgPlatform;
+  constructor(private readonly db: DbClient) {
+    this.os = new OrgPlatform(db);
+  }
 
   getSetting(key: string): string | null {
     const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
@@ -649,6 +653,33 @@ export class Repository {
     return jobId;
   }
 
+  seedJob(row: {
+    type: JobType;
+    status: JobStatus;
+    payload?: unknown;
+    createdAt?: string;
+    updatedAt?: string;
+  }): string {
+    const jobId = id("job");
+    const created = row.createdAt ?? nowIso();
+    this.db
+      .prepare(
+        `INSERT INTO jobs(id, type, status, payload_json, attempts, run_after, created_at, updated_at)
+         VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        jobId,
+        row.type,
+        row.status,
+        JSON.stringify(row.payload ?? {}),
+        0,
+        created,
+        created,
+        row.updatedAt ?? created,
+      );
+    return jobId;
+  }
+
   listJobs(limit = 50) {
     return this.db
       .prepare("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?")
@@ -964,5 +995,96 @@ export class Repository {
         (row.actualOutcome as string | null) ?? null,
         nowIso(),
       );
+  }
+
+  saveMission(m: Parameters<OrgPlatform["saveMission"]>[0]) {
+    this.os.saveMission(m);
+  }
+  getMission(idValue: string) {
+    return this.os.getMission(idValue);
+  }
+  updateMission(idValue: string, patch: Parameters<OrgPlatform["updateMission"]>[1]) {
+    this.os.updateMission(idValue, patch);
+  }
+  listMissions(opts?: Parameters<OrgPlatform["listMissions"]>[0]) {
+    return this.os.listMissions(opts);
+  }
+  saveDepartmentTask(t: Parameters<OrgPlatform["saveDepartmentTask"]>[0]) {
+    return this.os.saveDepartmentTask(t);
+  }
+  finishDepartmentTask(...args: Parameters<OrgPlatform["finishDepartmentTask"]>) {
+    this.os.finishDepartmentTask(...args);
+  }
+  listDepartmentTasks(missionId: string) {
+    return this.os.listDepartmentTasks(missionId);
+  }
+  saveDebate(missionId: string, payload: unknown) {
+    this.os.saveDebate(missionId, payload);
+  }
+  saveMissionAudit(missionId: string, report: { decision: string }) {
+    this.os.saveMissionAudit(missionId, report);
+  }
+  insertMemory(scope: string, kind: string, key: string, value: string) {
+    this.os.insertMemory(scope, kind, key, value);
+  }
+  saveSnapshot(...args: Parameters<OrgPlatform["saveSnapshot"]>) {
+    return this.os.saveSnapshot(...args);
+  }
+  latestSnapshot(...args: Parameters<OrgPlatform["latestSnapshot"]>) {
+    return this.os.latestSnapshot(...args);
+  }
+  recordApiEvent(...args: Parameters<OrgPlatform["recordApiEvent"]>) {
+    this.os.recordApiEvent(...args);
+  }
+  countApiEvents(...args: Parameters<OrgPlatform["countApiEvents"]>) {
+    return this.os.countApiEvents(...args);
+  }
+  aiSpendSinceHours(hours: number) {
+    return this.os.aiSpendSinceHours(hours);
+  }
+  insertAiUsage(...args: Parameters<OrgPlatform["insertAiUsage"]>) {
+    this.os.insertAiUsage(...args);
+  }
+  insertStrategyOutcome(...args: Parameters<OrgPlatform["insertStrategyOutcome"]>) {
+    this.os.insertStrategyOutcome(...args);
+  }
+  insertIncident(...args: Parameters<OrgPlatform["insertIncident"]>) {
+    this.os.insertIncident(...args);
+  }
+  findOpenIncident(source: string, title: string) {
+    return this.os.findOpenIncident(source, title);
+  }
+  listIncidents(opts?: { openOnly?: boolean }) {
+    return this.os.listIncidents(opts);
+  }
+  saveWatchSnapshot(...args: Parameters<OrgPlatform["saveWatchSnapshot"]>) {
+    this.os.saveWatchSnapshot(...args);
+  }
+  latestWatchSnapshot() {
+    return this.os.latestWatchSnapshot();
+  }
+  findIntegrityIssues() {
+    return this.os.findIntegrityIssues();
+  }
+  findBusinessLogicIssues() {
+    return this.os.findBusinessLogicIssues();
+  }
+  findCostAnomalies() {
+    return this.os.findCostAnomalies();
+  }
+  getGlobalSafetyLock(): boolean {
+    return this.getSafetySettings().globalSafetyLock;
+  }
+  setGlobalSafetyLock(on: boolean, reason: string): void {
+    const settings = this.getSafetySettings();
+    if (settings.globalSafetyLock === on) return;
+    this.saveSafetySettings({ ...settings, globalSafetyLock: on });
+    this.insertAudit({
+      actor: "SYSTEM_WATCH",
+      action: on ? "GLOBAL_SAFETY_LOCK_ON" : "GLOBAL_SAFETY_LOCK_OFF",
+      entityType: "settings",
+      entityId: "safety",
+      summary: reason,
+    });
   }
 }

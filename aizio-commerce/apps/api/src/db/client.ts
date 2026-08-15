@@ -307,6 +307,122 @@ export function migrate(db: DbClient): void {
     CREATE INDEX IF NOT EXISTS idx_price_history_product ON supplier_price_history(product_id, captured_at);
     CREATE INDEX IF NOT EXISTS idx_inventory_history_product ON inventory_history(product_id, captured_at);
     CREATE INDEX IF NOT EXISTS idx_shipping_history_product ON shipping_quote_history(product_id, captured_at);
+
+    CREATE TABLE IF NOT EXISTS missions (
+      id TEXT PRIMARY KEY,
+      owner_command TEXT NOT NULL,
+      level TEXT NOT NULL,
+      execution_scope TEXT NOT NULL,
+      objective TEXT NOT NULL,
+      departments_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progress INTEGER NOT NULL DEFAULT 0,
+      correlation_id TEXT NOT NULL,
+      result_json TEXT NOT NULL DEFAULT '{}',
+      error TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS department_tasks (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      department TEXT NOT NULL,
+      objective TEXT NOT NULL,
+      input_refs_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL,
+      result_json TEXT,
+      error TEXT,
+      started_at TEXT,
+      completed_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS debates (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_audits (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memories (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS data_snapshots (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      payload_hash TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      captured_at TEXT NOT NULL,
+      expires_at TEXT,
+      freshness TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS api_events (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      ok INTEGER NOT NULL,
+      status INTEGER NOT NULL,
+      error TEXT,
+      circuit TEXT,
+      at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      model TEXT,
+      task TEXT,
+      tokens_in INTEGER,
+      tokens_out INTEGER,
+      estimated_usd REAL,
+      mission_id TEXT,
+      department TEXT,
+      at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS incidents (
+      id TEXT PRIMARY KEY,
+      severity TEXT NOT NULL,
+      source TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      affected_json TEXT NOT NULL,
+      detected_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      actions_json TEXT NOT NULL,
+      requires_human INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS watch_snapshots (
+      id TEXT PRIMARY KEY,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS strategy_outcomes (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      proposal_title TEXT NOT NULL,
+      expected_json TEXT NOT NULL,
+      actual_json TEXT,
+      captured_at TEXT NOT NULL
+    );
   `);
 }
 

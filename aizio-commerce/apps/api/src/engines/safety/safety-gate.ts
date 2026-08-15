@@ -27,6 +27,11 @@ export function evaluateSafetyGate(
     return { allowed: false, decision: "BLOCK", reasons, ruleHits };
   }
 
+  if (settings.globalSafetyLock && WRITE_ACTIONS.has(ctx.action)) {
+    reasons.push("GLOBAL_SAFETY_LOCK — 주문·결제·환불·판매등록·가격/재고 변경이 잠겼습니다.");
+    ruleHits.push("lock.GLOBAL_SAFETY_LOCK");
+  }
+
   if (settings.operatingMode === "LIVE_OBSERVE" && WRITE_ACTIONS.has(ctx.action)) {
     reasons.push("LIVE_OBSERVE 모드에서는 주문·결제·판매등록·재고/가격 변경·환불을 실행하지 않습니다.");
     ruleHits.push("mode.LIVE_OBSERVE");
@@ -118,6 +123,7 @@ export function evaluateSafetyGate(
       "margin.min",
       "supplier.priceSpike",
       "mode.LIVE_OBSERVE",
+      "lock.GLOBAL_SAFETY_LOCK",
     ].includes(r),
   );
 

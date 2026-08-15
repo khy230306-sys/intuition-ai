@@ -91,6 +91,18 @@ export const JOB_TYPES = [
   "SYNC_TRACKING",
   "PROCESS_RETURN",
   "RECALCULATE_PROFIT",
+  "PLAN_MISSION",
+  "RUN_DEPARTMENT",
+  "CROSS_REVIEW",
+  "SYNTHESIZE_STRATEGY",
+  "AUDIT_MISSION",
+  "FINALIZE_MISSION",
+  "WATCH_HEALTH",
+  "WATCH_API",
+  "WATCH_JOBS",
+  "WATCH_DATA",
+  "WATCH_COST",
+  "HANDLE_INCIDENT",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
@@ -245,6 +257,13 @@ export interface FxSettings {
   manualUsdKrw: number | null;
 }
 
+export interface AiBudgetSettings {
+  maxPerMissionUsd: number;
+  dailyUsd: number;
+  monthlyUsd: number;
+  emergencyReserveUsd: number;
+}
+
 export interface SafetySettings {
   maxPerOrderKRW: number;
   maxDailyKRW: number;
@@ -260,6 +279,8 @@ export interface SafetySettings {
   targetMarginRate: number;
   fx: FxSettings;
   scout: ScoutFilterSettings;
+  globalSafetyLock: boolean;
+  aiBudget: AiBudgetSettings;
 }
 
 export interface SafetyContext {
@@ -359,4 +380,6 @@ export const DEFAULT_SAFETY_SETTINGS: SafetySettings = {
   targetMarginRate: 0.35,
   fx: { provider: "none", manualUsdKrw: null },
   scout: DEFAULT_SCOUT_FILTERS,
+  globalSafetyLock: false,
+  aiBudget: { maxPerMissionUsd: 1, dailyUsd: 10, monthlyUsd: 80, emergencyReserveUsd: 20 },
 };

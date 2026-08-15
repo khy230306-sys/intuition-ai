@@ -43,6 +43,54 @@ export function runWatchCycle(repo: Repository, input: WatchInput = processMetri
     openIncident(repo, "MEDIUM", "api", "API timeout burst", findings.at(-1)!, ["api"], ["circuit OPEN 후보"]);
   }
 
+  const cj401 = repo.countApiEvents({ sinceMinutes: 10, status: 401, provider: "cjdropshipping" });
+  const cj429 = repo.countApiEvents({ sinceMinutes: 10, status: 429, provider: "cjdropshipping" });
+  const cjTimeout = repo.countApiEvents({ sinceMinutes: 10, error: "timeout", provider: "cjdropshipping" });
+  const cjMalformed = repo.countApiEvents({ sinceMinutes: 10, error: "malformed_json", provider: "cjdropshipping" });
+  const cjCircuit = repo.latestApiCircuit("cjdropshipping");
+  if (cj401) {
+    overall = worse(overall, "DEGRADED");
+    findings.push(`CJ 401 ${cj401}/10m`);
+  }
+  if (cjTimeout) {
+    overall = worse(overall, "DEGRADED");
+    findings.push(`CJ timeout ${cjTimeout}/10m`);
+  }
+  if (cjMalformed) {
+    overall = worse(overall, "DEGRADED");
+    findings.push(`CJ malformed response ${cjMalformed}/10m`);
+  }
+  if (cj429 >= 5 || cjCircuit === "OPEN") {
+    overall = worse(overall, "DEGRADED");
+    findings.push("CJ API DEGRADED");
+    openIncident(
+      repo,
+      "HIGH",
+      "cjdropshipping",
+      "CJ API DEGRADED",
+      "Circuit breaker OPEN — SCOUT_PRODUCTS 일시중지, 기존 Snapshot 유지",
+      ["cjdropshipping", "SCOUT_PRODUCTS"],
+      ["circuit OPEN", "pause SCOUT_PRODUCTS"],
+    );
+  }
+
+  const staleSnapshots = repo.countProducts(
+    "captured_at IS NOT NULL AND captured_at < datetime('now','-2 days')",
+  );
+  if (staleSnapshots > 0) {
+    overall = worse(overall, "DEGRADED");
+    findings.push(`stale snapshot ${staleSnapshots}`);
+    openIncident(
+      repo,
+      "MEDIUM",
+      "data",
+      "stale snapshot",
+      `${staleSnapshots}개 상품 capturedAt이 48시간 이상`,
+      ["products"],
+      ["기존 Snapshot 유지", "재스카우트 전 Watch 확인"],
+    );
+  }
+
   const jobs = repo.listJobs(80);
   const jobsRunning = jobs.filter((j) => j.status === "RUNNING").length;
   const jobsFailed = jobs.filter((j) => j.status === "FAILED").length;

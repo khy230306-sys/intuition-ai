@@ -80,6 +80,9 @@ async function handleJob(
   const body = (payload ?? {}) as Record<string, unknown>;
   switch (type) {
     case "SCOUT_PRODUCTS": {
+      if (services.cj.circuitState() === "OPEN") {
+        return { status: "BLOCKED", data: { paused: "SCOUT_PRODUCTS" }, error: "CJ API DEGRADED" };
+      }
       const settings = services.repo.getSafetySettings();
       const result = await scoutProducts({
         supplier: services.cj,

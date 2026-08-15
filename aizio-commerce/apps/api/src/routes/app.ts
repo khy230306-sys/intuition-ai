@@ -9,6 +9,7 @@ import { runWatchCycle } from "../watch/cycle.ts";
 import { DEPARTMENT_LABEL } from "../organization/types.ts";
 import { enqueue } from "../jobs/queue.ts";
 import { evaluateSafetyGate } from "../engines/safety/safety-gate.ts";
+import { BLOCKED_BY_LIVE_OBSERVE, detectLiveObserveWrite, liveObserveWriteBlock } from "../engines/safety/live-observe.ts";
 import { generateContent } from "../engines/content/content-engine.ts";
 import { prepareAndList } from "../engines/listing/listing-engine.ts";
 import { draftCsReply, classifyCs } from "../engines/cs/cs-engine.ts";
@@ -62,6 +63,12 @@ export function createApp(services: AppServices) {
       pendingSetupCount: pending.length,
       operatingMode: settings.operatingMode,
       cjStatus: cj?.status ?? "PENDING_SETUP",
+      supplier: {
+        name: "CJdropshipping",
+        status: cj?.status ?? "PENDING_SETUP",
+        mode: "READ ONLY",
+      },
+      cjDegraded: (watch.findings ?? []).some((f) => f.includes("CJ API DEGRADED")) || cj?.status === "RATE_LIMITED",
       scout: {
         cjReady: cj?.status === "READY",
         lastRun,
@@ -180,7 +187,7 @@ export function createApp(services: AppServices) {
         summary: `판매 승인 차단: ${gate.reasons.join(" / ")}`,
         detail: gate,
       });
-      return c.json({ error: gate.decision, reasons: gate.reasons }, 409);
+      return c.json({ error: gate.decision, code: gate.code ?? BLOCKED_BY_LIVE_OBSERVE, reasons: gate.reasons }, 409);
     }
 
     const content = await generateContent(services.providers, { title: product.title });
@@ -259,17 +266,23 @@ export function createApp(services: AppServices) {
         openai: maskSecret(env.openaiKey),
         gemini: maskSecret(env.geminiKey),
         claude: maskSecret(env.anthropicKey),
-        cj: maskSecret(env.cjApiKey || env.cjApiPassword || env.cjAccessToken),
+        cjApiKey: maskSecret(env.cjApiKey || env.cjApiPassword || services.repo.getEncryptedSecret("cj.apiKey")),
+        cjAccessToken: maskSecret(env.cjAccessToken || services.repo.getEncryptedSecret("cj.accessToken")),
+        cj: maskSecret(
+          env.cjApiKey || env.cjApiPassword || env.cjAccessToken || services.repo.getEncryptedSecret("cj.apiKey"),
+        ),
         coupang: maskSecret(env.coupangAccessKey),
         naver: maskSecret(env.naverClientId),
       },
+      token: services.cj.tokenSnapshot(),
+      legacyWarning: services.cj.tokenSnapshot().legacyWarning,
     });
   });
 
   app.post("/api/integrations/:id/test", async (c) => {
     const id = c.req.param("id");
     if (id === "cjdropshipping") {
-      const report = await services.cj.runConnectionTest({ pauseMs: 1100 });
+      const report = await services.cj.runConnectionTest({ pauseMs: process.env.VITEST ? 0 : 1100 });
       const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : report.status;
       services.repo.upsertIntegration({
         id: "cjdropshipping",
@@ -287,10 +300,87 @@ export function createApp(services: AppServices) {
     if (id === "openai" || id === "gemini" || id === "claude") {
       const p = services.providers.get(id);
       result = p ? await p.testConnection() : result;
-    } else if (id === "coupang") result = await services.coupang.testConnection();
+    }     else if (id === "coupang") result = await services.coupang.testConnection();
     else if (id === "naver") result = await services.naver.testConnection();
     await refreshIntegrationRows(services, id, result);
     return c.json(result);
+  });
+
+  app.post("/api/integrations/cjdropshipping/connect", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { apiKey?: unknown; accessToken?: unknown };
+    const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    const accessToken = typeof body.accessToken === "string" ? body.accessToken.trim() : "";
+    if (!apiKey && !accessToken) {
+      return c.json(
+        {
+          connection: "FAILED",
+          status: "NOT_CONFIGURED",
+          error: "CREDENTIAL_REQUIRED",
+          mode: "READ ONLY",
+          operatingMode: "LIVE_OBSERVE",
+        },
+        400,
+      );
+    }
+    if (apiKey) services.repo.setEncryptedSecret("cj.apiKey", apiKey);
+    if (accessToken) services.repo.setEncryptedSecret("cj.accessToken", accessToken);
+    services.cj.configure({
+      apiKey: apiKey || services.repo.getEncryptedSecret("cj.apiKey") || env.cjApiKey,
+      accessToken: accessToken || services.repo.getEncryptedSecret("cj.accessToken") || env.cjAccessToken,
+      refreshToken: services.repo.getEncryptedSecret("cj.refreshToken") || env.cjRefreshToken,
+      accessExpiry: services.repo.getEncryptedSecret("cj.accessExpiry") ?? undefined,
+      legacyPasswordAlias: env.cjApiPassword,
+    });
+    const snap = services.cj.tokenSnapshot();
+    services.repo.insertAudit({
+      actor: "USER",
+      action: "CJ_CONNECT_ATTEMPT",
+      entityType: "integration",
+      entityId: "cjdropshipping",
+      summary: `CJ 연결 시도 (API Key ${snap.maskedApiKey ?? "없음"} / Access Token ${snap.maskedAccessToken ?? "없음"})`,
+    });
+      const report = await services.cj.runConnectionTest({ pauseMs: process.env.VITEST ? 0 : 1100 });
+    const issued = services.cj.persistableTokens();
+    if (issued.accessToken) services.repo.setEncryptedSecret("cj.accessToken", issued.accessToken);
+    if (issued.refreshToken) services.repo.setEncryptedSecret("cj.refreshToken", issued.refreshToken);
+    if (issued.accessExpiry) services.repo.setEncryptedSecret("cj.accessExpiry", issued.accessExpiry);
+    const display = report.status === "NOT_CONFIGURED" ? "PENDING_SETUP" : report.status;
+    services.repo.upsertIntegration({
+      id: "cjdropshipping",
+      kind: "supplier",
+      name: "CJdropshipping",
+      status: display,
+      lastSuccessAt: report.status === "READY" ? report.lastConnectedAt : null,
+      lastError: report.error,
+      capabilities: {
+        ...report.capabilities,
+        authentication: report.status === "READY" || report.status === "TOKEN_EXPIRING" ? "READY" : report.status,
+        products: report.capabilities.productSearch,
+        orders: "LOCKED",
+        payments: "LOCKED",
+        disputes: "LOCKED",
+      },
+      docsUrl: "https://developers.cjdropshipping.cn/en/api/api2/api/auth.html",
+    });
+    return c.json({
+      connection: report.status === "READY" || report.status === "TOKEN_EXPIRING" ? "CONNECTED" : "FAILED",
+      mode: "READ ONLY",
+      operatingMode: "LIVE_OBSERVE",
+      status: report.status,
+      lastConnectedAt: report.lastConnectedAt,
+      error: report.error,
+      probes: report.probes,
+      capabilities: {
+        authentication: report.probes.find((p) => p.name === "authentication")?.status ?? report.status,
+        products: report.capabilities.productSearch,
+        inventory: report.capabilities.inventory,
+        shipping: report.capabilities.shipping,
+        orders: "LOCKED",
+        payments: "LOCKED",
+        disputes: "LOCKED",
+      },
+      token: services.cj.tokenSnapshot(),
+    });
   });
 
   app.get("/api/settings/safety", (c) => c.json(services.repo.getSafetySettings()));
@@ -314,6 +404,27 @@ export function createApp(services: AppServices) {
     if (!parsed.success) return c.json({ error: "INVALID" }, 400);
     const classified = classifyOwnerCommand(parsed.data.text);
     const routed = routeCommand(parsed.data.text);
+    const blockedWrite = detectLiveObserveWrite(parsed.data.text);
+    if (blockedWrite) {
+      const block = liveObserveWriteBlock(blockedWrite);
+      services.repo.insertAudit({
+        actor: "SAFETY_GATE",
+        action: BLOCKED_BY_LIVE_OBSERVE,
+        entityType: "command",
+        entityId: blockedWrite,
+        summary: block.error,
+      });
+      return c.json(
+        {
+          code: block.code,
+          error: block.error,
+          classified,
+          routed,
+          source: classified.level === "STRATEGIC" || classified.level === "URGENT" ? "COMMANDER" : "CODE_ROUTER",
+        },
+        409,
+      );
+    }
     const useCommander =
       classified.level === "STRATEGIC" ||
       classified.level === "URGENT" ||

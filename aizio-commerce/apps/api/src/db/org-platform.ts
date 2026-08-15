@@ -209,18 +209,31 @@ export class OrgPlatform {
       .run(id("ape"), row.provider, row.ok ? 1 : 0, row.status, row.error, row.circuit, nowIso());
   }
 
-  countApiEvents(opts: { sinceMinutes: number; status?: number; error?: string }): number {
+  countApiEvents(opts: { sinceMinutes: number; status?: number; error?: string; provider?: string }): number {
     const since = new Date(Date.now() - opts.sinceMinutes * 60_000).toISOString();
+    const clauses = ["at>=?"];
+    const params: Array<string | number> = [since];
+    if (opts.provider) {
+      clauses.push("provider=?");
+      params.push(opts.provider);
+    }
     if (opts.status !== undefined) {
-      const row = this.db.prepare("SELECT COUNT(*) AS c FROM api_events WHERE at>=? AND status=?").get(since, opts.status);
-      return Number(row?.c ?? 0);
+      clauses.push("status=?");
+      params.push(opts.status);
     }
     if (opts.error) {
-      const row = this.db.prepare("SELECT COUNT(*) AS c FROM api_events WHERE at>=? AND error=?").get(since, opts.error);
-      return Number(row?.c ?? 0);
+      clauses.push("error=?");
+      params.push(opts.error);
     }
-    const row = this.db.prepare("SELECT COUNT(*) AS c FROM api_events WHERE at>=?").get(since);
+    const row = this.db.prepare(`SELECT COUNT(*) AS c FROM api_events WHERE ${clauses.join(" AND ")}`).get(...params);
     return Number(row?.c ?? 0);
+  }
+
+  latestApiCircuit(provider: string): string | null {
+    const row = this.db
+      .prepare("SELECT circuit FROM api_events WHERE provider=? ORDER BY at DESC LIMIT 1")
+      .get(provider);
+    return row ? str(row, "circuit") : null;
   }
 
   aiSpendSinceHours(hours: number): number {

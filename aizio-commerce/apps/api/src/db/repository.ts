@@ -11,6 +11,7 @@ import { DEFAULT_SAFETY_SETTINGS } from "../shared/types.ts";
 import { parseSafetySettings } from "../shared/schemas.ts";
 import { id, nowIso } from "../shared/ids.ts";
 import { OrgPlatform } from "./org-platform.ts";
+import { encryptText, decryptText } from "../crypto/pii.ts";
 
 function str(row: SqlRow | undefined, key: string): string {
   const v = row?.[key];
@@ -101,6 +102,35 @@ export class Repository {
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
       )
       .run(key, value, nowIso());
+  }
+
+  setEncryptedSecret(key: string, value: string): void {
+    const enc = encryptText(value);
+    this.db
+      .prepare(
+        `INSERT INTO secrets(key, ciphertext, iv, tag, updated_at) VALUES(?,?,?,?,?)
+         ON CONFLICT(key) DO UPDATE SET ciphertext=excluded.ciphertext, iv=excluded.iv, tag=excluded.tag, updated_at=excluded.updated_at`,
+      )
+      .run(key, enc.ciphertext, enc.iv, enc.tag, nowIso());
+  }
+
+  getEncryptedSecret(key: string): string | null {
+    const row = this.db.prepare("SELECT ciphertext, iv, tag FROM secrets WHERE key = ?").get(key);
+    if (!row) return null;
+    try {
+      return decryptText({
+        ciphertext: str(row, "ciphertext"),
+        iv: str(row, "iv"),
+        tag: str(row, "tag"),
+        keyVersion: "v1",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  latestApiCircuit(provider: string): string | null {
+    return this.os.latestApiCircuit(provider);
   }
 
   getSafetySettings(): SafetySettings {
@@ -437,6 +467,7 @@ export class Repository {
         "target_margin_price_krw IS NOT NULL AND supplier_price_krw IS NOT NULL AND shipping_krw IS NOT NULL",
       ),
       recommended: this.countProducts("scout_candidate = 1"),
+      reviewNeeded: this.countProducts("status = 'REVIEW_REQUIRED'"),
     };
   }
 

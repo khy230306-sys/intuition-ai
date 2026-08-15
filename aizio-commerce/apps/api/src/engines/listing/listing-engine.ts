@@ -16,7 +16,7 @@ export async function prepareAndList(opts: {
   humanApproved: boolean;
   dailySpent: number;
   monthlySpent: number;
-}): Promise<{ status: string; listingId: string | null; error: string | null; blocked?: boolean }> {
+}): Promise<{ status: string; listingId: string | null; error: string | null; blocked?: boolean; code?: string }> {
   const profit = opts.product.profit as ProfitAnalysis | null;
   const risk = assessRisk({
     title: opts.product.title,
@@ -66,7 +66,7 @@ export async function prepareAndList(opts: {
       summary: `판매등록 차단: ${gate.reasons.join(" / ")}`,
       detail: gate,
     });
-    return { status: gate.decision, listingId: null, error: gate.reasons.join(" / "), blocked: true };
+    return { status: gate.decision, listingId: null, error: gate.reasons.join(" / "), blocked: true, code: gate.code };
   }
 
   const payload = {

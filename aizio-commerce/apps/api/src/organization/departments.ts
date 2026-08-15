@@ -48,11 +48,11 @@ export async function runDepartment(
       return watchDept(services);
     case "audit":
       return {
-        summary: "내부감사실은 부서 실행 후 독립 검증 단계에서 수행합니다.",
-        findings: [],
-        recommendations: ["부서 결과 취합 후 감사"],
+        summary: "내부감사실은 Source Evidence와 원문 credential 노출을 독립 검증합니다.",
+        findings: ["핵심 필드에 CJ Product/Inventory/Logistic API 출처가 있어야 합니다."],
+        recommendations: ["부서 결과 취합 후 감사", "Audit Log에 credential 원문 금지"],
         risks: [],
-        evidenceRefs: ["audit:deferred"],
+        evidenceRefs: ["audit:source-evidence"],
         confidence: 1,
         dataFreshness: "LIVE",
       };
@@ -92,6 +92,7 @@ function productDept(services: AppServices, hub: DataHub): DepartmentResult {
     findings: [
       last ? `마지막 스카우트 ${last.createdAt}` : "스카우트 실행 이력 없음",
       cats.length ? `관측 카테고리: ${cats.join(", ")}` : "카테고리 LIVE 데이터 없음",
+      counts.analyzed ? "상품본부는 실제 CJ 상품 레코드만 분석합니다." : "실제 CJ 상품이 아직 없습니다.",
     ],
     recommendations: counts.recommended
       ? ["기존 후보를 TEST_SELL 검증 플랜 대상으로 검토"]
@@ -111,6 +112,7 @@ async function supplyDept(services: AppServices, hub: DataHub): Promise<Departme
     findings: [
       status === "READY" ? "공급처 READY — READ API만 사용" : "공급처 미연결. 신규 공급처 LIVE 탐색 불가",
       `주문 생성 능력: ${services.cj.capabilities().orderCreate ? "있음" : "LIVE_OBSERVE에서 차단"}`,
+      "공급망본부는 재고/배송/공급가격 Snapshot만 분석합니다.",
     ],
     recommendations: status === "READY" ? ["가격/재고/한국 배송 스냅샷 재사용"] : ["CJ_API_KEY 또는 CJ_ACCESS_TOKEN 설정"],
     risks: ["자격정보 없으면 공급가·배송비를 추정하지 않음"],
@@ -172,6 +174,7 @@ function financeDept(services: AppServices, hub: DataHub): DepartmentResult {
     findings: [
       `적자 추정 상품 ${loss.length}개 (ESTIMATE, 확정 아님)`,
       "마켓 수수료/광고/반품손실은 대부분 INSUFFICIENT_DATA",
+      "재무본부는 Profit Truth 단계만 보고합니다. 현재 단계는 실제 순이익이 아닙니다.",
     ],
     recommendations: ["금액은 Profit Truth 코드만 사용", "실제 순이익은 정산 전까지 0으로 둘 수 있음"],
     risks: ["수익 과대평가 금지"],
@@ -197,15 +200,22 @@ function riskDept(services: AppServices): DepartmentResult {
   };
 }
 
-function dataDept(_services: AppServices): DepartmentResult {
+async function dataDept(services: AppServices): Promise<DepartmentResult> {
+  const snaps = await services.providers.snapshots();
+  const ready = snaps.filter((s) => s.status === "READY");
+  const findings = ready.length
+    ? snaps.map((s) => `${s.label} ${s.status}`)
+    : ["AI_PROVIDER_REQUIRED", "OpenAI/Gemini/Claude 미설정 — 가짜 AI 결과를 만들지 않습니다."];
   return {
-    summary: "AI Provider는 미설정 시 NOT_CONFIGURED. 비용 0.",
-    findings: ["OpenAI/Gemini/Claude fallback registry 유지", "학습 데이터는 실제 성과가 있을 때만 기록"],
-    recommendations: ["Mission당 AI 예산 한도 적용"],
-    risks: ["불필요 부서 호출로 비용 급증"],
+    summary: ready.length
+      ? `AI Provider ${ready.length}개 READY`
+      : "AI Provider는 미설정 시 NOT_CONFIGURED. 비용 0. AI_PROVIDER_REQUIRED",
+    findings,
+    recommendations: ["Mission당 AI 예산 한도 적용", "deterministic engine은 AI 없이 계속 실행"],
+    risks: ["불필요 부서 호출로 비용 급증", "가짜 AI 분석 금지"],
     evidenceRefs: ["engine:provider-registry"],
-    confidence: 0.5,
-    dataFreshness: "UNKNOWN",
+    confidence: ready.length ? 0.5 : 0.2,
+    dataFreshness: ready.length ? "LIVE" : "NOT_CONNECTED",
   };
 }
 

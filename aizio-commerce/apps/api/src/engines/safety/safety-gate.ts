@@ -1,4 +1,5 @@
 import type { SafetyContext, SafetyGateResult, SafetySettings } from "../../shared/types.ts";
+import { BLOCKED_BY_LIVE_OBSERVE } from "./live-observe.ts";
 
 const WRITE_ACTIONS = new Set([
   "SUPPLIER_ORDER",
@@ -128,7 +129,13 @@ export function evaluateSafetyGate(
   );
 
   if (hardBlock) {
-    return { allowed: false, decision: "BLOCK", reasons, ruleHits };
+    return {
+      allowed: false,
+      decision: "BLOCK",
+      reasons,
+      ruleHits,
+      code: ruleHits.includes("mode.LIVE_OBSERVE") ? BLOCKED_BY_LIVE_OBSERVE : undefined,
+    };
   }
 
   if (ruleHits.includes("confidence.min") || ruleHits.includes("risk.REVIEW_REQUIRED") || needsManual) {

@@ -27,6 +27,7 @@ export const CREDENTIAL_STATUS = [
   "NOT_CONFIGURED",
   "AUTHENTICATING",
   "READY",
+  "TOKEN_EXPIRING",
   "AUTH_FAILED",
   "TOKEN_EXPIRED",
   "RATE_LIMITED",
@@ -73,6 +74,7 @@ export const PRODUCT_STATUS = [
   "PAUSED",
   "SOLD_OUT",
   "BLOCKED",
+  "KOREA_SHIPPING_UNAVAILABLE",
 ] as const;
 export type ProductStatus = (typeof PRODUCT_STATUS)[number];
 
@@ -303,6 +305,7 @@ export interface SafetyGateResult {
   decision: "ALLOW" | "REVIEW_REQUIRED" | "BLOCK";
   reasons: string[];
   ruleHits: string[];
+  code?: string;
 }
 
 export interface AiDecisionTrace {

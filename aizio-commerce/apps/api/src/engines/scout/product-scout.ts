@@ -3,7 +3,7 @@ import type { Repository, ProductRecord } from "../../db/repository.ts";
 import { analyzeProfit } from "../profit/profit-truth.ts";
 import { assessRisk } from "../risk/risk-engine.ts";
 import { decideProduct } from "../decision/decision-engine.ts";
-import { createCurrencyService, type CurrencyQuote } from "../../adapters/fx/currency-service.ts";
+import { createCurrencyService, classifyFxDisplay, type CurrencyQuote } from "../../adapters/fx/currency-service.ts";
 import {
   extractInventoryTotal,
   extractVariantId,
@@ -13,6 +13,7 @@ import {
 import { roundKrw, usdToKrw } from "../../shared/money.ts";
 import { nowIso } from "../../shared/ids.ts";
 import type { DataFreshness, ProductStatus, SafetySettings, ShippingAvailability } from "../../shared/types.ts";
+import { classifyInventory, scoreDataConfidence } from "../confidence/data-confidence.ts";
 
 export interface ScoutResult {
   status: string;
@@ -72,7 +73,8 @@ export function passesHardFilters(input: {
 }): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
   if (!input.identifiable) reasons.push("상품 식별 불가");
-  if (input.stock === null || input.stock <= 0) reasons.push("재고 없음");
+  if (input.stock === null) reasons.push("재고 UNKNOWN");
+  else if (input.stock <= 0) reasons.push("재고 없음");
   if (input.supplierPrice === null) reasons.push("공급가 없음");
   if (input.shippingCost === null) reasons.push("배송비 없음");
   if (input.shippingAvailability !== "AVAILABLE") reasons.push("한국 배송 불가 또는 미확인");
@@ -154,6 +156,18 @@ export async function scoutProducts(opts: {
   const settings = opts.settings ?? opts.repo.getSafetySettings();
   const scout = settings.scout;
   const emptyStats = { analyzed: 0, koreaShippable: 0, riskExcluded: 0, profitCalculable: 0, recommended: 0 };
+  const cj = opts.supplier as CjDropshippingAdapter;
+  if (typeof cj.circuitState === "function" && cj.circuitState() === "OPEN") {
+    const error = "CJ API DEGRADED";
+    opts.repo.saveScoutRun({
+      supplier: opts.supplier.id,
+      keyword: opts.keyword ?? scout.keyword,
+      ...emptyStats,
+      skipped: 0,
+      error,
+    });
+    return { status: "RATE_LIMITED", found: 0, saved: 0, created: 0, updated: 0, skipped: 0, error, stats: emptyStats };
+  }
   const status = await opts.supplier.getStatus();
   if (status !== "READY") {
     const error = status === "PENDING_SETUP" || status === "NOT_CONFIGURED" ? "공급처 연결 필요" : `${opts.supplier.label} — ${status}`;
@@ -409,8 +423,9 @@ async function ingestOne(opts: {
   });
 
   let statusOut: ProductStatus = decision.status;
-  if (stock !== null && stock <= 0) statusOut = "SOLD_OUT";
-  else if (risk.decision === "BLOCK") statusOut = "BLOCKED";
+  if (risk.decision === "BLOCK") statusOut = "BLOCKED";
+  else if (shippingAvailability === "UNAVAILABLE") statusOut = "KOREA_SHIPPING_UNAVAILABLE";
+  else if (stock !== null && stock <= 0) statusOut = "SOLD_OUT";
   else if (recommended && decision.status === "TEST_SELL") statusOut = "TEST_SELL";
   else if (recommended) statusOut = decision.status === "REJECTED" ? "REVIEW_REQUIRED" : decision.status;
   else if (!hard.ok) statusOut = "DISCOVERED";
@@ -419,6 +434,21 @@ async function ingestOne(opts: {
   const weight = optionalNum(raw, ["productWeight", "packWeight", "weight"]);
   const sourceUrl = optionalStr(raw, ["productUrl", "sourceUrl"]);
   const productId = stableProductId(opts.supplier.id, item.supplierProductId, variantId);
+  const inventoryStatus = classifyInventory(stock);
+  const fxDisplay = classifyFxDisplay({
+    status: opts.fxStatus,
+    capturedAt: fxQuote?.capturedAt ?? null,
+  });
+  const dataConfidence = scoreDataConfidence({
+    hasSupplierPrice: priceUsd !== null,
+    inventory: inventoryStatus,
+    hasShippingCost: shippingUsd !== null,
+    shippingAvailability,
+    fresh: true,
+    riskAssessed: true,
+    hasFx: fxQuote !== null,
+    hasMarketPrice: false,
+  });
 
   const sourceFacts: Record<string, unknown> = {
     supplier: opts.supplier.id,
@@ -469,8 +499,10 @@ async function ingestOne(opts: {
             api: "CJ INVENTORY API",
             endpoint: "/product/stock/queryByVid",
             capturedAt: stockCapturedAt,
+            status: inventoryStatus,
+            quantity: stock,
           }
-        : null,
+        : { status: "UNKNOWN", quantity: null },
       fx: fxQuote
         ? {
             source: fxQuote.source,
@@ -478,11 +510,14 @@ async function ingestOne(opts: {
             capturedAt: fxQuote.capturedAt,
             freshness: fxQuote.freshness,
             status: fxQuote.status,
+            displayStatus: fxDisplay,
           }
-        : { status: "FX_RATE_NOT_CONFIGURED", error: opts.fxError },
+        : { status: "FX_RATE_NOT_CONFIGURED", displayStatus: "FX_NOT_CONFIGURED", error: opts.fxError },
     },
     filter: { hard: hard.reasons, configurable: configurable.reasons, recommended },
     operatingMode: opts.settings.operatingMode,
+    inventoryStatus,
+    koreaShipping: shippingAvailability,
   };
 
   const record: ProductRecord = {
@@ -535,7 +570,7 @@ async function ingestOne(opts: {
     },
     content: null,
     sourceFacts,
-    confidence: profit.confidence,
+    confidence: dataConfidence,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };

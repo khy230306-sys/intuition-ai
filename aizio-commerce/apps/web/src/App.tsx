@@ -24,14 +24,6 @@ function Badge({ value }: { value: string | null | undefined }) {
   return <span className={`badge ${value}`}>{value}</span>;
 }
 
-function Fresh({ value, at }: { value?: string | null; at?: string | null }) {
-  return (
-    <span>
-      <Badge value={value} /> {at ? <span className="muted">{timeAgo(at)}</span> : null}
-    </span>
-  );
-}
-
 function timeAgo(iso: string | null | undefined) {
   if (!iso) return "확인 시각 없음";
   const ms = Date.now() - Date.parse(iso);
@@ -64,7 +56,13 @@ export function App() {
   }, [load]);
 
   const recommended = useMemo(
-    () => products.filter((p) => ["TEST_SELL", "APPROVED", "LISTING_READY"].includes(p.status)),
+    () =>
+      products.filter(
+        (p) =>
+          ["TEST_SELL", "APPROVED", "LISTING_READY"].includes(p.status) &&
+          p.status !== "KOREA_SHIPPING_UNAVAILABLE" &&
+          p.shippingAvailability !== "UNAVAILABLE",
+      ),
     [products],
   );
   const review = useMemo(
@@ -235,22 +233,29 @@ function Home({
 }) {
   const counts = dash.scout?.counts;
   const cjReady = dash.scout?.cjReady ?? dash.cjStatus === "READY";
+  const cjStatus = dash.supplier?.status ?? dash.cjStatus ?? "PENDING_SETUP";
   return (
     <>
+      <div className="card">
+        <h3>AIZIO COMMERCE</h3>
+        <div className="row"><span>SUPPLIER</span><b>CJdropshipping <Badge value={cjStatus} /></b></div>
+        <div className="row"><span>Operating Mode</span><Badge value={dash.operatingMode ?? "LIVE_OBSERVE"} /></div>
+        {dash.cjDegraded ? <div className="note">CJ API DEGRADED</div> : null}
+      </div>
       <div className="grid">
-        <Stat k="오늘 AI가 분석한 상품" v={dash.analyzedToday} />
-        <Stat k="판매 후보" v={dash.candidates} />
-        <Stat k="최종 추천" v={dash.recommended} />
+        <Stat k="오늘 실제 분석상품" v={counts?.analyzed ?? dash.analyzedToday} />
+        <Stat k="한국 배송 가능" v={counts?.koreaShippable ?? 0} />
+        <Stat k="위험 제외" v={counts?.riskExcluded ?? 0} />
+        <Stat k="검토 필요" v={counts?.reviewNeeded ?? dash.reviewNeeded} />
+        <Stat k="추천 가능" v={counts?.recommended ?? dash.recommended} />
         <Stat k="판매 중" v={dash.live} />
         <Stat k="오늘 주문" v={dash.ordersToday} />
-        <Stat k="자동 처리" v={dash.autoProcessed} />
-        <Stat k="검토 필요" v={dash.reviewNeeded} />
         <Stat k="연결 대기" v={dash.pendingSetupCount} />
       </div>
       {dash.watch ? (
         <div className="card" style={{ marginTop: 12 }}>
           <h3>SYSTEM HEALTH</h3>
-          <div className="row"><span>Overall</span><Badge value={dash.watch.overall} /></div>
+          <div className="row"><span>System Health</span><Badge value={dash.watch.overall} /></div>
           <div className="row"><span>API</span><b>{dash.watch.apiHealthy} / {dash.watch.apiTotal} Healthy</b></div>
           <div className="row"><span>Jobs</span><b>{dash.watch.jobsRunning} Running · {dash.watch.jobsFailed} Failed</b></div>
           <div className="row"><span>Queue</span><b>{dash.watch.queue}</b></div>
@@ -358,9 +363,19 @@ function List({
 }
 
 function ProductCard({ product, rank, onOpen }: { product: Product; rank: number; onOpen: () => void }) {
-  const profit = product.profit;
-  const evidence = (product.sourceFacts?.evidence ?? {}) as Record<string, { capturedAt?: string; status?: string }>;
+  const evidence = (product.sourceFacts?.evidence ?? {}) as Record<
+    string,
+    { capturedAt?: string; status?: string; displayStatus?: string; quantity?: number | null }
+  >;
   const fx = evidence.fx;
+  const inv = evidence.inventory;
+  const landed =
+    product.supplierPriceKrw != null && product.shippingKrw != null ? product.supplierPriceKrw + product.shippingKrw : null;
+  const invStatus =
+    inv?.status ?? (product.stock === null ? "UNKNOWN" : product.stock <= 0 ? "OUT_OF_STOCK" : "IN_STOCK");
+  const fxBadge =
+    fx?.displayStatus ??
+    (fx?.status === "MANUAL_RATE" ? "MANUAL_FX" : fx?.status === "LIVE" ? "LIVE_FX" : "FX_NOT_CONFIGURED");
   return (
     <article className="card">
       <div className="rank">AI 추천 {rank}위</div>
@@ -370,13 +385,14 @@ function ProductCard({ product, rank, onOpen }: { product: Product; rank: number
         <Badge value={product.risk?.decision} />
         <Badge value={product.profitStage} />
       </div>
-      <div className="row"><span>CJ 공급가</span><b>{won(product.supplierPriceKrw)} {product.supplierPriceUsd != null ? <span className="muted">${product.supplierPriceUsd}</span> : null} <Fresh value={profit?.inputFreshness.productCost ?? "LIVE"} at={evidence.product?.capturedAt ?? product.capturedAt} /></b></div>
-      <div className="row"><span>한국 배송비</span><b>{won(product.shippingKrw)} {product.shippingMethod ? <span className="muted">{product.shippingMethod}</span> : null} <Fresh value={product.shippingAvailability === "AVAILABLE" ? "LIVE" : product.shippingAvailability} at={evidence.shipping?.capturedAt} /></b></div>
-      <div className="row"><span>재고</span><b>{product.stock ?? "—"} <Badge value={product.stock === null ? "UNKNOWN" : "LIVE"} /></b></div>
-      <div className="row"><span>환율</span><b>{fx?.status === "FX_RATE_NOT_CONFIGURED" ? "데이터 없음" : fx?.status ?? "—"} <Badge value={fx?.status === "MANUAL_RATE" ? "MANUAL" : fx?.status === "LIVE" ? "LIVE" : "FX_RATE_NOT_CONFIGURED"} /></b></div>
-      <div className="row"><span>목표마진 기준 판매가</span><b>{won(product.targetMarginPriceKrw ?? product.recommendedPriceKrw)} <Badge value="ESTIMATE" /></b></div>
-      <div className="row"><span>시장 관측가격</span><b>{product.marketObservedPriceKrw != null ? won(product.marketObservedPriceKrw) : "데이터 없음"} <Badge value={product.marketObservedPriceKrw != null ? "LIVE" : "UNKNOWN"} /></b></div>
-      <div className="row"><span>예상 순이익</span><b>{won(profit?.expectedNetProfit)} <Badge value="ESTIMATE" /> <Badge value={profit?.stage} /></b></div>
+      <div className="row"><span>CJ 공급가격</span><b>{product.supplierPriceUsd != null ? `$${product.supplierPriceUsd}` : "—"} {won(product.supplierPriceKrw)} <Badge value="LIVE" /></b></div>
+      <div className="row"><span>재고</span><b>{product.stock ?? "UNKNOWN"} <Badge value={invStatus} /> <Badge value={product.stock === null ? "UNKNOWN" : "LIVE"} /></b></div>
+      <div className="row"><span>한국 배송</span><b><Badge value={product.shippingAvailability ?? "UNKNOWN"} /></b></div>
+      <div className="row"><span>배송비</span><b>{product.shippingUsd != null ? `$${product.shippingUsd}` : "—"} {won(product.shippingKrw)} {product.shippingMethod ? <span className="muted">{product.shippingMethod}</span> : null} <Badge value={product.shippingAvailability === "AVAILABLE" ? "LIVE" : product.shippingAvailability ?? "UNKNOWN"} /></b></div>
+      <div className="row"><span>환율</span><b>{fx?.status === "FX_RATE_NOT_CONFIGURED" ? "데이터 없음" : fx?.status ?? "—"} <Badge value={fxBadge} /></b></div>
+      <div className="row"><span>원화 공급+배송</span><b>{won(landed)}</b></div>
+      <div className="row"><span>목표마진 판매가</span><b>{won(product.targetMarginPriceKrw ?? product.recommendedPriceKrw)} <Badge value="ESTIMATE" /> <Badge value="TARGET_MARGIN_PRICE" /></b></div>
+      <div className="row"><span>시장 관측가격</span><b>{product.marketObservedPriceKrw != null ? won(product.marketObservedPriceKrw) : "UNKNOWN"} <Badge value="UNKNOWN" /></b></div>
       <div className="row"><span>Risk</span><b>{product.risk?.decision ?? "—"}</b></div>
       <div className="row"><span>Data Confidence</span><b>{Math.round((product.confidence ?? 0) * 100)}%</b></div>
       <div className="actions">
@@ -650,17 +666,30 @@ function MissionView({ id, onBack }: { id: string; onBack: () => void }) {
 function Integrations() {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.integrations>> | null>(null);
   const [lastTest, setLastTest] = useState<Record<string, unknown> | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [connectMsg, setConnectMsg] = useState<string | null>(null);
   useEffect(() => {
     void api.integrations().then(setData);
   }, []);
   if (!data) return <p className="muted">연결 상태를 불러오는 중…</p>;
+  const token = (data as { token?: { maskedApiKey?: string | null; maskedAccessToken?: string | null; legacyWarning?: string | null; status?: string } }).token;
   return (
     <>
       <h1>연결 상태</h1>
-      <p className="muted">API 키와 토큰은 화면에 그대로 보여주지 않습니다. 키는 서버 `.env`에 넣으세요. 공식 인증: CJ_API_KEY 또는 CJ_ACCESS_TOKEN.</p>
+      <p className="muted">CJ_API_KEY는 공식 getAccessToken의 apiKey입니다. CJ_ACCESS_TOKEN은 헤더 CJ-Access-Token이며 같은 값이 아닙니다. 원문은 표시하지 않습니다.</p>
       {data.integrations.map((i) => (
         <div className="card" key={String(i.id)}>
           <div className="row"><span>{String(i.name)}</span><Badge value={String(i.status)} /></div>
+          {i.id === "cjdropshipping" ? (
+            <>
+              <div className="row"><span>모드</span><b>CONNECTED / READ ONLY · LIVE_OBSERVE</b></div>
+              <div className="row"><span>API Key</span><b>{token?.maskedApiKey ?? (data as { secrets?: { cjApiKey?: string } }).secrets?.cjApiKey ?? "미설정"}</b></div>
+              <div className="row"><span>Access Token</span><b>{token?.maskedAccessToken ?? (data as { secrets?: { cjAccessToken?: string } }).secrets?.cjAccessToken ?? "미설정"}</b></div>
+              {token?.legacyWarning ? <p className="note">{token.legacyWarning}</p> : null}
+            </>
+          ) : null}
           <div className="row"><span>마지막 연결</span><b>{String(i.status) === "READY" ? String(i.lastSuccessAt ?? "없음") : "성공으로 표시하지 않음"}</b></div>
           <div className="row"><span>마지막 오류</span><b>{String(i.lastError ?? "없음")}</b></div>
           {i.id === "cjdropshipping" ? (
@@ -668,6 +697,44 @@ function Integrations() {
           ) : (
             <pre className="muted">{JSON.stringify(i.capabilities, null, 2)}</pre>
           )}
+          {i.id === "cjdropshipping" ? (
+            <div className="card" style={{ marginTop: 8 }}>
+              <h3>CJ 연결하기</h3>
+              <label>
+                CJ API Key (공식 apiKey)
+                <input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="My CJ → Authorization → API Key" />
+              </label>
+              <label>
+                CJ Access Token (선택, 헤더 토큰)
+                <input type="password" autoComplete="off" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} placeholder="이미 발급된 CJ-Access-Token" />
+              </label>
+              <div className="actions">
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void api
+                      .connectCj({ apiKey: apiKey || undefined, accessToken: accessToken || undefined })
+                      .then((r) => {
+                        setConnectMsg(`${String(r.connection)} · ${String(r.mode)} · ${String(r.status)}`);
+                        setApiKey("");
+                        setAccessToken("");
+                        setLastTest(r);
+                        return api.integrations().then(setData);
+                      })
+                      .catch((err: { data?: { error?: string } }) => {
+                        setConnectMsg(err.data?.error ?? "CREDENTIAL_REQUIRED");
+                      })
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  CJ 연결하기
+                </button>
+              </div>
+              {connectMsg ? <p className="muted">{connectMsg}</p> : null}
+            </div>
+          ) : null}
           <div className="actions">
             <button
               className="btn ghost"
@@ -705,9 +772,10 @@ function CapabilityMap({ caps }: { caps: Record<string, unknown> }) {
     ["Product Detail", capabilityLabel(caps.productDetail)],
     ["Inventory", capabilityLabel(caps.inventory)],
     ["Shipping", capabilityLabel(caps.shipping)],
-    ["Order API", capabilityLabel(caps.orderApi ?? caps.orderCreate, "CAPABILITY")],
-    ["Tracking", capabilityLabel(caps.tracking, "CAPABILITY")],
-    ["Dispute", capabilityLabel(caps.dispute, "CAPABILITY")],
+    ["Order API", capabilityLabel(caps.orderApi ?? caps.orders, "LOCKED")],
+    ["Payments", capabilityLabel(caps.payments, "LOCKED")],
+    ["Tracking", capabilityLabel(caps.tracking, "LOCKED")],
+    ["Dispute", capabilityLabel(caps.dispute ?? caps.disputes, "LOCKED")],
   ];
   return (
     <>

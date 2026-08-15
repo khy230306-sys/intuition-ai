@@ -13,7 +13,14 @@ import { RiskEngine } from '../engines/risk.js';
 import { deterministicJudge, runAiJudge } from '../ai/judge.js';
 import { defaultStops, evaluateExit } from '../engines/positionManager.js';
 import { writeJournal } from '../engines/journal.js';
-import { placeManagedOrder } from '../services/execution.js';
+import {
+  placeManagedOrder,
+  hasOpenExitOrder,
+  DuplicateOrderError,
+  syncOrderUntilSettled,
+} from '../services/execution.js';
+import { assertLiveOrdersAllowed, refreshLiveOrderLock } from '../services/liveOrders.js';
+import type { BrokerAdapter } from '../brokers/types.js';
 import {
   ensureAutopilotRow,
   getActiveRiskProfile,
@@ -43,6 +50,25 @@ export class AutopilotRuntime {
   private consecutiveLosses = 0;
   private peakEquity: number | null = null;
   private lastBroadScanAt = 0;
+  private riskStateLoaded = false;
+
+  private async loadPersistedRiskState(ap: Awaited<ReturnType<typeof ensureAutopilotRow>>) {
+    if (this.riskStateLoaded) return;
+    this.consecutiveLosses = Number((ap as { consecutiveLosses?: number }).consecutiveLosses ?? 0);
+    const peak = (ap as { peakEquity?: number | null }).peakEquity;
+    this.peakEquity = peak == null ? null : Number(peak);
+    this.riskStateLoaded = true;
+  }
+
+  private async persistRiskState() {
+    await prisma.autopilotStateRow.update({
+      where: { id: 'singleton' },
+      data: {
+        consecutiveLosses: this.consecutiveLosses,
+        peakEquity: this.peakEquity ?? undefined,
+      },
+    });
+  }
 
   start() {
     if (this.timer) return;
@@ -77,6 +103,7 @@ export class AutopilotRuntime {
 
   async tick() {
     const ap = await ensureAutopilotRow();
+    await this.loadPersistedRiskState(ap);
     await heartbeat(ap.aiStatusText);
 
     if (ap.stopMode === 'CLOSE_AND_STOP' || ap.circuitBreakerOn) {
@@ -97,6 +124,10 @@ export class AutopilotRuntime {
 
     let session = await getMarketSession('KR', { preferTossCalendar: tossConfigured() });
     const mode = ap.mode as TradingMode;
+    // Continuous LIVE lock — never trust a sticky in-memory unlock after ALLOW_LIVE flips off
+    if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') {
+      if (!env.ALLOW_LIVE) refreshLiveOrderLock(false);
+    }
     if (
       (mode === 'PAPER' || mode === 'PAPER_REPLAY') &&
       env.PAPER_SIMULATE_REGULAR_SESSION &&
@@ -310,14 +341,43 @@ export class AutopilotRuntime {
     const riskProfile = await getActiveRiskProfile();
     const openPositions = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: execMode } });
     const perf = await computePerformance();
-    const equity = ap.capital + perf.netPnl;
+
+    // Mark-to-market unrealized for daily loss / equity (closed PnL alone understates risk)
+    let unrealized = 0;
+    for (const p of openPositions) {
+      try {
+        const q = await broker.getQuote(p.symbol);
+        unrealized += (q.lastPrice - p.entryPrice) * p.quantity;
+      } catch {
+        /* ignore single quote miss */
+      }
+    }
+    const equity = ap.capital + perf.netPnl + unrealized;
     if (this.peakEquity == null) this.peakEquity = equity;
     this.peakEquity = Math.max(this.peakEquity, equity);
     const drawdownPct = this.peakEquity > 0 ? ((this.peakEquity - equity) / this.peakEquity) * 100 : 0;
+    await this.persistRiskState();
 
     const today = kstParts().dateStr;
     const dayRow = await prisma.dailyPerformance.findUnique({ where: { date: today } });
-    const dailyPnlPct = ap.capital > 0 ? ((dayRow?.netPnl ?? 0) / ap.capital) * 100 : 0;
+    const realizedToday = dayRow?.netPnl ?? 0;
+    const dailyPnlPct = ap.capital > 0 ? ((realizedToday + unrealized) / ap.capital) * 100 : 0;
+
+    // Honest broker / order-state probes
+    let brokerOk = true;
+    let orderStateKnown = true;
+    let buyingPowerCash = Number.POSITIVE_INFINITY;
+    try {
+      const health = await broker.health();
+      brokerOk = Boolean(health.ok);
+      const bp = await broker.getBuyingPower();
+      buyingPowerCash = bp.cashBuyingPower;
+      const oo = await broker.getOpenOrders();
+      orderStateKnown = oo.every((o) => String(o.status) !== 'UNKNOWN');
+    } catch {
+      brokerOk = false;
+      orderStateKnown = false;
+    }
 
     const riskEngine = new RiskEngine();
     const sizeMul = positionSizeMultiplier(regimeResult.regime);
@@ -450,8 +510,8 @@ export class AutopilotRuntime {
         consecutiveLosses: this.consecutiveLosses,
         quote: item.candidate.quote,
         marketOpen: isRegularSessionOpen(session),
-        brokerOk: true,
-        orderStateKnown: true,
+        brokerOk,
+        orderStateKnown,
         aiValid: shadowPaperPath
           ? true
           : judge.valid && judge.providerStatus !== 'MALFORMED' && judge.providerStatus !== 'TIMEOUT',
@@ -461,6 +521,15 @@ export class AutopilotRuntime {
         dataStaleMs: item.candidate.quote.freshnessMs,
         maxStaleMs: env.FRESHNESS_KR_MS,
       });
+
+      if (risk.allowed && Number.isFinite(buyingPowerCash)) {
+        const need = (item.candidate.quote.ask || item.candidate.quote.lastPrice) * risk.positionSize;
+        if (need > buyingPowerCash) {
+          risk.allowed = false;
+          risk.reasons.push('INSUFFICIENT_BUYING_POWER');
+          risk.positionSize = 0;
+        }
+      }
 
       if (!risk.allowed) {
         await emitEvent('RISK_REJECT', `${item.candidate.symbol} ${risk.reasons.join(',')}`, 'warn');
@@ -534,6 +603,15 @@ export class AutopilotRuntime {
         break;
       }
 
+      if (mode === 'LIVE') {
+        try {
+          assertLiveOrdersAllowed();
+        } catch (e) {
+          await emitEvent('LIVE_ORDERS_LOCKED', e instanceof Error ? e.message : 'locked', 'warn');
+          break;
+        }
+      }
+
       if (mode === 'SHADOW') {
         await emitEvent(
           'WOULD_BUY',
@@ -553,6 +631,17 @@ export class AutopilotRuntime {
           signalId,
           strategyId: topSignal?.strategyId ?? 'quant',
         });
+
+        if (String(order.status) === 'PENDING' || String(order.status) === 'PARTIAL_FILLED') {
+          await emitEvent(
+            'ORDER_PENDING',
+            `${item.candidate.symbol} LIVE order ${order.status} — waiting fill before position open`,
+            'warn',
+            { orderId: order.orderId },
+          );
+          // Do not invent a position; next ticks / recovery must reconcile broker truth
+          break;
+        }
 
         if (order.status === 'FILLED' && order.averageFilledPrice) {
           if (mode === 'SHADOW' && topSignal) {
@@ -692,6 +781,8 @@ export class AutopilotRuntime {
       await emitEvent('EXIT_SKIP', `broker connect: ${e instanceof Error ? e.message : 'err'}`, 'warn');
       return;
     }
+    await this.reconcileExitingPositions(mode, broker);
+
     const opens = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: executionMode(mode) } });
 
     for (const pos of opens) {
@@ -739,6 +830,11 @@ export class AutopilotRuntime {
 
       if (!decision.shouldExit) continue;
 
+      if (await hasOpenExitOrder(pos.id)) {
+        await emitEvent('EXIT_SKIP', `${pos.symbol} exit already working`, 'warn');
+        continue;
+      }
+
       if (mode === 'SHADOW') {
         await emitEvent(
           'WOULD_SELL',
@@ -752,6 +848,15 @@ export class AutopilotRuntime {
         getPaperBroker().forcePosition(pos.symbol, pos.quantity, pos.entryPrice);
       }
 
+      if (mode === 'LIVE') {
+        try {
+          assertLiveOrdersAllowed();
+        } catch (e) {
+          await emitEvent('LIVE_ORDERS_LOCKED', e instanceof Error ? e.message : 'locked', 'warn');
+          continue;
+        }
+      }
+
       await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'EXITING' } });
       try {
         const order = await placeManagedOrder({
@@ -762,9 +867,18 @@ export class AutopilotRuntime {
           quantity: pos.quantity,
           strategyId: pos.strategyId,
           signalId: pos.signalId ? `${pos.signalId}:exit` : undefined,
+          positionId: pos.id,
         });
+        if (String(order.status) === 'PENDING' || String(order.status) === 'PARTIAL_FILLED') {
+          await prisma.positionRow.update({
+            where: { id: pos.id },
+            data: { status: 'EXITING', exitOrderId: order.orderId },
+          });
+          await emitEvent('EXIT_PENDING', `${pos.symbol} exit ${order.status}`, 'warn');
+          continue;
+        }
         if (String(order.status) !== 'FILLED' && Number(order.filledQuantity) <= 0) {
-          await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'OPEN' } });
+          await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'OPEN', exitOrderId: null } });
           await emitEvent('EXIT_REJECT', `${pos.symbol} exit rejected: ${order.status}`, 'warn');
           continue;
         }
@@ -781,12 +895,14 @@ export class AutopilotRuntime {
             status: 'CLOSED',
             closedAt: new Date(),
             exitReason: decision.reason,
+            exitOrderId: order.orderId,
             realizedPnl: net,
           },
         });
 
         if (net < 0) this.consecutiveLosses += 1;
         else this.consecutiveLosses = 0;
+        await this.persistRiskState();
 
         if (pos.strategyId) await recordStrategyOutcome(pos.strategyId, 'WOULD_SELL', net);
 
@@ -818,9 +934,137 @@ export class AutopilotRuntime {
           'trade',
         );
       } catch (e) {
+        if (e instanceof DuplicateOrderError) {
+          await emitEvent('EXIT_SKIP', e.message, 'warn');
+          continue;
+        }
         await prisma.positionRow.update({ where: { id: pos.id }, data: { status: 'OPEN' } });
         await emitEvent('EXIT_ERROR', e instanceof Error ? e.message : 'exit-failed', 'error');
       }
+    }
+  }
+
+  private async reconcileExitingPositions(mode: TradingMode, broker: BrokerAdapter) {
+    // Orphan OPEN with a FILLED exit order — close without re-selling
+    const opens = await prisma.positionRow.findMany({
+      where: { status: 'OPEN', mode: executionMode(mode) },
+    });
+    for (const pos of opens) {
+      const filledExit = await prisma.orderRow.findFirst({
+        where: { positionId: pos.id, side: 'SELL', status: 'FILLED' },
+      });
+      if (!filledExit) continue;
+      const exitPrice = filledExit.avgFillPrice != null ? Number(filledExit.avgFillPrice) : pos.entryPrice;
+      const net =
+        (exitPrice - pos.entryPrice) * pos.quantity -
+        Number(filledExit.commission ?? 0) -
+        Number(filledExit.tax ?? 0);
+      await prisma.positionRow.update({
+        where: { id: pos.id },
+        data: {
+          status: 'CLOSED',
+          closedAt: new Date(),
+          exitReason: 'RECONCILE_ORPHAN_FILLED_EXIT',
+          exitOrderId: filledExit.brokerOrderId,
+          realizedPnl: net,
+        },
+      });
+      if (net < 0) this.consecutiveLosses += 1;
+      else this.consecutiveLosses = 0;
+      await this.persistRiskState();
+      await emitEvent('EXIT_FILLED', `${pos.symbol} orphan OPEN+FILLED exit closed`, 'trade');
+    }
+
+    const exiting = await prisma.positionRow.findMany({
+      where: { status: 'EXITING', mode: executionMode(mode) },
+    });
+    for (const pos of exiting) {
+      const exitOrder = await prisma.orderRow.findFirst({
+        where: { positionId: pos.id, side: 'SELL' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!exitOrder) {
+        await prisma.positionRow.update({
+          where: { id: pos.id },
+          data: { status: 'OPEN', exitOrderId: null },
+        });
+        await emitEvent('EXIT_REOPEN', `${pos.symbol} EXITING without order — reopen`, 'warn');
+        continue;
+      }
+
+      let status = String(exitOrder.status);
+      let filledQty = Number(exitOrder.filledQuantity);
+      let avg = exitOrder.avgFillPrice != null ? Number(exitOrder.avgFillPrice) : null;
+      let commission = Number(exitOrder.commission ?? 0);
+      let tax = Number(exitOrder.tax ?? 0);
+      let brokerOrderId = exitOrder.brokerOrderId ?? undefined;
+
+      if (exitOrder.brokerOrderId && mode === 'LIVE') {
+        try {
+          let bo = await broker.getOrder(exitOrder.brokerOrderId);
+          bo = await syncOrderUntilSettled(broker, bo);
+          status = String(bo.status);
+          filledQty = Number(bo.filledQuantity);
+          avg = bo.averageFilledPrice != null ? Number(bo.averageFilledPrice) : avg;
+          commission = Number(bo.commission ?? commission);
+          tax = Number(bo.tax ?? tax);
+          brokerOrderId = bo.orderId;
+          await prisma.orderRow.update({
+            where: { clientOrderId: exitOrder.clientOrderId },
+            data: {
+              status,
+              filledQuantity: filledQty,
+              avgFillPrice: avg ?? undefined,
+              commission,
+              tax,
+              brokerOrderId,
+              rawJson: JSON.stringify(bo),
+            },
+          });
+        } catch (e) {
+          await emitEvent(
+            'EXIT_RECONCILE_WARN',
+            `${pos.symbol} getOrder fail: ${e instanceof Error ? e.message : 'err'}`,
+            'warn',
+          );
+          continue;
+        }
+      }
+
+      if (status === 'FILLED' || filledQty > 0) {
+        const exitPrice = avg ?? pos.entryPrice;
+        const gross = (exitPrice - pos.entryPrice) * pos.quantity;
+        const net = gross - commission - tax;
+        await prisma.positionRow.update({
+          where: { id: pos.id },
+          data: {
+            status: 'CLOSED',
+            closedAt: new Date(),
+            exitReason: pos.exitReason ?? 'EXIT_FILLED',
+            exitOrderId: brokerOrderId ?? exitOrder.brokerOrderId,
+            realizedPnl: net,
+          },
+        });
+        if (net < 0) this.consecutiveLosses += 1;
+        else this.consecutiveLosses = 0;
+        await this.persistRiskState();
+        await emitEvent('EXIT_FILLED', `${pos.symbol} exit reconciled FILLED`, 'trade');
+        continue;
+      }
+
+      if (status === 'REJECTED' || status === 'CANCELED') {
+        await prisma.orderRow
+          .delete({ where: { idempotencyKey: `exit:${pos.id}` } })
+          .catch(() => undefined);
+        await prisma.positionRow.update({
+          where: { id: pos.id },
+          data: { status: 'OPEN', exitOrderId: null },
+        });
+        await emitEvent('EXIT_REOPEN', `${pos.symbol} exit ${status} — reopen for retry`, 'warn');
+        continue;
+      }
+
+      await emitEvent('EXIT_PENDING', `${pos.symbol} still ${status}`, 'warn');
     }
   }
 
@@ -857,6 +1101,10 @@ export class AutopilotRuntime {
 
     for (const pos of opens) {
       try {
+        if (await hasOpenExitOrder(pos.id)) {
+          await emitEvent('CLOSE_SKIP', `${pos.symbol} exit already working`, 'warn');
+          continue;
+        }
         const order = await placeManagedOrder({
           broker: mode === 'LIVE' ? broker : getPaperBroker(),
           mode: executionMode(mode),
@@ -864,6 +1112,7 @@ export class AutopilotRuntime {
           side: 'SELL',
           quantity: pos.quantity,
           strategyId: pos.strategyId,
+          positionId: pos.id,
         });
         if (String(order.status) !== 'FILLED' && Number(order.filledQuantity) <= 0) {
           await emitEvent('CLOSE_REJECT', `${pos.symbol} close rejected: ${order.status}`, 'error');
@@ -874,6 +1123,7 @@ export class AutopilotRuntime {
           data: {
             status: 'CLOSED',
             exitReason: reason,
+            exitOrderId: order.orderId,
             closedAt: new Date(),
             realizedPnl:
               order.averageFilledPrice != null

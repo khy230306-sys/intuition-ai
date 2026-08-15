@@ -136,9 +136,22 @@ export async function runLiveReadiness(): Promise<{
     checks.push(check('Idempotency', 'FAIL', 'error'));
   }
 
-  checks.push(check('Recovery', 'PASS', 'recovery engine loaded'));
-  checks.push(check('Kill Switch', 'PASS', 'emergencyStop available'));
+  checks.push(check('Recovery', 'PASS', 'runRecovery callable'));
+  checks.push(
+    check(
+      'Kill Switch',
+      'PASS',
+      env.CONTROL_PLANE_TOKEN ? 'emergencyStop + CONTROL_PLANE_TOKEN set' : 'emergencyStop available (set CONTROL_PLANE_TOKEN for API auth)',
+    ),
+  );
   checks.push(check('Emergency Stop', 'PASS', 'route available'));
+  checks.push(
+    check(
+      'Control Plane Auth',
+      env.CONTROL_PLANE_TOKEN ? 'PASS' : env.ALLOW_LIVE ? 'FAIL' : 'WARN',
+      env.CONTROL_PLANE_TOKEN ? 'token configured' : 'CONTROL_PLANE_TOKEN empty',
+    ),
+  );
 
   // REPLAY fallback prohibition probe
   try {
@@ -178,6 +191,7 @@ export async function runLiveReadiness(): Promise<{
     'Emergency Stop',
     'ALLOW_LIVE',
   ];
+  if (env.ALLOW_LIVE) required.push('Control Plane Auth');
   const byName = new Map(checks.map((c) => [c.name, c]));
   const ready = required.every((n) => byName.get(n)?.result === 'PASS');
   const locked = !ready || !env.ALLOW_LIVE;
@@ -191,8 +205,9 @@ export async function runLiveReadiness(): Promise<{
     update: { valueJson: JSON.stringify({ ready, locked, checks, at: new Date().toISOString() }) },
   });
 
-  // Sync toss broker lock
-  getTossBroker().allowLiveOrders = ready && envCfg.ALLOW_LIVE;
+  // Sync toss broker lock continuously from this evaluation
+  const { refreshLiveOrderLock } = await import('./liveOrders.js');
+  refreshLiveOrderLock(ready && envCfg.ALLOW_LIVE);
 
   return { ready, locked, checks };
 }

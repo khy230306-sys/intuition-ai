@@ -48,6 +48,8 @@ model AutopilotStateRow {
   circuitBreakerOn   Boolean   @default(false)
   aiStatusText       String    @default("대기")
   readiness          String    @default("NOT_CONFIGURED")
+  peakEquity         Float?
+  consecutiveLosses  Int       @default(0)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }
@@ -165,6 +167,7 @@ model OrderRow {
   idempotencyKey   String   @unique
   signalId         String?
   strategyId       String?
+  positionId       String?
   brokerOrderId    String?
   symbol           String
   side             String
@@ -184,6 +187,7 @@ model OrderRow {
 
   @@index([signalId])
   @@index([status])
+  @@index([positionId, side, status])
 }
 
 model ExecutionRow {
@@ -219,6 +223,7 @@ model PositionRow {
   status        String   @default("OPEN")
   mode          String
   exitReason    String?
+  exitOrderId   String?
   closedAt      DateTime?
   realizedPnl   Float?
   createdAt     DateTime @default(now())

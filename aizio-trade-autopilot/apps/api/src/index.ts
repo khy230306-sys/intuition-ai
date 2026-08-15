@@ -10,9 +10,13 @@ import { onActivity, emitEvent } from './services/events.js';
 import { prisma } from './db/client.js';
 import { refreshUniverse } from './services/universe.js';
 import { credentialGuidance, runShadowConnectionVerify } from './services/shadowVerify.js';
+import { registerControlPlaneAuth } from './services/controlPlaneAuth.js';
 
 async function main() {
   logCredentialHealth();
+  if (env.ALLOW_LIVE && !env.CONTROL_PLANE_TOKEN) {
+    console.warn('[security] ALLOW_LIVE=true but CONTROL_PLANE_TOKEN empty — set a token before live trading');
+  }
   await ensureAutopilotRow();
   await bootstrapBrokers();
 
@@ -57,6 +61,7 @@ async function main() {
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: true });
   await app.register(websocket);
+  registerControlPlaneAuth(app);
 
   await registerRoutes(app);
 

@@ -45,6 +45,10 @@ const schema = z.object({
     .optional()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
+  /** If set, mutating control-plane routes require Authorization: Bearer <token> */
+  CONTROL_PLANE_TOKEN: z.string().optional().default(''),
+  LIVE_ORDER_POLL_MS: z.coerce.number().default(400),
+  LIVE_ORDER_POLL_MAX: z.coerce.number().default(25),
   FRESHNESS_KR_MS: z.coerce.number().default(60_000),
   FRESHNESS_US_MS: z.coerce.number().default(90_000),
   UNIVERSE_INCLUDE_ETF: z
@@ -106,10 +110,14 @@ export function logCredentialHealth(): void {
 
 export function redactSecrets(value: unknown): unknown {
   if (typeof value === 'string') {
-    return value
+    let out = value
       .replace(env.TOSS_CLIENT_SECRET || '___', '[REDACTED]')
       .replace(env.TOSS_CLIENT_ID || '___', '[REDACTED]')
       .replace(env.AI_PROVIDER_API_KEY || '___', '[REDACTED]');
+    if (env.CONTROL_PLANE_TOKEN) {
+      out = out.replace(env.CONTROL_PLANE_TOKEN, '[REDACTED]');
+    }
+    return out;
   }
   if (Array.isArray(value)) return value.map(redactSecrets);
   if (value && typeof value === 'object') {

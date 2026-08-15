@@ -78,8 +78,10 @@ export async function runRecovery(): Promise<{ resumed: boolean; details: string
     details.push(`openOrders FAIL ${e instanceof Error ? e.message : 'err'}`);
   }
 
-  // Reconcile DB ↔ broker
-  const dbOpen = await prisma.positionRow.findMany({ where: { status: 'OPEN', mode: execMode } });
+  // Reconcile DB ↔ broker (OPEN + EXITING — never leave orphan EXITING forever)
+  const dbOpen = await prisma.positionRow.findMany({
+    where: { status: { in: ['OPEN', 'EXITING'] }, mode: execMode },
+  });
   const brokerSymbols = new Set(positions.map((p) => p.symbol));
 
   if (mode === 'LIVE' || mode === 'LIVE_OBSERVE') {
@@ -88,9 +90,14 @@ export async function runRecovery(): Promise<{ resumed: boolean; details: string
       if (!brokerSymbols.has(dbp.symbol)) {
         await prisma.positionRow.update({
           where: { id: dbp.id },
-          data: { status: 'CLOSED', exitReason: 'RECONCILE_MISSING_AT_BROKER', closedAt: new Date() },
+          data: {
+            status: 'CLOSED',
+            exitReason:
+              dbp.status === 'EXITING' ? 'RECONCILE_EXIT_FILLED_OR_GONE' : 'RECONCILE_MISSING_AT_BROKER',
+            closedAt: new Date(),
+          },
         });
-        details.push(`closed DB position missing at broker: ${dbp.symbol}`);
+        details.push(`closed DB position missing at broker: ${dbp.symbol} (was ${dbp.status})`);
       }
     }
     for (const bp of positions) {
@@ -119,11 +126,11 @@ export async function runRecovery(): Promise<{ resumed: boolean; details: string
       }
     }
   } else {
-    // PAPER / SHADOW: DB open positions are source of truth — restore paper ledger
+    // PAPER / SHADOW: DB open+exiting positions are source of truth — restore paper ledger
     const paper = getPaperBroker();
     for (const dbp of dbOpen) {
       paper.forcePosition(dbp.symbol, dbp.quantity, dbp.entryPrice);
-      details.push(`restored paper ledger ${dbp.symbol} qty=${dbp.quantity}`);
+      details.push(`restored paper ledger ${dbp.symbol} qty=${dbp.quantity} status=${dbp.status}`);
     }
   }
 

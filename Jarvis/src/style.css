@@ -4072,7 +4072,13 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   letter-spacing: 0.02em;
 }
 .aicam-panel, .fh-panel { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
-.screc-panel { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.screc-panel {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - 64px);
+  display: flex;
+  flex-direction: column;
+}
+.screc-phone .screc-status { margin: 4px 0 8px; }
 .screc-modes {
   display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px;
 }
@@ -4083,27 +4089,46 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 .screc-mic {
   display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; font-size: 0.9rem;
 }
+.screc-stage {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
 .screc-preview {
   position: relative;
-  min-height: min(42vh, 320px);
-  max-height: min(52vh, 420px);
-  border-radius: 14px;
+  flex: 1;
+  width: 100%;
+  min-height: min(58vh, 520px);
+  border-radius: 18px;
   border: 1px dashed rgba(255,255,255,.14);
-  background: rgba(0,0,0,.35);
+  background: #05070c;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
 .screc-preview.has { border-style: solid; }
 .screc-preview video {
   width: 100%;
   height: 100%;
-  min-height: min(42vh, 320px);
-  object-fit: contain;
+  min-height: min(58vh, 520px);
+  object-fit: cover;
   background: #000;
   display: block;
 }
 .screc-empty {
   position: absolute; inset: 0; display: grid; place-items: center; margin: 0; pointer-events: none;
+}
+.screc-rec-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(185, 28, 28, 0.92);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 .screc-timer { min-width: 3.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 .screc-error { color: #fbbf24; }
@@ -4116,7 +4141,92 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
 }
 .screc-tip strong { display: block; margin-bottom: 4px; font-size: 0.92rem; }
 .screc-actions { margin-top: 4px; }
+.screc-float-hint { margin: 2px 0 8px; opacity: 0.8; }
 .screc-stop { background: #b91c1c; border-color: #ef4444; }
+
+/* External start/stop dock — outside the remounted panel */
+body.screc-active {
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+}
+.screc-float-dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(420px, calc(100vw - 20px));
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(12, 16, 24, 0.94);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0,0,0,.45);
+}
+.screc-float-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  font-size: 0.86rem;
+  color: rgba(255,255,255,.88);
+}
+.screc-float-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+}
+.screc-float-dock.is-recording .screc-float-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.22);
+  animation: screc-pulse 1.2s ease-in-out infinite;
+}
+.screc-float-dock.is-done .screc-float-dot { background: #34d399; }
+.screc-float-timer {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.screc-float-btns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.screc-float-start,
+.screc-float-stop {
+  min-width: 64px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.screc-float-start {
+  background: #2563eb;
+  color: #fff;
+  border-color: #3b82f6;
+}
+.screc-float-stop {
+  background: #b91c1c;
+  color: #fff;
+  border-color: #ef4444;
+}
+.screc-float-start:disabled,
+.screc-float-stop:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+@keyframes screc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 .aicam-modes, .fh-tabs {
   display: flex;
   flex-wrap: wrap;

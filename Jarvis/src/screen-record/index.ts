@@ -28,6 +28,7 @@ export {
   bindScreenRecordScreen,
   defaultScreenRecordState,
   getLastClip,
+  removeFloatDock,
   renderScreenRecordScreen,
   teardownScreenRecord,
 } from './ui/recordScreen'

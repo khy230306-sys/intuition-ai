@@ -1,0 +1,67 @@
+name: Deploy Intuition AI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'intuition-ai/**'
+      - '.github/workflows/deploy-intuition-ai.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-intuition-ai
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: intuition-ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: intuition-ai/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: Deploy to Vercel production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "VERCEL_TOKEN not set — skip Vercel deploy"
+            exit 0
+          fi
+          npx vercel deploy ./dist --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Deploy to ShipStatic (permanent account)
+        env:
+          SHIP_TOKEN: ${{ secrets.SHIP_TOKEN }}
+        run: |
+          if [ -z "${SHIP_TOKEN:-}" ]; then
+            echo "SHIP_TOKEN not set — skip ShipStatic"
+            exit 0
+          fi
+          npx -y @shipstatic/ship ./dist --api-key "$SHIP_TOKEN"
+
+      - name: Build GitHub Pages subdirectory bundle
+        run: npx vite build --base /intuition-ai/intuition-app/ --outDir dist-pages
+
+      - name: Publish fixed path on gh-pages (/intuition-app)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: intuition-ai/dist-pages
+          destination_dir: intuition-app
+          keep_files: true
+          commit_message: Deploy Intuition AI Future Road Engine V2

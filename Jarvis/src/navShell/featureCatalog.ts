@@ -91,6 +91,14 @@ export const FEATURE_CATALOG: FeatureEntry[] = [
     keywords: ['카메라', '사진', 'OCR', '비전', '문서', 'vision'],
   },
   {
+    id: 'screen-record',
+    title: '화면 · 영상 녹화',
+    description: '화면 공유·카메라로 휴대폰 영상 녹화 · 저장',
+    group: 'tools',
+    view: 'screen-record',
+    keywords: ['녹화', '화면녹화', '스크린', '레코딩', '영상', 'record', 'screen'],
+  },
+  {
     id: 'translate',
     title: '번역',
     description: '상위 창을 번역 창으로 전환',

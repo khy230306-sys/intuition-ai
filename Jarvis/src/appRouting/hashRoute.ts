@@ -23,6 +23,7 @@ export const APP_HASH_SCREENS = [
   'friends',
   'customers',
   'ai-camera',
+  'screen-record',
   'invest',
   'actions',
   'global',
@@ -159,6 +160,8 @@ export function viewToHashScreen(
       return 'customers'
     case 'ai-camera':
       return 'ai-camera'
+    case 'screen-record':
+      return 'screen-record'
     case 'invest':
       return 'invest'
     case 'actions':
@@ -203,6 +206,8 @@ export function hashScreenToView(screen: AppHashScreen): string {
       return 'customers'
     case 'ai-camera':
       return 'ai-camera'
+    case 'screen-record':
+      return 'screen-record'
     case 'invest':
       return 'invest'
     case 'actions':

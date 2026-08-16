@@ -237,6 +237,13 @@ export async function executeRoutedCommand(
       return finish(
         replyFromExec('사진·메뉴판 번역은 카메라 화면에서 할게요.', { view: 'ai-camera' }),
       )
+    case 'screen.record.open':
+      return finish(
+        replyFromExec(
+          '화면·영상 녹화 화면으로 이동할게요. iPhone에서는 카메라 영상 녹화 또는 제어 센터 화면 녹화를 이용할 수 있어요.',
+          { view: 'screen-record' },
+        ),
+      )
     case 'travel.plan':
     case 'travel.flight.search':
     case 'travel.flight.select':

@@ -113,6 +113,13 @@ import {
   type CameraScreenState,
 } from './ai-camera'
 import {
+  bindScreenRecordScreen,
+  defaultScreenRecordState,
+  renderScreenRecordScreen,
+  teardownScreenRecord,
+  type ScreenRecordState,
+} from './screen-record'
+import {
   bindFamilyHelperScreen,
   defaultFamilyHelperState,
   ensureFamilyHelperSchema,
@@ -462,7 +469,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.17'
+const APP_VERSION = '1.33.18'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -986,6 +993,8 @@ const state = {
   } as NavScreenState,
   /** AI 만능 카메라 */
   aiCamera: defaultCameraState() as CameraScreenState,
+  /** 화면 · 영상 녹화 */
+  screenRecord: defaultScreenRecordState() as ScreenRecordState,
   /** 부모·가족 도우미 */
   familyHelper: defaultFamilyHelperState() as FamilyHelperState,
   /** Stage 7 feature diagnostics */
@@ -5551,6 +5560,7 @@ function goToView(next: View, ev?: MouseEvent): void {
   if (next === 'games') state.gamesPanel = 'hub'
   if (next === 'family-helper') recordRecentFeature('family-helper')
   else if (next === 'ai-camera') recordRecentFeature('ai-camera')
+  else if (next === 'screen-record') recordRecentFeature('screen-record')
   else if (next === 'chat') recordRecentFeature('chat')
   else if (next === 'schedule') recordRecentFeature('schedule')
   else if (next === 'life') recordRecentFeature('life')
@@ -5686,6 +5696,19 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
                                   <button type="button" class="ghost-btn" data-view="ai-camera">다시 시도</button></section>`
                                     }
                                   })()
+                                : state.view === 'screen-record'
+                                  ? (() => {
+                                      try {
+                                        return renderScreenRecordScreen(state.screenRecord)
+                                      } catch (err) {
+                                        recordDiagError(
+                                          `SCREEN-RECORD-001:${err instanceof Error ? err.message.slice(0, 40) : 'render'}`,
+                                        )
+                                        return `<section class="panel"><p class="hint">녹화 화면을 불러오지 못했어요. (SCREEN-RECORD-001)</p>
+                                  <button type="button" class="primary-btn" data-view="home">홈으로</button>
+                                  <button type="button" class="ghost-btn" data-view="screen-record">다시 시도</button></section>`
+                                      }
+                                    })()
                                 : state.view === 'family-helper'
                                   ? (() => {
                                       try {
@@ -5821,6 +5844,21 @@ function renderUnsafe(opts: RenderOpts, app: HTMLElement): void {
         },
       )
     }
+  } else if (state.view === 'screen-record') {
+    const panel = document.querySelector('[data-screc="1"]') as HTMLElement | null
+    if (panel) {
+      bindScreenRecordScreen(
+        panel,
+        state.screenRecord,
+        (next) => {
+          state.screenRecord = { ...state.screenRecord, ...next }
+          render({ guardNav: false })
+        },
+        { onBack: () => goToView('chat') },
+      )
+    }
+  } else {
+    teardownScreenRecord()
   }
   if (state.view === 'family-helper') {
     const panel = document.querySelector('[data-family-helper="1"]') as HTMLElement | null
@@ -6108,6 +6146,7 @@ function bindLifeBriefingControls(): void {
       }
       if (
         view === 'ai-camera' ||
+        view === 'screen-record' ||
         view === 'family-helper' ||
         view === 'life' ||
         view === 'family' ||
@@ -7158,6 +7197,7 @@ function bind(): void {
       const payload = btn.dataset.quickPayload || ''
       const id = btn.dataset.navQuick || ''
       if (id === 'ai-camera') recordRecentFeature('ai-camera')
+      if (id === 'screen-record') recordRecentFeature('screen-record')
       else if (id === 'family-schedule' || id === 'family') recordRecentFeature('family-helper')
       else if (id === 'translate') recordRecentFeature('translate')
       else if (id === 'chat') recordRecentFeature('chat')

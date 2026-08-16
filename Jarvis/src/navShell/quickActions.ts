@@ -10,6 +10,7 @@ export type QuickActionId =
   | 'schedule-add'
   | 'reminder-add'
   | 'ai-camera'
+  | 'screen-record'
   | 'translate'
   | 'family-schedule'
   | 'todo-add'
@@ -42,6 +43,7 @@ export const QUICK_ACTION_CATALOG: QuickActionDef[] = [
   { id: 'schedule-add', title: '일정 추가', sub: '내일 병원…', ico: '+', kind: 'cmd', payload: '내일 오후 3시 병원 일정 추가해줘' },
   { id: 'reminder-add', title: '알림 추가', sub: '잊지 않게', ico: '!', kind: 'cmd', payload: '30분 뒤 알림 만들어줘' },
   { id: 'ai-camera', title: 'AI 카메라', sub: '사진 분석', ico: 'o', kind: 'view', payload: 'ai-camera' },
+  { id: 'screen-record', title: '녹화', sub: '화면 · 영상', ico: 'R', kind: 'view', payload: 'screen-record' },
   { id: 'translate', title: '번역', sub: '번역하기', ico: 'A', kind: 'action', payload: 'translate' },
   { id: 'family-schedule', title: '가족 도우미', sub: '하원·학교', ico: 'F', kind: 'view', payload: 'family-helper' },
   { id: 'todo-add', title: '할 일 추가', sub: '오늘 할 일', ico: 'T', kind: 'cmd', payload: '할 일 추가해줘' },

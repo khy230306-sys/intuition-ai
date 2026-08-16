@@ -9,6 +9,7 @@ export type AizioIntent =
   | 'translation.escape'
   | 'vision.translation'
   | 'vision.open'
+  | 'screen.record.open'
   | 'calendar.create'
   | 'calendar.read'
   | 'reminder.create'

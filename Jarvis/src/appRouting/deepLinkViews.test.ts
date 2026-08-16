@@ -15,6 +15,7 @@ const DEEP_LINK_VIEWS = [
   'friends',
   'navigation',
   'ai-camera',
+  'screen-record',
   'invest',
   'customers',
   'actions',

@@ -214,8 +214,23 @@ export function isVisionTranslation(text: string): boolean {
 export function isVisionOpen(text: string): boolean {
   const t = text.trim()
   if (isVisionTranslation(t)) return false
+  if (isScreenRecordOpen(t)) return false
   return /카메라\s*(열어|켜|켜줘)|사진\s*(찍어|분석)|(?:이\s*)?(문서|사진|이미지|안내문)\s*읽어|문서\s*읽어|OCR|비전|이미지\s*(분석|읽어)/i.test(
     t,
+  )
+}
+
+/** Open in-app phone screen / camera video recorder. */
+export function isScreenRecordOpen(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  if (/번역|통역|날씨|일정|주식/i.test(t) && !/녹화|레코딩|record/i.test(t)) return false
+  return (
+    /(화면|스크린|휴대폰|핸드폰|폰)\s*(을\s*)?(녹화|레코딩)/i.test(t) ||
+    /(녹화|레코딩)\s*(화면|열어|켜|시작|해줘|하자)/i.test(t) ||
+    /영상\s*녹화/i.test(t) ||
+    /screen\s*record/i.test(t) ||
+    /스크린\s*레코드/i.test(t)
   )
 }
 
@@ -527,6 +542,19 @@ export function routeCommand(input: CommandRouterInput): CommandRouterResult {
       entities: {},
       action: 'calendar.read',
       reason: 'calendar_read',
+      normalized,
+      forbiddenActions: ['weather'],
+    })
+    pushRouteDiag(r, mode, false)
+    return r
+  }
+  if (isScreenRecordOpen(normalized)) {
+    const r = result({
+      intent: 'screen.record.open',
+      confidence: 0.94,
+      entities: {},
+      action: 'screen.record.open',
+      reason: 'screen_record_open',
       normalized,
       forbiddenActions: ['weather'],
     })

@@ -119,6 +119,11 @@ const CASES: Case[] = [
   { input: '사진 번역해줘', expectedIntent: 'vision.translation' },
   { input: '메뉴판 사진 영어로 번역해줘', expectedIntent: 'vision.translation' },
 
+  // —— Screen / video record ——
+  { input: '화면 녹화해줘', expectedIntent: 'screen.record.open' },
+  { input: '휴대폰 녹화 열어줘', expectedIntent: 'screen.record.open' },
+  { input: '영상 녹화', expectedIntent: 'screen.record.open' },
+
   // —— Memory / music ——
   { input: '이거 기억해줘 내 차는 파란색', expectedIntent: 'memory.save' },
   { input: '내가 전에 말한 거 찾아줘', expectedIntent: 'memory.read' },

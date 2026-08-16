@@ -176,6 +176,7 @@ export type View =
   | 'customers'
   | 'navigation'
   | 'ai-camera'
+  | 'screen-record'
   | 'family-helper'
   | 'travel'
   | 'restaurant'

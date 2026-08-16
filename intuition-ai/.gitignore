@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.local
 .vercel
+/home/ubuntu/.config/harvis/
+dist-cdn
+dist-pages

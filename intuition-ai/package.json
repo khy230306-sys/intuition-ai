@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4175",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deploy:web": "npm run build && npx -y hosting deploy ./dist --name intuition-ai"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

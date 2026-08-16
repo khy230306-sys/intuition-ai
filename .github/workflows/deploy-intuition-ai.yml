@@ -54,6 +54,17 @@ jobs:
           fi
           npx -y @shipstatic/ship ./dist --api-key "$SHIP_TOKEN"
 
+      - name: Deploy to Harvis fixed URL
+        env:
+          HARVIS_DEPLOY_TOKEN: ${{ secrets.HARVIS_DEPLOY_TOKEN }}
+          HARVIS_SUBDOMAIN: peppy-valley-859
+        run: |
+          if [ -z "${HARVIS_DEPLOY_TOKEN:-}" ]; then
+            echo "HARVIS_DEPLOY_TOKEN not set — skip Harvis"
+            exit 0
+          fi
+          npx -y hosting deploy ./dist --token "$HARVIS_DEPLOY_TOKEN" --subdomain "$HARVIS_SUBDOMAIN"
+
       - name: Build GitHub Pages subdirectory bundle
         run: npx vite build --base ./ --outDir dist-pages
 

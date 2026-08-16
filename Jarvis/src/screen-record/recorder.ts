@@ -254,29 +254,106 @@ export function revokeUrl(url: string): void {
 }
 
 export async function shareOrDownloadClip(clip: RecordedClip): Promise<{ ok: boolean; message: string }> {
+  return autoSaveClipToAlbum(clip, { preferShare: true })
+}
+
+export type AutoSaveResult = {
+  ok: boolean
+  method: 'download' | 'share' | 'none'
+  message: string
+}
+
+/**
+ * Best-effort save to device gallery / Downloads after recording.
+ * Web apps cannot silently write the iOS Photos library; on iPhone we open the
+ * share sheet so the user can tap 「비디오 저장」 in one step. Elsewhere we
+ * trigger an automatic file download (often lands in Downloads / Gallery).
+ */
+export async function autoSaveClipToAlbum(
+  clip: RecordedClip,
+  opts?: { preferShare?: boolean },
+): Promise<AutoSaveResult> {
   const file = new File([clip.blob], clip.name, { type: clip.mime || 'video/webm' })
+  const ios = isLikelyIos()
+  const preferShare = opts?.preferShare === true || ios
+
+  if (preferShare) {
+    const shared = await tryShareFile(file, clip.name)
+    if (shared.ok) return shared
+  }
+
+  const downloaded = tryDownloadFile(clip)
+  if (downloaded.ok) {
+    return {
+      ok: true,
+      method: 'download',
+      message: ios
+        ? '파일을 저장했어요. iPhone은 공유 → 「비디오 저장」으로 사진첩에 넣을 수 있어요.'
+        : '녹화를 기기에 저장했어요 (다운로드/갤러리).',
+    }
+  }
+
+  if (!preferShare) {
+    const shared = await tryShareFile(file, clip.name)
+    if (shared.ok) return shared
+  }
+
+  return {
+    ok: false,
+    method: 'none',
+    message: '자동 저장에 실패했어요. 「공유」로 사진첩에 저장해 주세요.',
+  }
+}
+
+async function tryShareFile(file: File, name: string): Promise<AutoSaveResult> {
   try {
-    if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'AIZIO 녹화', text: clip.name })
-      return { ok: true, message: '공유 시트를 열었습니다.' }
+    if (typeof navigator === 'undefined' || !navigator.canShare?.({ files: [file] })) {
+      return { ok: false, method: 'none', message: '' }
+    }
+    await navigator.share({
+      files: [file],
+      title: 'AIZIO 녹화',
+      text: name,
+    })
+    return {
+      ok: true,
+      method: 'share',
+      message: isLikelyIos()
+        ? '공유 시트에서 「비디오 저장」을 누르면 사진첩에 들어갑니다.'
+        : '공유 시트를 열었습니다. 갤러리/사진첩으로 저장하세요.',
     }
   } catch (err) {
-    const name = err instanceof Error ? err.name : ''
-    if (name === 'AbortError') return { ok: true, message: '공유를 취소했습니다.' }
+    const errName = err instanceof Error ? err.name : ''
+    if (errName === 'AbortError') {
+      return {
+        ok: true,
+        method: 'share',
+        message: '공유를 취소했습니다. 「공유」로 다시 사진첩에 저장할 수 있어요.',
+      }
+    }
+    return { ok: false, method: 'none', message: '' }
   }
+}
+
+function tryDownloadFile(clip: RecordedClip): AutoSaveResult {
   try {
     const url = URL.createObjectURL(clip.blob)
     const a = document.createElement('a')
     a.href = url
     a.download = clip.name
     a.rel = 'noopener'
+    a.style.display = 'none'
     document.body.appendChild(a)
     a.click()
     a.remove()
-    setTimeout(() => revokeUrl(url), 4000)
-    return { ok: true, message: '다운로드를 시작했습니다.' }
+    setTimeout(() => revokeUrl(url), 8000)
+    return {
+      ok: true,
+      method: 'download',
+      message: '다운로드를 시작했습니다.',
+    }
   } catch {
-    return { ok: false, message: '저장·공유에 실패했어요.' }
+    return { ok: false, method: 'none', message: '' }
   }
 }
 

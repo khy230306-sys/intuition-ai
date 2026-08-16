@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+/**
+ * @vitest-environment happy-dom
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  autoSaveClipToAlbum,
   extForMime,
   formatBytes,
   formatElapsed,
@@ -10,6 +14,7 @@ import {
 import { defaultScreenRecordState } from './ui/recordScreen'
 import { isScreenRecordOpen } from '../commandRouter/router'
 import { routeCommand } from '../commandRouter/router'
+import type { RecordedClip } from './types'
 
 describe('screen-record helpers', () => {
   it('formats elapsed and bytes', () => {
@@ -34,6 +39,71 @@ describe('screen-record helpers', () => {
 
   it('pickRecorderMime returns string (possibly empty in node)', () => {
     expect(typeof pickRecorderMime()).toBe('string')
+  })
+})
+
+describe('autoSaveClipToAlbum', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('auto-downloads when share API is unavailable', async () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0.0.0',
+        platform: 'Linux x86_64',
+        maxTouchPoints: 0,
+      },
+    })
+    const createObjectURL = vi.fn(() => 'blob:aizio-test')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+
+    const clip: RecordedClip = {
+      blob: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: 'video/webm' }),
+      mime: 'video/webm',
+      name: 'aizio-record-camera-test.webm',
+      bytes: 5,
+      createdAt: Date.now(),
+      mode: 'camera',
+    }
+    const r = await autoSaveClipToAlbum(clip)
+    expect(r.ok).toBe(true)
+    expect(r.method).toBe('download')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(r.message).toMatch(/저장/)
+  })
+
+  it('opens share sheet when canShare accepts the file', async () => {
+    const share = vi.fn(async () => undefined)
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+        platform: 'iPhone',
+        maxTouchPoints: 5,
+        canShare: () => true,
+        share,
+      },
+    })
+    const clip: RecordedClip = {
+      blob: new Blob([new Uint8Array([9, 9, 9])], { type: 'video/mp4' }),
+      mime: 'video/mp4',
+      name: 'aizio-record-camera-test.mp4',
+      bytes: 3,
+      createdAt: Date.now(),
+      mode: 'camera',
+    }
+    const r = await autoSaveClipToAlbum(clip)
+    expect(r.ok).toBe(true)
+    expect(r.method).toBe('share')
+    expect(share).toHaveBeenCalled()
+    expect(r.message).toMatch(/사진첩|비디오 저장|공유/)
   })
 })
 

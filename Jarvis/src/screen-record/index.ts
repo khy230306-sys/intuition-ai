@@ -8,6 +8,7 @@ export type {
 export {
   cancelRecording,
   clearElapsedTicker,
+  autoSaveClipToAlbum,
   extForMime,
   formatBytes,
   formatElapsed,

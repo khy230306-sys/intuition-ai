@@ -6,6 +6,7 @@ import {
   isLikelyIos,
   isRecordingActive,
   revokeUrl,
+  autoSaveClipToAlbum,
   shareOrDownloadClip,
   startElapsedTicker,
   startRecording,
@@ -289,7 +290,7 @@ export function renderScreenRecordScreen(st: ScreenRecordState): string {
       ${st.error ? `<p class="hint screc-error">${esc(st.error)}</p>` : ''}
       ${
         st.isIosHint
-          ? `<div class="screc-tip"><strong>iPhone 전체 화면 녹화</strong><p class="hint">제어 센터 → 화면 녹화 버튼을 누르면 휴대폰 전체 화면을 저장할 수 있어요. AIZIO 안에서는 카메라 영상 녹화를 제공합니다.</p></div>`
+          ? `<div class="screc-tip"><strong>iPhone 사진첩 저장</strong><p class="hint">녹화 중지 후 공유 시트가 열리면 「비디오 저장」을 누르면 사진첩에 들어갑니다. 전체 화면 시스템 녹화는 제어 센터 → 화면 녹화를 이용하세요.</p></div>`
           : ''
       }
       <div class="screc-modes" role="group" aria-label="녹화 모드">
@@ -312,7 +313,7 @@ export function renderScreenRecordScreen(st: ScreenRecordState): string {
           ${recording ? `<div class="screc-rec-badge" aria-live="polite">REC</div>` : ''}
         </div>
       </div>
-      <p class="hint screc-float-hint">시작·중지는 화면 밖 하단 외부 버튼으로 조작하세요.</p>
+      <p class="hint screc-float-hint">중지하면 자동으로 기기에 저장됩니다. 시작·중지는 하단 외부 버튼으로 조작하세요.</p>
       <div class="row-btns screc-actions screc-actions-inline" aria-hidden="true">
         ${
           hasResult
@@ -458,10 +459,15 @@ async function stopAndSave(): Promise<void> {
       video.muted = false
       video.src = url
     }
+
+    // Auto-save while still close to the Stop user gesture (iOS share / download).
+    const saved = await autoSaveClipToAlbum(clip)
     patch({
       phase: 'done',
-      status: '녹화가 완료됐어요. 공유·저장으로 앨범/파일에 보관하세요.',
-      error: '',
+      status: saved.ok
+        ? saved.message
+        : '녹화는 완료됐어요. 「공유」로 사진첩에 저장해 주세요.',
+      error: saved.ok ? '' : saved.message,
       resultUrl: url,
       resultMime: clip.mime,
       resultBytes: clip.bytes,

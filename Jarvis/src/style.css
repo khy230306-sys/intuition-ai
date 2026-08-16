@@ -4078,7 +4078,41 @@ body.home-v2-active[data-jarvis-view='chat'][data-home-v2-pane='home'] .brand-ba
   display: flex;
   flex-direction: column;
 }
-.screc-phone .screc-status { margin: 4px 0 8px; }
+.screc-lead {
+  margin: 2px 0 8px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.92);
+}
+.screc-lead em {
+  font-style: normal;
+  color: #93c5fd;
+  font-weight: 700;
+}
+.screc-system-guide {
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.16), rgba(15, 23, 42, 0.35));
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 8px 0 12px;
+}
+.screc-system-guide strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+.screc-system-guide ol {
+  margin: 0 0 10px;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: rgba(232, 238, 247, 0.9);
+}
+.screc-system-guide li b { color: #fff; }
+.screc-system-guide .primary-btn { width: 100%; margin-top: 4px; }
+
 .screc-modes {
   display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px;
 }

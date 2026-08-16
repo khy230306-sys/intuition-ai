@@ -8,7 +8,6 @@ import {
   formatBytes,
   formatElapsed,
   pickRecorderMime,
-  supportsDisplayCapture,
   supportsMediaRecorder,
 } from './recorder'
 import { defaultScreenRecordState } from './ui/recordScreen'
@@ -29,12 +28,12 @@ describe('screen-record helpers', () => {
     expect(extForMime('video/webm;codecs=vp8')).toBe('webm')
   })
 
-  it('default state prefers available mode', () => {
+  it('default state prefers phone-screen (display) mode', () => {
     const st = defaultScreenRecordState()
+    expect(st.mode).toBe('display')
     expect(st.recorderSupported).toBe(supportsMediaRecorder())
-    if (supportsDisplayCapture()) expect(st.mode).toBe('display')
-    else expect(st.mode).toBe('camera')
     expect(st.phase).toBe('idle')
+    expect(st.systemGuideOpen).toBe(false)
   })
 
   it('pickRecorderMime returns string (possibly empty in node)', () => {

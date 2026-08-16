@@ -469,7 +469,7 @@ import {
 } from './customers'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.33.20'
+const APP_VERSION = '1.33.21'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const SEEN_BUILD_ID_KEY = 'jarvis.app.seenBuildId'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
@@ -993,7 +993,7 @@ const state = {
   } as NavScreenState,
   /** AI 만능 카메라 */
   aiCamera: defaultCameraState() as CameraScreenState,
-  /** 화면 · 영상 녹화 */
+  /** 휴대폰에 보이는 화면 녹화 */
   screenRecord: defaultScreenRecordState() as ScreenRecordState,
   /** 부모·가족 도우미 */
   familyHelper: defaultFamilyHelperState() as FamilyHelperState,

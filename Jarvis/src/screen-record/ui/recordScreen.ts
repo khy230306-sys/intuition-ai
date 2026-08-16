@@ -29,15 +29,16 @@ export function defaultScreenRecordState(): ScreenRecordState {
   const recorderSupported = supportsMediaRecorder()
   const isIosHint = isLikelyIos()
   return {
-    mode: displaySupported ? 'display' : 'camera',
+    // Always lead with "what you see on the phone" — not the camera.
+    mode: 'display',
     facing: 'environment',
     includeMic: true,
     phase: 'idle',
     status: displaySupported
-      ? '화면 공유 또는 카메라로 휴대폰 화면·영상을 녹화할 수 있어요.'
+      ? '시작을 누르면 지금 휴대폰에 보이는 화면을 골라 녹화합니다. 원하는 앱·화면으로 이동해도 됩니다.'
       : isIosHint
-        ? 'iPhone 웹앱은 시스템 화면 공유가 제한됩니다. 카메라 영상 녹화를 쓰거나, 제어 센터 → 화면 녹화를 이용해 주세요.'
-        : '카메라 영상 녹화를 시작할 수 있어요. 화면 공유가 지원되면 화면 모드도 선택할 수 있습니다.',
+        ? 'iPhone에서는 앱이 다른 화면을 직접 캡처할 수 없습니다. 시작 → 제어 센터 화면 녹화로 지금 보이는 화면을 그대로 녹화하세요. 중지하면 사진첩에 저장됩니다.'
+        : '이 브라우저에서는 전체 화면 캡처가 제한됩니다. 가능하면 Chrome에서 다시 열어 주세요.',
     elapsedMs: 0,
     previewUrl: '',
     resultUrl: '',
@@ -48,6 +49,7 @@ export function defaultScreenRecordState(): ScreenRecordState {
     displaySupported,
     recorderSupported,
     isIosHint,
+    systemGuideOpen: false,
   }
 }
 
@@ -77,7 +79,9 @@ function syncFloatDock(st: ScreenRecordState): void {
   const timer = dock.querySelector('[data-screc-float-timer]') as HTMLElement | null
   const label = dock.querySelector('[data-screc-float-label]') as HTMLElement | null
   if (startBtn) {
-    startBtn.disabled = !st.recorderSupported || recording || busy || st.phase === 'stopping'
+    const canStartDisplay = st.mode === 'display' && (!st.displaySupported || st.recorderSupported)
+    const canStartCamera = st.mode === 'camera' && st.recorderSupported
+    startBtn.disabled = Boolean(recording || busy || st.phase === 'stopping' || !(canStartDisplay || canStartCamera))
     startBtn.setAttribute('aria-pressed', recording ? 'true' : 'false')
   }
   if (stopBtn) {
@@ -174,6 +178,19 @@ async function runStart(): Promise<void> {
   const patch = patchRef
   if (!st || !patch) return
   if (isRecordingActive() || starting) return
+
+  // Phone-screen intent on iOS / browsers without getDisplayMedia → system guide.
+  if (st.mode === 'display' && !st.displaySupported) {
+    patch({
+      systemGuideOpen: true,
+      phase: 'preview',
+      error: '',
+      status:
+        '제어 센터에서 화면 녹화를 켜면, 지금 휴대폰에 보이는 어떤 화면이든 그대로 녹화됩니다. 중지 시 사진첩에 저장됩니다.',
+    })
+    return
+  }
+
   if (!st.recorderSupported) {
     patch({ error: '이 브라우저에서는 녹화를 지원하지 않아요.', phase: 'error' })
     return
@@ -189,13 +206,14 @@ async function runStart(): Promise<void> {
     error: '',
     status:
       st.mode === 'display'
-        ? '화면 공유 권한을 확인한 뒤 녹화합니다…'
+        ? '공유할 화면을 고르세요. 「전체 화면」을 선택하면 지금 보이는 휴대폰 화면을 녹화합니다.'
         : '카메라 권한을 확인한 뒤 녹화합니다…',
     resultUrl: '',
     resultBytes: 0,
     resultName: '',
     resultMime: '',
     elapsedMs: 0,
+    systemGuideOpen: false,
   })
   try {
     const { stream } = await startRecording({
@@ -207,14 +225,15 @@ async function runStart(): Promise<void> {
         void stopAndSave()
       },
     })
-    // Remount may have happened during permission — re-query video each time.
     attachLive(stream)
-    // One more frame later in case render raced with permission dialog.
     requestAnimationFrame(() => attachLive(stream))
     starting = false
     patch({
       phase: 'recording',
-      status: '녹화 중… 아래 외부 「중지」 버튼으로 저장하세요.',
+      status:
+        st.mode === 'display'
+          ? '휴대폰 화면 녹화 중… 원하는 화면으로 이동한 뒤, 하단 「중지」로 끝내세요.'
+          : '녹화 중… 하단 「중지」로 저장하세요.',
       error: '',
       elapsedMs: 0,
     })
@@ -231,6 +250,19 @@ async function runStart(): Promise<void> {
     clearElapsedTicker()
     liveStream = null
     const msg = err instanceof Error ? err.message : String(err)
+    // If display capture was denied/unavailable, fall back to system guide on iOS.
+    if (st.mode === 'display' && (st.isIosHint || /화면|display|NotAllowed|NotSupported/i.test(msg))) {
+      patch({
+        phase: 'preview',
+        systemGuideOpen: true,
+        error: '',
+        status:
+          '브라우저 화면 공유를 쓸 수 없어 시스템 화면 녹화 안내로 전환했어요. 제어 센터로 지금 보이는 화면을 녹화하세요.',
+        elapsedMs: 0,
+      })
+      if (stateRef) syncFloatDock({ ...stateRef, phase: 'preview', elapsedMs: 0 })
+      return
+    }
     patch({
       phase: 'error',
       error: msg,
@@ -279,24 +311,38 @@ export function renderScreenRecordScreen(st: ScreenRecordState): string {
   const recording = st.phase === 'recording'
   const hasResult = Boolean(st.resultUrl)
   const timer = formatElapsed(st.elapsedMs)
+  const phoneScreen = st.mode === 'display'
+  const needsSystemGuide = phoneScreen && (!st.displaySupported || st.systemGuideOpen)
   return `
     <section class="panel screc-panel screc-phone" data-screc="1">
       <header class="navv2-head screc-head">
         <button type="button" class="ghost-btn tiny" data-action="screc-back">뒤로</button>
-        <strong>화면 · 영상 녹화</strong>
+        <strong>휴대폰 화면 녹화</strong>
         <span class="hint screc-timer" aria-live="polite">${esc(timer)}</span>
       </header>
+      <p class="screc-lead">휴대폰에 <em>지금 보이는 화면</em>을 그대로 녹화합니다. 원하는 앱·화면으로 이동해 찍으세요.</p>
       <p class="hint screc-status">${esc(st.status)}</p>
       ${st.error ? `<p class="hint screc-error">${esc(st.error)}</p>` : ''}
+      <div class="screc-modes" role="group" aria-label="녹화 대상">
+        <button type="button" class="ghost-btn tiny ${phoneScreen ? 'active' : ''}" data-screc-mode="display" ${recording ? 'disabled' : ''}>지금 보이는 화면</button>
+        <button type="button" class="ghost-btn tiny ${st.mode === 'camera' ? 'active' : ''}" data-screc-mode="camera" ${recording ? 'disabled' : ''}>카메라 촬영</button>
+      </div>
       ${
-        st.isIosHint
-          ? `<div class="screc-tip"><strong>iPhone 사진첩 저장</strong><p class="hint">녹화 중지 후 공유 시트가 열리면 「비디오 저장」을 누르면 사진첩에 들어갑니다. 전체 화면 시스템 녹화는 제어 센터 → 화면 녹화를 이용하세요.</p></div>`
+        needsSystemGuide
+          ? `<div class="screc-system-guide" data-screc-guide="1">
+              <strong>iPhone · 지금 보이는 화면 녹화</strong>
+              <ol>
+                <li>화면 오른쪽 위에서 아래로 쓸어 <b>제어 센터</b>를 엽니다.</li>
+                <li><b>화면 녹화</b> ● 버튼을 누릅니다. (없으면 제어 센터 편집에서 추가)</li>
+                <li>마이크를 켜면 내 목소리도 함께 녹음됩니다.</li>
+                <li>제어 센터를 닫고, <b>원하는 앱·화면</b>으로 이동합니다.</li>
+                <li>상단 빨간 상태 표시줄을 눌러 중지하면 <b>사진첩에 자동 저장</b>됩니다.</li>
+              </ol>
+              <p class="hint">AIZIO 웹앱은 iPhone의 다른 앱 화면을 직접 캡처할 수 없어, 시스템 화면 녹화를 안내합니다.</p>
+              <button type="button" class="primary-btn" data-screc-action="open-guide">안내 다시 보기</button>
+            </div>`
           : ''
       }
-      <div class="screc-modes" role="group" aria-label="녹화 모드">
-        <button type="button" class="ghost-btn tiny ${st.mode === 'display' ? 'active' : ''}" data-screc-mode="display" ${!st.displaySupported || recording ? 'disabled' : ''}>화면 공유</button>
-        <button type="button" class="ghost-btn tiny ${st.mode === 'camera' ? 'active' : ''}" data-screc-mode="camera" ${recording ? 'disabled' : ''}>카메라 영상</button>
-      </div>
       ${
         st.mode === 'camera'
           ? `<div class="screc-modes" role="group" aria-label="카메라 방향">
@@ -305,16 +351,34 @@ export function renderScreenRecordScreen(st: ScreenRecordState): string {
       </div>`
           : ''
       }
-      <label class="screc-mic"><input type="checkbox" data-screc-mic="1" ${st.includeMic ? 'checked' : ''} ${recording ? 'disabled' : ''}/> 마이크 소리 포함</label>
+      ${
+        st.mode === 'camera' || st.displaySupported
+          ? `<label class="screc-mic"><input type="checkbox" data-screc-mic="1" ${st.includeMic ? 'checked' : ''} ${recording ? 'disabled' : ''}/> 마이크 소리 포함</label>`
+          : ''
+      }
       <div class="screc-stage">
         <div class="screc-preview ${recording || st.previewUrl || hasResult ? 'has' : ''}">
           <video data-screc-video="1" playsinline muted autoplay ${hasResult && !recording ? 'controls' : ''} ${hasResult && !recording ? `src="${esc(st.resultUrl)}"` : ''}></video>
-          ${!recording && !hasResult && !st.previewUrl ? `<p class="hint screc-empty">미리보기 · 전화면</p>` : ''}
+          ${
+            !recording && !hasResult && !st.previewUrl
+              ? `<p class="hint screc-empty">${
+                  phoneScreen
+                    ? needsSystemGuide
+                      ? '시작 → 제어 센터 화면 녹화'
+                      : '시작 → 전체 화면 선택'
+                    : '미리보기 · 카메라'
+                }</p>`
+              : ''
+          }
           ${recording ? `<div class="screc-rec-badge" aria-live="polite">REC</div>` : ''}
         </div>
       </div>
-      <p class="hint screc-float-hint">중지하면 자동으로 기기에 저장됩니다. 시작·중지는 하단 외부 버튼으로 조작하세요.</p>
-      <div class="row-btns screc-actions screc-actions-inline" aria-hidden="true">
+      <p class="hint screc-float-hint">${
+        needsSystemGuide
+          ? '하단 「시작」을 누르면 제어 센터 안내가 열립니다. 시스템 녹화는 중지 시 사진첩에 저장됩니다.'
+          : '하단 「시작」으로 보이는 화면 녹화를 시작하고, 「중지」하면 기기에 저장됩니다.'
+      }</p>
+      <div class="row-btns screc-actions screc-actions-inline">
         ${
           hasResult
             ? `<button type="button" class="ghost-btn" data-screc-action="share">공유·저장</button>
@@ -327,7 +391,7 @@ export function renderScreenRecordScreen(st: ScreenRecordState): string {
           ? `<p class="hint">저장됨 · ${esc(st.resultName)} · ${esc(formatBytes(st.resultBytes))}</p>`
           : ''
       }
-      ${!st.recorderSupported ? `<p class="hint screc-error">이 브라우저에서는 녹화를 지원하지 않아요.</p>` : ''}
+      ${!st.recorderSupported && st.displaySupported ? `<p class="hint screc-error">이 브라우저에서는 녹화를 지원하지 않아요.</p>` : ''}
     </section>
   `
 }
@@ -380,20 +444,31 @@ export function bindScreenRecordScreen(
     btn.addEventListener('click', () => {
       if (isRecordingActive() || starting) return
       const mode = btn.dataset.screcMode === 'display' ? 'display' : 'camera'
-      if (mode === 'display' && !supportsDisplayCapture()) {
+      if (mode === 'display') {
         patch({
-          error: '이 기기에서는 화면 공유가 지원되지 않아요. 카메라 영상 모드를 이용해 주세요.',
+          mode,
+          error: '',
+          systemGuideOpen: !supportsDisplayCapture(),
+          status: supportsDisplayCapture()
+            ? '시작을 누르면 지금 휴대폰에 보이는 화면을 골라 녹화합니다.'
+            : '시작을 누르면 제어 센터 화면 녹화 안내가 열립니다. 원하는 화면으로 이동해 찍으세요.',
         })
         return
       }
       patch({
         mode,
         error: '',
-        status:
-          mode === 'display'
-            ? '화면 공유를 선택하면 공유할 화면을 고른 뒤 녹화가 시작됩니다.'
-            : '카메라로 영상을 녹화합니다. 전면/후면을 고를 수 있어요.',
+        systemGuideOpen: false,
+        status: '카메라로 영상을 녹화합니다. 전면/후면을 고를 수 있어요.',
       })
+    })
+  })
+
+  root.querySelector('[data-screc-action="open-guide"]')?.addEventListener('click', () => {
+    patch({
+      systemGuideOpen: true,
+      status:
+        '제어 센터 → 화면 녹화로 지금 보이는 화면을 녹화하세요. 중지하면 사진첩에 저장됩니다.',
     })
   })
 

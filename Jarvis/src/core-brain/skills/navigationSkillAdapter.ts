@@ -57,7 +57,7 @@ export async function execute(ctx: SkillContext): Promise<SkillResult> {
     customers: '손님관리',
     navigation: '길안내',
     'ai-camera': 'AI 카메라',
-    'screen-record': '화면 · 영상 녹화',
+    'screen-record': '휴대폰 화면 녹화',
     'family-helper': '가족 도우미',
     travel: '여행',
     restaurant: '맛집',

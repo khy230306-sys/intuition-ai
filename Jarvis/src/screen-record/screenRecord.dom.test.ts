@@ -18,12 +18,16 @@ describe('screen-record float dock (dom)', () => {
     document.body.className = ''
   })
 
-  it('renders phone stage and mounts external start/stop dock', () => {
+  it('renders phone-screen guide copy and mounts external start/stop dock', () => {
     const st = defaultScreenRecordState()
+    st.displaySupported = false
+    st.isIosHint = true
+    st.systemGuideOpen = true
     document.body.innerHTML = renderScreenRecordScreen(st)
     const root = document.querySelector('[data-screc="1"]') as HTMLElement
     expect(root.className).toMatch(/screc-phone/)
-    expect(root.querySelector('.screc-stage')).toBeTruthy()
+    expect(root.textContent).toMatch(/지금 보이는 화면/)
+    expect(root.querySelector('.screc-system-guide')).toBeTruthy()
     bindScreenRecordScreen(root, st, () => undefined)
     const dock = document.getElementById('screc-float-dock')
     expect(dock).toBeTruthy()

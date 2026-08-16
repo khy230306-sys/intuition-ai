@@ -100,13 +100,35 @@ async function openStream(
   if (mode === 'display') {
     if (!supportsDisplayCapture()) {
       throw new Error(
-        '이 브라우저에서는 화면 공유 녹화가 지원되지 않아요. 카메라 영상 녹화를 쓰거나, iPhone은 제어 센터의 화면 녹화를 이용해 주세요.',
+        '이 기기 웹앱에서는 전체 화면을 직접 캡처할 수 없어요. iPhone은 제어 센터 → 화면 녹화로 지금 보이는 화면을 녹화하세요.',
       )
     }
-    const display = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
+    // Prefer entire device screen when the browser allows it (Android Chrome etc.).
+    const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+      frameRate: 30,
+      displaySurface: 'monitor',
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    }
+    const displayOpts: DisplayMediaStreamOptions & Record<string, unknown> = {
+      video: videoConstraints,
       audio: includeMic,
-    })
+      preferCurrentTab: false,
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'include',
+      monitorTypeSurfaces: 'include',
+      systemAudio: includeMic ? 'include' : 'exclude',
+    }
+    let display: MediaStream
+    try {
+      display = await navigator.mediaDevices.getDisplayMedia(displayOpts)
+    } catch {
+      // Fall back to simpler constraints if advanced options are rejected.
+      display = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: includeMic,
+      })
+    }
     if (includeMic && display.getAudioTracks().length === 0 && supportsUserMedia()) {
       try {
         const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })

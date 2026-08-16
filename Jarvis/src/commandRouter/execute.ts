@@ -240,7 +240,7 @@ export async function executeRoutedCommand(
     case 'screen.record.open':
       return finish(
         replyFromExec(
-          '화면·영상 녹화 화면으로 이동할게요. iPhone에서는 카메라 영상 녹화 또는 제어 센터 화면 녹화를 이용할 수 있어요.',
+          '휴대폰에 지금 보이는 화면을 녹화할 수 있게 열어둘게요. iPhone은 제어 센터 화면 녹화로 원하는 앱·화면을 찍고, 중지하면 사진첩에 저장됩니다.',
           { view: 'screen-record' },
         ),
       )

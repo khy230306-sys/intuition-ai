@@ -3,6 +3,7 @@ export type RecordFacing = 'user' | 'environment'
 export type RecordPhase = 'idle' | 'preview' | 'recording' | 'stopping' | 'done' | 'error'
 
 export type ScreenRecordState = {
+  /** display = 휴대폰에 보이는 화면, camera = 카메라 촬영 */
   mode: RecordMode
   facing: RecordFacing
   includeMic: boolean
@@ -21,6 +22,8 @@ export type ScreenRecordState = {
   displaySupported: boolean
   recorderSupported: boolean
   isIosHint: boolean
+  /** iPhone: show Control Center screen-record guide */
+  systemGuideOpen: boolean
 }
 
 export type RecordedClip = {

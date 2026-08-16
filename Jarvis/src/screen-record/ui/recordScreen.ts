@@ -68,8 +68,11 @@ function syncFloatDock(st: ScreenRecordState): void {
   if (!dock) return
   const recording = st.phase === 'recording' || starting
   const busy = st.phase === 'stopping' || starting
+  const done = st.phase === 'done' && Boolean(st.resultUrl)
   const startBtn = dock.querySelector('[data-screc-float="start"]') as HTMLButtonElement | null
   const stopBtn = dock.querySelector('[data-screc-float="stop"]') as HTMLButtonElement | null
+  const shareBtn = dock.querySelector('[data-screc-float="share"]') as HTMLButtonElement | null
+  const clearBtn = dock.querySelector('[data-screc-float="clear"]') as HTMLButtonElement | null
   const timer = dock.querySelector('[data-screc-float-timer]') as HTMLElement | null
   const label = dock.querySelector('[data-screc-float-label]') as HTMLElement | null
   if (startBtn) {
@@ -79,6 +82,14 @@ function syncFloatDock(st: ScreenRecordState): void {
   if (stopBtn) {
     stopBtn.disabled = !recording || st.phase === 'stopping'
   }
+  if (shareBtn) {
+    shareBtn.hidden = !done
+    shareBtn.disabled = !done
+  }
+  if (clearBtn) {
+    clearBtn.hidden = !done
+    clearBtn.disabled = !done
+  }
   if (timer) timer.textContent = formatElapsed(st.elapsedMs)
   if (label) {
     label.textContent = recording
@@ -87,10 +98,12 @@ function syncFloatDock(st: ScreenRecordState): void {
         ? '완료'
         : st.phase === 'error'
           ? '오류'
-          : '대기'
+          : st.phase === 'stopping'
+            ? '저장 중'
+            : '대기'
   }
   dock.classList.toggle('is-recording', recording)
-  dock.classList.toggle('is-done', st.phase === 'done')
+  dock.classList.toggle('is-done', done)
 }
 
 function ensureFloatDock(): HTMLElement {
@@ -110,6 +123,8 @@ function ensureFloatDock(): HTMLElement {
       <div class="screc-float-btns">
         <button type="button" class="screc-float-start" data-screc-float="start">시작</button>
         <button type="button" class="screc-float-stop" data-screc-float="stop" disabled>중지</button>
+        <button type="button" class="screc-float-share" data-screc-float="share" hidden>공유</button>
+        <button type="button" class="screc-float-clear" data-screc-float="clear" hidden>지우기</button>
       </div>
     `
     document.body.appendChild(dock)
@@ -123,6 +138,8 @@ function ensureFloatDock(): HTMLElement {
       const action = t.getAttribute('data-screc-float')
       if (action === 'start') void runStart()
       if (action === 'stop') void stopAndSave()
+      if (action === 'share') void runShare()
+      if (action === 'clear') runClear()
     })
   }
   if (stateRef) syncFloatDock(stateRef)
@@ -221,6 +238,40 @@ async function runStart(): Promise<void> {
     })
     if (stateRef) syncFloatDock({ ...stateRef, phase: 'error', elapsedMs: 0 })
   }
+}
+
+async function runShare(): Promise<void> {
+  const patch = patchRef
+  if (!patch) return
+  if (!lastClip) {
+    patch({ error: '저장할 녹화가 없어요.' })
+    return
+  }
+  const r = await shareOrDownloadClip(lastClip)
+  patch({ status: r.message, error: r.ok ? '' : r.message })
+}
+
+function runClear(): void {
+  const patch = patchRef
+  const st = stateRef
+  if (!patch || !st) return
+  if (st.resultUrl) revokeUrl(st.resultUrl)
+  lastClip = null
+  const video = liveVideo()
+  if (video) {
+    video.removeAttribute('src')
+    video.srcObject = null
+  }
+  patch({
+    resultUrl: '',
+    resultBytes: 0,
+    resultName: '',
+    resultMime: '',
+    phase: 'idle',
+    status: '결과가 지워졌습니다. 다시 녹화할 수 있어요.',
+    error: '',
+    elapsedMs: 0,
+  })
 }
 
 export function renderScreenRecordScreen(st: ScreenRecordState): string {
@@ -359,34 +410,11 @@ export function bindScreenRecordScreen(
   })
 
   root.querySelector('[data-screc-action="share"]')?.addEventListener('click', () => {
-    void (async () => {
-      if (!lastClip) {
-        patch({ error: '저장할 녹화가 없어요.' })
-        return
-      }
-      const r = await shareOrDownloadClip(lastClip)
-      patch({ status: r.message, error: r.ok ? '' : r.message })
-    })()
+    void runShare()
   })
 
   root.querySelector('[data-screc-action="clear"]')?.addEventListener('click', () => {
-    if (st.resultUrl) revokeUrl(st.resultUrl)
-    lastClip = null
-    const video = liveVideo()
-    if (video) {
-      video.removeAttribute('src')
-      video.srcObject = null
-    }
-    patch({
-      resultUrl: '',
-      resultBytes: 0,
-      resultName: '',
-      resultMime: '',
-      phase: 'idle',
-      status: '결과가 지워졌습니다. 다시 녹화할 수 있어요.',
-      error: '',
-      elapsedMs: 0,
-    })
+    runClear()
   })
 
   if (liveStream && st.phase === 'recording') {

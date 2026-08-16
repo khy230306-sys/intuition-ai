@@ -4199,13 +4199,15 @@ body.screc-active {
   flex-shrink: 0;
 }
 .screc-float-start,
-.screc-float-stop {
-  min-width: 64px;
+.screc-float-stop,
+.screc-float-share,
+.screc-float-clear {
+  min-width: 56px;
   height: 40px;
   border-radius: 12px;
   border: 1px solid transparent;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
 .screc-float-start {
@@ -4218,8 +4220,20 @@ body.screc-active {
   color: #fff;
   border-color: #ef4444;
 }
+.screc-float-share {
+  background: #0f766e;
+  color: #fff;
+  border-color: #14b8a6;
+}
+.screc-float-clear {
+  background: transparent;
+  color: rgba(255,255,255,.88);
+  border-color: rgba(255,255,255,.22);
+}
 .screc-float-start:disabled,
-.screc-float-stop:disabled {
+.screc-float-stop:disabled,
+.screc-float-share:disabled,
+.screc-float-clear:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }

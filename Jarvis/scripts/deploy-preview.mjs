@@ -2,8 +2,9 @@
  * Deploy AIZIO Preview to the FIXED ShipStatic preview domain.
  *
  * ALWAYS share this Preview address — never random snapshot URLs:
+ *   https://light-lab.shipstatic.com
+ * Preferred when a free domain slot exists:
  *   https://lightlab-92m8bq7.shipstatic.com
- * Alias (also repointed): https://light-lab.shipstatic.com
  *
  * Does NOT change production https://jarvis-app.shipstatic.com
  *
@@ -50,7 +51,7 @@ function loadApiKey() {
 }
 
 function runShip(args, apiKey) {
-  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--api-key', apiKey, '--json'], {
+  const res = spawnSync('npx', ['-y', '@shipstatic/ship@2.3.3', ...args, '--token', apiKey, '--json'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
@@ -118,7 +119,7 @@ function pruneOldDeployments(apiKey) {
   )
   for (const dep of remove) {
     try {
-      parseJson(runShip(['deployments', 'remove', dep], apiKey))
+      parseJson(runShip(['deployments', 'delete', dep], apiKey))
       console.log(`  removed ${dep}`)
     } catch (err) {
       console.warn(`  skip remove ${dep}: ${err instanceof Error ? err.message : err}`)
@@ -221,7 +222,7 @@ async function main() {
         const id = normalizeDeployId(d.deployment)
         if (!id || live.has(id)) continue
         try {
-          runShip(['deployments', 'remove', d.deployment], apiKey)
+          runShip(['deployments', 'delete', d.deployment], apiKey)
           console.log(`  force-removed ${d.deployment}`)
         } catch {
           /* ignore */
@@ -244,12 +245,30 @@ async function main() {
   }
 
   const linkedUrls = []
+  const failedHosts = []
   for (const host of PREVIEW_REPOINT_HOSTS) {
     console.log(`Repointing ${host} → ${deployId} …`)
-    const linked = parseJson(runShip(['domains', 'set', host, deployId], apiKey))
-    linkedUrls.push(linked?.url || `https://${host}`)
+    try {
+      const linked = parseJson(runShip(['domains', 'set', host, deployId], apiKey))
+      linkedUrls.push(linked?.url || `https://${host}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      failedHosts.push({ host, msg })
+      if (/Domain limit reached|forbidden|not found|Resembles a deployment/i.test(msg)) {
+        console.warn(`  skip ${host}: ${msg}`)
+        continue
+      }
+      throw err
+    }
   }
-  const fixed = linkedUrls[0] || PREVIEW_URL
+  if (!linkedUrls.length) {
+    throw new Error(
+      `No Preview domain could be linked. failures=${JSON.stringify(failedHosts).slice(0, 500)}`,
+    )
+  }
+  // Prefer the canonical PREVIEW_HOST URL when it linked; else first success.
+  const preferred = linkedUrls.find((u) => u.includes(PREVIEW_HOST.replace(/\.shipstatic\.com$/, ''))) || linkedUrls[0]
+  const fixed = preferred || PREVIEW_URL
 
   // Sanity: never allow preview deploy to touch production domain
   try {

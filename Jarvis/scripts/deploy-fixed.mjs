@@ -76,7 +76,7 @@ const domainHost = (() => {
 })()
 
 function runShip(args) {
-  const res = spawnSync('npx', ['-y', '@shipstatic/ship', ...args, '--api-key', apiKey, '--json'], {
+  const res = spawnSync('npx', ['-y', '@shipstatic/ship@2.3.3', ...args, '--token', apiKey, '--json'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
@@ -159,7 +159,7 @@ function pruneOldDeployments() {
   )
   for (const dep of remove) {
     try {
-      const out = parseJson(runShip(['deployments', 'remove', dep]))
+      const out = parseJson(runShip(['deployments', 'delete', dep]))
       console.log(`  removed ${dep}${out?.success ? '' : ''}`)
     } catch (err) {
       console.warn(`  skip remove ${dep}: ${err instanceof Error ? err.message : err}`)
@@ -266,7 +266,7 @@ SHIP_API_KEY 가 없습니다.
         const id = normalizeDeployId(d.deployment)
         if (!id || live.has(id)) continue
         try {
-          runShip(['deployments', 'remove', d.deployment])
+          runShip(['deployments', 'delete', d.deployment])
           console.log(`  force-removed ${d.deployment}`)
         } catch {
           /* ignore */

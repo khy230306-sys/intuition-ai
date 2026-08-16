@@ -55,7 +55,7 @@ jobs:
           npx -y @shipstatic/ship ./dist --api-key "$SHIP_TOKEN"
 
       - name: Build GitHub Pages subdirectory bundle
-        run: npx vite build --base /intuition-ai/intuition-app/ --outDir dist-pages
+        run: npx vite build --base ./ --outDir dist-pages
 
       - name: Publish fixed path on gh-pages (/intuition-app)
         uses: peaceiris/actions-gh-pages@v4

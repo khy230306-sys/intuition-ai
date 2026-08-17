@@ -27,3 +27,12 @@ npm run deploy:web
 | API key env | `SHIP_API_KEY` |
 
 키가 없으면 고정 도메인 연결이 불가합니다. 키를 넣은 뒤 위 명령을 실행하면 주소가 살아납니다.
+
+## 현재 스냅샷 (2026-08-17)
+
+고정 도메인 연결 전 임시 배포:
+
+- **Live:** https://blazing-bead-x2m8625.shipstatic.com
+- **Claim (소유권 → aizio-studio 연결):** https://my.shipstatic.com/claim/e658135c60584382f02ce905eecc3241
+
+Claim 후 대시보드에서 이름을 `aizio-studio`로 지정하면 고정 URL이 활성화됩니다.

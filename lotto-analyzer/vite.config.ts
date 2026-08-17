@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   base: './',
@@ -9,5 +9,9 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: true,
+  },
+  test: {
+    globals: false,
+    environment: 'node',
   },
 })

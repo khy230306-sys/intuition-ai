@@ -3,7 +3,8 @@
 ## 아이지오 스튜디오 (`ssukssuk-playground`)
 
 AIZIO Studio · 쑥쑥놀이터 NEW — 자동차 공방 Prototype 01  
-(선택 → 조립 → 색칠 → 세차 → 정비 → 운전 → 미션 → 보상 → 성장)
+
+**고정 URL:** https://aizio-studio.shipstatic.com
 
 ```bash
 cd ssukssuk-playground && npm install && npm run dev

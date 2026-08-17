@@ -2,6 +2,12 @@
 
 **AIZIO Studio** kids production shell for Prototype 01 (firetruck workshop).
 
+## 고정 주소
+
+**https://aizio-studio.shipstatic.com**
+
+배포: `npm run deploy:web` (SHIP_API_KEY 필요) · 상세 [`PERMANENT_HOSTING.md`](PERMANENT_HOSTING.md)
+
 ## 최상위 규칙
 
 [`docs/VISUAL_ASSET_CONSTITUTION.md`](docs/VISUAL_ASSET_CONSTITUTION.md)

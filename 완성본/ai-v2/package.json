@@ -1,16 +1,39 @@
 {
-  "name": "intuition-ai-v2-future-road-engine",
+  "name": "intuition-ai-v2",
   "version": "2.0.0",
   "private": true,
-  "type": "module",
-  "description": "Future Road / Hidden Path Engine V2 — Intuition AI",
-  "main": "src/engine/index.ts",
+  "description": "Intuition AI v2 — Future Road / Hidden Path Engine",
+  "author": "Intuition AI",
+  "main": "main.cjs",
   "scripts": {
+    "dev": "vite",
+    "build:web": "tsc && vite build",
+    "build:exe": "npm run build:web && pkg launcher.cjs --targets node22-win-x64 --output release/Intuition-AI-v2.exe --assets dist/**/*",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "pack": "npm run build:exe"
   },
   "devDependencies": {
+    "@yao-pkg/pkg": "^6.22.0",
+    "electron": "^37.2.0",
+    "electron-packager": "^17.1.2",
     "typescript": "~5.9.3",
+    "vite": "^7.3.1",
     "vitest": "^3.2.7"
+  },
+  "bin": {
+    "intuition-ai-v2": "launcher.cjs"
+  },
+  "pkg": {
+    "scripts": [
+      "launcher.cjs"
+    ],
+    "assets": [
+      "dist/**/*"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ],
+    "outputPath": "release"
   }
 }

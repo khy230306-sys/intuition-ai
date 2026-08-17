@@ -166,3 +166,39 @@ export {
   type UserConstraints,
   type StoreExport,
 } from './persistence/store'
+
+export {
+  buildDrawReport,
+  formatBacktestHuman,
+  emptyDataMessage,
+  describeDrawStructure,
+  type DrawReport,
+  type DrawReportInput,
+} from './reports/report'
+
+export {
+  parseNaturalLanguageConstraints,
+  mergeParsedConstraints,
+  type ParsedNlConstraints,
+} from './generator/nlConstraints'
+
+export {
+  analyzeUserBias,
+  type BiasFinding,
+  type UserBiasReport,
+} from './performance/userBias'
+
+export {
+  buildNetworkGraph,
+  renderRelationSvg,
+  type NetworkGraph,
+  type NetworkEdge,
+} from './engines/network/graph'
+
+export { mapWithYield, yieldToUi, runChunked } from './workers/scheduler'
+
+export {
+  proposeWeightEvolution,
+  type EvolutionProposal,
+  type EvolutionOptions,
+} from './strategy/evolution'

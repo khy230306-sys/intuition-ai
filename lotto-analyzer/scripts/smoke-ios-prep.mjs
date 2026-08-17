@@ -60,9 +60,13 @@ if (pbx.includes('CURRENT_PROJECT_VERSION = 1;')) ok('build 1')
 else bad('build 1', 'mismatch')
 
 const main = readFileSync(join(root, 'src/main.ts'), 'utf8')
-if (main.includes('당첨을 보장하지 않습니다')) ok('disclaimer present')
+const v3ui = readFileSync(join(root, 'src/lotto/ui/app.ts'), 'utf8')
+const legacy = readFileSync(join(root, 'src/legacy/classicApp.ts'), 'utf8')
+const uiBlob = `${main}\n${v3ui}\n${legacy}`
+if (uiBlob.includes('당첨을 보장하지 않습니다') || uiBlob.includes('당첨을 보장하거나 예측하지 않습니다'))
+  ok('disclaimer present')
 else bad('disclaimer present', 'missing')
-if (!/필승|100%\s*당첨|당첨\s*보장(?!하지)/.test(main)) ok('no exaggerated guarantee copy')
+if (!/필승|100%\s*당첨|당첨\s*보장(?!하지|하거나)/.test(uiBlob)) ok('no exaggerated guarantee copy')
 else bad('no exaggerated guarantee copy', 'found')
 
 // Runtime analysis smoke via built modules is heavy; use JSON integrity

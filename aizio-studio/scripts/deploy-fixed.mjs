@@ -128,7 +128,7 @@ function writeBuildMeta(channel) {
     productionUrl: `https://${FIXED_DOMAIN}`,
     note:
       channel === 'production'
-        ? 'Fixed AIZIO Studio production'
+        ? 'Fixed AIZIO Studio production (not 쑥쑥놀이터)'
         : 'AIZIO Studio preview snapshot',
   }
   writeFileSync(join(root, 'public/build-meta.json'), JSON.stringify(meta, null, 2) + '\n')

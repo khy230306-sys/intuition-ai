@@ -1,5 +1,5 @@
 import type { WorkshopStage } from '../types/vehicle'
-import { STAGE_FLOW, STAGE_LABELS } from '../studio/stageFlow'
+import { STAGE_FLOW, STAGE_LABELS } from '../workshop/stageFlow'
 
 type Props = {
   stage: WorkshopStage
@@ -9,7 +9,7 @@ type Props = {
 
 export function StageBar({ stage, unlocked, onJump }: Props) {
   return (
-    <ol className="stage-bar" aria-label="아이지오 스튜디오 공방 단계">
+    <ol className="stage-bar" aria-label="쑥쑥놀이터 공방 단계">
       {STAGE_FLOW.map((id, i) => {
         const open = unlocked.includes(id)
         const current = id === stage

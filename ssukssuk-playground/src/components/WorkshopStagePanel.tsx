@@ -2,8 +2,8 @@ import { getAsset } from '../assets/registry'
 import type { CareState, RepairIssueId } from '../entity/careOps'
 import { careSummary, isRepairComplete, isWashComplete } from '../entity/careOps'
 import type { WorkshopStage } from '../types/vehicle'
-import { STAGE_HINTS, STAGE_LABELS } from '../studio/stageFlow'
-import { FIRETRUCK_PAINT_SWATCHES } from '../studio/paintSwatches'
+import { STAGE_HINTS, STAGE_LABELS } from '../workshop/stageFlow'
+import { FIRETRUCK_PAINT_SWATCHES } from '../workshop/paintSwatches'
 import { AssetRequired } from './AssetRequired'
 import { VehicleRenderer } from './VehicleRenderer'
 
@@ -22,10 +22,10 @@ type Props = {
 }
 
 /**
- * Stage body for AIZIO Studio Prototype 01.
+ * Stage body for 쑥쑥놀이터 NEW Prototype 01.
  * Never draws temp vehicle/character art — VehicleRenderer + AssetRequired only.
  */
-export function StudioStagePanel({
+export function WorkshopStagePanel({
   stage,
   playable,
   care,

@@ -6,7 +6,7 @@ import {
   unlockThrough,
 } from './stageFlow'
 
-describe('AIZIO Studio stage flow', () => {
+describe('쑥쑥놀이터 stage flow', () => {
   it('includes wash and repair between paint and drive', () => {
     expect(STAGE_FLOW).toEqual([
       'select',

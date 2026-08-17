@@ -10,34 +10,30 @@ const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 
 await page.goto('http://127.0.0.1:5175/', { waitUntil: 'networkidle' })
-await page.screenshot({ path: `${outDir}/aizio-studio-proto01.png`, fullPage: true })
+await page.screenshot({ path: `${outDir}/ssukssuk-proto01.png`, fullPage: true })
 
 const brand = await page.locator('.brand').innerText()
-const brandSub = await page.locator('.brand-sub').innerText()
 const proto = await page.locator('h2', { hasText: 'Prototype 01' }).innerText()
 const requiredBadges = await page.locator('.asset-required-badge').count()
 const stageLabels = await page.locator('.stage-label').allInnerTexts()
-const washPanel = await page.locator('[data-stage="wash"]').count()
 const assembleEntered = await page
   .locator('h2', { hasText: /^조립/ })
   .isVisible()
   .catch(() => false)
+const wrongBrand = await page.locator('text=아이지오 스튜디오').count()
 
 console.log({
   brand,
-  brandSub,
   proto,
   requiredBadges,
   stageLabels,
-  washPanel,
   assembleEntered,
+  wrongBrand,
   pageErrors: errors,
 })
 
-if (!brand.includes('아이지오') && !brand.includes('쑥쑥놀이터')) {
-  throw new Error('AIZIO Studio / 쑥쑥 brand missing')
-}
-if (!brandSub.includes('쑥쑥놀이터')) throw new Error('쑥쑥놀이터 sub-brand missing')
+if (!brand.includes('쑥쑥놀이터')) throw new Error('쑥쑥놀이터 brand missing')
+if (wrongBrand > 0) throw new Error('AIZIO Studio brand must not appear in 쑥쑥놀이터')
 if (!proto.includes('BLOCKED')) throw new Error('Prototype 01 must report BLOCKED without assets')
 if (requiredBadges < 3) throw new Error('expected ASSET_REQUIRED badges')
 if (!stageLabels.includes('세차') || !stageLabels.includes('정비')) {
@@ -47,4 +43,4 @@ if (assembleEntered) throw new Error('must not enter assemble without approved a
 if (errors.length) throw new Error(errors.join('; '))
 
 await browser.close()
-console.log('e2e aizio studio prototype gate OK')
+console.log('e2e 쑥쑥놀이터 prototype gate OK')

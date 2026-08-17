@@ -19,7 +19,7 @@ import { buildClientManifest } from './assets/manifest/productionGate'
 import { AssetRequired } from './components/AssetRequired'
 import { BaselineGate } from './components/BaselineGate'
 import { StageBar } from './components/StageBar'
-import { StudioStagePanel } from './components/StudioStagePanel'
+import { WorkshopStagePanel } from './components/WorkshopStagePanel'
 import {
   applySoap,
   createCareState,
@@ -39,19 +39,21 @@ import {
 import { recordGrowthEvent } from './growth/store'
 import { evaluatePrototypeGates } from './prototype/playLoop'
 import { sfx } from './lib/sfx'
-import { FIRETRUCK_PAINT_SWATCHES } from './studio/paintSwatches'
+import { FIRETRUCK_PAINT_SWATCHES } from './workshop/paintSwatches'
 import {
   STAGE_FLOW,
   nextStage,
   requiresApprovedArt,
   unlockThrough,
-} from './studio/stageFlow'
+} from './workshop/stageFlow'
 import type { WorkshopStage } from './types/vehicle'
 
 /**
- * AIZIO Studio · 쑥쑥놀이터 NEW — Production Prototype 01 shell.
+ * 쑥쑥놀이터 NEW — Production Prototype 01 shell.
  * Play loop stays BLOCKED until BASELINE TRIAD is GAME_READY.
  * Style Master / Visual Bible = reference only — never cropped into assets.
+ *
+ * NOTE: This app is NOT AIZIO Studio. AIZIO Studio lives in /aizio-studio.
  */
 export default function App() {
   const triad = useMemo(() => baselineTriad(), [])
@@ -182,8 +184,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-block">
-          <p className="brand">아이지오 스튜디오</p>
-          <p className="brand-sub">AIZIO STUDIO · 쑥쑥놀이터 NEW</p>
+          <p className="brand">쑥쑥놀이터 NEW</p>
           <h1>자동차 공방 · Prototype 01</h1>
           <p className="tagline">선택→조립→색칠→세차→정비→운전→미션→보상→성장</p>
         </div>
@@ -197,7 +198,7 @@ export default function App() {
       {toast && <div className="toast">{toast}</div>}
 
       <main className="stage-panel">
-        <StudioStagePanel
+        <WorkshopStagePanel
           stage={stage}
           playable={playable}
           care={care}
@@ -322,7 +323,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <span>AIZIO Studio · VSM-2026-08-12 · REFERENCE ≠ ASSET</span>
+        <span>쑥쑥놀이터 NEW · VSM-2026-08-12 · REFERENCE ≠ ASSET</span>
         <span>Prototype 01 · {gates.PROTOTYPE_01}</span>
       </footer>
     </div>

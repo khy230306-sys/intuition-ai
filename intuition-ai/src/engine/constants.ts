@@ -49,4 +49,4 @@ export const STORAGE_KEYS = {
 
 export const HISTORY_CAP = 5000
 export const PREDICTION_CAP = 10000
-export const SUCCESS_BOARD_SIZE = 12
+export const SUCCESS_BOARD_SIZE = 24

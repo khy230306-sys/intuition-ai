@@ -14,9 +14,12 @@ export type WorkshopStage =
   | 'select'
   | 'assemble'
   | 'paint'
+  | 'wash'
+  | 'repair'
   | 'drive'
   | 'mission'
   | 'reward'
+  | 'growth'
 
 export type Vec2 = { x: number; y: number }
 

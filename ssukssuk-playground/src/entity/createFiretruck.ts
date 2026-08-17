@@ -10,6 +10,7 @@ import {
   type VehicleDesign,
 } from '../assets/registry'
 import type { Vec2 } from '../types/vehicle'
+import { createCareState, type CareState } from './careOps'
 
 export type VehiclePartState = {
   id: FireTruck01PartId
@@ -38,8 +39,10 @@ export type VehicleEntity = {
   missionState: 'locked' | 'ready' | 'active' | 'complete'
   wheelAngle: number
   sirenPhase: number
-  /** Persisted paint design — used identically in drive/mission */
+  /** Persisted paint design — used identically in wash/repair/drive/mission */
   design: VehicleDesign
+  /** Wash + repair care — same entity continues through later stages */
+  care: CareState
 }
 
 const DEFAULT_COLORS: Record<FireTruck01PartId, string> = {
@@ -100,6 +103,7 @@ let seq = 0
 export function createFiretruckEntity(opts?: {
   assembled?: boolean
   design?: VehicleDesign | null
+  care?: CareState
 }): VehicleEntity {
   const assembled = opts?.assembled ?? false
   const design = opts?.design ?? {
@@ -108,6 +112,7 @@ export function createFiretruckEntity(opts?: {
     assembledParts: [],
     updatedAt: Date.now(),
   }
+  const care = opts?.care ?? createCareState()
 
   const parts = {} as Record<FireTruck01PartId, VehiclePartState>
   for (const id of FIRE_TRUCK_01_PART_IDS) {
@@ -142,6 +147,7 @@ export function createFiretruckEntity(opts?: {
     wheelAngle: 0,
     sirenPhase: 0,
     design,
+    care,
   }
 }
 

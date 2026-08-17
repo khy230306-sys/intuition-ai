@@ -67,4 +67,12 @@ export const sfx = {
   whoosh() {
     beep(240, 0.1, 'triangle', 0.03)
   },
+  wash() {
+    beep(300, 0.07, 'sine', 0.04)
+    beep(420, 0.09, 'triangle', 0.035)
+  },
+  repair() {
+    beep(260, 0.06, 'square', 0.035)
+    beep(480, 0.1, 'sine', 0.045)
+  },
 }

@@ -35,6 +35,31 @@ export const GARAGE_ASSETS: AssetSpec[] = [
     status: 'ASSET_REQUIRED',
     baselineGroup: 'garage',
   },
+  {
+    id: 'ASSET_WASH_BAY_BACKGROUND',
+    kind: 'environment',
+    labelKo: '세차장 배경',
+    usage: '세차 스테이지 배경 (문지르기·물·거품·스펀지)',
+    size: { w: 2048, h: 1536 },
+    transparentBackground: false,
+    states: ['day'],
+    animationRequirements: '물방울/거품 ambient 가능. 배경 속 차량·캐릭터 crop 금지.',
+    status: 'ASSET_REQUIRED',
+    qualityGateNotes:
+      '기준 트라이어드(공방) 승인 후 동일 Visual DNA로 제작. Prototype 01 플레이 게이트에 포함.',
+  },
+  {
+    id: 'ASSET_REPAIR_BAY_BACKGROUND',
+    kind: 'environment',
+    labelKo: '정비소 배경',
+    usage: '정비 스테이지 배경 (관찰·찾기·시도·해결)',
+    size: { w: 2048, h: 1536 },
+    transparentBackground: false,
+    states: ['day'],
+    animationRequirements: '공구/조명 ambient 가능. 배경 속 차량·캐릭터 crop 금지.',
+    status: 'ASSET_REQUIRED',
+    qualityGateNotes: '공방·세차장과 동일 perspective/lighting/shape language.',
+  },
 ]
 
 export const OTHER_VEHICLE_PLACEHOLDERS: AssetSpec[] = [

@@ -1,13 +1,5 @@
 import type { WorkshopStage } from '../types/vehicle'
-
-const STAGES: { id: WorkshopStage; ko: string }[] = [
-  { id: 'select', ko: '선택' },
-  { id: 'assemble', ko: '조립' },
-  { id: 'paint', ko: '색칠' },
-  { id: 'drive', ko: '운전' },
-  { id: 'mission', ko: '미션' },
-  { id: 'reward', ko: '보상' },
-]
+import { STAGE_FLOW, STAGE_LABELS } from '../studio/stageFlow'
 
 type Props = {
   stage: WorkshopStage
@@ -17,19 +9,15 @@ type Props = {
 
 export function StageBar({ stage, unlocked, onJump }: Props) {
   return (
-    <ol className="stage-bar" aria-label="공방 단계">
-      {STAGES.map((s, i) => {
-        const open = unlocked.includes(s.id)
-        const current = s.id === stage
+    <ol className="stage-bar" aria-label="아이지오 스튜디오 공방 단계">
+      {STAGE_FLOW.map((id, i) => {
+        const open = unlocked.includes(id)
+        const current = id === stage
         return (
-          <li key={s.id} className={`stage-step${current ? ' current' : ''}${open ? ' open' : ''}`}>
-            <button
-              type="button"
-              disabled={!open}
-              onClick={() => open && onJump?.(s.id)}
-            >
+          <li key={id} className={`stage-step${current ? ' current' : ''}${open ? ' open' : ''}`}>
+            <button type="button" disabled={!open} onClick={() => open && onJump?.(id)}>
               <span className="stage-num">{i + 1}</span>
-              <span className="stage-label">{s.ko}</span>
+              <span className="stage-label">{STAGE_LABELS[id]}</span>
             </button>
           </li>
         )

@@ -1,8 +1,9 @@
 # workspace
 
-## 쑥쑥놀이터 NEW (`ssukssuk-playground`)
+## 아이지오 스튜디오 (`ssukssuk-playground`)
 
-자동차 공방 — 소방차 Vehicle Entity 파이프라인 (선택 → 조립 → 부분 색칠 → 운전 → 미션 → 보상)
+AIZIO Studio · 쑥쑥놀이터 NEW — 자동차 공방 Prototype 01  
+(선택 → 조립 → 색칠 → 세차 → 정비 → 운전 → 미션 → 보상 → 성장)
 
 ```bash
 cd ssukssuk-playground && npm install && npm run dev

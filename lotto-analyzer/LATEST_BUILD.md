@@ -4,11 +4,11 @@
 
 ## 지금 접속할 주소 (아이폰 · 안드로이드)
 
-**https://pnly0n2h.nivii.app**
+**https://1sbxc0sr.nivii.app**
 
-- 배포일: 2026-08-07
-- 유효: ~2026-09-06
-- 포함: AIZIO 로고, 히어로 간격 조정, 통계·흐름 분석
+- 배포일: 2026-08-18
+- 유효: ~2026-09-17
+- 포함: LottoLens 3.0 Intelligence Engine (HOME / AI LAB / NUMBERS / 생성 / 백테스트 / MY / 연구)
 
 ## 로컬 실행
 

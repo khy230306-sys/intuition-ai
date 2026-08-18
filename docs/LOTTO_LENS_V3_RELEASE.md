@@ -4,6 +4,10 @@
 
 App version `1.0.0` (Capacitor / iOS). Product surface: **LottoLens 3.0 Intelligence Engine**.
 
+## Mobile demo
+
+**https://1sbxc0sr.nivii.app** (deployed 2026-08-18, expires ~2026-09-17)
+
 ## Branch
 
 `cursor/lottolens-v3-intelligence-f99e`

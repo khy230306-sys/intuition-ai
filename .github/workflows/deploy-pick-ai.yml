@@ -32,11 +32,12 @@ jobs:
           npm run build
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
-      - name: Publish gh-pages
+      - name: Publish to gh-pages root (keep other apps)
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ github.token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: DoriJitGoTtaeng-PICK-AI/dist
-          force_orphan: true
+          publish_branch: gh-pages
+          keep_files: true
           enable_jekyll: false
           commit_message: Deploy PICK AI static site

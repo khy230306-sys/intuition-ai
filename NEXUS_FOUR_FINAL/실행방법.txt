@@ -1,0 +1,33 @@
+# NEXUS FOUR FINAL 실행 방법
+
+## 1) 웹(PWA) 실행
+```bash
+cd /workspace/NEXUS_FOUR_FINAL
+npm run dev
+```
+- 브라우저에서 Vite가 제공하는 URL로 접속합니다.
+- PWA는 `vite-plugin-pwa`로 빌드 시 manifest/service worker가 생성됩니다.
+
+## 2) 웹 프로덕션 빌드
+```bash
+npm run build
+```
+- `dist/` 폴더에 산출물이 생성됩니다.
+
+## 3) Electron(Windows portable 래퍼) 실행(개발 모드)
+```bash
+npm run electron:dev
+```
+- 개발 서버 + Electron을 함께 실행합니다.
+
+## 4) Windows portable 패키징
+```bash
+npm run electron:build
+```
+- 이 환경에서는 서명/설치형은 환경에 의존하지만,
+- `dist-electron/` 아래에 Windows EXE가 생성됩니다.
+
+## 데이터
+- 게임 결과와 상태는 IndexedDB(Dexie)에 저장됩니다.
+- UI에서 JSON 백업/복원도 가능합니다.
+

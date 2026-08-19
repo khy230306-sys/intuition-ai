@@ -53,6 +53,22 @@ const SKILL_OWNED: CoreIntent[] = [
   'enable_skill',
   'disable_skill',
   'life_today_brief',
+  'open_campus',
+  'campus_today',
+  'campus_timetable_list',
+  'campus_timetable_add',
+  'campus_assignments',
+  'campus_exams',
+  'campus_urgent',
+  'campus_summary',
+  'campus_quiz',
+  'campus_quiz_wrong',
+  'campus_review',
+  'campus_study_plan',
+  'campus_email',
+  'campus_search',
+  'campus_focus',
+  'campus_gpa',
   // `help` → legacy think (full helpText with 투자/생활/…)
 ]
 

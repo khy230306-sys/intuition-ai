@@ -179,6 +179,8 @@ describe('HOME v2 render', () => {
     expect(nav).toContain('홈')
     expect(nav).toContain('전체')
     const more = renderHomeV2MoreSheet()
+    expect(more).toContain('CAMPUS')
+    expect(more).toContain('data-view="campus"')
     expect(more).toContain('길안내')
     expect(more).toContain('음악')
     expect(more).toContain('data-view="invest"')

@@ -178,4 +178,26 @@ describe('AIZIO Core Brain', () => {
     const settings = await think('설정 열어줘')
     expect(settings.view).toBe('settings')
   }, 30000)
+
+  it('routes Campus open and today-class intents without stealing reminders', async () => {
+    expect(classifyIntent('캠퍼스 열어줘', 'ko').intent).toBe('open_campus')
+    expect(classifyIntent('오늘 수업 뭐야?', 'ko').intent).toBe('campus_today')
+    const open = await processCoreBrain({ text: '캠퍼스 열어줘', allowDuplicate: true })
+    expect(open.fallbackLegacy).toBe(false)
+    expect(open.selectedSkills).toContain('campus')
+    expect(open.brainReply?.view).toBe('campus')
+
+    const add = await processCoreBrain({
+      text: '월요일 10시부터 11시 반까지 자료구조 수업 넣어줘',
+      allowDuplicate: true,
+    })
+    expect(add.intent).toBe('campus_timetable_add')
+    expect(add.responseText).toMatch(/저장/)
+    expect(add.selectedSkills).toContain('campus')
+
+    const today = await processCoreBrain({ text: '오늘 수업 뭐야?', allowDuplicate: true })
+    expect(today.intent).toBe('campus_today')
+    // Monday class only appears if today is Monday — still must not invent fake courses
+    expect(today.responseText).not.toMatch(/마케팅원론|영어회화/)
+  })
 })

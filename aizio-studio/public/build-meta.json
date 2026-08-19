@@ -1,0 +1,10 @@
+{
+  "app": "AIZIO STUDIO",
+  "version": "0.1.0",
+  "buildId": "production-pending",
+  "commit": "pending",
+  "channel": "production",
+  "builtAt": "2026-08-17T00:00:00.000Z",
+  "productionUrl": "https://aizio-studio.shipstatic.com",
+  "note": "Fixed AIZIO Studio production — separate from 쑥쑥놀이터"
+}

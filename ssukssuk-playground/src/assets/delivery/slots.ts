@@ -1,0 +1,246 @@
+import type { DeliverySlotId } from './mode'
+
+export type DeliverySlot = {
+  id: DeliverySlotId
+  /** Exact filename expected in IMPORT_DIRECTORY */
+  filename: string
+  phase: 'baseline_masters' | 'firetruck_parts'
+  registryAssetId: string
+  recommendedWidth: number
+  recommendedHeight: number
+  minWidth: number
+  minHeight: number
+  transparencyRequired: boolean
+  /** Master plates may be opaque BG; parts must be transparent */
+  notes: string
+}
+
+/** Phase A — receive first; Quality Gate before any APPROVED. */
+export const BASELINE_MASTER_SLOTS: DeliverySlot[] = [
+  {
+    id: 'SSUKSSUK_CHARACTER_BASE',
+    filename: 'SSUKSSUK_CHARACTER_BASE.png',
+    phase: 'baseline_masters',
+    registryAssetId: 'ASSET_SSUKSSUK_IDLE',
+    recommendedWidth: 1024,
+    recommendedHeight: 1024,
+    minWidth: 512,
+    minHeight: 512,
+    transparencyRequired: true,
+    notes: 'Independent artwork. Not a Style Master crop. Character Bible lock reference pose.',
+  },
+  {
+    id: 'FIRE_TRUCK_01_MASTER',
+    filename: 'FIRE_TRUCK_01_MASTER.png',
+    phase: 'baseline_masters',
+    registryAssetId: 'ASSET_FIRETRUCK_BODY',
+    recommendedWidth: 1536,
+    recommendedHeight: 1024,
+    minWidth: 768,
+    minHeight: 512,
+    transparencyRequired: true,
+    notes: 'Full assembled look reference for part alignment. Independent production master.',
+  },
+  {
+    id: 'CAR_WORKSHOP_MASTER',
+    filename: 'CAR_WORKSHOP_MASTER.png',
+    phase: 'baseline_masters',
+    registryAssetId: 'ASSET_GARAGE_BACKGROUND',
+    recommendedWidth: 2048,
+    recommendedHeight: 1536,
+    minWidth: 1280,
+    minHeight: 720,
+    transparencyRequired: false,
+    notes: 'Interactive workshop space plate. Opaque BG OK. No crop from Style Master.',
+  },
+]
+
+/** Phase B — only after BASELINE_VISUAL_APPROVED; same design language as FIRE_TRUCK_01_MASTER. */
+export const FIRETRUCK_PART_SLOTS: DeliverySlot[] = [
+  {
+    id: 'FIRETRUCK_BODY',
+    filename: 'FIRETRUCK_BODY.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_BODY',
+    recommendedWidth: 1024,
+    recommendedHeight: 640,
+    minWidth: 512,
+    minHeight: 320,
+    transparencyRequired: true,
+    notes: 'Must align to FIRE_TRUCK_01_MASTER when all parts assembled.',
+  },
+  {
+    id: 'FIRETRUCK_FRONT_DOOR',
+    filename: 'FIRETRUCK_FRONT_DOOR.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_FRONT_DOOR',
+    recommendedWidth: 512,
+    recommendedHeight: 512,
+    minWidth: 256,
+    minHeight: 256,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_REAR_DOOR',
+    filename: 'FIRETRUCK_REAR_DOOR.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_REAR_DOOR',
+    recommendedWidth: 512,
+    recommendedHeight: 512,
+    minWidth: 256,
+    minHeight: 256,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_FRONT_WHEEL',
+    filename: 'FIRETRUCK_FRONT_WHEEL.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_WHEEL_FRONT',
+    recommendedWidth: 512,
+    recommendedHeight: 512,
+    minWidth: 256,
+    minHeight: 256,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_REAR_WHEEL',
+    filename: 'FIRETRUCK_REAR_WHEEL.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_WHEEL_REAR',
+    recommendedWidth: 512,
+    recommendedHeight: 512,
+    minWidth: 256,
+    minHeight: 256,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_FRONT_RIM',
+    filename: 'FIRETRUCK_FRONT_RIM.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_RIM_FRONT',
+    recommendedWidth: 384,
+    recommendedHeight: 384,
+    minWidth: 192,
+    minHeight: 192,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_REAR_RIM',
+    filename: 'FIRETRUCK_REAR_RIM.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_RIM_REAR',
+    recommendedWidth: 384,
+    recommendedHeight: 384,
+    minWidth: 192,
+    minHeight: 192,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_FRONT_WINDOW',
+    filename: 'FIRETRUCK_FRONT_WINDOW.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_WINDOW_FRONT',
+    recommendedWidth: 640,
+    recommendedHeight: 480,
+    minWidth: 320,
+    minHeight: 240,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_SIDE_WINDOW',
+    filename: 'FIRETRUCK_SIDE_WINDOW.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_WINDOW_SIDE',
+    recommendedWidth: 512,
+    recommendedHeight: 384,
+    minWidth: 256,
+    minHeight: 192,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_BUMPER',
+    filename: 'FIRETRUCK_BUMPER.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_BUMPER',
+    recommendedWidth: 640,
+    recommendedHeight: 256,
+    minWidth: 320,
+    minHeight: 128,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_LADDER',
+    filename: 'FIRETRUCK_LADDER.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_LADDER',
+    recommendedWidth: 1024,
+    recommendedHeight: 256,
+    minWidth: 512,
+    minHeight: 128,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_EMERGENCY_LIGHT',
+    filename: 'FIRETRUCK_EMERGENCY_LIGHT.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_EMERGENCY_LIGHT',
+    recommendedWidth: 384,
+    recommendedHeight: 384,
+    minWidth: 192,
+    minHeight: 192,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_HOSE',
+    filename: 'FIRETRUCK_HOSE.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_HOSE',
+    recommendedWidth: 512,
+    recommendedHeight: 512,
+    minWidth: 256,
+    minHeight: 256,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_HEADLIGHT',
+    filename: 'FIRETRUCK_HEADLIGHT.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_HEAD_LIGHT',
+    recommendedWidth: 256,
+    recommendedHeight: 256,
+    minWidth: 128,
+    minHeight: 128,
+    transparencyRequired: true,
+    notes: 'Transparent PNG part.',
+  },
+  {
+    id: 'FIRETRUCK_SHADOW',
+    filename: 'FIRETRUCK_SHADOW.png',
+    phase: 'firetruck_parts',
+    registryAssetId: 'ASSET_FIRETRUCK_SHADOW',
+    recommendedWidth: 1024,
+    recommendedHeight: 256,
+    minWidth: 512,
+    minHeight: 128,
+    transparencyRequired: true,
+    notes: 'Transparent PNG shadow plate.',
+  },
+]
+
+export const ALL_DELIVERY_SLOTS = [...BASELINE_MASTER_SLOTS, ...FIRETRUCK_PART_SLOTS]
+
+export const REQUIRED_BASELINE_FILENAMES = BASELINE_MASTER_SLOTS.map((s) => s.filename)
+
+export const REQUIRED_PART_FILENAMES = FIRETRUCK_PART_SLOTS.map((s) => s.filename)

@@ -1,0 +1,10 @@
+node_modules
+dist
+.DS_Store
+*.local
+.vite
+.ship-api-key
+incoming/external-production/*.png
+incoming/external-production/BASELINE_VISUAL_APPROVED
+incoming/external-production/reports/
+public/assets/staging/external/*.png

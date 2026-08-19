@@ -1,0 +1,32 @@
+name: Keep Intuition AI Harvis Live
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: intuition-ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: intuition-ai/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Redeploy Harvis (requires HARVIS_DEPLOY_TOKEN secret)
+        env:
+          HARVIS_DEPLOY_TOKEN: ${{ secrets.HARVIS_DEPLOY_TOKEN }}
+          HARVIS_SUBDOMAIN: jazzy-custard-755
+        run: |
+          if [ -z "${HARVIS_DEPLOY_TOKEN:-}" ]; then
+            echo "HARVIS_DEPLOY_TOKEN not set"
+            exit 0
+          fi
+          npx -y hosting deploy ./dist --token "$HARVIS_DEPLOY_TOKEN" --subdomain "$HARVIS_SUBDOMAIN"

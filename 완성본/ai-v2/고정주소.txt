@@ -1,0 +1,19 @@
+# Intuition AI v2 — 고정 주소
+
+## 지금 바로 사용 (웹)
+**https://jazzy-custard-755.harvis.page**
+
+> 예전 주소 `peppy-valley-859.harvis.page` 는 만료되어 404 입니다.
+
+## 영구 사용 (1회 claim)
+아래 링크를 열어 로그인하면 **만료 없이** 같은 주소를 계속 쓸 수 있습니다.
+
+https://harvis.dev/claim/ccb0f8a2-29c4-422f-b189-64eb8eedede1
+
+## GitHub Pages (Pages 켜면 영구)
+Settings → Pages → gh-pages / (root) 켠 뒤:
+
+https://khy230306-sys.github.io/intuition-ai/intuition-app/
+
+## Windows EXE
+https://github.com/khy230306-sys/intuition-ai/releases/download/intuition-ai-v2-engine/Intuition-AI-v2-Windows.zip

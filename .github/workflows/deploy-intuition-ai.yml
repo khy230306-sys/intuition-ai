@@ -57,7 +57,7 @@ jobs:
       - name: Deploy to Harvis fixed URL
         env:
           HARVIS_DEPLOY_TOKEN: ${{ secrets.HARVIS_DEPLOY_TOKEN }}
-          HARVIS_SUBDOMAIN: peppy-valley-859
+          HARVIS_SUBDOMAIN: jazzy-custard-755
         run: |
           if [ -z "${HARVIS_DEPLOY_TOKEN:-}" ]; then
             echo "HARVIS_DEPLOY_TOKEN not set — skip Harvis"

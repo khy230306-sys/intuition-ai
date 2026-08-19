@@ -1,0 +1,254 @@
+.hero {
+  display: grid;
+  gap: 22px;
+  padding: 8px 0 20px;
+}
+
+.stageBlock {
+  width: min(100%, var(--max-stage));
+  margin: 0 auto;
+}
+
+.copy {
+  text-align: center;
+  display: grid;
+  gap: 10px;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--gold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 8vw, 3.6rem);
+  letter-spacing: 0.28em;
+  font-weight: 700;
+  text-indent: 0.28em;
+}
+
+.slogan {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(1rem, 3.4vw, 1.25rem);
+  line-height: 1.45;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.98rem;
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 420px);
+  margin: 4px auto 0;
+}
+
+.page {
+  display: grid;
+  gap: 18px;
+  padding: 8px 0 28px;
+  animation: none;
+}
+
+.pageHeader {
+  display: grid;
+  gap: 8px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: clamp(1.7rem, 5vw, 2.4rem);
+  letter-spacing: 0.04em;
+}
+
+.pageSubtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.cardGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.twoCols {
+  width: 100%;
+}
+
+.card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  padding: 18px 16px;
+  box-shadow: inset 0 0 40px rgba(58, 169, 255, 0.04);
+}
+
+.card h2,
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.orbRow {
+  display: grid;
+  gap: 12px;
+}
+
+.orbCard {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  padding: 16px;
+  background: rgba(5, 7, 15, 0.35);
+}
+
+.orbCardBlue {
+  border-color: rgba(58, 169, 255, 0.35);
+}
+
+.orbCardGold {
+  border-color: rgba(212, 178, 106, 0.35);
+}
+
+.orbCardViolet {
+  border-color: rgba(155, 107, 255, 0.35);
+}
+
+.settingsList {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  padding: 16px;
+}
+
+.fieldLabel {
+  font-weight: 600;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.segment {
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: rgba(244, 247, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmentActive {
+  color: var(--text-primary);
+  border-color: rgba(58, 169, 255, 0.5);
+  background: rgba(58, 169, 255, 0.14);
+  box-shadow: 0 0 18px rgba(58, 169, 255, 0.16);
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.switch {
+  width: 52px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: rgba(244, 247, 255, 0.08);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #d7deef;
+  transition: transform var(--motion-fast) ease;
+}
+
+.switchOn {
+  border-color: rgba(212, 178, 106, 0.55);
+  background: rgba(212, 178, 106, 0.22);
+}
+
+.switchOn::after {
+  transform: translateX(20px);
+  background: var(--gold);
+}
+
+.notFound {
+  min-height: min(70dvh, 640px);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 24px 8px;
+}
+
+.notFound h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+}
+
+.notFound p {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 36ch;
+  line-height: 1.6;
+}
+
+@media (min-width: 760px) {
+  .actions {
+    grid-template-columns: repeat(3, 1fr);
+    width: min(100%, 720px);
+  }
+
+  .orbRow {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .twoCols {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

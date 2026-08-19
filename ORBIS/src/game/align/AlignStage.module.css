@@ -1,0 +1,119 @@
+.stage {
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 28px;
+  border: 1px solid rgba(58, 169, 255, 0.22);
+  background:
+    radial-gradient(460px 220px at 50% 40%, rgba(58, 169, 255, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(11, 18, 36, 0.96), rgba(5, 7, 15, 0.98));
+  overflow: hidden;
+}
+
+.beam {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 3px;
+  height: 34%;
+  margin-left: -1.5px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(58, 169, 255, 0.05));
+  box-shadow: 0 0 14px rgba(143, 208, 255, 0.7);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.beamCap {
+  position: absolute;
+  left: 50%;
+  top: 7%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.8);
+  z-index: 5;
+}
+
+.core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fff 0%, #8fd0ff 28%, #3aa9ff 52%, #9b6bff 74%, transparent 80%);
+  box-shadow: 0 0 30px rgba(58, 169, 255, 0.45);
+  z-index: 6;
+}
+
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  border: 2px solid rgba(244, 247, 255, 0.16);
+  transform: translate(-50%, -50%);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.ringSelected {
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.16);
+}
+
+.gate {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  border-radius: 50%;
+  box-shadow: 0 0 14px currentColor;
+}
+
+.gateBlue {
+  color: var(--neon-blue);
+  background: radial-gradient(circle at 30% 30%, #fff, var(--neon-blue) 60%, #145a96);
+}
+
+.gateGold {
+  color: var(--gold);
+  background: radial-gradient(circle at 30% 30%, #fff8e8, var(--gold) 60%, #8a6a2c);
+}
+
+.gateViolet {
+  color: var(--violet);
+  background: radial-gradient(circle at 30% 30%, #fff, var(--violet) 60%, #4d2f96);
+}
+
+.alignedFlash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(143, 208, 255, 0.22), transparent 60%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+
+.alignedFlashOn {
+  animation: flash 500ms ease;
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

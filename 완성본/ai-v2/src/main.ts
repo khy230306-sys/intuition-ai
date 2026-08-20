@@ -82,7 +82,7 @@ app.innerHTML = `
         대로표 가져오기
       </button>
       <p class="import-hint">
-        방 화면 스크린샷 또는 P/B/T 텍스트로 가져옵니다. (Evolution 창 자동 읽기는 불가)
+        방 화면 스크린샷은 「사진첩에서 선택」으로 가져오세요. (Evolution 창 자동 읽기는 불가)
       </p>
     </section>
 
@@ -403,5 +403,25 @@ if (import.meta.env.DEV) {
       predictionRecords: store.predictionRecords,
     }).debug
 }
+
+// Prevent double-tap / double-click zoom on mobile browsers
+document.addEventListener(
+  'dblclick',
+  (e) => {
+    e.preventDefault()
+  },
+  { passive: false },
+)
+
+let lastTouchEnd = 0
+document.addEventListener(
+  'touchend',
+  (e) => {
+    const now = Date.now()
+    if (now - lastTouchEnd <= 300) e.preventDefault()
+    lastTouchEnd = now
+  },
+  { passive: false },
+)
 
 renderAll()

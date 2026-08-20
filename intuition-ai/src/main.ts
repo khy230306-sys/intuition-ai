@@ -1,9 +1,12 @@
 import './style.css'
 import { pathToString, predictNext, toBpRoad } from './engine'
 import { SUCCESS_BOARD_SIZE } from './engine/constants'
+import { importRoadWalkForward } from './importWalkForward'
 import { judgePrediction, successStats } from './judgment'
+import { parseRoadText } from './roadParse'
 import { clearStore, loadStore, saveStore, type AppStore } from './storage'
 import type { Outcome, PendingPrediction } from './types'
+import { extractPatternFromImage } from './vision'
 
 const app = document.querySelector('#app')
 if (!app) throw new Error('#app missing')
@@ -47,9 +50,14 @@ app.innerHTML = `
           <h2>최근 20판</h2>
         </div>
 
-        <button id="undoBtn" class="small-button" type="button">
-          되돌리기
-        </button>
+        <div class="header-actions">
+          <button id="undoBtn" class="small-button" type="button">
+            되돌리기
+          </button>
+          <button id="resetBtn" class="small-button danger" type="button">
+            전체 초기화
+          </button>
+        </div>
       </div>
 
       <div id="historyBoard" class="history-board"></div>
@@ -69,6 +77,13 @@ app.innerHTML = `
           TIE
         </button>
       </div>
+
+      <button id="importRoadBtn" class="import-button" type="button">
+        대로표 가져오기
+      </button>
+      <p class="import-hint">
+        방 화면 스크린샷 또는 P/B/T 텍스트로 가져옵니다. (Evolution 창 자동 읽기는 불가)
+      </p>
     </section>
 
     <section class="card">
@@ -96,15 +111,42 @@ app.innerHTML = `
         자동 학습 준비
       </div>
     </section>
-
-    <button id="resetBtn" class="reset-button" type="button">
-      전체 기록 초기화
-    </button>
   </main>
+
+  <div id="importModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-card">
+      <p class="section-kicker">ROAD IMPORT</p>
+      <h2 id="importTitle">대로표 가져오기</h2>
+      <p class="modal-desc">
+        iPhone에서 Evolution 방 화면을 캡처한 뒤 사진을 고르거나,<br />
+        P B B P … 텍스트를 붙여넣으세요.
+      </p>
+
+      <label class="file-label">
+        <input id="roadImageInput" type="file" accept="image/*" capture="environment" />
+        스크린샷 / 사진 선택
+      </label>
+
+      <textarea
+        id="roadTextInput"
+        class="road-textarea"
+        rows="4"
+        placeholder="예: P B B B P B P P 또는 PLAYER BANKER …"
+      ></textarea>
+
+      <p id="importPreview" class="import-preview">미리보기 없음</p>
+
+      <div class="modal-actions">
+        <button id="importCancelBtn" class="small-button" type="button">취소</button>
+        <button id="importApplyBtn" class="small-button primary" type="button">가져오기 적용</button>
+      </div>
+    </div>
+  </div>
 `
 
 let store: AppStore = loadStore()
 let pending: PendingPrediction | null = null
+let importDraft: Outcome[] = []
 
 function createPending(): PendingPrediction {
   const prediction = predictNext(store.history, {
@@ -223,17 +265,68 @@ function renderAll(): void {
 }
 
 function recordActual(actual: Outcome): void {
-  // Judge previous prediction before appending (TIE skips judgment, keeps pending)
   if (actual === 'P' || actual === 'B') {
     const judged = judgePrediction(pending, actual)
-    if (judged) {
-      store.predictionRecords.push(judged)
-    }
+    if (judged) store.predictionRecords.push(judged)
   }
-
   store.history.push(actual)
   saveStore(store)
   renderAll()
+}
+
+function setImportPreview(outcomes: Outcome[], note = ''): void {
+  importDraft = outcomes
+  const el = document.querySelector('#importPreview')
+  if (!el) return
+  if (outcomes.length === 0) {
+    el.textContent = note || '미리보기 없음'
+    return
+  }
+  const head = outcomes.slice(0, 40).join(' ')
+  const more = outcomes.length > 40 ? ` …(+${outcomes.length - 40})` : ''
+  el.textContent = `${note ? note + ' · ' : ''}${outcomes.length}판 · ${head}${more}`
+}
+
+function openImportModal(): void {
+  document.querySelector('#importModal')?.classList.remove('hidden')
+  const text = document.querySelector('#roadTextInput') as HTMLTextAreaElement | null
+  if (text) text.value = ''
+  const file = document.querySelector('#roadImageInput') as HTMLInputElement | null
+  if (file) file.value = ''
+  setImportPreview([])
+}
+
+function closeImportModal(): void {
+  document.querySelector('#importModal')?.classList.add('hidden')
+  importDraft = []
+}
+
+function applyImport(): void {
+  if (importDraft.length === 0) {
+    alert('가져올 대로표가 없습니다. 텍스트를 붙여넣거나 스크린샷을 선택하세요.')
+    return
+  }
+  if (
+    !confirm(
+      `대로표 ${importDraft.length}판을 가져오고, 과거 기준으로 픽·성공/실패를 다시 계산할까요?\n(현재 기록은 교체됩니다)`,
+    )
+  ) {
+    return
+  }
+
+  const result = importRoadWalkForward(importDraft)
+  store = {
+    history: result.history,
+    predictionRecords: result.predictionRecords,
+    patternMemory: store.patternMemory,
+  }
+  pending = result.pending
+  saveStore(store)
+  closeImportModal()
+  renderAll()
+  alert(
+    `가져오기 완료\n판수 ${result.history.length}\n판정 ${result.judgedCount} · 적중 ${result.wins}`,
+  )
 }
 
 document.querySelector('#playerBtn')?.addEventListener('click', () => recordActual('P'))
@@ -254,7 +347,40 @@ document.querySelector('#resetBtn')?.addEventListener('click', () => {
   renderAll()
 })
 
-// Expose debug helper in development
+document.querySelector('#importRoadBtn')?.addEventListener('click', () => openImportModal())
+document.querySelector('#importCancelBtn')?.addEventListener('click', () => closeImportModal())
+document.querySelector('#importApplyBtn')?.addEventListener('click', () => applyImport())
+
+document.querySelector('#roadTextInput')?.addEventListener('input', (e) => {
+  const value = (e.target as HTMLTextAreaElement).value
+  setImportPreview(parseRoadText(value), '텍스트')
+})
+
+document.querySelector('#roadImageInput')?.addEventListener('change', async (e) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const preview = document.querySelector('#importPreview')
+  if (preview) preview.textContent = '이미지 분석 중…'
+  try {
+    const outcomes = await extractPatternFromImage(file)
+    const textBox = document.querySelector('#roadTextInput') as HTMLTextAreaElement | null
+    if (textBox) textBox.value = outcomes.join(' ')
+    setImportPreview(outcomes, '스크린샷')
+    if (outcomes.length === 0) {
+      alert('대로표를 인식하지 못했습니다. 더 크게 찍거나 텍스트로 붙여넣어 주세요.')
+    }
+  } catch (err) {
+    console.error(err)
+    setImportPreview([])
+    alert('이미지 분석에 실패했습니다.')
+  }
+})
+
+document.querySelector('#importModal')?.addEventListener('click', (e) => {
+  if (e.target === document.querySelector('#importModal')) closeImportModal()
+})
+
 if (import.meta.env.DEV) {
   ;(window as unknown as { __intuitionDebug?: () => unknown }).__intuitionDebug = () =>
     predictNext(store.history, {

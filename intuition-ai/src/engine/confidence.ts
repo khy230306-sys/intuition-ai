@@ -13,8 +13,20 @@ export function computeConfidence(input: {
   alternative: PathSummary
   hidden: PathSummary
   topClusters: readonly ContinuationCluster[]
+  /** Recent calibration poor-form dampens confidence further. */
+  poorForm?: boolean
+  adapted?: boolean
 }): number {
-  const { matchCount, historyLength, nextSideAgreement, expected, alternative, hidden } = input
+  const {
+    matchCount,
+    historyLength,
+    nextSideAgreement,
+    expected,
+    alternative,
+    hidden,
+    poorForm = false,
+    adapted = false,
+  } = input
 
   if (historyLength === 0) return CONFIDENCE_EMPTY
   if (matchCount === 0) return CONFIDENCE_MIN
@@ -45,6 +57,8 @@ export function computeConfidence(input: {
     0.18 * dataFactor
 
   raw -= splitPenalty
+  if (poorForm) raw -= 0.08
+  if (adapted) raw -= 0.04
 
   const pct = Math.round(raw * 100)
   return Math.max(CONFIDENCE_MIN, Math.min(CONFIDENCE_MAX, pct))

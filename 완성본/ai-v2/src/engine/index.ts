@@ -1,3 +1,4 @@
+import { chooseAdaptivePick } from './calibration'
 import { computeConfidence } from './confidence'
 import {
   clusterContinuations,
@@ -10,7 +11,13 @@ import { DEFAULT_HORIZON } from './constants'
 import { extractRoadShape } from './roadShape'
 import { generateFuturePaths, pathToString, toBpRoad } from './roadUtils'
 import { searchHistoricalSimilarities } from './similaritySearch'
-import type { EngineDebug, EnginePrediction, Outcome, Side } from '../types'
+import type {
+  EngineDebug,
+  EnginePrediction,
+  Outcome,
+  PredictionRecord,
+  Side,
+} from '../types'
 
 export { generateFuturePaths, toBpRoad, pathToString }
 export { toRunLengths, extractRoadShape, mirrorSimilarity, runLengthSimilarity } from './roadShape'
@@ -24,6 +31,13 @@ export {
 } from './continuation'
 export { computeConfidence } from './confidence'
 export { futurePathCounts } from './roadUtils'
+export {
+  chooseAdaptivePick,
+  summarizeCalibration,
+  CALIBRATION_WINDOW,
+  CALIBRATION_POOR_RATE,
+  CALIBRATION_LOSS_STREAK,
+} from './calibration'
 export * from './constants'
 
 function fmt(path: readonly Side[] | null | undefined): string | null {
@@ -36,6 +50,8 @@ export type PredictOptions = {
   /** Exclusive index into fullOutcomeHistory for walk-forward tests. */
   asOfFullIndex?: number
   debug?: boolean
+  /** Judged prediction history for calibration (never used to blindly reverse). */
+  predictionRecords?: readonly PredictionRecord[]
 }
 
 function buildReason(
@@ -43,8 +59,10 @@ function buildReason(
   alternative: EnginePrediction['alternativePath'],
   hidden: EnginePrediction['hiddenPath'],
   matchCount: number,
+  adaptiveNote: string | null,
 ): string {
   const parts: string[] = []
+  if (adaptiveNote) parts.push(adaptiveNote)
   if (matchCount > 0) parts.push(`유사 상황 ${matchCount}건`)
   if (expected) parts.push(`EXPECTED ${pathToString(expected.path)}`)
   if (alternative) parts.push(`ALT ${pathToString(alternative.path)}`)
@@ -59,6 +77,7 @@ function buildReason(
  *
  * CURRENT ROAD → FUTURE PATH GENERATION → HISTORICAL SIMILARITY
  * → CONTINUATION ANALYSIS → EXPECTED / ALTERNATIVE / HIDDEN → NEXT PICK
+ * (+ optional calibration when recent Expected-led form is poor)
  */
 export function predictNext(
   fullHistory: readonly Outcome[],
@@ -67,6 +86,7 @@ export function predictNext(
   const horizon = options.horizon ?? DEFAULT_HORIZON
   const asOfFull =
     options.asOfFullIndex === undefined ? fullHistory.length : options.asOfFullIndex
+  const records = options.predictionRecords ?? []
 
   const historySlice = fullHistory.slice(0, asOfFull)
   const bp = toBpRoad(historySlice)
@@ -86,6 +106,10 @@ export function predictNext(
       confidence: 50,
       nextSideAgreement: 0.5,
       obviousPath: 'P'.repeat(horizon),
+      adapted: false,
+      adaptiveSource: 'FALLBACK',
+      lossStreak: 0,
+      recentHitRate: 0.5,
     }
     return {
       pick: 'P',
@@ -96,6 +120,8 @@ export function predictNext(
       hiddenPath: null,
       matchCount: 0,
       nextSideAgreement: 0.5,
+      adapted: false,
+      adaptiveSource: 'FALLBACK',
       debug,
     }
   }
@@ -111,13 +137,23 @@ export function predictNext(
   const alternativePath = selectAlternativePath(clusters, expectedPath)
   const hiddenPath = selectHiddenPath(clusters, bp, expectedPath, alternativePath, horizon)
 
-  let pick: Side = shape.currentSide ?? 'P'
-  if (expectedPath) pick = expectedPath.nextSide
-  else if (clusters.length > 0) {
+  let fallbackPick: Side = shape.currentSide ?? 'P'
+  if (!expectedPath && clusters.length > 0) {
     const pW = clusters.filter((c) => c.nextSide === 'P').reduce((s, c) => s + c.weight, 0)
     const bW = clusters.filter((c) => c.nextSide === 'B').reduce((s, c) => s + c.weight, 0)
-    pick = pW >= bW ? 'P' : 'B'
+    fallbackPick = pW >= bW ? 'P' : 'B'
+  } else if (expectedPath) {
+    fallbackPick = expectedPath.nextSide
   }
+
+  const adaptive = chooseAdaptivePick({
+    expected: expectedPath,
+    alternative: alternativePath,
+    hidden: hiddenPath,
+    fallbackPick,
+    records,
+  })
+  const pick = adaptive.pick
 
   const agreement = nextSideAgreement(clusters, pick)
   const confidence = computeConfidence({
@@ -128,9 +164,17 @@ export function predictNext(
     alternative: alternativePath,
     hidden: hiddenPath,
     topClusters: clusters,
+    poorForm: adaptive.calibration.poorForm,
+    adapted: adaptive.adapted,
   })
 
-  const reason = buildReason(expectedPath, alternativePath, hiddenPath, matches.length)
+  const reason = buildReason(
+    expectedPath,
+    alternativePath,
+    hiddenPath,
+    matches.length,
+    adaptive.note,
+  )
 
   const debug: EngineDebug = {
     currentContext: bp.slice(-Math.min(20, bp.length)),
@@ -157,6 +201,10 @@ export function predictNext(
     confidence,
     nextSideAgreement: Number(agreement.toFixed(4)),
     obviousPath: (shape.currentSide ?? 'P').repeat(horizon),
+    adapted: adaptive.adapted,
+    adaptiveSource: adaptive.source,
+    lossStreak: adaptive.calibration.lossStreak,
+    recentHitRate: Number(adaptive.calibration.hitRate.toFixed(4)),
   }
 
   if (options.debug) {
@@ -172,6 +220,8 @@ export function predictNext(
     hiddenPath,
     matchCount: matches.length,
     nextSideAgreement: agreement,
+    adapted: adaptive.adapted,
+    adaptiveSource: adaptive.source,
     debug,
   }
 }

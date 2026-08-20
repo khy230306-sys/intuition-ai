@@ -107,7 +107,10 @@ let store: AppStore = loadStore()
 let pending: PendingPrediction | null = null
 
 function createPending(): PendingPrediction {
-  const prediction = predictNext(store.history, { debug: Boolean(import.meta.env.DEV) })
+  const prediction = predictNext(store.history, {
+    debug: Boolean(import.meta.env.DEV),
+    predictionRecords: store.predictionRecords,
+  })
   const bp = toBpRoad(store.history)
   pending = {
     pick: prediction.pick,

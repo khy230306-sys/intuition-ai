@@ -86,6 +86,10 @@ export type EngineDebug = {
   confidence: number
   nextSideAgreement: number
   obviousPath: string
+  adapted: boolean
+  adaptiveSource: string
+  lossStreak: number
+  recentHitRate: number
 }
 
 export type EnginePrediction = {
@@ -97,6 +101,8 @@ export type EnginePrediction = {
   hiddenPath: PathSummary
   matchCount: number
   nextSideAgreement: number
+  adapted: boolean
+  adaptiveSource: string
   debug: EngineDebug
 }
 

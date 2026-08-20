@@ -107,7 +107,10 @@ let store: AppStore = loadStore()
 let pending: PendingPrediction | null = null
 
 function createPending(): PendingPrediction {
-  const prediction = predictNext(store.history, { debug: Boolean(import.meta.env.DEV) })
+  const prediction = predictNext(store.history, {
+    debug: Boolean(import.meta.env.DEV),
+    predictionRecords: store.predictionRecords,
+  })
   const bp = toBpRoad(store.history)
   pending = {
     pick: prediction.pick,
@@ -254,7 +257,10 @@ document.querySelector('#resetBtn')?.addEventListener('click', () => {
 // Expose debug helper in development
 if (import.meta.env.DEV) {
   ;(window as unknown as { __intuitionDebug?: () => unknown }).__intuitionDebug = () =>
-    predictNext(store.history, { debug: true }).debug
+    predictNext(store.history, {
+      debug: true,
+      predictionRecords: store.predictionRecords,
+    }).debug
 }
 
 renderAll()

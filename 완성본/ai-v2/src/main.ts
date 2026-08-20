@@ -122,10 +122,16 @@ app.innerHTML = `
         P B B P … 텍스트를 붙여넣으세요.
       </p>
 
-      <label class="file-label">
-        <input id="roadImageInput" type="file" accept="image/*" capture="environment" />
-        스크린샷 / 사진 선택
-      </label>
+      <div class="file-row">
+        <label class="file-label">
+          <input id="roadImageInput" type="file" accept="image/*" />
+          사진첩에서 선택
+        </label>
+        <label class="file-label secondary">
+          <input id="roadCameraInput" type="file" accept="image/*" capture="environment" />
+          카메라 촬영
+        </label>
+      </div>
 
       <textarea
         id="roadTextInput"
@@ -293,6 +299,8 @@ function openImportModal(): void {
   if (text) text.value = ''
   const file = document.querySelector('#roadImageInput') as HTMLInputElement | null
   if (file) file.value = ''
+  const cam = document.querySelector('#roadCameraInput') as HTMLInputElement | null
+  if (cam) cam.value = ''
   setImportPreview([])
 }
 
@@ -356,17 +364,14 @@ document.querySelector('#roadTextInput')?.addEventListener('input', (e) => {
   setImportPreview(parseRoadText(value), '텍스트')
 })
 
-document.querySelector('#roadImageInput')?.addEventListener('change', async (e) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+async function handleRoadImageFile(file: File, label: string): Promise<void> {
   const preview = document.querySelector('#importPreview')
   if (preview) preview.textContent = '이미지 분석 중…'
   try {
     const outcomes = await extractPatternFromImage(file)
     const textBox = document.querySelector('#roadTextInput') as HTMLTextAreaElement | null
     if (textBox) textBox.value = outcomes.join(' ')
-    setImportPreview(outcomes, '스크린샷')
+    setImportPreview(outcomes, label)
     if (outcomes.length === 0) {
       alert('대로표를 인식하지 못했습니다. 더 크게 찍거나 텍스트로 붙여넣어 주세요.')
     }
@@ -375,6 +380,16 @@ document.querySelector('#roadImageInput')?.addEventListener('change', async (e) 
     setImportPreview([])
     alert('이미지 분석에 실패했습니다.')
   }
+}
+
+document.querySelector('#roadImageInput')?.addEventListener('change', async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) await handleRoadImageFile(file, '사진첩')
+})
+
+document.querySelector('#roadCameraInput')?.addEventListener('change', async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) await handleRoadImageFile(file, '카메라')
 })
 
 document.querySelector('#importModal')?.addEventListener('click', (e) => {

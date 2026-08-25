@@ -1,0 +1,5 @@
+badge.webp
+gift.webp
+crown.webp
+medal.webp
+sticker.webp

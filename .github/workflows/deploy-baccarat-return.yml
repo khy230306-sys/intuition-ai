@@ -1,0 +1,43 @@
+name: Deploy Baccarat Return (gh-pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'baccarat-return/**'
+      - '.github/workflows/deploy-baccarat-return.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-baccarat-return
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: baccarat-return/package-lock.json
+      - working-directory: baccarat-return
+        run: |
+          npm ci
+          npm test
+          npm run build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+      - name: Publish gh-pages/baccarat-return
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: baccarat-return/dist
+          destination_dir: baccarat-return
+          keep_files: true
+          enable_jekyll: false
+          commit_message: Deploy Baccarat Return static site

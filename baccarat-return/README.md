@@ -4,6 +4,19 @@
 
 도라짓고땡 PICK AI와 같은 모바일 우선 스타일·구조로 만든 독립 앱입니다. 데이터는 브라우저(LocalStorage)에만 저장됩니다.
 
+## 실행 URL
+
+### 지금 바로
+**https://light-fringe-b3uck61.shipstatic.com**
+
+영구 유지(약 1분): [PERMANENT_HOSTING.md](./PERMANENT_HOSTING.md)  
+클레임 → https://my.shipstatic.com/claim/5d7bffafbfb778db3e9ae1cf508d2c97286b8a122e39717e58bfd87d39f7df78
+
+### GitHub Pages (영구)
+**https://khy230306-sys.github.io/intuition-ai/baccarat-return/**
+
+Pages가 꺼져 있으면 저장소 Settings → Pages에서 `gh-pages` / `/ (root)` 를 한 번만 켜면 됩니다. 자세한 단계: [PERMANENT_HOSTING.md](./PERMANENT_HOSTING.md)
+
 ## 로컬 실행
 
 ```bash

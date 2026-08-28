@@ -1,0 +1,25 @@
+{
+  "name": "aizio-trade-autopilot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AIZIO TRADE AUTOPILOT V1 — persistent automated trading system",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @aizio/trade-api & npm run dev -w @aizio/trade-web",
+    "dev:api": "npm run dev -w @aizio/trade-api",
+    "dev:web": "npm run dev -w @aizio/trade-web",
+    "build": "npm run build -w @aizio/trade-shared && npm run build -w @aizio/trade-api && npm run build -w @aizio/trade-web",
+    "test": "npm run test -w @aizio/trade-api",
+    "db:push": "npm run db:push -w @aizio/trade-api",
+    "db:generate": "npm run db:generate -w @aizio/trade-api",
+    "start:api": "npm run start -w @aizio/trade-api",
+    "toss:probe": "npm run toss:probe -w @aizio/trade-api",
+    "toss:report": "npm run toss:report -w @aizio/trade-api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

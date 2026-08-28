@@ -1,0 +1,445 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { AppServices } from "../app-context.ts";
+import { approveProductSchema, commandSchema, safetySettingsSchema } from "../shared/schemas.ts";
+import { routeCommand } from "../engines/command/command-router.ts";
+import { enqueue } from "../jobs/queue.ts";
+import { evaluateSafetyGate } from "../engines/safety/safety-gate.ts";
+import { generateContent } from "../engines/content/content-engine.ts";
+import { prepareAndList } from "../engines/listing/listing-engine.ts";
+import { draftCsReply, classifyCs } from "../engines/cs/cs-engine.ts";
+import { settle } from "../engines/settlement/settlement-engine.ts";
+import type { ProfitAnalysis, ProductStatus } from "../shared/types.ts";
+import { nowIso } from "../shared/ids.ts";
+import { maskSecret } from "../env.ts";
+import { env } from "../env.ts";
+
+export function createApp(services: AppServices) {
+  const app = new Hono();
+  app.use("*", cors());
+
+  app.get("/api/health", (c) => c.json({ ok: true, name: "AIZIO COMMERCE", time: nowIso() }));
+
+  app.get("/api/dashboard", (c) => {
+    const analyzedToday = services.repo.countProducts("updated_at >= date('now')");
+    const candidates = services.repo.countProducts("status IN ('DISCOVERED','ANALYZING','REVIEW_REQUIRED','TEST_SELL')");
+    const recommended = services.repo.countProducts("status IN ('TEST_SELL','APPROVED','LISTING_READY')");
+    const live = services.repo.countProducts("status = 'LIVE'");
+    const review = services.repo.countProducts("status IN ('REVIEW_REQUIRED','BLOCKED')");
+    const ordersToday = services.repo.countOrdersToday();
+    const profit = services.repo.profitTotals();
+    const integrations = services.repo.listIntegrations();
+    const pending = integrations.filter((i) =>
+      ["PENDING_SETUP", "NOT_CONFIGURED", "NOT_CONNECTED"].includes(i.status),
+    );
+    return c.json({
+      analyzedToday,
+      candidates,
+      recommended,
+      live,
+      ordersToday,
+      autoProcessed: 0,
+      reviewNeeded: review,
+      expectedNetProfit: profit.expectedNetProfit,
+      actualNetProfit: profit.actualNetProfit,
+      pendingSetupCount: pending.length,
+      note: pending.length
+        ? "외부 API가 연결되지 않아 실시간 판매 수치는 0일 수 있습니다. 가상 매출은 표시하지 않습니다."
+        : null,
+    });
+  });
+
+  app.get("/api/products", (c) => {
+    const status = c.req.query("status");
+    const minMargin = c.req.query("minMargin");
+    let products = services.repo.listProducts({ status: status || undefined, limit: 100 });
+    if (minMargin) {
+      const min = Number(minMargin);
+      products = products.filter((p) => {
+        const profit = p.profit as ProfitAnalysis | null;
+        return profit !== null && profit.netMarginRate >= min;
+      });
+    }
+    return c.json({ products, count: products.length });
+  });
+
+  app.get("/api/products/:id", (c) => {
+    const product = services.repo.getProduct(c.req.param("id"));
+    if (!product) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json({ product });
+  });
+
+  app.post("/api/products/scout", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const keyword = typeof body.keyword === "string" ? body.keyword : undefined;
+    const jobId = enqueue(services.repo, "SCOUT_PRODUCTS", { keyword });
+    services.repo.insertAudit({
+      actor: "USER",
+      action: "SCOUT_ENQUEUED",
+      entityType: "job",
+      entityId: jobId,
+      summary: `AI 상품 찾기 작업이 대기열에 들어갔습니다.${keyword ? ` 키워드: ${keyword}` : ""}`,
+    });
+    return c.json({ jobId, status: "QUEUED" });
+  });
+
+  app.post("/api/products/:id/approve", async (c) => {
+    const parsed = approveProductSchema.safeParse({
+      ...(await c.req.json().catch(() => ({}))),
+      productId: c.req.param("id"),
+    });
+    if (!parsed.success) return c.json({ error: "INVALID", details: parsed.error.flatten() }, 400);
+    const product = services.repo.getProduct(parsed.data.productId);
+    if (!product) return c.json({ error: "NOT_FOUND" }, 404);
+    const risk = product.risk as { decision?: string } | null;
+    if (risk?.decision === "BLOCK") {
+      return c.json({ error: "RISK_BLOCK", message: "Risk Engine BLOCK은 승인할 수 없습니다." }, 409);
+    }
+    const settings = services.repo.getSafetySettings();
+    const profit = product.profit as ProfitAnalysis | null;
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(startOfDay.getFullYear(), startOfDay.getMonth(), 1);
+    const gate = evaluateSafetyGate(settings, {
+      action: "MARKETPLACE_LISTING",
+      amountKRW: parsed.data.sellingPrice ?? product.recommendedPriceKrw ?? 0,
+      dailySpentKRW: services.repo.spendBetween(startOfDay.toISOString(), nowIso()),
+      monthlySpentKRW: services.repo.spendBetween(startOfMonth.toISOString(), nowIso()),
+      netMarginRate: profit?.netMarginRate ?? null,
+      confidence: profit?.confidence ?? product.confidence,
+      supplierPriceIncreaseRate: 0,
+      category: product.category,
+      supplierId: product.supplier,
+      riskDecision: (risk?.decision as "PASS" | "REVIEW_REQUIRED" | "BLOCK" | undefined) ?? "PASS",
+      humanApproved: true,
+    });
+    if (!gate.allowed) {
+      services.repo.insertAudit({
+        actor: "SAFETY_GATE",
+        action: "APPROVAL_BLOCKED",
+        entityType: "product",
+        entityId: product.id,
+        summary: `판매 승인 차단: ${gate.reasons.join(" / ")}`,
+        detail: gate,
+      });
+      return c.json({ error: gate.decision, reasons: gate.reasons }, 409);
+    }
+
+    const content = await generateContent(services.providers, { title: product.title });
+    const nextStatus: ProductStatus = "APPROVED";
+    services.repo.saveProduct({
+      ...product,
+      status: nextStatus,
+      content,
+      recommendedPriceKrw: parsed.data.sellingPrice ?? product.recommendedPriceKrw,
+      updatedAt: nowIso(),
+    });
+    services.repo.insertAudit({
+      actor: "USER",
+      action: "PRODUCT_APPROVED",
+      entityType: "product",
+      entityId: product.id,
+      summary: `상품 ${product.title} 판매 승인`,
+    });
+
+    let listing = null;
+    if (parsed.data.autoList && parsed.data.marketplace) {
+      const mp = parsed.data.marketplace === "naver" ? services.naver : services.coupang;
+      listing = await prepareAndList({
+        product: { ...product, status: nextStatus, content },
+        marketplace: mp,
+        supplier: services.cj,
+        repo: services.repo,
+        settings,
+        humanApproved: true,
+        dailySpent: services.repo.spendBetween(startOfDay.toISOString(), nowIso()),
+        monthlySpent: services.repo.spendBetween(startOfMonth.toISOString(), nowIso()),
+      });
+    }
+    return c.json({ status: nextStatus, content, listing });
+  });
+
+  app.post("/api/products/:id/pause", (c) => {
+    const product = services.repo.getProduct(c.req.param("id"));
+    if (!product) return c.json({ error: "NOT_FOUND" }, 404);
+    const settings = services.repo.getSafetySettings();
+    const gate = evaluateSafetyGate(settings, {
+      action: "PAUSE_PRODUCT",
+      amountKRW: 0,
+      dailySpentKRW: 0,
+      monthlySpentKRW: 0,
+      netMarginRate: null,
+      confidence: 1,
+      supplierPriceIncreaseRate: null,
+      humanApproved: true,
+    });
+    if (!gate.allowed) return c.json({ error: gate.decision, reasons: gate.reasons }, 409);
+    services.repo.saveProduct({ ...product, status: "PAUSED", updatedAt: nowIso() });
+    services.repo.insertAudit({
+      actor: "USER",
+      action: "PRODUCT_PAUSED",
+      entityType: "product",
+      entityId: product.id,
+      summary: `상품 ${product.title} 일시중지`,
+    });
+    return c.json({ status: "PAUSED" });
+  });
+
+  app.get("/api/orders", (c) => c.json({ orders: services.repo.listOrders() }));
+
+  app.get("/api/audit", (c) => c.json({ entries: services.repo.listAudit(200) }));
+
+  app.get("/api/jobs", (c) => c.json({ jobs: services.repo.listJobs(80) }));
+
+  app.get("/api/integrations", async (c) => {
+    const snapshots = await services.providers.snapshots();
+    await refreshIntegrationRows(services);
+    return c.json({
+      integrations: services.repo.listIntegrations(),
+      ai: snapshots,
+      secrets: {
+        openai: maskSecret(env.openaiKey),
+        gemini: maskSecret(env.geminiKey),
+        claude: maskSecret(env.anthropicKey),
+        cj: maskSecret(env.cjAccessToken || env.cjApiPassword),
+        coupang: maskSecret(env.coupangAccessKey),
+        naver: maskSecret(env.naverClientId),
+      },
+    });
+  });
+
+  app.post("/api/integrations/:id/test", async (c) => {
+    const id = c.req.param("id");
+    let result: { status: string; error: string | null } = { status: "UNAVAILABLE", error: "unknown integration" };
+    if (id === "openai" || id === "gemini" || id === "claude") {
+      const p = services.providers.get(id);
+      result = p ? await p.testConnection() : result;
+    } else if (id === "cjdropshipping") result = await services.cj.testConnection();
+    else if (id === "coupang") result = await services.coupang.testConnection();
+    else if (id === "naver") result = await services.naver.testConnection();
+    await refreshIntegrationRows(services, id, result);
+    return c.json(result);
+  });
+
+  app.get("/api/settings/safety", (c) => c.json(services.repo.getSafetySettings()));
+  app.put("/api/settings/safety", async (c) => {
+    const parsed = safetySettingsSchema.safeParse(await c.req.json());
+    if (!parsed.success) return c.json({ error: "INVALID", details: parsed.error.flatten() }, 400);
+    services.repo.saveSafetySettings(parsed.data);
+    services.repo.insertAudit({
+      actor: "USER",
+      action: "SAFETY_SETTINGS_UPDATED",
+      entityType: "settings",
+      entityId: "safety",
+      summary: "Safety Gate 한도가 변경되었습니다.",
+      detail: parsed.data,
+    });
+    return c.json(parsed.data);
+  });
+
+  app.post("/api/command", async (c) => {
+    const parsed = commandSchema.safeParse(await c.req.json());
+    if (!parsed.success) return c.json({ error: "INVALID" }, 400);
+    const routed = routeCommand(parsed.data.text);
+    if (routed.mutating) {
+      const settings = services.repo.getSafetySettings();
+      const gate = evaluateSafetyGate(settings, {
+        action: routed.intent === "pause_loss" ? "PAUSE_PRODUCT" : "SUPPLIER_ORDER",
+        amountKRW: 0,
+        dailySpentKRW: 0,
+        monthlySpentKRW: 0,
+        netMarginRate: null,
+        confidence: 1,
+        supplierPriceIncreaseRate: null,
+        humanApproved: routed.intent !== "pause_loss",
+      });
+      if (routed.intent === "pause_loss" && !gate.allowed && gate.decision === "BLOCK") {
+        return c.json({ routed, error: gate.reasons }, 409);
+      }
+    }
+    const result = await executeCommand(services, routed);
+    return c.json({ routed, result, source: "CODE_ROUTER" });
+  });
+
+  app.post("/api/vision", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
+    const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
+    if (!imageBase64) return c.json({ error: "imageBase64 required" }, 400);
+    const analysis = await services.vision.analyzeImage(imageBase64, mimeType);
+    if (analysis.status === "READY" && analysis.analysis?.supplierSearchKeywords[0]) {
+      enqueue(services.repo, "SCOUT_PRODUCTS", {
+        keyword: analysis.analysis.supplierSearchKeywords[0],
+      });
+    }
+    return c.json(analysis);
+  });
+
+  app.get("/api/cs", (c) => c.json({ drafts: services.repo.listCsDrafts() }));
+  app.post("/api/cs/draft", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const kind = typeof body.kind === "string" ? body.kind : "basic_product_info";
+    const classified = classifyCs(kind);
+    const draft = draftCsReply({
+      kind,
+      facts: {
+        status: typeof body.status === "string" ? body.status : null,
+        productName: typeof body.productName === "string" ? body.productName : null,
+      },
+    });
+    const id = services.repo.insertCsDraft({
+      orderId: typeof body.orderId === "string" ? body.orderId : null,
+      marketplace: typeof body.marketplace === "string" ? body.marketplace : null,
+      inquiryId: typeof body.inquiryId === "string" ? body.inquiryId : null,
+      draft,
+      status: "DRAFT",
+      riskLevel: classified.mode,
+    });
+    return c.json({ id, draft, classified, mode: "AI Draft → 확인 → 전송" });
+  });
+
+  app.post("/api/settlements", async (c) => {
+    const body = await c.req.json();
+    const result = settle({
+      expectedNetProfit: numOrNull(body.expectedNetProfit),
+      actualProductCost: numOrNull(body.actualProductCost),
+      actualShipping: numOrNull(body.actualShipping),
+      actualFee: numOrNull(body.actualFee),
+      actualAds: numOrNull(body.actualAds),
+      actualRefund: numOrNull(body.actualRefund),
+      actualReturnLoss: numOrNull(body.actualReturnLoss),
+      actualSettlement: numOrNull(body.actualSettlement),
+    });
+    if (typeof body.orderId === "string") {
+      services.repo.saveSettlement({ orderId: body.orderId, ...result });
+    }
+    return c.json(result);
+  });
+
+  return app;
+}
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+async function executeCommand(services: AppServices, routed: ReturnType<typeof routeCommand>) {
+  switch (routed.intent) {
+    case "scout": {
+      const jobId = enqueue(services.repo, "SCOUT_PRODUCTS", {});
+      return { message: "상품 탐색 작업을 시작했습니다. 공급처가 연결되어야 실제 결과가 생깁니다.", jobId };
+    }
+    case "recommendations":
+      return { products: services.repo.listProducts({ status: "TEST_SELL" }) };
+    case "filter_margin": {
+      const min = Number(routed.slots.minMargin ?? 0.25);
+      const products = services.repo.listProducts().filter((p) => {
+        const profit = p.profit as ProfitAnalysis | null;
+        return profit !== null && profit.netMarginRate >= min;
+      });
+      return { min, products };
+    }
+    case "high_return":
+      return { message: "반품률 LIVE 데이터가 아직 없습니다.", freshness: "INSUFFICIENT_DATA", products: [] };
+    case "pause_loss": {
+      const products = services.repo.listProducts().filter((p) => {
+        const profit = p.profit as ProfitAnalysis | null;
+        return profit !== null && profit.expectedNetProfit < 0 && p.status === "LIVE";
+      });
+      for (const p of products) {
+        services.repo.saveProduct({ ...p, status: "PAUSED", updatedAt: nowIso() });
+        services.repo.insertAudit({
+          actor: "COMMAND_ROUTER",
+          action: "PRODUCT_PAUSED",
+          entityType: "product",
+          entityId: p.id,
+          summary: `적자 상품 ${p.title} 일시중지`,
+        });
+      }
+      return { paused: products.length };
+    }
+    case "orders_today":
+      return { count: services.repo.countOrdersToday(), orders: services.repo.listOrders(20) };
+    case "cost_up":
+      return { message: "원가 상승 비교는 공급처 LIVE 재조회가 필요합니다.", products: [] };
+    case "profit_month":
+      return services.repo.profitTotals();
+    default:
+      return { message: "명령을 이해하지 못했습니다. 예: 오늘 팔만한 상품 찾아줘" };
+  }
+}
+
+export async function refreshIntegrationRows(
+  services: AppServices,
+  onlyId?: string,
+  test?: { status: string; error: string | null },
+) {
+  const rows = [
+    {
+      id: "openai",
+      kind: "ai",
+      name: "OpenAI",
+      adapter: () => services.providers.get("openai")?.getStatus() ?? Promise.resolve("NOT_CONFIGURED" as const),
+      capabilities: { chat: true, vision: false },
+      docsUrl: "https://platform.openai.com/docs",
+    },
+    {
+      id: "gemini",
+      kind: "ai",
+      name: "Gemini",
+      adapter: () => services.providers.get("gemini")?.getStatus() ?? Promise.resolve("NOT_CONFIGURED" as const),
+      capabilities: { chat: true, vision: true },
+      docsUrl: "https://ai.google.dev/gemini-api/docs",
+    },
+    {
+      id: "claude",
+      kind: "ai",
+      name: "Claude",
+      adapter: () => services.providers.get("claude")?.getStatus() ?? Promise.resolve("NOT_CONFIGURED" as const),
+      capabilities: { chat: true, vision: false },
+      docsUrl: "https://docs.anthropic.com/en/api",
+    },
+    {
+      id: "cjdropshipping",
+      kind: "supplier",
+      name: "CJdropshipping",
+      adapter: () => services.cj.getStatus(),
+      capabilities: services.cj.capabilities(),
+      docsUrl: "https://developers.cjdropshipping.com/en/api/api2/api/product.html",
+    },
+    {
+      id: "coupang",
+      kind: "marketplace",
+      name: "Coupang",
+      adapter: () => services.coupang.getStatus(),
+      capabilities: services.coupang.capabilities(),
+      docsUrl: "https://developers.coupang.com/en/api",
+    },
+    {
+      id: "naver",
+      kind: "marketplace",
+      name: "Naver SmartStore",
+      adapter: () => services.naver.getStatus(),
+      capabilities: services.naver.capabilities(),
+      docsUrl: "https://apicenter.commerce.naver.com/docs/auth",
+    },
+  ];
+  for (const row of rows) {
+    if (onlyId && row.id !== onlyId) continue;
+    const status = test && onlyId === row.id ? test.status : await row.adapter();
+    const display =
+      status === "NOT_CONFIGURED" && (row.kind === "supplier" || row.kind === "marketplace")
+        ? "PENDING_SETUP"
+        : status;
+    services.repo.upsertIntegration({
+      id: row.id,
+      kind: row.kind,
+      name: row.name,
+      status: display,
+      lastSuccessAt: display === "READY" ? nowIso() : null,
+      lastError: test && onlyId === row.id ? test.error : display === "PENDING_SETUP" ? `${row.name} — PENDING_SETUP` : null,
+      capabilities: row.capabilities,
+      docsUrl: row.docsUrl,
+    });
+  }
+}

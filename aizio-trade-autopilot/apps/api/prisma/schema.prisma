@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite for local/dev. Switch DATABASE_URL to PostgreSQL for production.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brokerConnections BrokerConnection[]
+  riskProfiles      RiskProfileRow[]
+}
+
+model BrokerConnection {
+  id           String   @id @default(cuid())
+  userId       String?
+  provider     String // toss | paper
+  status       String // NOT_CONFIGURED | CONNECTED | ERROR | DEGRADED
+  accountSeq   String?
+  metaJson     String   @default("{}")
+  lastCheckedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User?    @relation(fields: [userId], references: [id])
+}
+
+model AutopilotStateRow {
+  id                 String    @id @default("singleton")
+  enabled            Boolean   @default(false)
+  state              String    @default("OFF")
+  mode               String    @default("PAPER")
+  stopMode           String    @default("NONE")
+  startedAt          DateTime?
+  stoppedAt          DateTime?
+  lastHeartbeatAt    DateTime?
+  lastMarketCheckAt  DateTime?
+  haltReason         String?
+  capital            Float     @default(3000000)
+  riskLevel          String    @default("BALANCED")
+  circuitBreakerOn   Boolean   @default(false)
+  aiStatusText       String    @default("대기")
+  readiness          String    @default("NOT_CONFIGURED")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model RiskProfileRow {
+  id                   String   @id @default(cuid())
+  userId               String?
+  name                 String   @default("default")
+  maxCapital           Float
+  maxPositionPct       Float
+  maxOpenPositions     Int
+  maxDailyLossPct      Float
+  maxDrawdownPct       Float
+  riskPerTradePct      Float
+  maxConsecutiveLosses Int
+  maxSlippagePct       Float
+  maxSpreadPct         Float
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User?    @relation(fields: [userId], references: [id])
+}
+
+model MarketSessionRow {
+  id            String   @id @default(cuid())
+  market        String
+  venue         String?
+  tradingDate   String
+  isTradingDay  Boolean
+  isOpen        Boolean
+  session       String
+  opensAt       DateTime?
+  closesAt      DateTime?
+  reason        String?
+  snapshotJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([market, tradingDate])
+}
+
+model SymbolRow {
+  id            String   @id @default(cuid())
+  symbol        String   @unique
+  name          String
+  market        String   @default("KR")
+  securityType  String   @default("STOCK")
+  listed        Boolean  @default(true)
+  halted        Boolean  @default(false)
+  managed       Boolean  @default(false)
+  isNewListing  Boolean  @default(false)
+  metaJson      String   @default("{}")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model MarketSnapshot {
+  id            String   @id @default(cuid())
+  symbol        String
+  ts            DateTime
+  lastPrice     Float
+  bid           Float?
+  ask           Float?
+  volume        Float    @default(0)
+  value         Float    @default(0)
+  changePct     Float    @default(0)
+  volatility    Float    @default(0)
+  spreadPct     Float    @default(0)
+  marketCap     Float?
+  source        String
+  freshnessMs   Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([symbol, ts])
+}
+
+model Signal {
+  id           String   @id @default(cuid())
+  symbol       String
+  strategyId   String
+  score        Float
+  confidence   Float
+  evidenceJson String
+  invalidationJson String @default("[]")
+  quantScore   Float?
+  regime       String?
+  status       String   @default("NEW") // NEW | CONSUMED | REJECTED | EXPIRED
+  detectedAt   DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([symbol, strategyId, detectedAt])
+  @@index([status, detectedAt])
+}
+
+model AiDecision {
+  id            String   @id @default(cuid())
+  symbol        String
+  signalId      String?
+  action        String
+  confidence    Float
+  bullScore     Float
+  bearScore     Float
+  dataQuality   Float
+  reasonsJson   String
+  risksJson     String
+  rawJson       String?
+  valid         Boolean  @default(true)
+  generatedAt   DateTime
+  createdAt     DateTime @default(now())
+}
+
+model OrderRow {
+  id               String   @id @default(cuid())
+  clientOrderId    String   @unique
+  idempotencyKey   String   @unique
+  signalId         String?
+  strategyId       String?
+  brokerOrderId    String?
+  symbol           String
+  side             String
+  orderType        String
+  quantity         Float
+  price            Float?
+  status           String
+  mode             String
+  filledQuantity   Float    @default(0)
+  avgFillPrice     Float?
+  commission       Float    @default(0)
+  tax              Float    @default(0)
+  rejectReason     String?
+  rawJson          String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([signalId])
+  @@index([status])
+}
+
+model ExecutionRow {
+  id            String   @id @default(cuid())
+  orderId       String
+  symbol        String
+  side          String
+  quantity      Float
+  price         Float
+  commission    Float    @default(0)
+  tax           Float    @default(0)
+  slippagePct   Float    @default(0)
+  executedAt    DateTime
+  mode          String
+  createdAt     DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model PositionRow {
+  id            String   @id @default(cuid())
+  symbol        String
+  entryPrice    Float
+  quantity      Float
+  stopLoss      Float?
+  takeProfit    Float?
+  trailingStop  Float?
+  strategyId    String
+  signalId      String?
+  openedAt      DateTime
+  highestPrice  Float
+  lowestPrice   Float
+  status        String   @default("OPEN")
+  mode          String
+  exitReason    String?
+  closedAt      DateTime?
+  realizedPnl   Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, symbol])
+}
+
+model TradeJournal {
+  id                String   @id @default(cuid())
+  symbol            String
+  strategyId        String?
+  signalId          String?
+  discoveryWhy      String?
+  buyWhy            String?
+  rejectWhy         String?
+  marketRegime      String?
+  quantScore        Float?
+  aiAction          String?
+  aiConfidence      Float?
+  riskDecision      String?
+  entryPrice        Float?
+  exitPrice         Float?
+  quantity          Float?
+  slippagePct       Float?
+  commission        Float?
+  tax               Float?
+  grossPnl          Float?
+  netPnl            Float?
+  maxFavorable      Float?
+  maxAdverse        Float?
+  holdMs            Int?
+  openedAt          DateTime?
+  closedAt          DateTime?
+  metaJson          String   @default("{}")
+  createdAt         DateTime @default(now())
+}
+
+model DailyPerformance {
+  id            String   @id @default(cuid())
+  date          String   @unique
+  trades        Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  grossPnl      Float    @default(0)
+  netPnl        Float    @default(0)
+  fees          Float    @default(0)
+  maxDrawdown   Float    @default(0)
+  metaJson      String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SystemEvent {
+  id        String   @id @default(cuid())
+  kind      String
+  level     String   @default("info")
+  message   String
+  detailJson String  @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model StrategyPerformance {
+  id            String   @id @default(cuid())
+  strategyId    String   @unique
+  enabled       Boolean  @default(true)
+  trades        Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  winRate       Float    @default(0)
+  profitFactor  Float    @default(0)
+  expectancy    Float    @default(0)
+  drawdown      Float    @default(0)
+  rollingJson   String   @default("{}")
+  autoDisable   Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model ConfigKv {
+  key       String   @id
+  valueJson String
+  updatedAt DateTime @updatedAt
+}

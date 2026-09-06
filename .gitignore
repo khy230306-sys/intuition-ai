@@ -1,2 +1,5 @@
 *.zip
 JARVIS-*.zip
+aizio-campus/node_modules
+aizio-campus/dist
+aizio-campus/.ship-api-key

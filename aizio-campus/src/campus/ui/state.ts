@@ -1,0 +1,65 @@
+import type { CampusTab } from '../types'
+
+export type CampusUiState = {
+  tab: CampusTab
+  courseId: string | null
+  quizId: string | null
+  quizIndex: number
+  focusMinutes: number
+  focusRemaining: number
+  /** Seconds remaining when the current focus session started (for accurate log). */
+  focusSessionStartRemaining: number
+  focusRunning: boolean
+  focusCourseId: string
+  recordingCourseId: string
+  status: string
+  searchQ: string
+  morePane: 'menu' | 'gpa' | 'projects' | 'settings' | 'search' | 'deadlines'
+  /** After onboarding / empty timetable, keep add form open. */
+  sessionFormOpen: boolean
+  chatKeysOpen: boolean
+}
+
+export const campusUi: CampusUiState = {
+  tab: 'today',
+  courseId: null,
+  quizId: null,
+  quizIndex: 0,
+  focusMinutes: 25,
+  focusRemaining: 25 * 60,
+  focusSessionStartRemaining: 25 * 60,
+  focusRunning: false,
+  focusCourseId: '',
+  recordingCourseId: '',
+  status: '',
+  searchQ: '',
+  morePane: 'menu',
+  sessionFormOpen: false,
+  chatKeysOpen: false,
+}
+
+let focusTimer: number | null = null
+
+export function stopFocusTicker(): void {
+  if (focusTimer) {
+    window.clearInterval(focusTimer)
+    focusTimer = null
+  }
+  campusUi.focusRunning = false
+}
+
+export function startFocusTicker(onTick: () => void, onDone: () => void): void {
+  stopFocusTicker()
+  campusUi.focusRunning = true
+  focusTimer = window.setInterval(() => {
+    if (!campusUi.focusRunning) return
+    campusUi.focusRemaining -= 1
+    if (campusUi.focusRemaining <= 0) {
+      stopFocusTicker()
+      campusUi.focusRemaining = 0
+      onDone()
+    } else {
+      onTick()
+    }
+  }, 1000)
+}

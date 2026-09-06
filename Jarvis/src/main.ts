@@ -1,5 +1,7 @@
 import { registerSW } from 'virtual:pwa-register'
 import './style.css'
+import './campus/ui/campus.css'
+import { bindCampus, renderCampusShell, syncCampusNotifications } from './campus'
 import { FIXED_APP_URL, fetchRemoteAppVersion } from './appUpdate'
 import {
   clearProviderKey,
@@ -257,7 +259,7 @@ import {
 } from './navigation'
 import { recordDiagError } from './diagnostics/deviceDiagnostics'
 
-const APP_VERSION = '1.15.4'
+const APP_VERSION = '1.16.0'
 const SEEN_APP_VERSION_KEY = 'jarvis.app.seenVersion'
 const PENDING_INVITE_KEY = 'jarvis.pendingInvite.v1'
 /** Bumps when MIC is stopped/retargeted so late mic-permission callbacks abort. */
@@ -3824,8 +3826,10 @@ function render(opts: RenderOpts = {}): void {
   }
   invalidateSpaceInboxCache()
   const homeV2On = activeHomeVariant() === 'v2'
-  const main =
-    state.view === 'chat'
+  const campusOn = state.view === 'campus'
+  const main = campusOn
+    ? renderCampusShell()
+    : state.view === 'chat'
       ? renderChatOrHomeV2()
       : state.view === 'invest'
         ? renderInvest()
@@ -3842,24 +3846,28 @@ function render(opts: RenderOpts = {}): void {
                   : state.view === 'actions'
                     ? renderActions()
                     : renderSettings()
-  const nav = homeV2On
-    ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
-    : renderNav()
-  const more = homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
+  const nav = campusOn
+    ? ''
+    : homeV2On
+      ? renderHomeV2NavWithPane(state.view, state.homeV2Pane, state.homeV2MoreOpen)
+      : renderNav()
+  const more = !campusOn && homeV2On && state.homeV2MoreOpen ? renderHomeV2MoreSheet() : ''
   const navSheet =
-    state.homeV2NavSheetOpen
+    !campusOn && state.homeV2NavSheetOpen
       ? renderNavigationSheet({
           defaultMap: loadNavigationSettings().defaultMap,
           defaultTravel: loadNavigationSettings().defaultTravelMode,
         })
       : ''
-  const hideBrand = homeV2On && state.view === 'chat' && state.homeV2Pane === 'home'
+  const hideBrand =
+    campusOn || (homeV2On && state.view === 'chat' && state.homeV2Pane === 'home')
   // Keep HOME v2 first viewport dense — install banner stays available on legacy / thread / other tabs.
   const installHtml = hideBrand ? '' : renderInstall()
   app.innerHTML = `${hideBrand ? '' : renderBrand()}${installHtml}${main}${nav}${more}${navSheet}${renderShareModal()}${renderInstallGuideModal()}`
   document.body.dataset.jarvisView = state.view
   document.body.dataset.homeV2Pane = homeV2On ? state.homeV2Pane : ''
-  document.body.classList.toggle('home-v2-active', homeV2On)
+  document.body.classList.toggle('home-v2-active', homeV2On && !campusOn)
+  document.body.classList.toggle('campus-active', campusOn)
   if (opts.guardNav !== false) {
     if (opts.guardNav === 'async' || !opts.pointer) {
       armNavGuard({ mode: 'async', ms: 260 })
@@ -3868,6 +3876,22 @@ function render(opts: RenderOpts = {}): void {
     }
   }
   bind()
+  if (campusOn) {
+    bindCampus({
+      onBack: () => {
+        state.view = 'chat'
+        state.homeV2Pane = 'home'
+        state.homeV2MoreOpen = false
+        render()
+      },
+      onFlash: (msg) => showFlash(msg),
+    })
+    try {
+      syncCampusNotifications()
+    } catch {
+      /* ignore */
+    }
+  }
   void refreshNavPermStatus()
   if (state.view === 'games') {
     // remount after DOM ready
@@ -4682,6 +4706,14 @@ function bind(): void {
   })
   document.querySelector('[data-action="home-v2-open-nav"]')?.addEventListener('click', () => {
     openNavigationSheet()
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-action="open-campus-external"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.homeV2MoreOpen = false
+      window.open('https://aizio-campus.shipstatic.com', '_blank', 'noopener,noreferrer')
+      showFlash('AIZIO CAMPUS를 엽니다')
+      render()
+    })
   })
   document.querySelector('[data-action="home-v2-music"]')?.addEventListener('click', () => {
     state.homeV2MoreOpen = false

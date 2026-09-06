@@ -1,0 +1,52 @@
+{
+  "ASSET_DELIVERY_MODE": "EXTERNAL_PRODUCTION_ART",
+  "IMPORT_DIRECTORY": "incoming/external-production",
+  "SUPPORTED_FORMATS": ["png"],
+  "visualBibleVersion": "VSM-2026-08-12",
+  "baselineMasters": [
+    {
+      "id": "SSUKSSUK_CHARACTER_BASE",
+      "filename": "SSUKSSUK_CHARACTER_BASE.png",
+      "recommended": "1024x1024",
+      "min": "512x512",
+      "transparencyRequired": true
+    },
+    {
+      "id": "FIRE_TRUCK_01_MASTER",
+      "filename": "FIRE_TRUCK_01_MASTER.png",
+      "recommended": "1536x1024",
+      "min": "768x512",
+      "transparencyRequired": true
+    },
+    {
+      "id": "CAR_WORKSHOP_MASTER",
+      "filename": "CAR_WORKSHOP_MASTER.png",
+      "recommended": "2048x1536",
+      "min": "1280x720",
+      "transparencyRequired": false
+    }
+  ],
+  "firetruckPartsAfterBaselineApproved": [
+    "FIRETRUCK_BODY.png",
+    "FIRETRUCK_FRONT_DOOR.png",
+    "FIRETRUCK_REAR_DOOR.png",
+    "FIRETRUCK_FRONT_WHEEL.png",
+    "FIRETRUCK_REAR_WHEEL.png",
+    "FIRETRUCK_FRONT_RIM.png",
+    "FIRETRUCK_REAR_RIM.png",
+    "FIRETRUCK_FRONT_WINDOW.png",
+    "FIRETRUCK_SIDE_WINDOW.png",
+    "FIRETRUCK_BUMPER.png",
+    "FIRETRUCK_LADDER.png",
+    "FIRETRUCK_EMERGENCY_LIGHT.png",
+    "FIRETRUCK_HOSE.png",
+    "FIRETRUCK_HEADLIGHT.png",
+    "FIRETRUCK_SHADOW.png"
+  ],
+  "rules": [
+    "Do not crop Style Master / Visual Bible",
+    "Receipt does not mean Production Approved",
+    "Quality Gate + human DNA review required",
+    "Play loop stays ASSET_REQUIRED until Registry APPROVED"
+  ]
+}

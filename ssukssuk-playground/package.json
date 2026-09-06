@@ -1,0 +1,30 @@
+{
+  "name": "ssukssuk-playground",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4175",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e-pipeline.mjs",
+    "assets:gate": "node scripts/quality-gate-external-art.mjs",
+    "assets:stage": "node scripts/stage-external-art.mjs",
+    "assets:approve-baseline": "node scripts/approve-baseline-external-art.mjs"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "playwright": "^1.55.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.7"
+  }
+}

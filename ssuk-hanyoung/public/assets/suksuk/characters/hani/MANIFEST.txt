@@ -1,0 +1,7 @@
+hani-idle.webp  # REAL when delivered
+hani-happy.webp  # REAL when delivered
+hani-celebrate.webp  # REAL when delivered
+hani-thinking.webp  # REAL when delivered
+hani-encourage.webp  # REAL when delivered
+hani-sad.webp  # REAL when delivered
+hani-surprised.webp  # REAL when delivered

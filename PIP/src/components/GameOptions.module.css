@@ -1,0 +1,280 @@
+.wrap {
+  display: grid;
+  gap: 16px;
+}
+
+.section {
+  display: grid;
+  gap: 10px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: rgba(244, 247, 255, 0.72);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.modeRow,
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.modeBtn,
+.choiceBtn,
+.stakeBtn,
+.moreBtn,
+.extraBtn,
+.bundleOpenBtn,
+.modeMini,
+.bundleCard {
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(244, 247, 255, 0.14);
+  background: rgba(16, 27, 51, 0.7);
+  color: #f4f7ff;
+  font-weight: 700;
+}
+
+.modeBtn,
+.moreBtn,
+.extraBtn {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 8px;
+}
+
+.modeBtn small,
+.moreBtn small,
+.extraBtn small,
+.choiceBtn small {
+  color: rgba(244, 247, 255, 0.45);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.modeBtn:disabled,
+.choiceBtn:disabled,
+.stakeBtn:disabled,
+.moreBtn:disabled,
+.extraBtn:disabled,
+.bundleOpenBtn:disabled,
+.modeMini:disabled,
+.bundleCard:disabled,
+.input:disabled {
+  opacity: 0.5;
+}
+
+.active {
+  border-color: rgba(126, 224, 255, 0.55);
+  box-shadow: 0 0 18px rgba(126, 224, 255, 0.18);
+  background: rgba(58, 169, 255, 0.14);
+}
+
+.choiceRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.choiceBtn {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+}
+
+.choiceMain {
+  font-size: 1.02rem;
+}
+
+.toneDOWN,
+.toneLOW {
+  background: linear-gradient(180deg, rgba(155, 107, 255, 0.16), rgba(16, 27, 51, 0.7));
+}
+
+.toneSAME,
+.toneCENTER {
+  background: linear-gradient(180deg, rgba(212, 178, 106, 0.16), rgba(16, 27, 51, 0.7));
+}
+
+.toneUP,
+.toneHIGH {
+  background: linear-gradient(180deg, rgba(58, 169, 255, 0.16), rgba(16, 27, 51, 0.7));
+}
+
+.stakeRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.customLabel {
+  display: grid;
+  gap: 6px;
+  color: rgba(244, 247, 255, 0.65);
+  font-size: 0.82rem;
+}
+
+.input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(244, 247, 255, 0.14);
+  background: rgba(5, 7, 15, 0.55);
+  color: #f4f7ff;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.bundleOpenBtn {
+  width: 100%;
+  font-size: 1rem;
+}
+
+.bundleModeBox {
+  border-radius: 14px;
+  border: 1px solid rgba(244, 247, 255, 0.12);
+  background: rgba(5, 7, 15, 0.35);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.bundleModeTitle {
+  color: rgba(244, 247, 255, 0.55);
+  font-size: 0.78rem;
+}
+
+.bundleModeValue {
+  color: #8fe7ff;
+  font-weight: 750;
+}
+
+.modeMini {
+  min-height: 48px;
+  font-size: 0.82rem;
+  padding: 6px;
+}
+
+.morePanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(155, 107, 255, 0.28);
+  background: rgba(11, 18, 36, 0.85);
+}
+
+.sectionLabel {
+  margin: 0;
+  color: rgba(244, 247, 255, 0.65);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.exactGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sheetRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  align-items: end;
+}
+
+.sheetBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sheet {
+  position: relative;
+  z-index: 1;
+  max-height: min(78dvh, 720px);
+  overflow: auto;
+  border-radius: 22px 22px 0 0;
+  border: 1px solid rgba(126, 224, 255, 0.25);
+  background: linear-gradient(180deg, rgba(14, 22, 40, 0.98), rgba(5, 7, 15, 0.98));
+  padding:
+    10px 14px
+    calc(18px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 12px;
+}
+
+.sheetHandle {
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(244, 247, 255, 0.25);
+  margin: 0 auto 4px;
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sheetHeader h3 {
+  margin: 0;
+}
+
+.sheetHeader button {
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 247, 255, 0.2);
+  background: rgba(16, 27, 51, 0.8);
+  color: #f4f7ff;
+  padding: 0 14px;
+  font-weight: 700;
+}
+
+.sheetNote {
+  margin: 0;
+  color: rgba(244, 247, 255, 0.6);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.sheetGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.sheetGroupTitle {
+  color: rgba(244, 247, 255, 0.7);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.bundleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bundleCard {
+  min-height: 56px;
+  font-size: 0.95rem;
+}
+
+.bundleActive {
+  border-color: rgba(126, 224, 255, 0.65);
+  background: rgba(58, 169, 255, 0.2);
+  box-shadow: 0 0 16px rgba(126, 224, 255, 0.2);
+}

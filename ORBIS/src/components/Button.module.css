@@ -1,0 +1,62 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition:
+    transform var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+.primary {
+  color: #071018;
+  background: linear-gradient(135deg, #8fd0ff 0%, var(--neon-blue) 45%, #d4b26a 100%);
+  box-shadow: 0 8px 28px rgba(58, 169, 255, 0.28);
+}
+
+.primary:hover {
+  box-shadow: 0 10px 34px rgba(58, 169, 255, 0.38);
+  transform: translateY(-1px);
+}
+
+.secondary {
+  color: var(--text-primary);
+  background: rgba(16, 27, 51, 0.7);
+  border-color: rgba(212, 178, 106, 0.35);
+}
+
+.secondary:hover {
+  border-color: rgba(212, 178, 106, 0.7);
+  background: rgba(16, 27, 51, 0.9);
+}
+
+.ghost {
+  color: var(--text-primary);
+  background: rgba(244, 247, 255, 0.04);
+  border-color: var(--border-soft);
+}
+
+.ghost:hover {
+  border-color: rgba(155, 107, 255, 0.55);
+  background: rgba(155, 107, 255, 0.08);
+}
+
+.full {
+  width: 100%;
+}

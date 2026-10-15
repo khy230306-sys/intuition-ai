@@ -1,0 +1,43 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  background: #05070f;
+  color: #f4f7ff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  background:
+    radial-gradient(1000px 520px at 50% -10%, rgba(58, 169, 255, 0.16), transparent 55%),
+    radial-gradient(700px 360px at 90% 20%, rgba(155, 107, 255, 0.12), transparent 50%),
+    linear-gradient(180deg, #05070f, #0a1220 55%, #070b14);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid #7ee0ff;
+  outline-offset: 2px;
+}

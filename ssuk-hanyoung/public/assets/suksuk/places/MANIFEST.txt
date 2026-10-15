@@ -1,0 +1,12 @@
+home.webp
+school.webp
+hospital.webp
+fireStation.webp
+policeStation.webp
+supermarket.webp
+farm.webp
+zoo.webp
+park.webp
+beach.webp
+space.webp
+museum.webp

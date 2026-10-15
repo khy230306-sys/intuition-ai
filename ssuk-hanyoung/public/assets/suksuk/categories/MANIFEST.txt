@@ -1,0 +1,8 @@
+language.webp
+math.webp
+cognition.webp
+science.webp
+creativity.webp
+music.webp
+life.webp
+exploration.webp

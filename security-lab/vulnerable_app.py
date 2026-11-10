@@ -109,11 +109,11 @@ class VulnerableHandler(BaseHTTPRequestHandler):
         self._send(200, text + "\n")
 
 
-def make_server(port: int, db_path: Path, log_path: Path) -> ThreadingHTTPServer:
+def make_server(port: int, db_path: Path, log_path: Path, host: str = "127.0.0.1") -> ThreadingHTTPServer:
     reset_database(db_path, hashed=False)  # ❌ 취약점 #4: 비밀번호를 그대로 저장
     if log_path.exists():
         log_path.unlink()
-    server = ThreadingHTTPServer(("127.0.0.1", port), VulnerableHandler)
+    server = ThreadingHTTPServer((host, port), VulnerableHandler)
     server.db_path = db_path
     server.log_path = log_path
     return server
@@ -122,10 +122,14 @@ def make_server(port: int, db_path: Path, log_path: Path) -> ThreadingHTTPServer
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="취약한 연습 서버 (127.0.0.1 전용)")
     parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="기본은 내 컴퓨터만(127.0.0.1). 두 대 실습 때만 0.0.0.0 사용")
     args = parser.parse_args()
 
-    server = make_server(args.port, DB_PATH, LOG_PATH)
-    print(f"[취약한 서버] http://127.0.0.1:{args.port} 실행 중 (Ctrl+C로 종료)")
+    server = make_server(args.port, DB_PATH, LOG_PATH, host=args.host)
+    if args.host != "127.0.0.1":
+        print("⚠️  같은 와이파이의 다른 기기에서 접속할 수 있는 상태입니다. 실습이 끝나면 Ctrl+C로 꼭 끄세요.")
+    print(f"[취약한 서버] http://{args.host}:{args.port} 실행 중 (Ctrl+C로 종료)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

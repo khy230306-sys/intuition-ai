@@ -25,10 +25,12 @@ def main() -> None:
     parser.add_argument("--target", choices=TARGETS.keys(), default="vulnerable")
     parser.add_argument("--user", default="alice")
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--allow-lan", action="store_true",
+                        help="같은 집 와이파이의 다른 컴퓨터(사설 IP)를 대상으로 허용")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{TARGETS[args.target]}"
-    check_local(base)
+    check_local(base, allow_lan=args.allow_lan)
     print(f"🎯 대상: {base}  계정: {args.user}  (목록 {len(WORDLIST)}개)\n")
 
     for i, guess in enumerate(WORDLIST, start=1):

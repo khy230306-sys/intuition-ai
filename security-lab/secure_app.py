@@ -156,11 +156,11 @@ class SecureHandler(BaseHTTPRequestHandler):
         self._send(200, text + "\n")
 
 
-def make_server(port: int, db_path: Path, log_path: Path) -> ThreadingHTTPServer:
+def make_server(port: int, db_path: Path, log_path: Path, host: str = "127.0.0.1") -> ThreadingHTTPServer:
     reset_database(db_path, hashed=True)  # ✅ 비밀번호는 해시로 저장
     if log_path.exists():
         log_path.unlink()
-    server = ThreadingHTTPServer(("127.0.0.1", port), SecureHandler)
+    server = ThreadingHTTPServer((host, port), SecureHandler)
     server.db_path = db_path
     server.log_path = log_path
     server.limiter = RateLimiter(MAX_FAILURES, WINDOW_SECONDS)
@@ -170,10 +170,12 @@ def make_server(port: int, db_path: Path, log_path: Path) -> ThreadingHTTPServer
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="안전하게 만든 실습 서버 (127.0.0.1 전용)")
     parser.add_argument("--port", type=int, default=8002)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="기본은 내 컴퓨터만(127.0.0.1). 두 대 실습 때만 0.0.0.0 사용")
     args = parser.parse_args()
 
-    server = make_server(args.port, DB_PATH, LOG_PATH)
-    print(f"[보안 서버] http://127.0.0.1:{args.port} 실행 중 (Ctrl+C로 종료)")
+    server = make_server(args.port, DB_PATH, LOG_PATH, host=args.host)
+    print(f"[보안 서버] http://{args.host}:{args.port} 실행 중 (Ctrl+C로 종료)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
